@@ -3,13 +3,13 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ISubscriptionClientProvider } from '@microsoft/vscode-azure-azutils';
+import { ISubscriptionClientProvider, type AzureSubscription } from '@microsoft/vscode-azure-azutils';
 import { createActionContext, IActionContext, ICodeContext, IOutputChannel, IVsCode } from '@microsoft/vscode-azure-utils';
 import { Container } from 'inversify';
 import { IAzdService } from '../../src/azd/AzdService';
 import { ITempDirManager, TempDirManager } from '../../src/azd/TempDirManager';
 import { createGenerateBicepStepFactory, IGenerateBicepStepFactory } from '../../src/azd/wizard/GenerateBicepStep';
-import { IAzureViewDataTree, IAzureViewViewItemTree } from '../../src/services';
+import { IAzureViewDataTree, IAzureViewViewItemTree, ISubscriptionResolver } from '../../src/services';
 import { IArmDeploymentDataProvider } from '../../src/tree/activity/ArmDeploymentDataProvider';
 import { ICodeDeploymentDataProvider } from '../../src/tree/activity/CodeDeploymentDataProvider';
 
@@ -25,6 +25,8 @@ export interface WizardCommandMocks {
     readonly subscriptionClientProvider?: ISubscriptionClientProvider;
     readonly armProvider?: IArmDeploymentDataProvider;
     readonly codeProvider?: ICodeDeploymentDataProvider;
+    /** Defaults to a resolver that finds nothing, which is the behavior of a subscription no account can reach. */
+    readonly subscriptionResolver?: (subscriptionId: string) => Promise<AzureSubscription | undefined>;
 }
 
 /**
@@ -47,6 +49,7 @@ export function createWizardCommandContainer(mocks: WizardCommandMocks): Contain
     container.bind(IAzdService).toConstantValue(mocks.azd);
     container.bind(ITempDirManager).toConstantValue(mocks.tempManager ?? new TempDirManager(mocks.ctx));
     container.bind(IAzureViewDataTree).toConstantValue(mocks.dataTree);
+    container.bind(ISubscriptionResolver).toConstantValue(mocks.subscriptionResolver ?? (() => Promise.resolve(undefined)));
 
     container.bind(IGenerateBicepStepFactory).toFactory(context => createGenerateBicepStepFactory(context.get(ICodeContext)));
 

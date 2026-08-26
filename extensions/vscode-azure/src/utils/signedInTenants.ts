@@ -46,6 +46,21 @@ export function readSignedInTenants(code: IVsCode): SignedInTenant[] {
 }
 
 /**
+ * The manually-entered tenant ids saved for one account.
+ *
+ * Account ids are matched case-insensitively (matching the `byAccount`
+ * selector): the persisted id is written verbatim from `session.account.id` and
+ * the setting is user-editable, so a casing difference must not stop a saved
+ * tenant from being folded into its account's tenant listing.
+ */
+export function signedInTenantIdsFor(code: IVsCode, accountId: string): string[] {
+    const wanted = accountId.toLowerCase();
+    return readSignedInTenants(code)
+        .filter(entry => entry.accountId.toLowerCase() === wanted)
+        .map(entry => entry.tenantId);
+}
+
+/**
  * Persist a manually-entered tenant, additively and idempotently: an entry
  * already present (same account id and case-insensitive tenant id) is left
  * untouched, so repeated sign-ins don't accumulate duplicates.

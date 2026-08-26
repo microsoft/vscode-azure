@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { AzurePublicCloud } from '@microsoft/vscode-azure-azutils';
 import type { Activity } from '../../../src/tree/activity/Activity';
 import type { ArmDeploymentActivity, ArmDeploymentOperationActivity } from '../../../src/tree/activity/ArmDeploymentDataProvider';
 
@@ -23,7 +24,7 @@ export function makeArmDeploymentActivity(overrides?: Partial<ArmDeploymentActiv
         type: 'armDeployment',
         title: 'd1',
         deploymentId: '/subscriptions/sub/providers/Microsoft.Resources/deployments/d1',
-        subscriptionId: 'sub',
+        subscription: { subscriptionId: 'sub', environment: AzurePublicCloud },
         scope: '/subscriptions/sub',
         deploymentName: 'd1',
         rootDeploymentId: '/subscriptions/sub/providers/Microsoft.Resources/deployments/d1',

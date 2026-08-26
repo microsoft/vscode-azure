@@ -5,15 +5,16 @@
 
 import { createHttpPoller, type OperationResponse, type OperationState } from '@azure/core-lro';
 import {
-    IDeploymentClientProvider, KnownProvisioningState, parseAzureResourceId,
-    type DeploymentExtended, type DeploymentOperation, type IDeploymentClient, type ProvisioningOperation, type ProvisioningState
+    getConfiguredAzureEnv, IDeploymentClientProvider, KnownProvisioningState, parseAzureResourceId,
+    type AzureSubscriptionTarget, type DeploymentExtended, type DeploymentOperation, type IDeploymentClient,
+    type ProvisioningOperation, type ProvisioningState
 } from '@microsoft/vscode-azure-azutils';
 import {
     CaselessMap, CaselessSet, Disposable, EventEmitter, flattenPages, IActionExecutor, IVsCode, Roots, selfOnly, stringifyError,
     type DataProvider, type DataProviderChangeEvent
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
-import { ISubscriptionResolver } from '../../services';
+import { ICredentialOptionsScope } from '../../utils/CredentialOptionsScope';
 import { IAzureAccountDataProvider } from '../resources/AzureAccountDataProvider';
 import { isActivity, isTerminalActivityStatus, type Activity } from './Activity';
 
@@ -45,12 +46,12 @@ interface PollFailureState {
 export interface ArmDeploymentActivity extends Activity {
     readonly type: 'armDeployment';
     readonly deploymentId: string;
-    /** The id of the subscription the deployment targets, parsed from {@linkcode deploymentId}. Resolved to a full subscription on demand when a client is needed. */
-    readonly subscriptionId: string;
-    /** Optional id of the owning tenant, used as a hint when resolving {@linkcode subscriptionId} to a full subscription. */
-    readonly tenantId?: string;
-    /** Optional id of the owning account, used as a hint when resolving {@linkcode subscriptionId} to a full subscription. */
-    readonly accountId?: string;
+    /**
+     * What ARM requests about this deployment are issued against: the
+     * subscription parsed from {@linkcode deploymentId}, the cloud it lives in,
+     * and whatever tenant/account the tracker knew.
+     */
+    readonly subscription: AzureSubscriptionTarget;
     /** The ARM scope prefix (everything before `/providers/Microsoft.Resources/deployments/`). */
     readonly scope: string;
     readonly deploymentName: string;
@@ -105,12 +106,15 @@ export class ArmDeploymentDataProvider implements DataProvider<Activity>, Dispos
         @inject(IVsCode) private readonly code: IVsCode,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IDeploymentClientProvider) private readonly createClient: IDeploymentClientProvider,
-        @inject(ISubscriptionResolver) private readonly resolveSubscription: ISubscriptionResolver,
+        @inject(ICredentialOptionsScope) private readonly credentialOptions: ICredentialOptionsScope,
         @inject(IAzureAccountDataProvider) accountProvider: IAzureAccountDataProvider,
     ) {
         this.disposables.push(accountProvider.onDidRemoveAccounts(accountIds => {
             const removedIds = new CaselessSet(accountIds);
-            this.clearActivities(activity => !!activity.accountId && removedIds.has(activity.accountId));
+            this.clearActivities(activity => {
+                const accountId = activity.subscription.accountId;
+                return !!accountId && removedIds.has(accountId);
+            });
         }));
     }
 
@@ -137,20 +141,25 @@ export class ArmDeploymentDataProvider implements DataProvider<Activity>, Dispos
      * Fetch all operations for the deployment and store them in-place.
      * Starts polling for non-terminal deployments. Called automatically
      * by {@linkcode DataItemTree} after a resource is loaded.
+     *
+     * A failed fetch reports "nothing changed" rather than throwing. The tree
+     * surfaces a rejection as an error notification, and enrichment is work the
+     * user never asked for -- so the deployment stays visible but unenriched,
+     * and a refresh retries.
      */
     public async enrich(resource: ArmDeploymentActivity): Promise<boolean> {
         if (resource.abortController.signal.aborted) {
             return false;
         }
 
-        const client = await this.getClient(resource.subscriptionId, resource.tenantId, resource.accountId);
-        if (!client) {
-            // Subscription not resolvable (e.g. not signed in to the owning
-            // account). Leave the deployment visible but unenriched; a manual
-            // refresh can retry once the account is available.
+        const client = this.getClient(resource);
+
+        try {
+            resource.operations = await this.fetchOperations(client, resource, resource.abortController.signal);
+        } catch (error) {
+            this.executor.output.warn(this.code.l10n.t('[activity] could not fetch operations for deployment {0}: {1}', resource.deploymentId, stringifyError(error)));
             return false;
         }
-        resource.operations = await this.fetchOperations(client, resource, resource.abortController.signal);
 
         // Start polling if not terminal and not already polling
         if (!isTerminalActivityStatus(resource.status) && !this.activePolls.has(resource.id)) {
@@ -168,11 +177,12 @@ export class ArmDeploymentDataProvider implements DataProvider<Activity>, Dispos
      * an `onDidChange` so the tree picks it up. Enrichment (and polling)
      * will start on first access by the tree.
      *
-     * The target subscription is parsed from {@linkcode deploymentId} and
-     * resolved to an authenticatable handle lazily, the first time a client is
-     * needed (see {@linkcode getClient}). An optional {@linkcode tenantId} hint
-     * and {@linkcode accountId} hint (e.g. hydrated from azd) speed up that
-     * resolution.
+     * The target subscription is parsed from {@linkcode deploymentId} and paired
+     * with the configured cloud, so a client can always be built. The optional
+     * {@linkcode tenantId} and {@linkcode accountId} (from the subscription the
+     * caller provisioned into, or from an azd environment) scope the token: the
+     * tenant pins its authority, and the account breaks the tie when more than
+     * one signed-in account can reach that tenant.
      *
      * @throws if {@linkcode deploymentId} is not a valid ARM deployment id.
      */
@@ -187,9 +197,12 @@ export class ArmDeploymentDataProvider implements DataProvider<Activity>, Dispos
             title: deploymentName,
             startTime: new Date(),
             deploymentId,
-            subscriptionId,
-            tenantId,
-            accountId,
+            subscription: {
+                subscriptionId,
+                tenantId,
+                accountId,
+                environment: getConfiguredAzureEnv(this.code),
+            },
             scope,
             deploymentName,
             rootDeploymentId: deploymentId,
@@ -358,9 +371,7 @@ export class ArmDeploymentDataProvider implements DataProvider<Activity>, Dispos
                     description: op.provisioningState,
                     startTime: activity.startTime,
                     deploymentId: op.targetResourceId,
-                    subscriptionId: activity.subscriptionId,
-                    tenantId: activity.tenantId,
-                    accountId: activity.accountId,
+                    subscription: activity.subscription,
                     scope,
                     deploymentName,
                     rootDeploymentId: activity.rootDeploymentId,
@@ -421,24 +432,22 @@ export class ArmDeploymentDataProvider implements DataProvider<Activity>, Dispos
     }
 
     /**
-     * Returns a deployment client for {@linkcode subscriptionId}, resolving the
-     * current full subscription before creating the lightweight client.
-     * An optional {@linkcode tenantId} hint narrows the resolution drill to the
-     * owning tenant, and an optional {@linkcode accountId} hint narrows it to the
-     * owning account. Returns `undefined` when the subscription cannot be resolved
-     * (e.g. the owning account is not signed in).
+     * Returns a deployment client for the deployment's target subscription.
      *
-     * The injected subscription resolver owns its lookup and caching semantics;
-     * this provider retains the resulting client only for the operation that
+     * Built under a silent credential scope: polling runs in the background,
+     * possibly for a tenant the user never opened, so a missing session must end
+     * in an unenriched deployment rather than an unprompted-for sign-in dialog.
+     * The credential captures that scope when it is built, so it holds for the
+     * whole poll loop.
+     *
+     * This provider retains the resulting client only for the operation that
      * requested it (including the lifetime of a poll loop).
      */
-    private async getClient(subscriptionId: string, tenantId?: string, accountId?: string): Promise<IDeploymentClient | undefined> {
-        const subscription = await this.resolveSubscription(subscriptionId, tenantId, accountId);
-        if (!subscription) {
-            this.executor.output.debug(`[activity] could not resolve subscription ${subscriptionId} for deployment client`);
-            return undefined;
-        }
-        return this.createClient(subscription);
+    private getClient(activity: ArmDeploymentActivity): IDeploymentClient {
+        return this.credentialOptions.run(
+            { sessionOptions: { silent: true } },
+            () => this.createClient(activity.subscription),
+        );
     }
 
     /**

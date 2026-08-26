@@ -5,7 +5,7 @@
 
 import { createMockCodeContext, withSettings } from '@microsoft/vscode-azure-utils/testing';
 import { ConfigurationSection, SignedInTenantsConfigurationKey } from '../../src/constants';
-import { addSignedInTenant, readSignedInTenants, type SignedInTenant } from '../../src/utils/signedInTenants';
+import { addSignedInTenant, readSignedInTenants, signedInTenantIdsFor, type SignedInTenant } from '../../src/utils/signedInTenants';
 
 describe('signedInTenants (unit)', () => {
     const settingKey = `${ConfigurationSection}.${SignedInTenantsConfigurationKey}`;
@@ -57,6 +57,38 @@ describe('signedInTenants (unit)', () => {
 
             await withSettings(mock, { [settingKey]: 'garbage' }, () => {
                 expect(readSignedInTenants(ctx.code)).to.deep.equal([]);
+            });
+        });
+    });
+
+    describe('signedInTenantIdsFor', () => {
+        it('should return only the tenants saved for the requested account', async () => {
+            const { ctx, mock } = createMockCodeContext();
+
+            await withSettings(mock, { [settingKey]: [
+                { accountId: 'acct-1', tenantId },
+                { accountId: 'acct-2', tenantId: otherTenantId },
+            ] }, () => {
+                expect(signedInTenantIdsFor(ctx.code, 'acct-1')).to.deep.equal([tenantId]);
+            });
+        });
+
+        it('should match the account id case-insensitively', async () => {
+            const { ctx, mock } = createMockCodeContext();
+
+            // The persisted id is written verbatim from `session.account.id`
+            // and the setting is user-editable, so a casing difference must not
+            // hide a saved tenant from its account's listing.
+            await withSettings(mock, { [settingKey]: [{ accountId: 'ACCT-1', tenantId }] }, () => {
+                expect(signedInTenantIdsFor(ctx.code, 'acct-1')).to.deep.equal([tenantId]);
+            });
+        });
+
+        it('should return nothing for an account with no saved tenants', async () => {
+            const { ctx, mock } = createMockCodeContext();
+
+            await withSettings(mock, { [settingKey]: [{ accountId: 'acct-1', tenantId }] }, () => {
+                expect(signedInTenantIdsFor(ctx.code, 'acct-2')).to.deep.equal([]);
             });
         });
     });

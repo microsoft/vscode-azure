@@ -75,4 +75,104 @@ describe('Limiter (unit)', () => {
 
         expect(order).to.deep.equal([1, 2, 3]);
     });
+
+    describe('map', () => {
+        // eslint-disable-next-line @typescript-eslint/require-await
+        async function* range(count: number, pulled?: number[]): AsyncIterable<number> {
+            for (let i = 0; i < count; i++) {
+                pulled?.push(i);
+                yield i;
+            }
+        }
+
+        const collect = async <T>(source: AsyncIterable<T>): Promise<T[]> => {
+            const items: T[] = [];
+            for await (const item of source) {
+                items.push(item);
+            }
+            return items;
+        };
+
+        it('yields results in source order, not completion order', async () => {
+            const limiter = new Limiter<number>(4);
+
+            // Earlier items finish last, so completion order is the reverse.
+            const results = await collect(limiter.map(range(4), async item => {
+                await new Promise(resolve => setTimeout(resolve, (4 - item) * 10));
+                return item;
+            }));
+
+            expect(results).to.deep.equal([0, 1, 2, 3]);
+        });
+
+        it('runs no more than the window at once', async () => {
+            const limiter = new Limiter<number>(3);
+            let running = 0;
+            let maxRunning = 0;
+
+            await collect(limiter.map(range(10), async item => {
+                running++;
+                maxRunning = Math.max(maxRunning, running);
+                await new Promise(resolve => setTimeout(resolve, 5));
+                running--;
+                return item;
+            }));
+
+            expect(maxRunning).to.equal(3);
+        });
+
+        it('reads no further than the window ahead of the consumer', async () => {
+            const limiter = new Limiter<number>(2);
+            const pulled: number[] = [];
+            const started: number[] = [];
+
+            for await (const item of limiter.map(range(10, pulled), item => {
+                started.push(item);
+                return Promise.resolve(item);
+            })) {
+                if (item === 0) {
+                    break;
+                }
+            }
+
+            // A caller that stops at the first result must not have paid to
+            // enumerate the whole source, nor started work it never consumed.
+            expect(pulled).to.deep.equal([0, 1]);
+            expect(started).to.deep.equal([0, 1]);
+        });
+
+        it('shares its bound across concurrent callers', async () => {
+            const limiter = new Limiter<number>(2);
+            let running = 0;
+            let maxRunning = 0;
+
+            const task = async (item: number): Promise<number> => {
+                running++;
+                maxRunning = Math.max(maxRunning, running);
+                await new Promise(resolve => setTimeout(resolve, 5));
+                running--;
+                return item;
+            };
+
+            await Promise.all([
+                collect(limiter.map(range(6), task)),
+                collect(limiter.map(range(6), task)),
+            ]);
+
+            expect(maxRunning).to.equal(2);
+        });
+
+        it('propagates a rejection from the mapped task', async () => {
+            const limiter = new Limiter<number>(2);
+
+            await expect(collect(limiter.map(range(4), item => {
+                return item === 2 ? Promise.reject(new Error('boom')) : Promise.resolve(item);
+            }))).to.be.rejectedWith('boom');
+        });
+
+        it('yields nothing for an empty source', async () => {
+            const limiter = new Limiter<number>(2);
+            expect(await collect(limiter.map(range(0), item => Promise.resolve(item)))).to.deep.equal([]);
+        });
+    });
 });

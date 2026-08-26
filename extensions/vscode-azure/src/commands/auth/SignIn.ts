@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { byAccount, ICredentialFactory, isAccount, VsCodeExtensionCredential } from '@microsoft/vscode-azure-azutils';
-import { CaselessSet, Everything, ICodeContext, type QuickPickItemWithData, Roots, showMessage, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
+import { byAccount, ICredentialFactory, IAzureListingCache, VsCodeExtensionCredential, type AzureListingCache } from '@microsoft/vscode-azure-azutils';
+import { CaselessSet, ICodeContext, type QuickPickItemWithData, Roots, showMessage, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 import { GuidPattern } from '../../constants';
@@ -31,17 +31,17 @@ import { listFirstPageReachableTenants, type ReachableTenant } from './listReach
  *   directly (see {@linkcode pickTenantOrEnterId}).
  *
  * After a successful sign-in it invalidates the resources tree so the freshly
- * added account/tenant appears: a {@linkcode Roots} re-list for a default
- * sign-in, or the affected account's subtree ({@linkcode byAccount}) / the whole
- * tree ({@linkcode Everything}) for a tenant sign-in, since a reconciling
- * {@linkcode Roots} re-list would otherwise preserve the previously-empty
- * subscription list of a newly authorized tenant.
+ * added account or tenant appears, and touches the listing cache as little as
+ * the change allows: a {@linkcode Roots} re-list for a default sign-in, and for
+ * a tenant sign-in either nothing at all (a newly named tenant, which is merged
+ * above the cache) or a re-enumeration of just that tenant's subscriptions.
  */
 @injectable()
 export class SignIn implements ManagedCommand {
     public constructor(
         @inject(ICodeContext) private readonly ctx: ICodeContext,
-        @inject(IAzureViewDataTree) private readonly cache: IAzureViewDataTree,
+        @inject(IAzureViewDataTree) private readonly tree: IAzureViewDataTree,
+        @inject(IAzureListingCache) private readonly listings: AzureListingCache,
         @inject(ICredentialFactory) private readonly credentialFactory: ICredentialFactory,
     ) { }
 
@@ -49,14 +49,14 @@ export class SignIn implements ManagedCommand {
     public async execute(): Promise<void> {
         const code = this.ctx.code;
 
-        // Detect the current state without prompting: the resources tree lists
-        // already-signed-in accounts via `getAccounts`, which never triggers an
-        // interactive flow. If listing fails (e.g. a transient error), treat the
-        // user as signed out so they can still trigger an interactive sign-in
-        // rather than the command failing outright.
+        // Detect the current state without prompting: listing accounts goes
+        // through `getAccounts`, which never triggers an interactive flow. If
+        // listing fails (e.g. a transient error), treat the user as signed out so
+        // they can still trigger an interactive sign-in rather than the command
+        // failing outright.
         let signedIn: boolean;
         try {
-            signedIn = (await this.cache.getChildren()).some(isAccount);
+            signedIn = (await this.listings.listAccounts()).length > 0;
         } catch {
             signedIn = false;
         }
@@ -65,7 +65,10 @@ export class SignIn implements ManagedCommand {
             // Nobody is signed in yet, so the common case is a plain interactive
             // sign-in to the home tenant.
             if (await this.trySignInToDefault()) {
-                this.cache.invalidate(Roots);
+                // The account set just changed, and the memo says otherwise
+                // until it is told to look again.
+                await this.refreshAccounts();
+                this.tree.invalidate(Roots);
                 return;
             }
 
@@ -86,41 +89,57 @@ export class SignIn implements ManagedCommand {
         // tenant ID, so a failure is treated as "no suggestions".
         let tenants: ReachableTenant[];
         try {
-            tenants = await listFirstPageReachableTenants(this.cache);
+            tenants = await listFirstPageReachableTenants(this.listings);
         } catch {
             tenants = [];
         }
         const pick = await pickTenantOrEnterId(this.ctx, tenants);
         const session = await this.signInToTenant(pick);
 
-        const accountId = pick.accountId ?? session?.account.id;
+        // A tenant-targeted sign-in can surface an account that was not signed
+        // in before, and the accounts memo would otherwise keep saying it was
+        // not. Done before anything else so the tree re-list any branch below
+        // triggers sees the new account.
+        await this.refreshAccounts();
+
+        const accountId = pick.accountId ?? session.account.id;
 
         // A manually-entered tenant (no account context from the pick) won't show
         // up when listing tenants is blocked (e.g. conditional access), so persist
-        // it now that we know which account it resolved to. The data provider
-        // merges these saved tenants into that account's tenant listing.
-        if (!pick.accountId && accountId) {
-            // Persisting updates the signedInTenants setting, which
-            // AzureAccountDataProvider's configuration listener reacts to by
-            // invalidating the tree -- mirroring how SelectSubscriptions relies on
-            // the same setting-change detection, so this path doesn't invalidate
-            // the cache directly. Only when nothing was persisted (the tenant was
-            // already saved, so no configuration-change event fires) do we fall
-            // through to a direct invalidation: the tenant was still just
-            // re-authenticated, and account/tenant/subscription data never goes
-            // stale on its own (its TTL is Infinity), so its subtree still needs
-            // refreshing to surface any newly-authorized subscriptions.
-            if (await addSignedInTenant(code, { accountId, tenantId: pick.tenantId })) {
-                return;
-            }
+        // it now that we know which account it resolved to.
+        if (!pick.accountId && await addSignedInTenant(code, { accountId, tenantId: pick.tenantId })) {
+            // Newly named: nothing cached is untrue, because named tenants are
+            // merged above the cache on every read. The tenant appears on the
+            // next read with nothing re-listed, and its subscriptions are
+            // fetched when something first drills into it. The configuration
+            // listener re-renders the tree.
+            return;
         }
 
-        // A picked tenant, a typed tenant that resolved to no account, or a
-        // re-sign-in to an already-saved tenant writes no setting, so nothing else
-        // refreshes the tree -- invalidate directly. Prefer the affected account's
-        // subtree; fall back to a full-tree invalidation only when no account id is
-        // available.
-        this.cache.invalidate(accountId ? byAccount(accountId) : Everything);
+        // The tenant was already reachable -- picked from the suggestions, or
+        // typed but already saved. Its subscriptions are the one thing the
+        // sign-in can have changed: it may have authorized subscriptions that
+        // were invisible when the tenant was last listed. Nothing else is
+        // touched, including every other tenant under the same account.
+        this.listings.reenumerateSubscriptions({ accountId, tenantId: pick.tenantId });
+        this.tree.invalidate(byAccount(accountId));
+    }
+
+    /**
+     * Re-list accounts so the memo reflects the sign-in that just happened.
+     *
+     * Tolerates a listing failure: the sign-in itself succeeded, so failing the
+     * command here would be misleading. A failed listing is not retained by the
+     * cache, so the tree re-list that follows goes back to Azure and surfaces
+     * any lasting problem where the user can see it.
+     */
+    private async refreshAccounts(): Promise<void> {
+        try {
+            this.listings.reenumerateAccounts();
+            await this.listings.listAccounts();
+        } catch {
+            // Deliberately ignored; see above.
+        }
     }
 
     /**
@@ -180,11 +199,15 @@ export class SignIn implements ManagedCommand {
      * instead of `getToken`. The cast is safe because the default factory always
      * produces a {@linkcode VsCodeExtensionCredential}.
      *
-     * @returns The established session (whose `account.id` identifies the
-     * account the tenant resolved to), or `undefined` if VS Code returned no
-     * session.
+     * @returns The established session, whose `account.id` identifies the
+     * account the tenant resolved to.
+     * @throws If VS Code returns no session. `createIfNone` is set, so the
+     * documented outcomes are a session or a thrown cancellation; returning
+     * nothing would leave the caller unable to say which account was affected,
+     * and treating that as "signed in, account unknown" is what previously drove
+     * a full cache discard in response to a sign-in that had not happened.
      */
-    private async signInToTenant(pick: TenantPick): Promise<vscode.AuthenticationSession | undefined> {
+    private async signInToTenant(pick: TenantPick): Promise<vscode.AuthenticationSession> {
         const credential = this.credentialFactory({
             tenantId: pick.tenantId,
             sessionOptions: {
@@ -193,7 +216,11 @@ export class SignIn implements ManagedCommand {
             },
         }) as VsCodeExtensionCredential;
 
-        return (await credential.authenticate()) ?? undefined;
+        const session = await credential.authenticate();
+        if (!session) {
+            throw new Error(this.ctx.code.l10n.t('Signing in to tenant {0} returned no session.', pick.tenantId));
+        }
+        return session;
     }
 }
 

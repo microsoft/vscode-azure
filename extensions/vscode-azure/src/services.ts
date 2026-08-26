@@ -5,6 +5,7 @@
 
 import {
     type AzureSubscription,
+    type AzureSubscriptionTarget,
     type ConcreteAzureNode,
     type ConcreteAzureNodeTree,
     ICredentialFactory,
@@ -38,20 +39,20 @@ export const IAzureResourceTreeView: ServiceIdentifier<IAzureResourceTreeView> =
 export type IAzureResourceTreeView = vscode.TreeView<string>;
 
 /**
- * Identifier for a resolver that maps a bare subscription id to a fully-populated
- * {@linkcode AzureSubscription} by drilling the Azure resource data tree.
+ * Identifier for a resolver that maps a bare subscription id -- an azd
+ * environment's `AZURE_SUBSCRIPTION_ID`, a deep link -- to the
+ * {@linkcode AzureSubscription} carrying it, so a caller can learn which tenant
+ * to authenticate to. Bound to `findSubscriptionById` over the listing cache,
+ * which keeps components that merely need a tenant off the cache itself.
  *
- * Lets activity-tree components (e.g. the ARM deployment provider) obtain an
- * authenticatable subscription handle without taking a direct dependency on the
- * resource tree. Returns `undefined` when no signed-in account exposes the id.
+ * Resolve up front rather than on a background path: the answer is stable for
+ * the lifetime of the thing being tracked, so one lookup beats one per retry.
  *
- * An optional `tenantId` hint narrows the drill to a single tenant when the
- * owning tenant is known (e.g. hydrated from azd). An optional `accountId` hint
- * likewise narrows the drill to a single account when the owning account is
- * known.
+ * Returns `undefined` when no signed-in account reaches the id, which callers
+ * must degrade on rather than treat as an error.
  */
 export const ISubscriptionResolver: ServiceIdentifier<ISubscriptionResolver> = Symbol.for('ISubscriptionResolver');
-export type ISubscriptionResolver = (subscriptionId: string, tenantId?: string, accountId?: string) => Promise<AzureSubscription | undefined>;
+export type ISubscriptionResolver = (subscriptionId: string) => Promise<AzureSubscription | undefined>;
 
 // #endregion
 
@@ -106,22 +107,30 @@ export function pushDisposable<T>(context: Pick<ResolutionContext, 'get'>, injec
  */
 export type ProviderEntry<T> = Newable<T> | readonly [ServiceIdentifier<T>, Newable<T>];
 
-/** Signature shared by subscription-scoped Azure REST client `create` methods. */
-export type AzureClientCreate<TResult> = (
+/**
+ * Signature shared by subscription-scoped Azure REST client `create` methods.
+ *
+ * Generic in the subscription shape because clients need different amounts of
+ * it: issuing requests needs only an {@linkcode AzureSubscriptionTarget}, while
+ * a client that stamps the subscription onto what it returns (so the tree can
+ * build node ids from it) needs a listed {@linkcode AzureSubscription}. Each
+ * provider declares which, and gets exactly that.
+ */
+export type AzureClientCreate<TResult, TSubscription extends AzureSubscriptionTarget> = (
     context: ICodeContext,
     executor: IActionExecutor,
     credential: TokenCredential,
-    subscription: AzureSubscription,
+    subscription: TSubscription,
 ) => TResult;
 
 /**
  * Bind a subscription-scoped Azure client provider unless another product
  * already registered the same shared provider.
  */
-export function bindAzureClientProvider<TResult>(
+export function bindAzureClientProvider<TResult, TSubscription extends AzureSubscriptionTarget>(
     container: Container,
-    providerId: ServiceIdentifier<(subscription: AzureSubscription) => TResult>,
-    create: AzureClientCreate<TResult>,
+    providerId: ServiceIdentifier<(subscription: TSubscription) => TResult>,
+    create: AzureClientCreate<TResult, TSubscription>,
 ): void {
     if (container.isBound(providerId)) {
         return;
@@ -131,7 +140,7 @@ export function bindAzureClientProvider<TResult>(
         const codeContext = context.get(ICodeContext);
         const executor = context.get(IActionExecutor);
         const credentialFactory = context.get(ICredentialFactory);
-        return (subscription: AzureSubscription) => create(
+        return (subscription: TSubscription) => create(
             codeContext,
             executor,
             credentialFactory(subscription),

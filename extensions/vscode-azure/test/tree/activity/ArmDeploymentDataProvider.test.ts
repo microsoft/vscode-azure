@@ -3,10 +3,12 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createMockAccountDataProvider, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
+import { AzurePublicCloud, type AzureSubscriptionTarget, type CredentialFactoryOptions } from '@microsoft/vscode-azure-azutils';
+import { createMockAccountDataProvider } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import { ArmDeploymentDataProvider, isNestedDeploymentOp, isVisibleOperation, parseDeploymentId, type ArmDeploymentActivity } from '../../../src/tree/activity/ArmDeploymentDataProvider';
+import { CredentialOptionsScope } from '../../../src/utils/CredentialOptionsScope';
 import { makeActivity, makeOperationActivity } from './mockActivity';
 
 /** Creates a mock IDeploymentClient that returns the given operations and deployment state. */
@@ -143,8 +145,7 @@ describe('ArmDeploymentDataProvider (unit)', () => {
         const createClientFn = clientOrFactory
             ? mock.fn(() => clientOrFactory)
             : mock.fn(() => ({}));
-        const resolveSubscription = mock.fn((subscriptionId: string) => Promise.resolve(makeSubscription({ subscriptionId })));
-        return new ArmDeploymentDataProvider(vscode, executor, createClientFn as never, resolveSubscription, createMockAccountDataProvider());
+        return new ArmDeploymentDataProvider(vscode, executor, createClientFn as never, new CredentialOptionsScope(), createMockAccountDataProvider());
     }
 
     /**
@@ -193,7 +194,7 @@ describe('ArmDeploymentDataProvider (unit)', () => {
             expect(roots).to.have.length(1);
             expect(roots[0].deploymentName).to.equal('myDeploy');
             expect(roots[0].status).to.equal('InProgress');
-            expect(roots[0].subscriptionId).to.equal('test-sub');
+            expect(roots[0].subscription.subscriptionId).to.equal('test-sub');
         });
 
         it('should populate scope from the deployment ID', () => {
@@ -209,28 +210,36 @@ describe('ArmDeploymentDataProvider (unit)', () => {
             const provider = createProvider();
             provider.trackDeployment('/subscriptions/test-sub/providers/Microsoft.Resources/deployments/d1', 'tenant-9');
 
-            expect(provider.getChildren()[0].tenantId).to.equal('tenant-9');
+            expect(provider.getChildren()[0].subscription.tenantId).to.equal('tenant-9');
         });
 
         it('should leave the tenantId unset when no hint is provided', () => {
             const provider = createProvider();
             provider.trackDeployment('/subscriptions/test-sub/providers/Microsoft.Resources/deployments/d1');
 
-            expect(provider.getChildren()[0].tenantId).to.be.undefined;
+            expect(provider.getChildren()[0].subscription.tenantId).to.be.undefined;
         });
 
         it('should store the accountId hint on the tracked deployment', () => {
             const provider = createProvider();
             provider.trackDeployment('/subscriptions/test-sub/providers/Microsoft.Resources/deployments/d1', 'tenant-9', 'acct-9');
 
-            expect(provider.getChildren()[0].accountId).to.equal('acct-9');
+            expect(provider.getChildren()[0].subscription.accountId).to.equal('acct-9');
         });
 
         it('should leave the accountId unset when no hint is provided', () => {
             const provider = createProvider();
             provider.trackDeployment('/subscriptions/test-sub/providers/Microsoft.Resources/deployments/d1');
 
-            expect(provider.getChildren()[0].accountId).to.be.undefined;
+            expect(provider.getChildren()[0].subscription.accountId).to.be.undefined;
+        });
+
+        it('should target the configured cloud', () => {
+            const provider = createProvider();
+            provider.trackDeployment('/subscriptions/test-sub/providers/Microsoft.Resources/deployments/d1');
+
+            expect(provider.getChildren()[0].subscription.environment.resourceManagerEndpointUrl)
+                .to.equal(AzurePublicCloud.resourceManagerEndpointUrl);
         });
 
         it('should fire onDidChange when tracking', () => {
@@ -256,8 +265,7 @@ describe('ArmDeploymentDataProvider (unit)', () => {
             const { executor } = createTestActionExecutor();
             const { vscode } = createMockVsCode();
             const accountProvider = createMockAccountDataProvider();
-            const resolveSubscription = mock.fn((subscriptionId: string) => Promise.resolve(makeSubscription({ subscriptionId })));
-            const provider = new ArmDeploymentDataProvider(vscode, executor, mock.fn(() => createMockClient()) as never, resolveSubscription, accountProvider);
+            const provider = new ArmDeploymentDataProvider(vscode, executor, mock.fn(() => createMockClient()) as never, new CredentialOptionsScope(), accountProvider);
             provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/removed', 'tenant', 'ACCOUNT-1');
             provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/kept', 'tenant', 'account-2');
             const removed = provider.getChildren()[0];
@@ -265,7 +273,7 @@ describe('ArmDeploymentDataProvider (unit)', () => {
             accountProvider.removeAccountsEmitter.fire(['account-1']);
 
             expect(removed.abortController.signal.aborted).to.be.true;
-            expect(provider.getChildren().map(activity => activity.accountId)).to.deep.equal(['account-2']);
+            expect(provider.getChildren().map(activity => activity.subscription.accountId)).to.deep.equal(['account-2']);
         });
     });
 
@@ -296,63 +304,72 @@ describe('ArmDeploymentDataProvider (unit)', () => {
             expect(activity.operations![0].targetResourceName).to.equal('sa1');
         });
 
-        it('should forward the tenantId hint to the subscription resolver', async () => {
+        it('should build the deployment client for the deployment target', async () => {
             const { executor } = createTestActionExecutor();
             const { vscode } = createMockVsCode();
-            const resolveSubscription = mock.fn((subscriptionId: string, _tenantId?: string) => Promise.resolve(makeSubscription({ subscriptionId })));
-            const provider = new ArmDeploymentDataProvider(vscode, executor, mock.fn(() => createMockClient()) as never, resolveSubscription, createMockAccountDataProvider());
-            provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/d1', 'tenant-9');
-
-            await provider.enrich(provider.getChildren()[0]);
-
-            expect(resolveSubscription.mock.callCount()).to.equal(1);
-            expect(resolveSubscription.mock.calls[0].arguments[0]).to.equal('sub');
-            expect(resolveSubscription.mock.calls[0].arguments[1]).to.equal('tenant-9');
-        });
-
-        it('should forward the accountId hint to the subscription resolver', async () => {
-            const { executor } = createTestActionExecutor();
-            const { vscode } = createMockVsCode();
-            const resolveSubscription = mock.fn((subscriptionId: string, _tenantId?: string, _accountId?: string) => Promise.resolve(makeSubscription({ subscriptionId })));
-            const provider = new ArmDeploymentDataProvider(vscode, executor, mock.fn(() => createMockClient()) as never, resolveSubscription, createMockAccountDataProvider());
+            const createClient = mock.fn((_target: AzureSubscriptionTarget) => createMockClient());
+            const provider = new ArmDeploymentDataProvider(vscode, executor, createClient as never, new CredentialOptionsScope(), createMockAccountDataProvider());
             provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/d1', 'tenant-9', 'acct-9');
 
             await provider.enrich(provider.getChildren()[0]);
 
-            expect(resolveSubscription.mock.callCount()).to.equal(1);
-            expect(resolveSubscription.mock.calls[0].arguments[2]).to.equal('acct-9');
+            expect(createClient.mock.callCount()).to.equal(1);
+            const target = createClient.mock.calls[0].arguments[0];
+            expect(target.subscriptionId).to.equal('sub');
+            expect(target.tenantId).to.equal('tenant-9');
+            expect(target.accountId).to.equal('acct-9');
         });
 
-        it('should return false when the subscription cannot be resolved', async () => {
+        it('should build the deployment client under a silent credential scope', async () => {
             const { executor } = createTestActionExecutor();
             const { vscode } = createMockVsCode();
-            const createClientFn = mock.fn(() => createMockClient());
-            const resolveSubscription = mock.fn((_id: string) => Promise.resolve(undefined));
-            const provider = new ArmDeploymentDataProvider(vscode, executor, createClientFn as never, resolveSubscription, createMockAccountDataProvider());
+            const scope = new CredentialOptionsScope();
+            let observed: CredentialFactoryOptions | undefined;
+            const createClient = mock.fn(() => {
+                observed = scope.current;
+                return createMockClient();
+            });
+            const provider = new ArmDeploymentDataProvider(vscode, executor, createClient as never, scope, createMockAccountDataProvider());
             provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/d1');
 
-            const activity = provider.getChildren()[0];
-            const changed = await provider.enrich(activity);
+            await provider.enrich(provider.getChildren()[0]);
 
-            expect(changed).to.be.false;
-            expect(activity.operations).to.be.undefined;
-            expect(createClientFn.mock.callCount()).to.equal(0);
+            expect(observed?.sessionOptions?.silent).to.be.true;
         });
 
-        it('should resolve the subscription and create a lightweight client for each operation', async () => {
+        it('should leave the deployment unenriched instead of throwing when the fetch fails', async () => {
+            const failingClient = {
+                deployments: { getAtScope: mock.fn(() => Promise.reject(new Error('Pagination failed with unexpected statusCode 401'))) },
+                deploymentOperations: {
+                    listAtScope() {
+                        return (async function* () {
+                            yield await Promise.reject(new Error('Pagination failed with unexpected statusCode 401'));
+                        })();
+                    },
+                },
+            };
+            const provider = createProvider(failingClient);
+            provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/d1');
+
+            // The tree turns a rejected enrichment into an error notification,
+            // for work the user never asked for.
+            const changed = await provider.enrich(provider.getChildren()[0]);
+
+            expect(changed).to.be.false;
+        });
+
+        it('should create a client for each enrichment', async () => {
             const { executor } = createTestActionExecutor();
             const { vscode } = createMockVsCode();
             const client = createMockClient();
             const createClient = mock.fn(() => client);
-            const resolveSubscription = mock.fn((subscriptionId: string) => Promise.resolve(makeSubscription({ subscriptionId })));
-            const provider = new ArmDeploymentDataProvider(vscode, executor, createClient as never, resolveSubscription, createMockAccountDataProvider());
+            const provider = new ArmDeploymentDataProvider(vscode, executor, createClient as never, new CredentialOptionsScope(), createMockAccountDataProvider());
             provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/d1');
             const activity = provider.getChildren()[0];
 
             await provider.enrich(activity);
             await provider.enrich(activity);
 
-            expect(resolveSubscription.mock.callCount()).to.equal(2);
             expect(createClient.mock.callCount()).to.equal(2);
         });
 
