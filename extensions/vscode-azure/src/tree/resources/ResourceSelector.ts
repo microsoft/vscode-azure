@@ -130,21 +130,24 @@ export class ResourceSelector {
      * Resolves a resource of type {@linkcode T}.
      *
      * @param logicalType - The logical resource type to filter on
-     *   (e.g. {@linkcode AcrResourceType}).
+     *   (e.g. {@linkcode AcrResourceType}). Both paths honor it: the picker
+     *   offers only resources of this type, and a `key` naming a resource of
+     *   any other type is rejected. Compared case-insensitively.
      * @param key - Optional tree-item key. When provided, the resource
      *   is looked up directly from the data cache. When omitted, the
      *   user is prompted to pick a resource via a quick-pick wizard.
      * @returns The resolved resource.
-     * @throws If `key` is provided but does not identify a resource in the
-     *   data cache (e.g. stale tree item or invalid invocation), or if
-     *   the user cancels the picker when `key` is not provided.
+     * @throws If `key` is provided but does not identify a resource of
+     *   `logicalType` in the data cache (e.g. stale tree item or invalid
+     *   invocation), or if the user cancels the picker when `key` is not
+     *   provided.
      */
     public async select<T extends GenericResource>(logicalType: string, key?: string): Promise<T> {
         if (key) {
             const notFound = () => this.ctx.code.l10n.t('Resource not found in the resources view. Try refreshing the resources view and running the command again.');
             return this.resolve({
                 key,
-                canHandle: isGenericResource,
+                canHandle: (node): node is GenericResource => isGenericResource(node) && node.logicalType.toLowerCase() === logicalType.toLowerCase(),
                 messages: { missingNode: notFound, invalidNode: notFound },
             }) as T;
         }

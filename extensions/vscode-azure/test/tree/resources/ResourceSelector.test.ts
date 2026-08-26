@@ -54,6 +54,23 @@ describe('ResourceSelector (unit)', () => {
                 .to.be.rejectedWith(/Resource not found/);
         });
 
+        it('should throw when the key identifies a resource of a different logical type', async () => {
+            // The logical type is part of the contract on both paths, so a key
+            // naming a web app cannot satisfy a request for a registry.
+            const { selector } = createTestResourceSelector({ nodes: [site1] });
+
+            await expect(selector.select<GenericResource>('Microsoft.ContainerRegistry/registries', site1Id))
+                .to.be.rejectedWith(/Resource not found/);
+        });
+
+        it('should match the logical type case-insensitively', async () => {
+            const { selector } = createTestResourceSelector({ nodes: [site1] });
+
+            const result = await selector.select<GenericResource>('microsoft.web/SITES', site1Id);
+
+            expect(result.name).to.equal('site1');
+        });
+
         it('should prompt the user with a resource picker when no key is provided', async () => {
             const viewTree = createMockViewItemTree({
                 '': [subId],
