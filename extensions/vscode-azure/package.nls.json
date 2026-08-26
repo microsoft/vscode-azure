@@ -28,6 +28,8 @@
     "commands.vscode-azure/containerApps/revealEnvironment": "Reveal Environment",
     "commands.vscode-azure/containerApps/startStreamingLogs": "Start Streaming Logs...",
     "commands.vscode-azure/containerApps/stopStreamingLogs": "Stop Streaming Logs...",
+    "commands.vscode-azure/containerApps/createNew": "Create Empty Container App in Azure...",
+    "commands.vscode-azure/containerApps/deploy": "Deploy Project as Container App...",
     "commands.vscode-azure/azdUp": "Provision & Deploy",
     "commands.vscode-azure/azdDown": "Delete Deployment",
     "commands.vscode-azure/signIn": "Sign in to Azure...",

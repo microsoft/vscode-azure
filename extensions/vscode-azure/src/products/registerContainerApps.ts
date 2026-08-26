@@ -5,6 +5,7 @@
 
 import { ContainerAppsClient, IContainerAppsClientProvider } from '@microsoft/vscode-azure-azutils';
 import { selfOnly } from '@microsoft/vscode-azure-utils';
+import { CreateContainerApp } from '../commands/containerApps/CreateContainerApp';
 import { OpenContainerAppConsole, OpenContainerAppLogs } from '../commands/containerApps/portalBlades';
 import { RestartContainerApp } from '../commands/containerApps/RestartContainerApp';
 import { RevealContainerAppEnvironment } from '../commands/containerApps/RevealContainerAppEnvironment';
@@ -16,6 +17,8 @@ import { IAzureViewDataTree } from '../services';
 import { ContainerAppLogStreamService, IContainerAppLogStreamService } from '../tree/resources/containerApps/ContainerAppLogStream';
 import { ContainerAppsDataProvider } from '../tree/resources/containerApps/ContainerAppsDataProvider';
 import { ContainerAppsViewProvider } from '../tree/resources/containerApps/ContainerAppsViewProvider';
+import { containerAppsDetector } from '../tree/workspace/containerApps/containerAppsDetector';
+import { IWorkspaceDetector } from '../utils/workspaceIndex/WorkspaceDetector';
 
 /** Contribute all Azure Container Apps services and UI integrations. */
 export function registerContainerApps(registrar: ProductRegistrar): void {
@@ -25,6 +28,7 @@ export function registerContainerApps(registrar: ProductRegistrar): void {
 
     registrar.registerBinding(container => {
         container.bind(IContainerAppLogStreamService).to(ContainerAppLogStreamService).inSingletonScope();
+        container.bind(IWorkspaceDetector).toConstantValue(containerAppsDetector);
     });
 
     registrar.registerResourceDataProvider(ContainerAppsDataProvider);
@@ -36,6 +40,8 @@ export function registerContainerApps(registrar: ProductRegistrar): void {
     registrar.registerCommand('vscode-azure/containerApps/revealEnvironment', RevealContainerAppEnvironment);
     registrar.registerCommand('vscode-azure/containerApps/startStreamingLogs', StartStreamingLogs);
     registrar.registerCommand('vscode-azure/containerApps/stopStreamingLogs', StopStreamingLogs);
+    registrar.registerCommand('vscode-azure/containerApps/createNew', CreateContainerApp, 'createNew');
+    registrar.registerCommand('vscode-azure/containerApps/deploy', CreateContainerApp, 'deploy');
 
     // Whether a stream is open decides whether the app node offers to stop it,
     // so a change in the live set has to re-render that node. Only its label

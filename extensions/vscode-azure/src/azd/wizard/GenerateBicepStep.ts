@@ -11,11 +11,17 @@ export const InfraFolderName = 'infra';
 export const MainBicepFileName = 'main.bicep';
 const MainParametersFileName = 'main.parameters.json';
 
-/** Name of a bundled bicep template under `resources/templates/`. */
-export type BicepTemplateName = 'functionApp.bicep'; // | 'staticWebApp.bicep' | ...
+/**
+ * Name of a bundled template directory under `resources/templates/`.
+ *
+ * Each directory holds a complete `infra/` payload, so a template that needs a
+ * local Bicep module alongside its `main.bicep` ships both and keeps the module
+ * boundary in the generated project.
+ */
+export type BicepTemplateName = 'functionApp' | 'containerApp';
 
 /**
- * Generates infra files: copies the chosen bicep template from the
+ * Generates infra files: copies the chosen template directory from the
  * extension's bundled templates and writes a `main.parameters.json` with
  * the user's chosen values.
  *
@@ -70,18 +76,22 @@ export class GenerateBicepStep<TContext extends AzdWizardContext> extends Execut
             },
         }, undefined, 4);
 
-        await this.ctx.code.workspace.fs.createDirectory(bicepFolder);
-        await Promise.all([
-            this.ctx.code.workspace.fs.writeFile(
-                this.ctx.code.Uri.joinPath(bicepFolder, MainParametersFileName),
-                Buffer.from(parameters),
-            ),
-            this.ctx.code.workspace.fs.copy(
-                templateUri,
-                this.ctx.code.Uri.joinPath(bicepFolder, MainBicepFileName),
-                { overwrite: true }, // We shouldn't actually be overwriting, due to `shouldExecute()`'s guard, but just in case...
-            ),
-        ]);
+        // Copying the directory rather than a single file is what preserves a
+        // template's own layout -- a `modules/` subtree arrives in the generated
+        // project with its relative paths intact, so the module references in
+        // `main.bicep` still resolve.
+        await this.ctx.code.workspace.fs.copy(
+            templateUri,
+            bicepFolder,
+            { overwrite: true }, // We shouldn't actually be overwriting, due to `shouldExecute()`'s guard, but just in case...
+        );
+
+        // After the copy: it creates the destination directory, and on some file
+        // systems copying onto an existing directory is refused.
+        await this.ctx.code.workspace.fs.writeFile(
+            this.ctx.code.Uri.joinPath(bicepFolder, MainParametersFileName),
+            Buffer.from(parameters),
+        );
     }
 
     private pickParameters(context: Readonly<TContext>): Record<string, { value: unknown }> {

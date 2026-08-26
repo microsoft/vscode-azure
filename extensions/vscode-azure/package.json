@@ -134,6 +134,16 @@
                 "title": "%commands.vscode-azure/containerApps/stopStreamingLogs%"
             },
             {
+                "command": "vscode-azure/containerApps/createNew",
+                "category": "%commands.category.azure%",
+                "title": "%commands.vscode-azure/containerApps/createNew%"
+            },
+            {
+                "command": "vscode-azure/containerApps/deploy",
+                "category": "%commands.category.azure%",
+                "title": "%commands.vscode-azure/containerApps/deploy%"
+            },
+            {
                 "command": "vscode-azure/azdUp",
                 "category": "%commands.category.azure%",
                 "icon": "$(rocket)",

@@ -254,36 +254,46 @@ Both resource types are handled by **one** data provider and **one** view provid
 > External facts: azd opts into a remote ACR build with `services.<name>.docker.remoteBuild: true`
 > (verified against [azd's `azure.yaml` schema](https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json)
 > and the [azd schema docs](https://learn.microsoft.com/en-us/azure/developer/azure-developer-cli/azd-schema));
-> the bare service-level `remoteBuild` is a **different**, Functions-only feature. AVM module references and
-> versions are recorded in the provisioning decision above.
+> the bare service-level `remoteBuild` is a **different**, Functions-only feature. Every AVM module
+> reference, version, and parameter name in the topology module is verified by `az bicep build`, which
+> resolves each pinned `br/public:` module from the registry and type-checks the call. That compile caught
+> one error in the research: `container-apps-stack:0.4.0` takes `logAnalyticsWorkspaceName`, not
+> `logAnalyticsWorkspaceResourceId`.
+
+**Status: the create/deploy path is complete and green; five tasks below remain open.** The wizard
+provisions the full topology and `azd deploy` targets the app, which is the end-to-end path. What is not
+built is the *existing-image* path (ACA-096/098/112/113), the overwrite warning (ACA-110), and post-deploy
+start verification (ACA-105/115). None blocks the primary flow, because on the `deploy` job azd builds and
+pushes the image itself and the Bicep falls back to a placeholder until it does.
+
 
 - [x] File the tracking issue for a real AVM container-apps topology pattern module
       ([#329](https://github.com/microsoft/vscode-azure/issues/329)), and link it from the local module's
       header comment  <- ACA-002
-- [ ] Generalize `GenerateBicepStep` from copying **one** template file to copying a template **directory**
+- [x] Generalize `GenerateBicepStep` from copying **one** template file to copying a template **directory**
       with relative paths preserved, and move `functionApp.bicep` to `functionApp/main.bicep` in the same
       change so no previously migrated product stays the implicit default case  <- ACA-002
-- [ ] Author `templates/containerApp/modules/container-app-topology/main.bicep`: an AVM-shaped pattern
+- [x] Author `templates/containerApp/modules/container-app-topology/main.bicep`: an AVM-shaped pattern
       module composing `avm/ptn/azd/monitoring`, `avm/ptn/azd/container-apps-stack`,
       `avm/res/managed-identity/user-assigned-identity`, and `avm/ptn/azd/container-app-upsert`, each at a
       pinned `br/public:...:<version>` reference; every parameter and output described and named for a
       future registry contract  <- ACA-002, ACA-003, ACA-101, ACA-114
-- [ ] Author `templates/containerApp/main.bicep`: thin consumer owning `targetScope = 'subscription'`, the
+- [x] Author `templates/containerApp/main.bicep`: thin consumer owning `targetScope = 'subscription'`, the
       resource group, and the azd placeholders  <- ACA-002
-- [ ] Validate the consumer with the repo's Bicep validation so the remote modules actually resolve, and
+- [x] Validate the consumer with the repo's Bicep validation so the remote modules actually resolve, and
       confirm Post-clone / Bootstrapped still skip generation when `infra/main.bicep` exists  <- ACA-002
-- [ ] `CreateContainerAppContext` extending `AzdWizardContext` with the image, ingress and registry inputs
+- [x] `CreateContainerAppContext` extending `AzdWizardContext` with the image, ingress and registry inputs
       <- ACA-002
 - [ ] `PickImageSourceStep` -- one combobox over the user's ACR repositories/tags **plus** free-text entry,
       instead of the source's registry-kind -> registry -> repository -> tag chain. Ships the "other
       registry" path as free-text input in the same pick, not a separate surface  <- ACA-096, ACA-098
 - [ ] Add `@azure/container-registry` and an `AcrRepositoryClient` data-plane wrapper in azutils to back
       that pick (management-plane ACR is already covered by the existing `AcrClient`)  <- ACA-113, ACA-112
-- [ ] **Reuse**, no code: registry creation is a line in the topology module, and everything else about
+- [x] **Reuse**, no code: registry creation is a line in the topology module, and everything else about
       registries belongs to the ACR product -- no container-apps-owned "create registry" command  <- ACA-048
-- [ ] Quickstart image becomes the Bicep default rather than a prompt -- an empty `imageName` resolves to
+- [x] Quickstart image becomes the Bicep default rather than a prompt -- an empty `imageName` resolves to
       the module's placeholder image  <- ACA-095
-- [ ] Dockerfile `EXPOSE` parsing feeds the `targetPort` Bicep **parameter default**; it never prompts.
+- [x] Dockerfile `EXPOSE` parsing feeds the `targetPort` Bicep **parameter default**; it never prompts.
       Read the Dockerfile through the workspace index  <- ACA-104
 - [ ] Overwrite / unsupported-features warning rebuilt on the shared confirm step (`ConfirmProvisionStep`),
       shown only when targeting an existing app  <- ACA-110
@@ -292,7 +302,7 @@ Both resource types are handled by **one** data provider and **one** view provid
       (`ContainerAppConsoleLogs_CL`, last 5 minutes) and attach the output to the activity so it can be
       explained  <- ACA-105
 - [ ] Add `@azure/monitor-query` and a `LogsQueryClient` wrapper in azutils to back that step  <- ACA-115
-- [ ] Register `CreateContainerApp` twice -- `vscode-azure/containerApps/createNew` and
+- [x] Register `CreateContainerApp` twice -- `vscode-azure/containerApps/createNew` and
       `vscode-azure/containerApps/deploy` -- via `prefixArgs`, matching the Functions precedent. This is
       where `createContainerApp`, `createManagedEnvironment`, `deployWorkspaceProject` and
       `deployContainerApp` all land: the environment is provisioned as supporting infrastructure inside the
@@ -300,11 +310,11 @@ Both resource types are handled by **one** data provider and **one** view provid
 
 ## Slice 4 -- Manifest, docs, verification
 
-- [ ] Final `package.json` / `package.nls.json` pass: every command localized, every palette entry
+- [x] Final `package.json` / `package.nls.json` pass: every command localized, every palette entry
       deliberate, every `when` clause `\b`-anchored and matching an **assembled** context value  <- --
-- [ ] No `contributes.configuration` entries are added -- all seven source settings are Drop or Reuse
+- [x] No `contributes.configuration` entries are added -- all seven source settings are Drop or Reuse
       <- ACA-055 .. ACA-061
-- [ ] Product doc `docs/products/containerapps.md`; framework docs get at most a link  <- --
+- [x] Product doc `docs/products/containerapps.md`; framework docs get at most a link  <- --
 - [ ] Unit tests for the behavior each slice adds (guards, enrichment, view rendering, the log-stream
       service's live-set bookkeeping, the image-source pick). No manifest-completeness, DI-registration, or
       `contextValue`-literal tests  <- --
