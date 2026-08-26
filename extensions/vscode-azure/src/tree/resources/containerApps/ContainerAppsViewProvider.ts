@@ -7,10 +7,15 @@ import { AzureNodeId, getNodeType, isGenericResource, type VirtualResource } fro
 import { IActionExecutor, ICodeContext, type ITreeItem, type ViewProvider } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { OpenContainerAppConsole, OpenContainerAppLogs } from '../../../commands/containerApps/portalBlades';
+import { RestartContainerApp } from '../../../commands/containerApps/RestartContainerApp';
+import { RevealContainerAppEnvironment } from '../../../commands/containerApps/RevealContainerAppEnvironment';
+import { StartStreamingLogs } from '../../../commands/containerApps/StartStreamingLogs';
+import { StopStreamingLogs } from '../../../commands/containerApps/StopStreamingLogs';
 import { IAzureViewDataTree } from '../../../services';
 import { resourceContextValue } from '../../contextValueHelpers';
 import { getResourceTypeIconUri } from '../../iconPath';
 import { isContainerApp, type ContainerApp } from './ContainerApp';
+import { IContainerAppLogStreamService } from './ContainerAppLogStream';
 import { isContainerNode } from './ContainerAppsDataProvider';
 import { isManagedEnvironment } from './ManagedEnvironment';
 
@@ -31,6 +36,7 @@ export class ContainerAppsViewProvider implements ViewProvider<string> {
         @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IAzureViewDataTree) private readonly tree: IAzureViewDataTree,
+        @inject(IContainerAppLogStreamService) private readonly streams: IContainerAppLogStreamService,
     ) { }
 
     /** @inheritdoc */
@@ -74,25 +80,47 @@ export class ContainerAppsViewProvider implements ViewProvider<string> {
         // An app expands to its containers; an environment is a leaf, because
         // the apps it hosts are siblings rooted in their own resource groups
         // and its true ARM children are out of scope.
-        const isApp = isContainerApp(resource);
+        const app = isContainerApp(resource) ? resource : undefined;
 
         const item = new this.ctx.code.TreeItem(
             resource.name,
-            isApp
+            app
                 ? this.ctx.code.TreeItemCollapsibleState.Collapsed
                 : this.ctx.code.TreeItemCollapsibleState.None,
         );
         item.id = key;
         item.iconPath = getResourceTypeIconUri(this.ctx, resource.logicalType);
-        item.contextValue = isApp
-            ? resourceContextValue(resource, OpenContainerAppConsole.ContextValue, OpenContainerAppLogs.ContextValue)
+        item.contextValue = app
+            ? resourceContextValue(resource, ...this.appContextValues(app))
             : resourceContextValue(resource);
-
-        if (isContainerApp(resource)) {
-            item.description = this.describeAppState(resource);
-        }
+        item.description = app ? this.describeAppState(app) : undefined;
 
         return item;
+    }
+
+    /**
+     * Context values for the commands that act on a container app.
+     *
+     * Stopping a stream is only offered while one is open, so the node has to be
+     * re-rendered when that changes -- the log-stream service invalidates it.
+     */
+    private appContextValues(resource: ContainerApp): string[] {
+        const values = [
+            OpenContainerAppConsole.ContextValue,
+            OpenContainerAppLogs.ContextValue,
+            RestartContainerApp.ContextValue,
+            StartStreamingLogs.ContextValue,
+        ];
+
+        if (resource.environmentId) {
+            values.push(RevealContainerAppEnvironment.ContextValue);
+        }
+
+        if (this.streams.isStreaming(resource.id)) {
+            values.push(StopStreamingLogs.ContextValue);
+        }
+
+        return values;
     }
 
     /** @inheritdoc */

@@ -12,10 +12,16 @@ import {
 } from '@azure/arm-appcontainers/api/containerApps';
 import {
     getRevision as sdkGetRevision,
+    listRevisions as sdkListRevisions,
     restartRevision as sdkRestartRevision,
     type ContainerAppsRevisionsGetRevisionOptionalParams,
+    type ContainerAppsRevisionsListRevisionsOptionalParams,
     type ContainerAppsRevisionsRestartRevisionOptionalParams,
 } from '@azure/arm-appcontainers/api/containerAppsRevisions';
+import {
+    listReplicas as sdkListReplicas,
+    type ContainerAppsRevisionReplicasListReplicasOptionalParams,
+} from '@azure/arm-appcontainers/api/containerAppsRevisionReplicas';
 import { get as sdkGetManagedEnvironment, type ManagedEnvironmentsGetOptionalParams } from '@azure/arm-appcontainers/api/managedEnvironments';
 import type {
     Container,
@@ -23,8 +29,10 @@ import type {
     ContainerAppAuthToken,
     ManagedEnvironment as SdkManagedEnvironment,
     Replica,
+    ReplicaContainer,
     Revision as SdkRevision,
 } from '@azure/arm-appcontainers/models';
+import type { PagedAsyncIterableIterator } from '@azure/core-paging';
 import type { TokenCredential } from '@azure/core-auth';
 import type { IActionExecutor, ICodeContext, SyncFactory, WithRequired } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
@@ -38,7 +46,7 @@ export type Revision = WithRequired<SdkRevision, 'id' | 'name' | 'type'>;
 /** Subset of the SDK managed environment with the fields ARM always returns. */
 export type ManagedEnvironment = WithRequired<SdkManagedEnvironment, 'id' | 'name' | 'type' | 'location'>;
 
-export type { Container, ContainerAppAuthToken, Replica };
+export type { Container, ContainerAppAuthToken, Replica, ReplicaContainer };
 
 /** Factory that creates an {@linkcode IContainerAppsClient} for a given subscription. */
 export const IContainerAppsClientProvider: ServiceIdentifier<IContainerAppsClientProvider> = Symbol.for('IContainerAppsClientProvider');
@@ -62,7 +70,15 @@ export interface IContainerAppsClient {
     };
     readonly containerAppsRevisions: {
         getRevision(resourceGroupName: string, containerAppName: string, revisionName: string, options?: ContainerAppsRevisionsGetRevisionOptionalParams): Promise<Revision>;
+        listRevisions(resourceGroupName: string, containerAppName: string, options?: ContainerAppsRevisionsListRevisionsOptionalParams): PagedAsyncIterableIterator<Revision>;
         restartRevision(resourceGroupName: string, containerAppName: string, revisionName: string, options?: ContainerAppsRevisionsRestartRevisionOptionalParams): Promise<void>;
+    };
+    readonly containerAppsRevisionReplicas: {
+        /**
+         * Lists the replicas currently running a revision. The service returns
+         * the whole collection in one response rather than paging it.
+         */
+        listReplicas(resourceGroupName: string, containerAppName: string, revisionName: string, options?: ContainerAppsRevisionReplicasListReplicasOptionalParams): Promise<readonly Replica[]>;
     };
     readonly managedEnvironments: {
         get(resourceGroupName: string, environmentName: string, options?: ManagedEnvironmentsGetOptionalParams): Promise<ManagedEnvironment>;
@@ -114,8 +130,17 @@ export class ContainerAppsClient implements IContainerAppsClient {
         return {
             getRevision: (resourceGroupName, containerAppName, revisionName, options) =>
                 sdkGetRevision(this.inner, resourceGroupName, containerAppName, revisionName, options) as Promise<Revision>,
+            listRevisions: (resourceGroupName, containerAppName, options) =>
+                sdkListRevisions(this.inner, resourceGroupName, containerAppName, options) as PagedAsyncIterableIterator<Revision>,
             restartRevision: (resourceGroupName, containerAppName, revisionName, options) =>
                 sdkRestartRevision(this.inner, resourceGroupName, containerAppName, revisionName, options),
+        };
+    }
+
+    public get containerAppsRevisionReplicas(): IContainerAppsClient['containerAppsRevisionReplicas'] {
+        return {
+            listReplicas: async (resourceGroupName, containerAppName, revisionName, options) =>
+                (await sdkListReplicas(this.inner, resourceGroupName, containerAppName, revisionName, options)).value,
         };
     }
 

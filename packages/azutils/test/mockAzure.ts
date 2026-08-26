@@ -18,7 +18,8 @@ import type { GenericResource } from '../src/models/GenericResource';
 import type { ResourceGroup, VirtualGroup } from '../src/models/Grouping';
 import type { VirtualResource } from '../src/models/VirtualResource';
 import type { ISubscriptionClient, ISubscriptionClientProvider, Location, Subscription, TenantIdDescription } from '../src/rest/clients/SubscriptionClient';
-import type { Container, IContainerAppsClient } from '../src/rest/clients/ContainerAppsClient';
+import type { Container, IContainerAppsClient, Replica, Revision } from '../src/rest/clients/ContainerAppsClient';
+import type { PagedAsyncIterableIterator } from '@azure/core-paging';
 import type { IWebAppClient } from '../src/rest/clients/WebAppClient';
 
 const defaultEnvironment: EnvironmentLike = AzurePublicCloud;
@@ -494,6 +495,12 @@ export interface MockContainerAppsClientOptions {
     readonly latestRevisionName?: string;
     /** Containers in the app's current template. */
     readonly containers?: readonly Container[];
+    /** Revisions returned by `containerAppsRevisions.listRevisions`. */
+    readonly revisions?: readonly Revision[];
+    /** Replicas returned by `containerAppsRevisionReplicas.listReplicas`. */
+    readonly replicas?: readonly Replica[];
+    /** Data-plane token returned by `containerApps.getAuthToken`. */
+    readonly authToken?: string;
 }
 
 /**
@@ -503,6 +510,7 @@ export interface MockContainerAppsClientOptions {
 export type MockContainerAppsClient = IContainerAppsClient & {
     readonly containerApps: { [K in keyof IContainerAppsClient['containerApps']]: Mock<IContainerAppsClient['containerApps'][K]> };
     readonly containerAppsRevisions: { [K in keyof IContainerAppsClient['containerAppsRevisions']]: Mock<IContainerAppsClient['containerAppsRevisions'][K]> };
+    readonly containerAppsRevisionReplicas: { [K in keyof IContainerAppsClient['containerAppsRevisionReplicas']]: Mock<IContainerAppsClient['containerAppsRevisionReplicas'][K]> };
     readonly managedEnvironments: { [K in keyof IContainerAppsClient['managedEnvironments']]: Mock<IContainerAppsClient['managedEnvironments'][K]> };
 };
 
@@ -538,7 +546,7 @@ export function createMockContainerAppsClient(options?: MockContainerAppsClientO
                 name: 'MyApp',
                 type: 'Microsoft.App/containerApps',
                 location: 'eastus',
-                token: 'test-token',
+                token: options?.authToken ?? 'test-token',
             })),
         },
         containerAppsRevisions: {
@@ -547,7 +555,11 @@ export function createMockContainerAppsClient(options?: MockContainerAppsClientO
                 name: 'rev1',
                 type: 'Microsoft.App/containerApps/revisions',
             })),
+            listRevisions: mock.fn(() => toPagedAsyncIterable(options?.revisions ?? [])),
             restartRevision: mock.fn(() => Promise.resolve()),
+        },
+        containerAppsRevisionReplicas: {
+            listReplicas: mock.fn(() => Promise.resolve(options?.replicas ?? [])),
         },
         managedEnvironments: {
             get: mock.fn(() => Promise.resolve({
@@ -558,4 +570,42 @@ export function createMockContainerAppsClient(options?: MockContainerAppsClientO
             })),
         },
     };
+}
+
+/**
+ * Wraps a fixed array in the {@linkcode PagedAsyncIterableIterator} shape the
+ * Azure SDKs return. Only the async-iteration surface is populated, which is
+ * what the client wrappers and their callers actually consume.
+ */
+function toPagedAsyncIterable<T>(items: readonly T[]): PagedAsyncIterableIterator<T> {
+    let index = 0;
+
+    const iterator = {
+        next() {
+            return Promise.resolve(index < items.length
+                ? { done: false as const, value: items[index++] }
+                : { done: true as const, value: undefined });
+        },
+        [Symbol.asyncIterator]() {
+            return iterator;
+        },
+        byPage: () => {
+            let sent = false;
+            const pages = {
+                next() {
+                    if (sent) {
+                        return Promise.resolve({ done: true as const, value: undefined });
+                    }
+                    sent = true;
+                    return Promise.resolve({ done: false as const, value: [...items] });
+                },
+                [Symbol.asyncIterator]() {
+                    return pages;
+                },
+            };
+            return pages;
+        },
+    };
+
+    return iterator;
 }

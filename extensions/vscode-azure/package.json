@@ -112,6 +112,28 @@
                 "title": "%commands.vscode-azure/containerApps/openLogsInPortal%"
             },
             {
+                "command": "vscode-azure/containerApps/restart",
+                "category": "%commands.category.azure%",
+                "icon": "$(debug-restart)",
+                "title": "%commands.vscode-azure/containerApps/restart%"
+            },
+            {
+                "command": "vscode-azure/containerApps/revealEnvironment",
+                "title": "%commands.vscode-azure/containerApps/revealEnvironment%"
+            },
+            {
+                "command": "vscode-azure/containerApps/startStreamingLogs",
+                "category": "%commands.category.azure%",
+                "icon": "$(play)",
+                "title": "%commands.vscode-azure/containerApps/startStreamingLogs%"
+            },
+            {
+                "command": "vscode-azure/containerApps/stopStreamingLogs",
+                "category": "%commands.category.azure%",
+                "icon": "$(debug-stop)",
+                "title": "%commands.vscode-azure/containerApps/stopStreamingLogs%"
+            },
+            {
                 "command": "vscode-azure/azdUp",
                 "category": "%commands.category.azure%",
                 "icon": "$(rocket)",
@@ -201,6 +223,10 @@
                 {
                     "command": "vscode-azure/containerApps/openLogsInPortal",
                     "when": "false"
+                },
+                {
+                    "command": "vscode-azure/containerApps/revealEnvironment",
+                    "when": "false"
                 }
             ],
             "view/title": [
@@ -273,6 +299,37 @@
                 {
                     "command": "vscode-azure/containerApps/openLogsInPortal",
                     "when": "view == vscode-azure/resources && viewItem =~ /\\bopenContainerAppLogs\\b/i"
+                },
+                {
+                    "command": "vscode-azure/containerApps/revealEnvironment",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\brevealContainerAppEnvironment\\b/i"
+                },
+                {
+                    "command": "vscode-azure/containerApps/restart",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\brestartContainerApp\\b/i"
+                },
+                {
+                    "command": "vscode-azure/containerApps/restart",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\brestartContainerApp\\b/i",
+                    "group": "inline@3"
+                },
+                {
+                    "command": "vscode-azure/containerApps/startStreamingLogs",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\bstartContainerAppLogStream\\b/i"
+                },
+                {
+                    "command": "vscode-azure/containerApps/startStreamingLogs",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\bstartContainerAppLogStream\\b/i",
+                    "group": "inline@1"
+                },
+                {
+                    "command": "vscode-azure/containerApps/stopStreamingLogs",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\bstopContainerAppLogStream\\b/i"
+                },
+                {
+                    "command": "vscode-azure/containerApps/stopStreamingLogs",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\bstopContainerAppLogStream\\b/i",
+                    "group": "inline@2"
                 },
                 {
                     "command": "vscode-azure/workspace/revealInExplorer",

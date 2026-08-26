@@ -8,6 +8,9 @@ import { AzureNodeId } from '@microsoft/vscode-azure-azutils';
 import { makeGenericResource } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { OpenContainerAppConsole, OpenContainerAppLogs } from '../../../../src/commands/containerApps/portalBlades';
+import { RevealContainerAppEnvironment } from '../../../../src/commands/containerApps/RevealContainerAppEnvironment';
+import { StartStreamingLogs } from '../../../../src/commands/containerApps/StartStreamingLogs';
+import { StopStreamingLogs } from '../../../../src/commands/containerApps/StopStreamingLogs';
 import { ContainerAppResourceType, type ContainerApp } from '../../../../src/tree/resources/containerApps/ContainerApp';
 import { ContainerVirtualType } from '../../../../src/tree/resources/containerApps/ContainerAppsDataProvider';
 import { ContainerAppsViewProvider, shortenImageReference } from '../../../../src/tree/resources/containerApps/ContainerAppsViewProvider';
@@ -40,14 +43,21 @@ function makeEnvironment(): GenericResource {
 }
 
 /** Builds a provider whose data tree serves the supplied nodes by key. */
-function createProvider(nodes: readonly ConcreteAzureNode[], children: readonly ConcreteAzureNode[] = []) {
+function createProvider(
+    nodes: readonly ConcreteAzureNode[],
+    children: readonly ConcreteAzureNode[] = [],
+    streamingAppIds: readonly string[] = [],
+) {
     const byKey = new Map(nodes.map(node => [AzureNodeId.from(node).toString(), node]));
     const tree = {
         get: (key: string) => byKey.get(key),
         getChildren: () => Promise.resolve(children),
     };
+    const streams = {
+        isStreaming: (appId: string) => streamingAppIds.some(id => id.toLowerCase() === appId.toLowerCase()),
+    };
     const { executor } = createTestActionExecutor();
-    return new ContainerAppsViewProvider(createMockCodeContext().ctx, executor, tree as never);
+    return new ContainerAppsViewProvider(createMockCodeContext().ctx, executor, tree as never, streams as never);
 }
 
 describe('ContainerAppsViewProvider (unit)', () => {
@@ -83,6 +93,34 @@ describe('ContainerAppsViewProvider (unit)', () => {
         expect(appContext).to.include(OpenContainerAppConsole.ContextValue);
         expect(appContext).to.include(OpenContainerAppLogs.ContextValue);
         expect(envContext).to.not.include(OpenContainerAppConsole.ContextValue);
+    });
+
+    it('offers to stop a stream only while one is open', () => {
+        const app = makeApp();
+        const idle = createProvider([app]);
+        const streaming = createProvider([app], [], [app.id]);
+
+        const idleContext = idle.getTreeItem(AzureNodeId.from(app).toString()).contextValue ?? '';
+        const streamingContext = streaming.getTreeItem(AzureNodeId.from(app).toString()).contextValue ?? '';
+
+        expect(idleContext).to.include(StartStreamingLogs.ContextValue);
+        expect(idleContext).to.not.include(StopStreamingLogs.ContextValue);
+        expect(streamingContext).to.include(StopStreamingLogs.ContextValue);
+    });
+
+    it('offers to reveal the environment only once one is known', () => {
+        const unenriched = makeApp();
+        const enriched = makeApp({
+            id: '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/MyRG/providers/Microsoft.App/containerApps/Hosted',
+            name: 'Hosted',
+            environmentId: '/subscriptions/sub/resourceGroups/MyRG/providers/Microsoft.App/managedEnvironments/MyEnv',
+        });
+        const provider = createProvider([unenriched, enriched]);
+
+        expect(provider.getTreeItem(AzureNodeId.from(unenriched).toString()).contextValue ?? '')
+            .to.not.include(RevealContainerAppEnvironment.ContextValue);
+        expect(provider.getTreeItem(AzureNodeId.from(enriched).toString()).contextValue ?? '')
+            .to.include(RevealContainerAppEnvironment.ContextValue);
     });
 
     it('describes an app only when it is not in a successful state', () => {

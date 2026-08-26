@@ -133,22 +133,22 @@ this, so no `VerifyProvidersStep` equivalent is built.
 > `microsoft.app/managedenvironments.svg` already ship in `packages/azutils/resources/azureIcons/`
 > (directory listed; nothing to add).
 
-- [ ] Add `ContainerApp.ts`: `ContainerAppResourceType = 'Microsoft.App/containerApps'`, the enriched
+- [x] Add `ContainerApp.ts`: `ContainerAppResourceType = 'Microsoft.App/containerApps'`, the enriched
       `ContainerApp` / `EnrichedContainerApp` interfaces, and `isContainerApp()` comparing `logicalType`
       case-insensitively against the constant  <- ACA-063
-- [ ] Add `ManagedEnvironment.ts`: `ManagedEnvironmentResourceType = 'Microsoft.App/managedEnvironments'`
+- [x] Add `ManagedEnvironment.ts`: `ManagedEnvironmentResourceType = 'Microsoft.App/managedEnvironments'`
       and `isManagedEnvironment()`  <- ACA-062
-- [ ] Add `@azure/arm-appcontainers` (single consumer -> direct version specifier in
+- [x] Add `@azure/arm-appcontainers` (single consumer -> direct version specifier in
       `packages/azutils/package.json`, not the catalog) and `pnpm install`  <- ACA-111
-- [ ] Add `ContainerAppsClient.ts` wrapper: `IContainerAppsClient`, `IContainerAppsClientProvider`,
+- [x] Add `ContainerAppsClient.ts` wrapper: `IContainerAppsClient`, `IContainerAppsClientProvider`,
       static `create()` over `createArmRestSubscriptionClient`, normalizing the SDK's free functions into
       `client.containerApps.*` / `client.containerAppsRevisions.*` / `client.managedEnvironments.*`.
       Re-export every SDK type used in the public surface (`ContainerApp`, `Revision`, `Container`,
       `ManagedEnvironment`) from `packages/azutils/src/index.ts`  <- ACA-111
-- [ ] Bind the client provider in a new `products/registerContainerApps.ts` via
+- [x] Bind the client provider in a new `products/registerContainerApps.ts` via
       `registrar.registerAzureClientProvider`, and add it to `registerProducts.ts` **before**
       `registerGenericAzure`  <- ACA-126
-- [ ] Confirm (do not add) the two existing resource icons resolve by `logicalType` convention  <- ACA-135
+- [x] Confirm (do not add) the two existing resource icons resolve by `logicalType` convention  <- ACA-135
 
 ## Slice 1 -- Resource nodes in the tree
 
@@ -175,23 +175,23 @@ Both resource types are handled by **one** data provider and **one** view provid
 | Container app | `openInPortal;deleteResource;browseWebsite;restartContainerApp;revealContainerAppEnvironment;openContainerAppConsole;openContainerAppLogs;startContainerAppLogStream` (+ `stopContainerAppLogStream` while a stream is live) | one node per container |
 | Container | `containerAppContainer` | none (leaf) |
 
-- [ ] `ContainerAppsDataProvider.canHandle` -> `isContainerApp(r) || isManagedEnvironment(r)` plus this
+- [x] `ContainerAppsDataProvider.canHandle` -> `isContainerApp(r) || isManagedEnvironment(r)` plus this
       product's own virtual container nodes  <- ACA-062, ACA-063, ACA-126
-- [ ] `ContainerAppsDataProvider.enrich` for the app: `containerApps.get` -> `setWebsiteUrl(fqdn)`, and
+- [x] `ContainerAppsDataProvider.enrich` for the app: `containerApps.get` -> `setWebsiteUrl(fqdn)`, and
       attach `environmentId` (the current property -- **not** the deprecated `managedEnvironmentId`),
       `provisioningState`, `latestRevisionName`, and `template.containers`  <- ACA-063, ACA-014
-- [ ] `ContainerAppsDataProvider.getChildren`: containers as `VirtualResource` nodes hanging directly off
+- [x] `ContainerAppsDataProvider.getChildren`: containers as `VirtualResource` nodes hanging directly off
       the app, with no `Containers` grouping node, single or multiple  <- ACA-068, ACA-069
-- [ ] `ContainerAppsViewProvider.getTreeItem`: environment leaf; app collapsible with a non-`Succeeded`
+- [x] `ContainerAppsViewProvider.getTreeItem`: environment leaf; app collapsible with a non-`Succeeded`
       `provisioningState` description; container node whose `description` is the image tag and whose
       `tooltip` carries registry + full image reference  <- ACA-062, ACA-063, ACA-069, ACA-084, ACA-085
-- [ ] Register both providers in `registerContainerApps.ts` ahead of the generic providers  <- ACA-126
-- [ ] **Reuse** wiring, no new code: the generic `openInPortal` and `deleteResource` context values come
+- [x] Register both providers in `registerContainerApps.ts` ahead of the generic providers  <- ACA-126
+- [x] **Reuse** wiring, no new code: the generic `openInPortal` and `deleteResource` context values come
       from `resourceContextValue`; `browseWebsite` appears automatically once `setWebsiteUrl` runs
       <- ACA-004, ACA-011, ACA-013, ACA-060, ACA-125
-- [ ] **Reuse** `OpenUrl` with a portal-blade resolver registered as a prefix arg, for the app's console
+- [x] **Reuse** `OpenUrl` with a portal-blade resolver registered as a prefix arg, for the app's console
       and logs blades -- no product-specific browse or portal command  <- ACA-015, ACA-094
-- [ ] **Reuse**, verify only: activity-log entries come from the existing ARM deployment provider and the
+- [x] **Reuse**, verify only: activity-log entries come from the existing ARM deployment provider and the
       output channel from `IOutputChannel`; nothing product-specific is added  <- ACA-136, ACA-137
 
 ## Slice 2 -- Commands on the tree
@@ -207,29 +207,31 @@ Both resource types are handled by **one** data provider and **one** view provid
 > `packages/utils/src` and `packages/azutils/src` -- no streaming primitive exists, so the transport is new;
 > it stays product-local because nothing else in the monorepo streams a data plane today.
 > Activation: none. Every command activates the extension when invoked.
-> External facts: the cross-origin redirect opt-in (`redirectOptions.allowCrossOriginRedirects`) is
-> required from `@azure/core-rest-pipeline` >= 1.23 -- to be re-verified against that package's changelog at
-> implementation time before it is written as a comment or a version gate.
+> External facts: `ReplicaContainer.logStreamEndpoint` and `containerApps.getAuthToken` are the transport's
+> two ARM inputs (verified against the installed `@azure/arm-appcontainers@4.0.0-beta.1` type definitions).
+> The redirect is followed by hand rather than delegated: the fetch spec strips `Authorization` on a
+> cross-origin redirect, and following one blindly would instead hand an Azure credential to whatever host
+> the response names, so the token is re-attached only while the target stays on `*.azurecontainerapps.io`.
 
-- [ ] `RestartContainerApp` -- `ContextValue = 'restartContainerApp'`; resolves the app, awaits enrichment
+- [x] `RestartContainerApp` -- `ContextValue = 'restartContainerApp'`; resolves the app, awaits enrichment
       for `latestRevisionName`, calls `containerAppsRevisions.restartRevision`, then invalidates the node.
       Contributed to `view/item/context` **and** `"group": "inline"`  <- ACA-041
-- [ ] `RevealContainerAppEnvironment` -- `ContextValue = 'revealContainerAppEnvironment'`; awaits
+- [x] `RevealContainerAppEnvironment` -- `ContextValue = 'revealContainerAppEnvironment'`; awaits
       enrichment for `environmentId`, derives the environment's node id, and reveals it in the resources
       view. Needs an **additive** public factory on `AzureNodeId` (its constructor is private and only
       `parse()`/`from()` are public) to derive a sibling resource node id without string surgery; add it in
       azutils, do not fork  <- ACA-014
-- [ ] `ContainerAppLogStream` service -- ARM `containerApps.getAuthToken` for a short-lived data-plane
+- [x] `ContainerAppLogStream` service -- ARM `containerApps.getAuthToken` for a short-lived data-plane
       token, GET the per-container `logStreamEndpoint` with cross-origin redirects allowed, pipe the
       chunked response into a per-replica output channel, track live streams with an `AbortController`
       each, and fire an event when the live set changes  <- ACA-118
-- [ ] `StartStreamingLogs` -- `ContextValue = 'startContainerAppLogStream'`; picks revision -> replica ->
+- [x] `StartStreamingLogs` -- `ContextValue = 'startContainerAppLogStream'`; picks revision -> replica ->
       container, then opens the stream. Absorbs the source's `logStreamItem` leaf and the `Logs` group node
       <- ACA-016, ACA-083, ACA-093
-- [ ] `StopStreamingLogs` -- `ContextValue = 'stopContainerAppLogStream'`, added to the app's
+- [x] `StopStreamingLogs` -- `ContextValue = 'stopContainerAppLogStream'`, added to the app's
       `contextValue` only while a stream is live; the view provider re-renders on the service's change
       event. Offers "stop all" when several streams are open  <- ACA-017
-- [ ] Contribute all four commands, their `%key%` titles, `commandPalette` visibility, and `\b`-anchored
+- [x] Contribute all four commands, their `%key%` titles, `commandPalette` visibility, and `\b`-anchored
       `when` clauses to `package.json` + `package.nls.json`  <- ACA-016, ACA-017, ACA-041, ACA-014
 
 ## Slice 3 -- Create / Deploy (azd + Bicep)   [Adapt]
@@ -359,8 +361,15 @@ verbatim reasoning.
   and this monorepo deliberately does not author files azd owns. Recorded in `TRIAGE.md` as a follow-up
   idea rather than a dispositioned feature; needs a decision before Slice 3 closes.
 - **Reveal across grouping strategies.** `RevealContainerAppEnvironment` (ACA-014) reveals a node whose
-  view-layer parent depends on the active grouping strategy and which may not be loaded yet. Confirm the
-  behavior when grouping by resource type or location.
+  view-layer parent depends on the active grouping strategy. When the environment is *not* yet loaded,
+  `GenericAzureViewProvider` claims the key and computes the grouping-aware parent, so reveal works. When it
+  *is* loaded, `ContainerAppsViewProvider` claims it and returns the resource group as the parent, which is
+  wrong under `resourceType` / `location` / `armTag` grouping. This is **pre-existing and not specific to
+  this product** -- `AcrViewProvider` and `WebAppViewProvider` have the identical naive `getParent`. Fixing
+  it means sharing the grouping-aware computation across product view providers, which is its own change.
+- **Live verification of the log stream.** The transport (ACA-118) is covered by unit tests over a stubbed
+  `fetch`, including the redirect guard, but has not been run against a real container app. The redirect
+  behavior of the real endpoint is the part most likely to need adjustment.
 
 ## Drift log
 
