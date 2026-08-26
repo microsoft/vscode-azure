@@ -5,9 +5,6 @@
     "publisher": "ms-azuretools",
     "displayName": "Azure for Visual Studio Code",
     "description": "%extension.description%",
-    "activationEvents": [
-        "onCommand:vscode-azure/acquireTool"
-    ],
     "homepage": "https://github.com/microsoft/vscode-azure#readme",
     "bugs": {
         "url": "https://github.com/microsoft/vscode-azure/issues"
@@ -59,6 +56,11 @@
                 "command": "vscode-azure/installAzd",
                 "category": "%commands.category.azure%",
                 "title": "%commands.vscode-azure/installAzd%"
+            },
+            {
+                "command": "vscode-azure/acquireTool",
+                "category": "%commands.category.azure%",
+                "title": "%commands.vscode-azure/acquireTool%"
             },
             {
                 "command": "vscode-azure/acr/disableAdminUser",
@@ -131,6 +133,10 @@
         ],
         "menus": {
             "commandPalette": [
+                {
+                    "command": "vscode-azure/acquireTool",
+                    "when": "false"
+                },
                 {
                     "command": "vscode-azure/resources/refresh",
                     "when": "false"
@@ -423,6 +429,7 @@
         "@vscode/extension-telemetry": "catalog:",
         "inversify": "catalog:",
         "jsonc-parser": "^3.3.1",
-        "semver": "^7.8.4"
+        "semver": "^7.8.4",
+        "zod": "^4.4.3"
     }
 }

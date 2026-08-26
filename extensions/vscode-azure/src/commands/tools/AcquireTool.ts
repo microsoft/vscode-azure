@@ -6,7 +6,7 @@
 import { IActionContext, IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, multiInject } from 'inversify';
 import { IToolInstaller, type ToolInstaller } from '../../tools/ToolInstaller';
-import { IToolService, validateAcquireToolRequest, type AcquireToolRequest, type AcquireToolResult } from '../../tools/ToolService';
+import { IToolService, validateAcquireToolRequest, type AcquireToolResult, type NormalizedToolRequest } from '../../tools/ToolService';
 import type { ManagedCommand } from '../ManagedCommand';
 
 /**
@@ -39,15 +39,16 @@ export class AcquireTool implements ManagedCommand<AcquireToolResult> {
             : this.tools.acquire(request);
     }
 
-    private async acquireWithNotification(request: AcquireToolRequest): Promise<AcquireToolResult> {
+    private async acquireWithNotification(request: NormalizedToolRequest): Promise<AcquireToolResult> {
         return await this.code.window.withProgress({
             location: this.code.ProgressLocation.Notification,
-            cancellable: true,
+            // Only offer Cancel when it would do something. A caller that
+            // supplied its own token owns cancellation, and the notification's
+            // button cannot reach that token.
+            cancellable: !request.cancellationToken,
             title: this.code.l10n.t('Azure'),
         }, (progress, notificationCancellation) => this.tools.acquire({
             ...request,
-            // A caller that supplied its own token owns cancellation; otherwise
-            // the notification's Cancel button drives it.
             cancellationToken: request.cancellationToken ?? notificationCancellation,
             progress: message => {
                 request.progress?.(message);

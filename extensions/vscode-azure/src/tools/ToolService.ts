@@ -3,11 +3,12 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { fileExists, InflightMap, IProcessExecutor, IVsCode } from '@microsoft/vscode-azure-utils';
+import { fileExists, InflightMap, IProcessExecutor, IVsCode, type Satisfies } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, multiInject, type ServiceIdentifier } from 'inversify';
 import * as path from 'node:path';
 import * as semver from 'semver';
 import type * as vscode from 'vscode';
+import * as z from 'zod/mini';
 import { ExtensionId } from '../constants';
 import { IToolInstaller, type ToolInstaller } from './ToolInstaller';
 
@@ -23,8 +24,16 @@ import { IToolInstaller, type ToolInstaller } from './ToolInstaller';
  */
 export const AcquireToolCommandId = 'vscode-azure/acquireTool';
 
-/** Tools that can be acquired. */
-export type ToolId = 'azd';
+/**
+ * Tools that can be acquired.
+ *
+ * An id may be listed here before an installer for it exists; requesting one
+ * that has no registered {@linkcode ToolInstaller} is rejected by name.
+ */
+export const ToolIds = ['azd', 'func', 'swa'] as const;
+
+/** Identifies a tool that can be acquired. */
+export type ToolId = typeof ToolIds[number];
 
 /** Input to {@linkcode IToolService.acquire}. */
 export interface AcquireToolRequest {
@@ -105,6 +114,55 @@ export interface IToolService {
 }
 
 /**
+ * Shape of a request once validated: the caller's optional flags have been
+ * resolved to concrete booleans, so consumers never repeat a default.
+ */
+export type NormalizedToolRequest = z.output<typeof AcquireToolRequestSchema>;
+
+/** Matches a VS Code {@linkcode vscode.CancellationToken CancellationToken} structurally. */
+function isCancellationToken(value: unknown): value is vscode.CancellationToken {
+    const token = value as vscode.CancellationToken | undefined;
+    return typeof token?.isCancellationRequested === 'boolean'
+        && typeof token.onCancellationRequested === 'function';
+}
+
+/**
+ * Validates and normalizes an acquisition request.
+ *
+ * Requests arrive from other extensions through a command, so every field is
+ * treated as untrusted -- including the callbacks and cancellation token, which
+ * would otherwise fail much later inside a spawn.
+ */
+const AcquireToolRequestSchema = z.object({
+    toolId: z.enum(ToolIds),
+    requestingExtensionId: z.string().check(
+        z.regex(/^[^.\s]+\.[^.\s]+$/, 'requestingExtensionId must be in publisher.name form'),
+    ),
+    versionRange: z.optional(z.string().check(
+        z.refine(value => semver.validRange(value) !== null, 'versionRange must be a valid semver range'),
+    )),
+    existingPath: z.optional(z.string().check(
+        z.refine(value => path.isAbsolute(value), 'existingPath must be an absolute path'),
+    )),
+    force: z._default(z.boolean(), false),
+    requireSignature: z._default(z.boolean(), false),
+    showProgressNotification: z._default(z.boolean(), false),
+    revealInstallTask: z._default(z.boolean(), false),
+    cancellationToken: z.optional(z.custom<vscode.CancellationToken>(
+        isCancellationToken,
+        'cancellationToken must be a CancellationToken',
+    )),
+    progress: z.optional(z.custom<(message: string) => void>(
+        value => typeof value === 'function',
+        'progress must be a function',
+    )),
+});
+
+// The documented request interface is hand-written so consumers get real
+// JSDoc rather than an inferred blob; this keeps it honest against the schema.
+type RequestMatchesSchema = Satisfies<AcquireToolRequest, z.input<typeof AcquireToolRequestSchema>>; // eslint-disable-line @typescript-eslint/no-unused-vars
+
+/**
  * Builds the request used by the extension's own "install this tool" commands.
  *
  * Those commands are how a user asks for the newest tool, so they force the
@@ -125,50 +183,39 @@ export function userToolRequest(toolId: ToolId): AcquireToolRequest {
  * Validates a request that crossed the command boundary from another
  * extension, and pairs it with the installer that will service it.
  *
- * @throws When any field is missing, malformed, or unsupported.
+ * @throws When any field is missing, malformed, or names a tool that has no
+ *   registered installer.
  */
 export function validateAcquireToolRequest(
     input: unknown,
     installers: readonly ToolInstaller[],
-): { request: AcquireToolRequest, installer: ToolInstaller } {
-    // TODO: Replace these hand-written guards with schema validation (e.g. Zod)
-    // if the request grows per-tool option shapes.
-    if (typeof input !== 'object' || input === null) {
-        throw new Error('The tool request must be an object.');
+): { request: NormalizedToolRequest, installer: ToolInstaller } {
+    const result = AcquireToolRequestSchema.safeParse(input);
+    if (!result.success) {
+        const detail = result.error.issues
+            .map(issue => issue.path.length > 0 ? `${issue.path.join('.')}: ${issue.message}` : issue.message)
+            .join('; ');
+        throw new Error(`Invalid tool request. ${detail}`);
     }
 
-    const request = input as Record<string, unknown>;
+    const request = result.data;
     const installer = installers.find(candidate => candidate.id === request.toolId);
     if (!installer) {
-        throw new Error(`Unsupported tool: ${String(request.toolId)}.`);
-    }
-    if (typeof request.requestingExtensionId !== 'string' || !/^[^.\s]+\.[^.\s]+$/.test(request.requestingExtensionId)) {
-        throw new Error('requestingExtensionId must be in publisher.name form.');
-    }
-    if (request.versionRange !== undefined
-        && (typeof request.versionRange !== 'string' || semver.validRange(request.versionRange) === null)) {
-        throw new Error('versionRange must be a valid semver range.');
-    }
-    if (request.existingPath !== undefined
-        && (typeof request.existingPath !== 'string' || !path.isAbsolute(request.existingPath))) {
-        throw new Error('existingPath must be an absolute path.');
-    }
-    for (const flag of ['force', 'requireSignature', 'showProgressNotification', 'revealInstallTask'] as const) {
-        if (request[flag] !== undefined && typeof request[flag] !== 'boolean') {
-            throw new Error(`${flag} must be a boolean.`);
-        }
-    }
-    if (request.progress !== undefined && typeof request.progress !== 'function') {
-        throw new Error('progress must be a function.');
+        // A tool id can be declared before its installer exists, so name the
+        // ones that are actually available rather than calling the id invalid.
+        throw new Error(
+            `${request.toolId} cannot be installed by this version of the extension. Available tools: ${installers.map(i => i.id).join(', ')}.`,
+        );
     }
 
-    return { request: request as unknown as AcquireToolRequest, installer };
+    return { request, installer };
 }
 
 /** Default {@linkcode IToolService}, dispatching to the registered {@linkcode ToolInstaller}s. */
 @injectable()
 export class ToolService implements IToolService {
-    private readonly inflight = new InflightMap<AcquireToolResult>();
+    /** At most one install per tool may be in flight; see {@linkcode acquireCore}. */
+    private readonly installs = new InflightMap<void>();
     private readonly resolvedPaths = new Map<ToolId, string>();
 
     public constructor(
@@ -180,21 +227,7 @@ export class ToolService implements IToolService {
     /** @inheritdoc */
     public acquire(request: AcquireToolRequest): Promise<AcquireToolResult> {
         const { request: validated, installer } = validateAcquireToolRequest(request, this.installers);
-        const versionRange = validated.versionRange ?? installer.defaultVersionRange;
-
-        // A caller-supplied path is never installed to, so it needs no lock.
-        if (validated.existingPath) {
-            return this.acquireCore(installer, validated, versionRange);
-        }
-
-        // Callers share one install so they cannot race the same package
-        // manager. A forced request gets its own key, since it must not be
-        // satisfied by an in-flight request that may stop at a version that is
-        // merely acceptable.
-        return this.inflight.getOrRun(
-            `${installer.id}|${versionRange ?? '*'}${validated.force ? '|force' : ''}`,
-            () => this.acquireCore(installer, validated, versionRange),
-        );
+        return this.acquireCore(installer, validated, validated.versionRange ?? installer.defaultVersionRange);
     }
 
     /** @inheritdoc */
@@ -204,7 +237,7 @@ export class ToolService implements IToolService {
 
     private async acquireCore(
         installer: ToolInstaller,
-        request: AcquireToolRequest,
+        request: NormalizedToolRequest,
         versionRange: string | undefined,
     ): Promise<AcquireToolResult> {
         request.progress?.(this.code.l10n.t('Looking for {0}...', installer.displayName));
@@ -230,12 +263,19 @@ export class ToolService implements IToolService {
         }
 
         request.progress?.(this.code.l10n.t('Installing {0}...', installer.displayName));
-        await installer.install({
+        // Installing mutates machine-wide state, so at most one install per
+        // tool runs at a time -- keyed by tool alone, because two callers
+        // wanting *different* versions must still not drive the same package
+        // manager at once. A caller that arrives mid-install joins the one in
+        // flight rather than starting a second, then re-checks below against
+        // its own range; an install started for someone else may or may not
+        // satisfy it. (Joining also means the first caller's `reveal` wins.)
+        await this.installs.getOrRun(installer.id, () => installer.install({
             current: found.satisfying ?? found.rejected,
-            requireSignature: request.requireSignature ?? false,
-            reveal: request.revealInstallTask ?? false,
+            requireSignature: request.requireSignature,
+            reveal: request.revealInstallTask,
             cancellationToken: request.cancellationToken,
-        });
+        }));
 
         request.progress?.(this.code.l10n.t('Verifying {0}...', installer.displayName));
         const installed = await this.resolve(installer, request, versionRange);
@@ -264,7 +304,7 @@ export class ToolService implements IToolService {
      */
     private async resolve(
         installer: ToolInstaller,
-        request: AcquireToolRequest,
+        request: NormalizedToolRequest,
         versionRange: string | undefined,
     ): Promise<{ satisfying?: ResolvedTool, rejected?: ResolvedTool }> {
         const candidates = request.existingPath

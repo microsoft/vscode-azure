@@ -15,10 +15,12 @@ const { executablePath } = await vscode.commands.executeCommand<AcquireToolResul
 );
 ```
 
-The command is not contributed to the Command Palette, so an `onCommand`
-activation event keeps it callable before the extension has activated. Requests
-arriving from other extensions are validated field by field, and failures throw
-an `Error` whose message is meant to be read by a user.
+The command is contributed in `package.json` like any other -- that is what makes
+VS Code activate the extension when another extension invokes it -- and hidden
+from the Command Palette with a `when: false` entry under `menus.commandPalette`.
+Requests arriving from other extensions are validated against a Zod Mini schema,
+which also normalizes the optional flags, and failures throw an `Error` whose
+message is meant to be read by a user.
 
 The extension's own install commands are that same `AcquireTool` command
 registered with a `userToolRequest('<toolId>')` prefix argument, which asks for
@@ -35,18 +37,21 @@ managers often install somewhere that is not on the current process's `PATH`, so
 re-checking known locations is what makes the tool usable without a reload.
 `getResolvedPath()` hands that path to callers such as `AzdService`.
 
-Concurrent requests for the same tool and version range share one install, so
-two callers cannot race the same package manager.
+Installing is serialized per tool, keyed by tool id alone. Requests that want
+*different* versions still must not drive the same package manager at once, so a
+caller arriving mid-install joins the one already running rather than starting a
+second. Each caller then re-checks the result against its own range: one install
+may satisfy several waiting callers, and any it does not satisfy fail
+individually. Resolution itself is not shared, since it only reads.
 
 A request may set `force` to install even when an acceptable version is already
 present, which is how a tool gets updated. The extension's own install commands
 do this, so "Install Azure Developer CLI" updates an existing `azd` rather than
-reporting success and doing nothing. Forced requests do not share an install
-with unforced ones, which may stop at a merely acceptable version.
+reporting success and doing nothing.
 
 ## Adding a tool
 
-Add the id to `ToolId`, implement `ToolInstaller`, and bind it to
+Add the id to `ToolIds`, implement `ToolInstaller`, and bind it to
 `IToolInstaller` in `extension.ts`. An installer owns its own known paths,
 version probe, and installation methods; nothing about *how* a tool installs
 reaches the API.
@@ -58,10 +63,7 @@ rather than fall back to a method that cannot establish that what it downloads
 came from the publisher it claims.
 
 Package managers do this for us, which is what makes them the preferred method
-rather than merely the convenient one. Install scripts piped into a shell cannot,
-so they are marked unverified and run only after a warning to the output channel.
-Note that PowerShell's `-ExecutionPolicy AllSigned` does *not* change this: it
-does not apply to `-Command`, so it does not gate the piped script.
+rather than merely the convenient one.
 
 In practice winget covers the large majority of Windows machines. Where it is
 absent -- Windows Server, LTSC, or a Store-blocked fleet -- a caller passing

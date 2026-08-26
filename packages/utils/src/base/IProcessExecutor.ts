@@ -221,12 +221,15 @@ export class ProcessExecutor implements IProcessExecutor {
     public resolveExecutable(command: string): string | undefined {
         // Batch files are allowed so `.cmd` shims (the Azure CLI's `az.cmd`,
         // the Functions Core Tools' `func.cmd`) can be resolved.
-        return this.resolveExecutableFn(command, { allowWindowsBatchFiles: true });
+        const resolved = this.resolveExecutableFn(command, { allowWindowsBatchFiles: true });
+        // Normalize any falsy result to `undefined`, so callers have a single
+        // value to test for "not found".
+        return resolved || undefined;
     }
 
     /** @inheritdoc */
     public isOnPath(command: string): boolean {
-        return this.resolveExecutable(command) !== undefined;
+        return !!this.resolveExecutable(command);
     }
 
     private async spawnForeground(options: ForegroundProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<void> {

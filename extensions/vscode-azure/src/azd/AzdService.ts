@@ -151,6 +151,34 @@ interface AzdVersionResult {
 }
 
 /**
+ * Returns the version of the `azd` at {@linkcode executablePath}, or `undefined`
+ * when it is missing, fails to run, or reports something that is not valid
+ * semver.
+ *
+ * Exported so {@linkcode AzdInstaller} can probe a candidate it has just found
+ * or installed: the version gate and tool acquisition must agree on what counts
+ * as a usable `azd`, which they only do by sharing this one implementation.
+ */
+export async function getAzdVersion(
+    processExecutor: IProcessExecutor,
+    executablePath: string = AzdCommand,
+    cancellationToken?: vscode.CancellationToken,
+): Promise<string | undefined> {
+    try {
+        const result = await processExecutor.spawn<AzdVersionResult>({
+            execution: 'background',
+            command: command(executablePath)
+                .arg('version')
+                .namedArg('--output', 'json'),
+            parseJson: true,
+        }, cancellationToken);
+        return semver.valid(result.json.azd.version) ?? undefined;
+    } catch {
+        return undefined;
+    }
+}
+
+/**
  * Wraps {@linkcode IProcessExecutor} to provide a typed interface for
  * invoking the Azure Developer CLI (`azd`). Handles the common
  * `ENOENT` error with an actionable install hint.
@@ -331,20 +359,7 @@ export class AzdService implements IAzdService {
 
     /** @inheritdoc */
     public async checkVersion(minVersion: string = MinAzdVersion): Promise<boolean | undefined> {
-        let version: string | null;
-        try {
-            const result = await this.processExecutor.spawn<AzdVersionResult>({
-                execution: 'background',
-                command: command(this.getAzdCommand())
-                    .arg('version')
-                    .namedArg('--output', 'json'),
-                parseJson: true,
-            });
-            version = semver.valid(result.json.azd.version);
-        } catch {
-            return undefined;
-        }
-
+        const version = await getAzdVersion(this.processExecutor, this.getAzdCommand());
         return version ? semver.gte(version, minVersion) : undefined;
     }
 

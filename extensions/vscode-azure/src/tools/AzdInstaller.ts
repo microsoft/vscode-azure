@@ -8,16 +8,16 @@ import { inject, injectable } from 'inversify';
 import * as path from 'node:path';
 import * as semver from 'semver';
 import type * as vscode from 'vscode';
-import { AzdCommand, MinAzdVersion } from '../azd/AzdService';
+import { AzdCommand, getAzdVersion, MinAzdVersion } from '../azd/AzdService';
 import type { ToolId } from './ToolService';
 import type { ToolInstallOptions, ToolInstaller } from './ToolInstaller';
 
 /** Minimum `azd` version that supports the `azd update` command. */
 const MinAzdUpdateVersion = '1.23.14';
 
-/** Result of `azd version --output json`. */
-interface AzdVersionResult {
-    readonly azd: { readonly version: string };
+/** A path under {@linkcode root}, or nothing when `root` is unset. */
+function pathUnder(root: string | undefined, ...segments: string[]): string[] {
+    return root ? [path.join(root, ...segments)] : [];
 }
 
 /**
@@ -58,35 +58,24 @@ export class AzdInstaller implements ToolInstaller {
     public getKnownPaths(): readonly string[] {
         const home = process.env.USERPROFILE ?? process.env.HOME;
 
-        const candidates = process.platform === 'win32'
-            ? [
-                process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, 'Programs', 'Azure Dev CLI', 'azd.exe'),
-                process.env.ProgramFiles && path.join(process.env.ProgramFiles, 'Azure Dev CLI', 'azd.exe'),
-                home && path.join(home, '.azd', 'bin', 'azd.exe'),
-            ]
-            : [
-                home && path.join(home, '.azd', 'bin', 'azd'),
-                '/usr/local/bin/azd',
-                process.platform === 'darwin' ? '/opt/homebrew/bin/azd' : undefined,
+        if (process.platform === 'win32') {
+            return [
+                ...pathUnder(process.env.LOCALAPPDATA, 'Programs', 'Azure Dev CLI', 'azd.exe'),
+                ...pathUnder(process.env.ProgramFiles, 'Azure Dev CLI', 'azd.exe'),
+                ...pathUnder(home, '.azd', 'bin', 'azd.exe'),
             ];
+        }
 
-        return candidates.filter((candidate): candidate is string => !!candidate);
+        return [
+            ...pathUnder(home, '.azd', 'bin', 'azd'),
+            '/usr/local/bin/azd',
+            ...(process.platform === 'darwin' ? ['/opt/homebrew/bin/azd'] : []),
+        ];
     }
 
     /** @inheritdoc */
-    public async getVersion(executablePath: string, cancellationToken?: vscode.CancellationToken): Promise<string | undefined> {
-        try {
-            const result = await this.processExecutor.spawn<AzdVersionResult>({
-                execution: 'background',
-                command: command(executablePath)
-                    .arg('version')
-                    .namedArg('--output', 'json'),
-                parseJson: true,
-            }, cancellationToken);
-            return semver.valid(result.json.azd.version) ?? undefined;
-        } catch {
-            return undefined;
-        }
+    public getVersion(executablePath: string, cancellationToken?: vscode.CancellationToken): Promise<string | undefined> {
+        return getAzdVersion(this.processExecutor, executablePath, cancellationToken);
     }
 
     /** @inheritdoc */

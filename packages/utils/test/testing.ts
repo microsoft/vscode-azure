@@ -18,3 +18,4 @@ export * from './vscode/MockUri';
 export * from './vscode/MockValueTypes';
 export * from './vscode/MockVsCode';
 export * from './vscode/tree/MockTreeItem';
+export * from './waitFor';

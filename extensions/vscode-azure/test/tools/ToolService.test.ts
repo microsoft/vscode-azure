@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { IProcessExecutor } from '@microsoft/vscode-azure-utils';
-import { MockUri, createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
+import { MockUri, createMockVsCode, waitFor } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import type { ToolInstallOptions, ToolInstaller } from '../../src/tools/ToolInstaller';
 import { ToolService, userToolRequest, validateAcquireToolRequest, type AcquireToolRequest } from '../../src/tools/ToolService';
@@ -191,6 +191,52 @@ describe('ToolService (unit)', () => {
         expect(forced.executablePath).to.equal('/tools/azd');
         expect(install.mock.callCount()).to.equal(1);
     });
+
+    it('should install once for concurrent requests wanting different versions', async () => {
+        const versions = new Map<string, string>();
+        let finishInstall: (() => void) | undefined;
+        const install = mock.fn(() => new Promise<void>(resolve => {
+            finishInstall = () => {
+                versions.set('/tools/azd', '1.30.0');
+                resolve();
+            };
+        }));
+        const { installer } = createInstaller(versions, { getKnownPaths: () => ['/tools/azd'], install });
+        const service = createService(installer, undefined, ['/tools/azd']);
+
+        // Different ranges, so these are not the "same" request -- but they
+        // must still not drive the package manager concurrently.
+        const lenient = service.acquire(request({ versionRange: '>=1.25.0' }));
+        const strict = service.acquire(request({ versionRange: '>=1.29.0' }));
+        await waitFor(() => finishInstall !== undefined);
+        finishInstall?.();
+
+        expect((await lenient).executablePath).to.equal('/tools/azd');
+        expect((await strict).executablePath).to.equal('/tools/azd');
+        expect(install.mock.callCount()).to.equal(1);
+    });
+
+    it('should fail only the caller whose version the shared install did not satisfy', async () => {
+        const versions = new Map<string, string>();
+        let finishInstall: (() => void) | undefined;
+        const install = mock.fn(() => new Promise<void>(resolve => {
+            finishInstall = () => {
+                versions.set('/tools/azd', '1.26.0');
+                resolve();
+            };
+        }));
+        const { installer } = createInstaller(versions, { getKnownPaths: () => ['/tools/azd'], install });
+        const service = createService(installer, undefined, ['/tools/azd']);
+
+        const satisfied = service.acquire(request({ versionRange: '>=1.25.0' }));
+        const unsatisfiable = service.acquire(request({ versionRange: '>=99.0.0' }));
+        await waitFor(() => finishInstall !== undefined);
+        finishInstall?.();
+
+        expect((await satisfied).executablePath).to.equal('/tools/azd');
+        await expect(unsatisfiable).to.be.rejectedWith(/no version satisfying/);
+        expect(install.mock.callCount()).to.equal(1);
+    });
 });
 
 describe('userToolRequest (unit)', () => {
@@ -216,11 +262,18 @@ describe('validateAcquireToolRequest (unit)', () => {
         expect(() => validateAcquireToolRequest(userToolRequest('azd'), installers)).to.not.throw();
     });
 
-    it('should reject an unsupported tool', () => {
+    it('should reject an unknown tool id', () => {
         expect(() => validateAcquireToolRequest({
             toolId: 'nope',
             requestingExtensionId: 'publisher.name',
-        }, installers)).to.throw(/Unsupported tool/);
+        }, installers)).to.throw(/toolId/);
+    });
+
+    it('should reject a declared tool that has no installer yet', () => {
+        expect(() => validateAcquireToolRequest({
+            toolId: 'swa',
+            requestingExtensionId: 'publisher.name',
+        }, installers)).to.throw(/cannot be installed by this version/);
     });
 
     it('should reject a missing requesting extension', () => {
@@ -242,10 +295,32 @@ describe('validateAcquireToolRequest (unit)', () => {
             existingPath: 'azd',
         }, installers)).to.throw(/existingPath/);
     });
-});
 
-async function waitFor(predicate: () => boolean): Promise<void> {
-    while (!predicate()) {
-        await new Promise(resolve => setTimeout(resolve, 0));
-    }
-}
+    it('should reject a cancellation token that is not one', () => {
+        expect(() => validateAcquireToolRequest({
+            toolId: 'azd',
+            requestingExtensionId: 'publisher.name',
+            cancellationToken: { nope: true },
+        }, installers)).to.throw(/cancellationToken/);
+    });
+
+    it('should reject a progress callback that is not callable', () => {
+        expect(() => validateAcquireToolRequest({
+            toolId: 'azd',
+            requestingExtensionId: 'publisher.name',
+            progress: 'not a function',
+        }, installers)).to.throw(/progress/);
+    });
+
+    it('should normalize omitted flags to false', () => {
+        const { request } = validateAcquireToolRequest({
+            toolId: 'azd',
+            requestingExtensionId: 'publisher.name',
+        }, installers);
+
+        expect(request.force).to.be.false;
+        expect(request.requireSignature).to.be.false;
+        expect(request.showProgressNotification).to.be.false;
+        expect(request.revealInstallTask).to.be.false;
+    });
+});
