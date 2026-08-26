@@ -17,11 +17,9 @@
     "author": "Microsoft Corporation",
     "main": "main.js",
     "activationEvents": [
-        "onDebugDynamicConfigurations",
+        "onDebugDynamicConfigurations:swa",
         "onDebugInitialConfigurations",
-        "onDebugResolve:pwa-chrome",
-        "workspaceContains:**/staticwebapp.config.json",
-        "workspaceContains:**/swa-cli.config.json"
+        "onDebugResolve:pwa-chrome"
     ],
     "capabilities": {
         "virtualWorkspaces": {
