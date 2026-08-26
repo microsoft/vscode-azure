@@ -10,7 +10,7 @@ import type { ManagedCommandRegistration } from '../registration/ProductRegistra
 import { AzdDown } from './deploy/AzdDown';
 import { AzdUp } from './deploy/AzdUp';
 import { ClearActivities } from './deploy/ClearActivities';
-import { AcquireToolCommandId, userToolRequest } from '../tools/ToolService';
+import { userToolRequest } from '../tools/ToolService';
 import type { ManagedCommand } from './ManagedCommand';
 import { AcquireTool } from './tools/AcquireTool';
 import { LoadMore } from './tree/LoadMore';
@@ -37,7 +37,9 @@ export function registerCommands(
 
     registerManagedCommand(container, AzdUpCommandId, AzdUp);
     registerManagedCommand(container, AzdDownCommandId, AzdDown);
-    registerManagedCommand(container, AcquireToolCommandId, AcquireTool);
+    // Callable by other extensions, which pass an AcquireToolRequest and get
+    // back an AcquireToolResult. Hidden from the palette via `when: false`.
+    registerManagedCommand(container, 'vscode-azure/acquireTool', AcquireTool);
     registerManagedCommand(container, 'vscode-azure/installAzd', AcquireTool, userToolRequest('azd'));
     registerManagedCommand(container, 'vscode-azure/installFunc', AcquireTool, userToolRequest('func'));
     registerManagedCommand(container, 'vscode-azure/installSwa', AcquireTool, userToolRequest('swa'));

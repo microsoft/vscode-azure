@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { fileExists, InflightMap, IProcessExecutor, IVsCode, type Satisfies } from '@microsoft/vscode-azure-utils';
+import { fileExists, InflightMap, IProcessExecutor, isCancellationToken, IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, multiInject, type ServiceIdentifier } from 'inversify';
 import * as path from 'node:path';
 import * as semver from 'semver';
@@ -11,18 +11,6 @@ import type * as vscode from 'vscode';
 import * as z from 'zod/mini';
 import { ExtensionId } from '../constants';
 import { IToolInstaller, type ToolInstaller } from './ToolInstaller';
-
-/**
- * Command other extensions call to resolve or install a tool:
- *
- * ```ts
- * const { executablePath } = await vscode.commands.executeCommand<AcquireToolResult>(
- *     AcquireToolCommandId,
- *     { toolId: 'azd', requestingExtensionId: 'publisher.name', versionRange: '>=1.25.0' },
- * );
- * ```
- */
-export const AcquireToolCommandId = 'vscode-azure/acquireTool';
 
 /**
  * Tools that can be acquired.
@@ -35,50 +23,83 @@ export const ToolIds = ['azd', 'func', 'swa'] as const;
 /** Identifies a tool that can be acquired. */
 export type ToolId = typeof ToolIds[number];
 
-/** Input to {@linkcode IToolService.acquire}. */
-export interface AcquireToolRequest {
-    readonly toolId: ToolId;
+/**
+ * Validates and normalizes an acquisition request.
+ *
+ * Requests arrive from other extensions through a command, so every field is
+ * treated as untrusted -- including the callbacks and cancellation token, which
+ * would otherwise fail much later inside a spawn. The optional flags are
+ * defaulted here so consumers never repeat a `?? false`.
+ *
+ * This schema is the single definition of the request: {@linkcode AcquireToolRequest}
+ * and {@linkcode NormalizedToolRequest} are inferred from it, and the field
+ * documentation below is what shows up in a caller's IntelliSense.
+ */
+const AcquireToolRequestSchema = z.object({
+    toolId: z.enum(ToolIds),
 
     /** Extension asking for the tool, as `publisher.name`. Recorded in telemetry. */
-    readonly requestingExtensionId: string;
+    requestingExtensionId: z.string().check(
+        z.regex(/^[^.\s]+\.[^.\s]+$/, 'requestingExtensionId must be in publisher.name form'),
+    ),
 
     /**
      * Semver range the tool must satisfy. Defaults to whatever range the tool
      * itself declares, so callers with no particular requirement can omit it.
      */
-    readonly versionRange?: string;
+    versionRange: z.optional(z.string().check(
+        z.refine(value => semver.validRange(value) !== null, 'versionRange must be a valid semver range'),
+    )),
 
     /** Absolute path to an executable the caller manages itself. */
-    readonly existingPath?: string;
+    existingPath: z.optional(z.string().check(
+        z.refine(value => path.isAbsolute(value), 'existingPath must be an absolute path'),
+    )),
 
     /**
      * Installs even when an acceptable executable is already present, so the
      * tool is updated to the newest version its installer can reach. Defaults
      * to `false`, which returns the first acceptable executable found.
      *
-     * Ignored when {@linkcode existingPath} is set, since a caller-managed
-     * executable is never installed over.
+     * Ignored when `existingPath` is set, since a caller-managed executable is
+     * never installed over.
      */
-    readonly force?: boolean;
+    force: z._default(z.boolean(), false),
 
     /**
      * Fails rather than installing through a method that cannot verify what it
      * downloads. Defaults to `false`, in which case an unverified fallback is
      * used only after logging a warning.
      */
-    readonly requireSignature?: boolean;
+    requireSignature: z._default(z.boolean(), false),
 
     /** Shows a cancellable progress notification. Defaults to `false`. */
-    readonly showProgressNotification?: boolean;
+    showProgressNotification: z._default(z.boolean(), false),
 
     /** Reveals the installation task's terminal. Defaults to `false`. */
-    readonly revealInstallTask?: boolean;
+    revealInstallTask: z._default(z.boolean(), false),
 
-    readonly cancellationToken?: vscode.CancellationToken;
+    /** Cancels the acquisition, including any install already under way. */
+    cancellationToken: z.optional(z.custom<vscode.CancellationToken>(
+        isCancellationToken,
+        'cancellationToken must be a CancellationToken',
+    )),
 
     /** Receives progress messages suitable for display to a user. */
-    readonly progress?: (message: string) => void;
-}
+    progress: z.optional(z.custom<(message: string) => void>(
+        value => typeof value === 'function',
+        'progress must be a function',
+    )),
+});
+
+/** Input to {@linkcode IToolService.acquire}. */
+export type AcquireToolRequest = z.input<typeof AcquireToolRequestSchema>;
+
+/**
+ * A validated request: the optional flags have been resolved to concrete
+ * booleans, so consumers never repeat a default.
+ */
+export type NormalizedToolRequest = z.output<typeof AcquireToolRequestSchema>;
 
 /** Result of {@linkcode IToolService.acquire}. */
 export interface AcquireToolResult {
@@ -112,55 +133,6 @@ export interface IToolService {
      */
     getResolvedPath(toolId: ToolId): string | undefined;
 }
-
-/**
- * Shape of a request once validated: the caller's optional flags have been
- * resolved to concrete booleans, so consumers never repeat a default.
- */
-export type NormalizedToolRequest = z.output<typeof AcquireToolRequestSchema>;
-
-/** Matches a VS Code {@linkcode vscode.CancellationToken CancellationToken} structurally. */
-function isCancellationToken(value: unknown): value is vscode.CancellationToken {
-    const token = value as vscode.CancellationToken | undefined;
-    return typeof token?.isCancellationRequested === 'boolean'
-        && typeof token.onCancellationRequested === 'function';
-}
-
-/**
- * Validates and normalizes an acquisition request.
- *
- * Requests arrive from other extensions through a command, so every field is
- * treated as untrusted -- including the callbacks and cancellation token, which
- * would otherwise fail much later inside a spawn.
- */
-const AcquireToolRequestSchema = z.object({
-    toolId: z.enum(ToolIds),
-    requestingExtensionId: z.string().check(
-        z.regex(/^[^.\s]+\.[^.\s]+$/, 'requestingExtensionId must be in publisher.name form'),
-    ),
-    versionRange: z.optional(z.string().check(
-        z.refine(value => semver.validRange(value) !== null, 'versionRange must be a valid semver range'),
-    )),
-    existingPath: z.optional(z.string().check(
-        z.refine(value => path.isAbsolute(value), 'existingPath must be an absolute path'),
-    )),
-    force: z._default(z.boolean(), false),
-    requireSignature: z._default(z.boolean(), false),
-    showProgressNotification: z._default(z.boolean(), false),
-    revealInstallTask: z._default(z.boolean(), false),
-    cancellationToken: z.optional(z.custom<vscode.CancellationToken>(
-        isCancellationToken,
-        'cancellationToken must be a CancellationToken',
-    )),
-    progress: z.optional(z.custom<(message: string) => void>(
-        value => typeof value === 'function',
-        'progress must be a function',
-    )),
-});
-
-// The documented request interface is hand-written so consumers get real
-// JSDoc rather than an inferred blob; this keeps it honest against the schema.
-type RequestMatchesSchema = Satisfies<AcquireToolRequest, z.input<typeof AcquireToolRequestSchema>>; // eslint-disable-line @typescript-eslint/no-unused-vars
 
 /**
  * Builds the request used by the extension's own "install this tool" commands.

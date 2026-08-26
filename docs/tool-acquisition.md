@@ -67,13 +67,17 @@ The three installers differ enough to show the range:
 | | Windows | macOS | Linux |
 |---|---|---|---|
 | `azd` | winget, choco, script | brew, script | script |
-| `func` | winget, choco, npm | brew (`azure/functions` tap), npm | npm |
+| `func` | install script (v5 preview) | install script | install script |
 | `swa` | npm | brew (core), npm | npm |
 
-`func` needs a fully-qualified formula (`azure/functions/azure-functions-core-tools@4`)
-because it is not in brew core; naming it that way makes brew tap it, so no
-separate preinstall step is needed. `swa` ships only as an npm package, so it has
-no Windows package-manager entry at all.
+`func` installs the **v5 preview**, which ships only through the official
+install scripts -- the winget, Chocolatey, Homebrew, and npm packages all still
+carry v4. Its default range is `>=5.0.0-0`, prerelease-inclusive so the preview
+actually satisfies it, and a v4 install found on the machine is handed to the
+script for an upgrade (`-Force` / `--force`) rather than accepted.
+
+`swa` ships only as an npm package, so it has no Windows package-manager entry
+at all.
 
 ## Verifying what gets installed
 
@@ -84,10 +88,11 @@ came from the publisher it claims.
 Package managers do this for us, which is what makes them the preferred method
 rather than merely the convenient one. npm is treated as unverified: it checks
 the tarball against the registry's hash over HTTPS, which detects tampering in
-transit but does not establish the publisher. So npm is always last, and
-`requireSignature` skips it.
+transit but does not establish the publisher. Install scripts piped into a shell
+cannot either. Both are ordered last, and `requireSignature` skips them.
 
 In practice winget covers the large majority of Windows machines. Where it is
 absent -- Windows Server, LTSC, or a Store-blocked fleet -- a caller passing
 `requireSignature` gets a clean failure rather than an unverified install. The
-same is true of `swa` on Windows, which has no verified method at all.
+same is true of `swa` anywhere but macOS, and of `func` everywhere while v5
+remains preview.

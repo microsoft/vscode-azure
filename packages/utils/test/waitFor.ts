@@ -12,15 +12,21 @@
  *
  * @param condition - Polled between turns; waiting ends as soon as it is true.
  * @param description - Named in the timeout message to identify the wait.
- * @throws When {@linkcode condition} has not held after ~1s, so a test that
- *   would otherwise hang fails with a useful message instead.
+ * @param timeoutMs - How long to keep polling before giving up.
+ * @throws When {@linkcode condition} has not held within {@linkcode timeoutMs},
+ *   so a test that would otherwise hang fails with a useful message instead.
  */
-export async function waitFor(condition: () => boolean, description = 'the expected state'): Promise<void> {
-    for (let attempt = 0; attempt < 1000 && !condition(); attempt++) {
+export async function waitFor(
+    condition: () => boolean,
+    description = 'the expected state',
+    timeoutMs = 1000,
+): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    while (!condition() && Date.now() < deadline) {
         await new Promise(resolve => setTimeout(resolve, 1));
     }
 
     if (!condition()) {
-        throw new Error(`Timed out waiting for ${description}.`);
+        throw new Error(`Timed out after ${timeoutMs}ms waiting for ${description}.`);
     }
 }

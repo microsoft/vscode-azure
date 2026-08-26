@@ -11,7 +11,7 @@ import type { ToolInstallOptions, ToolInstaller } from './ToolInstaller';
 import {
     getVersionFromOutput,
     npmGlobalBinPaths,
-    npmInstallMethod,
+    pathUnder,
     programFilesPaths,
     runInstallMethod,
     type ToolInstallMethod,
@@ -20,15 +20,21 @@ import {
 /** The `func` executable name. */
 export const FuncCommand = 'func';
 
-/** npm package backing the npm install method. */
-const FuncNpmPackage = 'azure-functions-core-tools';
+/**
+ * v5 is in preview and is what we install, so accept it and anything newer.
+ *
+ * A v4 install found on the machine does not satisfy this, and is offered to
+ * the install script for an upgrade instead.
+ */
+const MinFuncVersion = '5.0.0-0';
 
 /**
- * v4 is the supported major: v3 and earlier are out of support, and every
- * package below installs v4, so accepting an older one would leave the caller
- * with a tool the publisher no longer services.
+ * Where the official install scripts put the CLI when no path is given.
+ *
+ * Both scripts default to `$HOME/.azure-functions` and place the executable
+ * directly in it.
  */
-const MinFuncVersion = '4.0.0';
+const FuncDefaultInstallDir = '.azure-functions';
 
 /** Installs the Azure Functions Core Tools. */
 @injectable()
@@ -53,15 +59,21 @@ export class FuncInstaller implements ToolInstaller {
 
     /** @inheritdoc */
     public getKnownPaths(): readonly string[] {
+        const home = process.env.USERPROFILE ?? process.env.HOME;
+
         if (process.platform === 'win32') {
             return [
-                // Where the MSI (and the winget package wrapping it) installs.
+                ...pathUnder(home, FuncDefaultInstallDir, 'func.exe'),
+                // Where the v4 MSI (and the winget package wrapping it) installs.
                 ...programFilesPaths('Microsoft', 'Azure Functions Core Tools', 'func.exe'),
                 ...npmGlobalBinPaths(FuncCommand),
             ];
         }
 
-        return npmGlobalBinPaths(FuncCommand);
+        return [
+            ...pathUnder(home, FuncDefaultInstallDir, FuncCommand),
+            ...npmGlobalBinPaths(FuncCommand),
+        ];
     }
 
     /** @inheritdoc */
@@ -80,50 +92,44 @@ export class FuncInstaller implements ToolInstaller {
                 executableName: this.executableName,
                 manualInstallUrl: 'https://aka.ms/azfunc-install',
             },
-            this.getInstallMethods(),
+            this.getInstallMethods(options),
             options,
         );
     }
 
     /**
-     * Returns the install methods that apply to this system, most preferred
-     * first. npm is last everywhere: it is the only option on Linux, but on the
-     * other platforms a native package manager both verifies what it installs
-     * and does not depend on a Node install the user may not have.
+     * Returns the install methods that apply to this system.
+     *
+     * v5 is preview, so it ships only through the official install scripts --
+     * the winget, Chocolatey, Homebrew, and npm packages all still carry v4.
+     * That leaves one method per platform.
+     *
+     * Neither script can establish that what it downloads came from Microsoft,
+     * so both are unverified and a `requireSignature` caller is refused.
      */
-    private getInstallMethods(): readonly ToolInstallMethod[] {
-        const methods: ToolInstallMethod[] = [];
+    private getInstallMethods(options: ToolInstallOptions): readonly ToolInstallMethod[] {
+        // The scripts refuse to overwrite an existing install without --force.
+        const force = options.current !== undefined;
 
         if (process.platform === 'win32') {
-            if (this.processExecutor.isOnPath('winget')) {
-                methods.push({
-                    name: 'winget',
-                    command: command('winget')
-                        .arg('install', 'Microsoft.Azure.FunctionsCoreTools', '--accept-source-agreements'),
-                    verified: true,
-                });
-            }
-            if (this.processExecutor.isOnPath('choco')) {
-                methods.push({
-                    name: 'choco',
-                    command: command('choco').arg('upgrade', FuncNpmPackage),
-                    verified: true,
-                });
-            }
-        } else if (process.platform === 'darwin' && this.processExecutor.isOnPath('brew')) {
-            // Fully qualified so brew taps `azure/functions` itself rather than
-            // needing a separate tap step; the formula is not in brew core.
-            methods.push({
-                name: 'brew',
-                command: command('brew').arg('install', 'azure/functions/azure-functions-core-tools@4'),
-                verified: true,
-            });
+            const script = `& { $(irm https://aka.ms/func-cli/install.ps1) } -Prerelease${force ? ' -Force' : ''}`;
+            return [{
+                name: 'install.ps1',
+                command: command('powershell')
+                    .namedArg('-ExecutionPolicy', 'Bypass')
+                    .arg('-Command')
+                    .quotedArg(`iex '${script}'`),
+                verified: false,
+            }];
         }
 
-        if (this.processExecutor.isOnPath('npm')) {
-            methods.push(npmInstallMethod(FuncNpmPackage));
-        }
-
-        return methods;
+        return [{
+            name: 'install.sh',
+            command: command('bash').arg(
+                '-c',
+                `curl -sSL https://aka.ms/func-cli/install.sh | bash -s -- --prerelease${force ? ' --force' : ''}`,
+            ),
+            verified: false,
+        }];
     }
 }

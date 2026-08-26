@@ -158,9 +158,14 @@ export async function runInstallMethod(
     }
 
     if (!method.verified) {
-        context.output.warn(
-            `[${context.executableName}] Installing via ${method.name}, which cannot verify the authenticity of what it downloads.`,
-        );
+        // Localized: a warning the user is meant to read and act on, unlike the
+        // debug/trace output that is exempt. The tag stays outside it so the
+        // channel remains greppable by tool.
+        context.output.warn(`[${context.executableName}] ${context.code.l10n.t(
+            'Installing {0} via {1}, which cannot verify the authenticity of what it downloads.',
+            context.displayName,
+            method.name,
+        )}`);
     }
 
     await context.processExecutor.spawn({
