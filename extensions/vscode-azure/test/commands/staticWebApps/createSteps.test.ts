@@ -120,7 +120,7 @@ describe('Static Web Apps creation steps (unit)', () => {
         expect(mock.quickPicks).to.have.length(0);
     });
 
-    it('should use the preset API without prompting', async () => {
+    it('should leave the API empty when the project has no Functions app', async () => {
         const { ctx, mock } = createMockCodeContext();
         const step = new ApiLocationStep(createActionContext('test'), ctx);
         const result = await step.prompt({
@@ -129,7 +129,20 @@ describe('Static Web Apps creation steps (unit)', () => {
             buildPreset: getStaticWebAppBuildPreset('react'),
         });
 
-        expect(result.apiLocation).to.equal('api');
+        expect(result.apiLocation).to.equal('');
+        expect(mock.inputBoxes).to.have.length(0);
+    });
+
+    it('should keep the preset API when the framework build emits one', async () => {
+        const { ctx, mock } = createMockCodeContext();
+        const step = new ApiLocationStep(createActionContext('test'), ctx);
+        const result = await step.prompt({
+            resourceDisplayName: 'Static Web App',
+            detectedApiLocations: [],
+            buildPreset: getStaticWebAppBuildPreset('svelte-kit'),
+        });
+
+        expect(result.apiLocation).to.equal('build/server');
         expect(mock.inputBoxes).to.have.length(0);
     });
 

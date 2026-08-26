@@ -110,7 +110,7 @@ describe('CreateStaticWebApp (unit)', () => {
         const parametersPath = [...mock.fs.files.keys()].find(path => path.endsWith('/infra/main.parameters.json'));
         const parameters = JSON.parse(Buffer.from(mock.fs.files.get(parametersPath ?? '') ?? []).toString());
         expect(parameters.parameters.appLocation.value).to.equal('/');
-        expect(parameters.parameters.apiLocation.value).to.equal('api');
+        expect(parameters.parameters.apiLocation.value).to.equal('');
         expect(parameters.parameters.outputLocation.value).to.equal('build');
     });
 

@@ -38,8 +38,8 @@ export class ApiLocationStep extends PromptStep<CreateStaticWebAppContext> {
         if (detected.length === 1) {
             apiLocation = detected[0];
         } else if (detected.length === 0) {
-            apiLocation = defaultValue;
-        } else if (detected.length > 1) {
+            apiLocation = declared ?? this.locationWithoutFunctions(context);
+        } else {
             const items: QuickPickItemWithData<ApiLocationChoice>[] = [
                 ...detected.map(location => ({
                     label: location === '/' ? this.ctx.code.l10n.t('(workspace root)') : location,
@@ -55,13 +55,23 @@ export class ApiLocationStep extends PromptStep<CreateStaticWebAppContext> {
             apiLocation = selected.data.custom
                 ? await this.promptForLocation(declared || defaultValue)
                 : selected.data.location ?? '';
-        } else {
-            apiLocation = await this.promptForLocation(declared || defaultValue);
         }
 
         apiLocation = apiLocation.trim();
         addLocationTelemetry(this.actionContext, 'apiLocation', apiLocation, defaultValue, declared);
         return { apiLocation };
+    }
+
+    /**
+     * Resolves the API location for a project with no Azure Functions app in it.
+     *
+     * A preset whose build emits the API keeps its path, since the folder only appears once the
+     * framework compiles its server. Every other preset names a convention rather than something
+     * the project has, so an empty value keeps the generated infrastructure honest instead of
+     * pointing it at a folder that will never exist.
+     */
+    private locationWithoutFunctions(context: Readonly<CreateStaticWebAppContext>): string {
+        return context.buildPreset?.buildEmitsApi ? context.buildPreset.apiLocation : '';
     }
 
     private promptForLocation(value: string): Promise<string> {

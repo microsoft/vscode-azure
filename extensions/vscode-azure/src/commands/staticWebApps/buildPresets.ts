@@ -26,6 +26,14 @@ export interface StaticWebAppBuildPreset {
     readonly appLocation: string;
     readonly apiLocation: string;
     readonly outputLocation: string;
+    /**
+     * Whether the framework's build emits an API at {@linkcode apiLocation}.
+     *
+     * Server-rendered frameworks compile their server into that folder, so the path is correct
+     * even though nothing exists there until a build runs. Elsewhere {@linkcode apiLocation} is
+     * only the conventional home for an Azure Functions app the author writes themselves.
+     */
+    readonly buildEmitsApi?: true;
     readonly port: number;
     readonly startCommand?: string;
     readonly group: 'framework' | 'ssg';
@@ -45,8 +53,8 @@ export const staticWebAppBuildPresets: readonly StaticWebAppBuildPreset[] = [
     { id: 'blazor', displayName: 'Blazor', appLocation: 'Client', apiLocation: 'Api', outputLocation: 'wwwroot', port: 5000, group: 'framework' },
     { id: 'nextjs', displayName: 'Next.js (SSR)', appLocation: '/', apiLocation: '', outputLocation: '', port: 3000, group: 'framework' },
     { id: 'nextjs-export', displayName: 'Next.js (static export)', appLocation: '/', apiLocation: '', outputLocation: 'out', port: 3000, group: 'framework' },
-    { id: 'nuxt3', displayName: 'Nuxt 3', appLocation: '/', apiLocation: '.output/server', outputLocation: '.output/public', port: 3000, group: 'framework' },
-    { id: 'svelte-kit', displayName: 'SvelteKit', appLocation: '/', apiLocation: 'build/server', outputLocation: 'build/static', port: 3000, group: 'framework' },
+    { id: 'nuxt3', displayName: 'Nuxt 3', appLocation: '/', apiLocation: '.output/server', buildEmitsApi: true, outputLocation: '.output/public', port: 3000, group: 'framework' },
+    { id: 'svelte-kit', displayName: 'SvelteKit', appLocation: '/', apiLocation: 'build/server', buildEmitsApi: true, outputLocation: 'build/static', port: 3000, group: 'framework' },
     { id: 'html', displayName: 'HTML', appLocation: '/', apiLocation: '', outputLocation: '/', port: 3000, group: 'framework' },
     { id: 'gatsby', displayName: 'Gatsby', appLocation: '/', apiLocation: 'api', outputLocation: 'public', port: 8000, group: 'ssg' },
     { id: 'hugo', displayName: 'Hugo', appLocation: '/', apiLocation: 'api', outputLocation: 'public', port: 1313, group: 'ssg' },
