@@ -140,6 +140,12 @@ const client = this.getResourceClient(subscription);
 const resources = client.resources.listByResourceGroup(rgName);
 ```
 
+### How much subscription a client needs
+
+`ResourceClient` takes a full `AzureSubscription` because it stamps that object onto every `GenericResource` it returns, and the tree builds node ids from it. Most clients need far less: `DeploymentClient` is bound as `SyncFactory<IDeploymentClient, [AzureSubscriptionTarget]>`, because naming a deployment by its ARM id says nothing about having listed the hierarchy it lives in.
+
+So `registerAzureClientProvider` (and the `bindAzureClientProvider` / `AzureClientCreate` pair behind it) is generic in the subscription shape, constrained to `AzureSubscriptionTarget`. The provider's identifier declares the shape it wants and the `create` callback is checked against it, so every provider goes through this one path regardless -- a client that needs less does not get a bespoke binding, and `ICredentialFactory` accepts a target just as it accepts a subscription. See the registrations in [`registerGenericAzure.ts`](../extensions/vscode-azure/src/products/registerGenericAzure.ts).
+
 ## Type Re-exports
 
 Client wrappers **re-export** any Azure SDK types that appear in their public API (return types, interface fields) so that consumers import them from the wrapper — never directly from `@azure/*` packages. This isolates the rest of the codebase from SDK changes.

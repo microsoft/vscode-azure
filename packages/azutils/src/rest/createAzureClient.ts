@@ -6,7 +6,7 @@
 import type { Client as RestClient, ClientOptions as RestClientOptions } from '@azure-rest/core-client';
 import type { TokenCredential } from '@azure/core-auth';
 import type { IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
-import type { AzureSubscription } from '../auth/AzureSubscription';
+import type { AzureSubscriptionTarget } from '../auth/AzureSubscription';
 import type { EnvironmentLike } from '../auth/Environment';
 import { AcceptLanguagePolicy } from './pipeline/AcceptLanguagePolicy';
 import { CorrelationIdPolicy } from './pipeline/CorrelationIdPolicy';
@@ -58,12 +58,14 @@ export function createArmRestClient<TClient extends RestClient, TOptions extends
  *
  * Applies the standard set of pipeline policies (see
  * {@linkcode createArmRestClient}). The subscription ID and ARM endpoint are
- * taken from the supplied {@linkcode AzureSubscription}, and any caller-provided
- * `options` are merged over the factory defaults.
+ * taken from the supplied {@linkcode AzureSubscriptionTarget}, and any
+ * caller-provided `options` are merged over the factory defaults.
  *
  * @param credential - The token credential used to authenticate requests.
  * @param subscription - The subscription whose ID and environment endpoint are used.
- *   A subscription with an empty `subscriptionId` raises a `TypeError`.
+ *   A subscription with an empty `subscriptionId` raises a `TypeError`. It also
+ *   serves as the deduplication identity, which partitions by account and tenant
+ *   when those are known and per-client otherwise.
  * @param options - Optional client options merged over the factory defaults.
  */
 export function createArmRestSubscriptionClient<TClient extends RestClient, TOptions extends RestClientOptions>(
@@ -71,7 +73,7 @@ export function createArmRestSubscriptionClient<TClient extends RestClient, TOpt
     executor: IActionExecutor,
     getClient: (credential: TokenCredential, subscriptionId: string, options?: TOptions) => TClient,
     credential: TokenCredential,
-    subscription: AzureSubscription,
+    subscription: AzureSubscriptionTarget,
     options?: TOptions,
 ): TClient {
     const subscriptionId = subscription.subscriptionId;
