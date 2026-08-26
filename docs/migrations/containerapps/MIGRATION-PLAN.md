@@ -381,8 +381,8 @@ verbatim reasoning.
   `GenericAzureViewProvider` claims the key and computes the grouping-aware parent, so reveal works. When it
   *is* loaded, `ContainerAppsViewProvider` claims it and returns the resource group as the parent, which is
   wrong under `resourceType` / `location` / `armTag` grouping. This is **pre-existing and not specific to
-  this product** -- `AcrViewProvider` and `WebAppViewProvider` have the identical naive `getParent`. Fixing
-  it means sharing the grouping-aware computation across product view providers, which is its own change.
+  this product** -- `AcrViewProvider`, `WebAppViewProvider` and `SettingsViewProvider` have the identical
+  naive `getParent`. Tracked by [#331](https://github.com/microsoft/vscode-azure/issues/331).
 - **Live verification of the log stream.** The transport (ACA-118) is covered by unit tests over a stubbed
   `fetch`, including the redirect guard, but has not been run against a real container app. The redirect
   behavior of the real endpoint is the part most likely to need adjustment.

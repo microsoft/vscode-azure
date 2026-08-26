@@ -127,7 +127,7 @@ and `stopContainerAppLogStream` only while a stream is open.
 |---|---|
 | `pnpm run lint` | clean |
 | `pnpm run build` | succeeds |
-| `pnpm run test` | 883 extension, 500 utils, 366 azutils; 0 failing |
+| `pnpm run test` | 901 extension, 500 utils, 366 azutils; 0 failing |
 | `az bicep build` on the consumer template | compiles; all four pinned AVM modules resolve |
 
 ## Known gaps
@@ -138,17 +138,13 @@ Honest remainder. None is a silent omission -- each is tracked.
    covered by unit tests over stubbed I/O but have never run against a real container app. The redirect
    behavior of the real log-stream endpoint is the most likely thing to need adjustment.
 2. **`getParent` is grouping-unaware for loaded nodes.** Affects reveal (ACA-014) under `resourceType` /
-   `location` / `armTag` grouping. **Pre-existing and not specific to this product** -- `AcrViewProvider` and
-   `WebAppViewProvider` have the identical naive implementation. Fixing it means sharing the grouping-aware
-   computation across product view providers. Recorded under Open questions in `MIGRATION-PLAN.md`.
-3. **No command-level tests** for `RestartContainerApp`, `RevealContainerAppEnvironment`,
-   `StartStreamingLogs`, `StopStreamingLogs`. They are thin orchestration over the log-stream service and
-   clients, which are tested; the ACR precedent (`DisableAcrAdminUser`) likewise has none. A deliberate
-   call, not an oversight.
-4. **`docker.remoteBuild` is unresolved.** The source never needed a local Docker daemon because it always
+   `location` / `armTag` grouping. **Pre-existing and not specific to this product** -- `AcrViewProvider`,
+   `WebAppViewProvider` and `SettingsViewProvider` have the identical naive implementation. Tracked by
+   [#331](https://github.com/microsoft/vscode-azure/issues/331).
+3. **`docker.remoteBuild` is unresolved.** The source never needed a local Docker daemon because it always
    built in ACR. Preserving that means emitting `services.<name>.docker.remoteBuild: true`, but
    `GenerateAzureYamlStep` delegates to `azd init` and this monorepo does not author files azd owns. Recorded
    under Open questions; needs a decision.
-5. **13 Defer rows are not built**, by signed decision: the `deployImage` exported API and its shim
+4. **13 Defer rows are not built**, by signed decision: the `deployImage` exported API and its shim
    (ACA-007, ACA-127), revision activate/deactivate and their nodes (ACA-039, ACA-040, ACA-065, ACA-067),
    the Dapr surface (ACA-082, ACA-089-092), and Docker Hub support (ACA-097, ACA-117).
