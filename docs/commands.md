@@ -107,6 +107,9 @@ that payload. Omit it to open the payload unchanged. Redacted values are
 replaced with a visible marker rather than dropped, so the reader can tell a
 withheld property from an absent one.
 
+The opened JSON document is a readonly snapshot of the current state. Editable
+resource configuration belongs in the settings framework instead.
+
 ### `prefixArgs` Pattern
 
 Both registration functions accept optional trailing `...prefixArgs`, which are prepended to the arguments VS Code passes to `execute()`. This lets one command class be registered several times with different fixed arguments instead of being split into near-identical subclasses:

@@ -5,11 +5,12 @@
 
 import { AzureNodeId, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
 import { createMockDataItemTree, makeGenericResource, makeSubscription, makeVirtualResource } from '@microsoft/vscode-azure-azutils/testing';
-import { createActionContext, IActionContext, ICodeContext } from '@microsoft/vscode-azure-utils';
+import { createActionContext, IActionContext, ICodeContext, IVsCode } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, type MockVsCodeResult } from '@microsoft/vscode-azure-utils/testing';
 import { Container } from 'inversify';
 import { mock, type Mock } from 'node:test';
 import { ViewProperties } from '../../../src/commands/tree/ViewProperties';
+import { IPropertiesContentProvider, PropertiesContentProvider, PropertiesScheme } from '../../../src/properties/PropertiesContentProvider';
 import { IPropertiesAdapter, type PropertiesAdapter } from '../../../src/properties/PropertiesAdapter';
 import { RedactedMarker } from '../../../src/properties/redactSecrets';
 import { IAzureViewDataTree } from '../../../src/services';
@@ -23,6 +24,8 @@ describe('ViewProperties (unit)', () => {
         await setup.command.execute(AzureNodeId.from(resource).toString());
 
         const document = setup.mockResult.textDocuments[0];
+        expect(document.isUntitled).to.be.false;
+        expect(document.uri.scheme).to.equal(PropertiesScheme);
         expect(document.languageId).to.equal('json');
         expect(JSON.parse(document.getText())).to.deep.equal(payload);
         expect(setup.mockResult.shownDocuments[0]).to.equal(document);
@@ -125,9 +128,11 @@ function createCommand(nodes: readonly ConcreteAzureNode[], adapters: readonly P
     const context = createActionContext('viewProperties');
 
     const container = new Container();
+    container.bind(IVsCode).toConstantValue(ctx.code);
     container.bind(ICodeContext).toConstantValue(ctx);
     container.bind(IActionContext).toConstantValue(context);
     container.bind(IAzureViewDataTree).toConstantValue(createMockDataItemTree([...nodes]));
+    container.bind(IPropertiesContentProvider).to(PropertiesContentProvider).inSingletonScope();
     for (const adapter of adapters) {
         container.bind(IPropertiesAdapter).toConstantValue(adapter);
     }

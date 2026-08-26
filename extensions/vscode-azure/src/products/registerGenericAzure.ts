@@ -28,10 +28,11 @@ import { BrowseWebsite } from '../commands/tree/BrowseWebsite';
 import { OpenInPortal } from '../commands/tree/OpenInPortal';
 import { RefreshResourcesView } from '../commands/tree/RefreshResourcesView';
 import { ViewProperties } from '../commands/tree/ViewProperties';
+import { IPropertiesContentProvider, PropertiesContentProvider } from '../properties/PropertiesContentProvider';
 import { GenericArmPropertiesAdapter } from '../properties/adapters/GenericArmPropertiesAdapter';
 import { IPropertiesAdapter } from '../properties/PropertiesAdapter';
 import type { ProductRegistrar } from '../registration/ProductRegistrar';
-import { ISubscriptionResolver } from '../services';
+import { ISubscriptionResolver, pushDisposable } from '../services';
 import {
     AzureAccountDataProvider,
     IAzureAccountDataProvider,
@@ -102,6 +103,7 @@ export function registerGenericAzure(registrar: ProductRegistrar): void {
         });
 
         container.bind(IResourceSelector).to(ResourceSelector).inSingletonScope();
+        container.bind(IPropertiesContentProvider).to(PropertiesContentProvider).inSingletonScope().onActivation(pushDisposable);
 
         // Bound last of all the products, so every product adapter gets first refusal and this only
         // runs for nodes nobody claimed.

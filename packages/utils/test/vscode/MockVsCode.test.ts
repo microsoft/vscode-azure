@@ -6,8 +6,8 @@
 import { createMockVsCode } from './MockVsCode';
 
 // `openTextDocument` is one of the few pieces of mock logic worth testing directly: it picks between
-// two real overloads and, for a URI, serves content from the mock filesystem. A caller whose
-// assertion silently passed against the wrong branch would prove nothing.
+// real overloads and, for a URI, serves content from the mock filesystem or a content provider. A
+// caller whose assertion silently passed against the wrong branch would prove nothing.
 describe('MockVsCode.openTextDocument (unit)', () => {
     it('serves a URI from the mock filesystem so a caller can read back what it wrote', async () => {
         const { vscode: code, fs } = createMockVsCode();
@@ -37,6 +37,22 @@ describe('MockVsCode.openTextDocument (unit)', () => {
         expect(document.isUntitled).to.be.true;
         expect(document.languageId).to.equal('json');
         expect(document.getText()).to.equal('{}');
+    });
+
+    it('serves a URI from a registered text document content provider', async () => {
+        const { vscode: code } = createMockVsCode();
+        code.workspace.registerTextDocumentContentProvider('mock-properties', {
+            provideTextDocumentContent: () => '{\n    "setting": true\n}',
+        });
+
+        const document = await code.workspace.openTextDocument(code.Uri.from({
+            scheme: 'mock-properties',
+            path: '/settings.json',
+        }));
+
+        expect(document.isUntitled).to.be.false;
+        expect(document.languageId).to.equal('json');
+        expect(document.getText()).to.equal('{\n    "setting": true\n}');
     });
 
     it('treats an empty options bag as an untitled document, not as a URI', async () => {

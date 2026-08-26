@@ -6,6 +6,7 @@
 import { getNodeType, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
 import { IActionContext, ICodeContext } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, multiInject } from 'inversify';
+import { IPropertiesContentProvider } from '../../properties/PropertiesContentProvider';
 import { IPropertiesAdapter, type PropertiesAdapter } from '../../properties/PropertiesAdapter';
 import { applyRedaction } from '../../properties/redactSecrets';
 import { IAzureViewDataTree } from '../../services';
@@ -22,8 +23,8 @@ import type { ManagedCommand } from '../ManagedCommand';
  * Dispatch is first-match-wins over the bound adapters in product registration order, so a product
  * that claims a node takes precedence over the generic ARM adapter registered last.
  *
- * The document is untitled and unsaved: this is a read of the current state, not a thing to edit.
- * Anything that should be editable belongs in the settings editor instead.
+ * The document is readonly and unsaved: this is a read of the current state, not a thing to
+ * edit. Anything that should be editable belongs in the settings editor instead.
  */
 @injectable()
 export class ViewProperties implements ManagedCommand {
@@ -34,6 +35,7 @@ export class ViewProperties implements ManagedCommand {
         @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IActionContext) private readonly context: IActionContext,
         @inject(IAzureViewDataTree) private readonly dataTree: IAzureViewDataTree,
+        @inject(IPropertiesContentProvider) private readonly contentProvider: IPropertiesContentProvider,
         @multiInject(IPropertiesAdapter) private readonly adapters: readonly PropertiesAdapter[],
     ) { }
 
@@ -53,12 +55,9 @@ export class ViewProperties implements ManagedCommand {
 
         const properties = applyRedaction(adapter.redact, await adapter.read(node));
 
-        // `preview: true` so repeatedly checking properties across a few resources reuses one tab
-        // rather than leaving a trail of them, matching how VS Code opens any other read-only peek.
-        const document = await this.ctx.code.workspace.openTextDocument({
-            content: JSON.stringify(properties, undefined, 4),
-            language: 'json',
-        });
+        // `preview: true` keeps quick inspections to one tab while the content provider keeps the
+        // JSON readonly.
+        const document = await this.contentProvider.openTextDocument(JSON.stringify(properties, undefined, 4));
         await this.ctx.code.window.showTextDocument(document, { preview: true });
     }
 
