@@ -6,6 +6,7 @@
 import { mock } from 'node:test';
 import { delay } from '../../src/base/delay';
 import type { Page } from '../../src/data/Page';
+import { asAsyncIterable, pagesOf } from '../data/asyncIterables';
 import { DataItemTree } from '../../src/tree/DataItemTree';
 import type { DataProvider, DataProviderChangeEvent } from '../../src/tree/DataProvider';
 import { Everything, Roots, selfOnly, subtreeOf, type Selector } from '../../src/tree/Selector';
@@ -215,14 +216,7 @@ describe('DataItemTree (unit)', () => {
             return {
                 isRoot: false,
                 canHandle: (r: unknown): r is TestResource => (r as TestResource).id === parentId,
-                getChildren: () => {
-                    const iter = pages[Symbol.iterator]();
-                    return {
-                        [Symbol.asyncIterator]() {
-                            return { next: () => Promise.resolve(iter.next()) };
-                        },
-                    };
-                },
+                getChildren: () => asAsyncIterable(pages),
             };
         }
 
@@ -288,17 +282,7 @@ describe('DataItemTree (unit)', () => {
             tree.registerProvider({
                 isRoot: false,
                 canHandle: (r: unknown): r is TestResource => canHandleRoot && (r as TestResource).id === 'root',
-                getChildren: () => {
-                    const iter = [
-                        { items: [{ id: 'p1' }], hasMore: true },
-                        { items: [{ id: 'p2' }], hasMore: false },
-                    ][Symbol.iterator]();
-                    return {
-                        [Symbol.asyncIterator]() {
-                            return { next: () => Promise.resolve(iter.next()) };
-                        },
-                    };
-                },
+                getChildren: () => pagesOf([{ id: 'p1' }], [{ id: 'p2' }]),
             });
 
             await tree.getChildren();

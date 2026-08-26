@@ -5,6 +5,7 @@
 
 import type { AccessToken, TokenCredential } from '@azure/core-auth';
 import { CaselessSet, EventEmitter, type ChildResult, type DataProvider, type Event, type Page } from '@microsoft/vscode-azure-utils';
+import { rejectingAsyncIterable } from '@microsoft/vscode-azure-utils/testing';
 import { mock, type Mock } from 'node:test';
 import type * as vscode from 'vscode';
 import { isAzureSubscriptionTarget, type AzureAccount, type AzureSubscription, type AzureTenant } from '../src/auth/AzureSubscription';
@@ -19,8 +20,8 @@ import type { ResourceGroup, VirtualGroup } from '../src/models/Grouping';
 import type { VirtualResource } from '../src/models/VirtualResource';
 import type { ISubscriptionClient, ISubscriptionClientProvider, Location, Subscription, TenantIdDescription } from '../src/rest/clients/SubscriptionClient';
 import type { Container, IContainerAppsClient, Replica, Revision } from '../src/rest/clients/ContainerAppsClient';
-import type { PagedAsyncIterableIterator } from '@azure/core-paging';
 import type { IWebAppClient } from '../src/rest/clients/WebAppClient';
+import { makePagedAsyncIterable } from './rest/mockPaging';
 
 const defaultEnvironment: EnvironmentLike = AzurePublicCloud;
 
@@ -362,14 +363,10 @@ export function createMockAzureListingFetcher(options?: MockAzureListingFetcherO
         }
     }
 
-    function rejecting<T>(error: Error): AsyncIterable<Page<T>> {
-        return { [Symbol.asyncIterator]: () => ({ next: () => Promise.reject(error) }) };
-    }
-
     return {
         fetchAccounts: mock.fn(() => Promise.resolve([...accounts])),
         fetchTenants: mock.fn((account: AzureAccount) => unlistable.has(account.id)
-            ? rejecting<AzureTenant>(new Error(`Mock: cannot list tenants for account ${account.id}`))
+            ? rejectingAsyncIterable<Page<AzureTenant>>(new Error(`Mock: cannot list tenants for account ${account.id}`))
             : paged('tenants', tenants.filter(tenant => tenant.accountId.toLowerCase() === account.id.toLowerCase()))),
         fetchSubscriptions: mock.fn((tenant: AzureTenant) => {
             const error = signedOut.has(tenant.tenantId)
@@ -378,7 +375,7 @@ export function createMockAzureListingFetcher(options?: MockAzureListingFetcherO
                     ? new Error(`Mock: cannot list subscriptions for tenant ${tenant.tenantId}`)
                     : undefined;
             if (error) {
-                return rejecting<AzureSubscription>(error);
+                return rejectingAsyncIterable<Page<AzureSubscription>>(error);
             }
             return paged('subscriptions', subscriptions.filter(sub =>
                 sub.accountId.toLowerCase() === tenant.accountId.toLowerCase()
@@ -562,7 +559,7 @@ export function createMockContainerAppsClient(options?: MockContainerAppsClientO
                 name: 'rev1',
                 type: 'Microsoft.App/containerApps/revisions',
             })),
-            listRevisions: mock.fn(() => toPagedAsyncIterable(options?.revisions ?? [])),
+            listRevisions: mock.fn(() => makePagedAsyncIterable(options?.revisions ?? [])),
             restartRevision: mock.fn(() => Promise.resolve()),
         },
         containerAppsRevisionReplicas: {
@@ -577,42 +574,4 @@ export function createMockContainerAppsClient(options?: MockContainerAppsClientO
             })),
         },
     };
-}
-
-/**
- * Wraps a fixed array in the {@linkcode PagedAsyncIterableIterator} shape the
- * Azure SDKs return. Only the async-iteration surface is populated, which is
- * what the client wrappers and their callers actually consume.
- */
-function toPagedAsyncIterable<T>(items: readonly T[]): PagedAsyncIterableIterator<T> {
-    let index = 0;
-
-    const iterator = {
-        next() {
-            return Promise.resolve(index < items.length
-                ? { done: false as const, value: items[index++] }
-                : { done: true as const, value: undefined });
-        },
-        [Symbol.asyncIterator]() {
-            return iterator;
-        },
-        byPage: () => {
-            let sent = false;
-            const pages = {
-                next() {
-                    if (sent) {
-                        return Promise.resolve({ done: true as const, value: undefined });
-                    }
-                    sent = true;
-                    return Promise.resolve({ done: false as const, value: [...items] });
-                },
-                [Symbol.asyncIterator]() {
-                    return pages;
-                },
-            };
-            return pages;
-        },
-    };
-
-    return iterator;
 }

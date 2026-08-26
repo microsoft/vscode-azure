@@ -6,7 +6,7 @@
 import type { AzureSubscription, GenericResource } from '@microsoft/vscode-azure-azutils';
 import { makeGenericResource, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
 import type { Page } from '@microsoft/vscode-azure-utils';
-import { createMockCodeContext, DebugOutputChannel, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, DebugOutputChannel, pagesOf, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import { PickImageSourceStep } from '../../../src/commands/containerApps/steps/PickImageSourceStep';
 import { AcrResourceType } from '../../../src/tree/resources/acr/AcrRegistry';
@@ -31,11 +31,7 @@ describe('PickImageSourceStep (unit)', () => {
     ) {
         const { ctx, mock: mockResult } = createMockCodeContext();
 
-        const list = mock.fn((_options?: { filter?: string }): AsyncIterable<Page<GenericResource>> => ({
-            async *[Symbol.asyncIterator]() {
-                yield await Promise.resolve({ items: registries, hasMore: false });
-            },
-        }));
+        const list = mock.fn((_options?: { filter?: string }): AsyncIterable<Page<GenericResource>> => pagesOf(registries));
 
         const createRepositoryClient = mock.fn((_subscription: AzureSubscription, loginServer: string) => ({
             listRepositories: () => Promise.resolve([]),
