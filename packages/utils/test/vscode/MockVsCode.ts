@@ -359,6 +359,7 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
 
     const textDocuments: vscode.TextDocument[] = [];
     const textDocumentContentProviders = new Map<string, vscode.TextDocumentContentProvider>();
+    let untitledDocumentCount = 0;
 
     const registerFileSystemProvider = mock.fn(
         (_scheme: string, _provider: vscode.FileSystemProvider) => ({ dispose: () => undefined }),
@@ -392,6 +393,11 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         return Buffer.from(fs.files.get(uri.path) ?? new Uint8Array()).toString();
     };
 
+    const nextUntitledUri = (): vscode.Uri => {
+        untitledDocumentCount += 1;
+        return MockUri.from({ scheme: 'untitled', path: `/Untitled-${untitledDocumentCount}` });
+    };
+
     const openTextDocument = mock.fn(
         async (target: vscode.Uri | { language?: string; content?: string }): Promise<vscode.TextDocument> => {
             // `workspace.openTextDocument` is overloaded: a URI opens the file at that path, while an
@@ -401,9 +407,9 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
             const isUri = 'scheme' in target;
             const content = isUri ? await readUriText(target) : target.content ?? '';
             const document = {
-                uri: isUri ? target : MockUri.from({ scheme: 'untitled', path: '/Untitled-1' }),
+                uri: isUri ? target : nextUntitledUri(),
                 isUntitled: !isUri,
-                languageId: isUri ? languageFromPath(target.path) : target.language,
+                languageId: isUri ? languageFromPath(target.path) : target.language ?? 'plaintext',
                 getText: () => content,
                 lineAt: (line: number) => ({ text: content.split(/\r?\n/)[line] ?? '' }),
                 validateRange: (range: vscode.Range) => range,
