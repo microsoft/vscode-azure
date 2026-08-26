@@ -428,4 +428,60 @@ describe('AzureNodeId (unit)', () => {
             expect(parent!.isGenericResourceNodeId()).to.be.true;
         });
     });
+
+    describe('forRelatedResource', () => {
+        const environmentId = '/subscriptions/test-sub/resourceGroups/other-rg/providers/Microsoft.App/managedEnvironments/myEnv';
+
+        it('should build the node ID of a resource referenced by another', () => {
+            const app = makeGenericResource({
+                id: '/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.App/containerApps/myApp',
+                name: 'myApp',
+                type: 'Microsoft.App/containerApps',
+                logicalType: 'Microsoft.App/containerApps',
+            });
+
+            const related = AzureNodeId.from(app).forRelatedResource(environmentId);
+
+            expect(related.isGenericResourceNodeId()).to.be.true;
+            expect(related.toString()).to.contain(environmentId);
+        });
+
+        it('should keep the related resource inside the source node\'s account, tenant and cloud', () => {
+            const app = makeGenericResource({
+                id: '/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.App/containerApps/myApp',
+            });
+            const source = AzureNodeId.from(app);
+
+            const related = source.forRelatedResource(environmentId);
+
+            // The identity segments are what stop a derived id escaping into
+            // another account or sovereign cloud, so they must be inherited.
+            const identity = source.toString().split('/subscriptions/')[0];
+            expect(related.toString().startsWith(identity)).to.be.true;
+        });
+
+        it('should round-trip through parse', () => {
+            const app = makeGenericResource({
+                id: '/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.App/containerApps/myApp',
+            });
+
+            const related = AzureNodeId.from(app).forRelatedResource(environmentId);
+
+            expect(AzureNodeId.parse(related.toString()).toString()).to.equal(related.toString());
+        });
+
+        it('should reject a relative resource id', () => {
+            const app = makeGenericResource();
+
+            expect(() => AzureNodeId.from(app).forRelatedResource('myEnv'))
+                .to.throw('Not an absolute ARM resource id');
+        });
+
+        it('should reject deriving from an account node, which has no tenant to inherit', () => {
+            const account = AzureNodeId.from(makeAccount());
+
+            expect(() => account.forRelatedResource(environmentId))
+                .to.throw('Cannot derive a related resource from an account node ID');
+        });
+    });
 });
