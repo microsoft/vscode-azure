@@ -19,6 +19,6 @@ on:
 jobs:
   Build:
     # Use template from https://github.com/microsoft/vscode-azuretools/tree/main/.github/workflows
-    uses: microsoft/vscode-azuretools/.github/workflows/jobs.yml@main
+    uses: microsoft/vscode-azuretools/.github/workflows/jobs.yml@agents/update-github-actions-workflow
     with:
       package_manager: pnpm
