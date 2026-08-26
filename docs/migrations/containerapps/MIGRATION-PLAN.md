@@ -74,9 +74,10 @@ azd's own reference templates use (see
 **Decision (reviewer, this session).** Take the skill's two-file fallback: author one AVM-shaped local
 **pattern** module that owns the complete topology, plus a thin consumer. The local module is not written
 from scratch -- **it composes the published AVM modules above**, so the stand-in is exactly the pattern
-module AVM is missing rather than a re-implementation of modules that already exist. File an upstream issue
-proposing the real module; when it is published, the local module collapses to a single pinned
-`br/public:` reference and the consumer does not change.
+module AVM is missing rather than a re-implementation of modules that already exist. Publishing the real
+module is tracked by [#329](https://github.com/microsoft/vscode-azure/issues/329) (the Container Apps
+analog of [#112](https://github.com/microsoft/vscode-azure/issues/112) for Functions); when it lands, the
+local module collapses to a single pinned `br/public:` reference and the consumer does not change.
 
 **Generated layout** (module boundary preserved, per the fallback rules):
 
@@ -254,8 +255,9 @@ Both resource types are handled by **one** data provider and **one** view provid
 > the bare service-level `remoteBuild` is a **different**, Functions-only feature. AVM module references and
 > versions are recorded in the provisioning decision above.
 
-- [ ] File the upstream issue proposing a real `avm/ptn/azd` container-apps topology pattern module, and
-      link it from the local module's header comment and from this plan  <- ACA-002
+- [x] File the tracking issue for a real AVM container-apps topology pattern module
+      ([#329](https://github.com/microsoft/vscode-azure/issues/329)), and link it from the local module's
+      header comment  <- ACA-002
 - [ ] Generalize `GenerateBicepStep` from copying **one** template file to copying a template **directory**
       with relative paths preserved, and move `functionApp.bicep` to `functionApp/main.bicep` in the same
       change so no previously migrated product stays the implicit default case  <- ACA-002

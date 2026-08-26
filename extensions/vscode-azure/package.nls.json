@@ -22,6 +22,8 @@
     "commands.vscode-azure/settings/edit": "Edit Settings",
     "commands.vscode-azure/functions/createNew": "Create Empty Function App in Azure...",
     "commands.vscode-azure/functions/deploy": "Deploy Project as Function App...",
+    "commands.vscode-azure/containerApps/openConsoleInPortal": "Open Console in Portal",
+    "commands.vscode-azure/containerApps/openLogsInPortal": "Open Logs in Portal",
     "commands.vscode-azure/azdUp": "Provision & Deploy",
     "commands.vscode-azure/azdDown": "Delete Deployment",
     "commands.vscode-azure/signIn": "Sign in to Azure...",

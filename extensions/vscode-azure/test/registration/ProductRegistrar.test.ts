@@ -28,6 +28,8 @@ import { AcrDataProvider } from '../../src/tree/resources/acr/AcrDataProvider';
 import { AcrViewProvider } from '../../src/tree/resources/acr/AcrViewProvider';
 import { AzureAccountDataProvider, IAzureAccountDataProvider } from '../../src/tree/resources/AzureAccountDataProvider';
 import { AzureResourceDataProvider } from '../../src/tree/resources/AzureResourceDataProvider';
+import { ContainerAppsDataProvider } from '../../src/tree/resources/containerApps/ContainerAppsDataProvider';
+import { ContainerAppsViewProvider } from '../../src/tree/resources/containerApps/ContainerAppsViewProvider';
 import { GenericAzureViewProvider } from '../../src/tree/resources/GenericAzureViewProvider';
 import { SettingsDataProvider } from '../../src/tree/resources/settings/SettingsDataProvider';
 import { SettingsViewProvider } from '../../src/tree/resources/settings/SettingsViewProvider';
@@ -58,12 +60,14 @@ describe('ProductRegistrar (unit)', () => {
         const viewProviders = registrar.getResourceViewProviders();
         expect(dataProviders[0]).to.equal(SettingsDataProvider);
         expect(dataProviders[1]).to.equal(AcrDataProvider);
-        expect(dataProviders[2]).to.equal(WebAppDataProvider);
-        expect(dataProviders[3]).to.deep.equal([IAzureAccountDataProvider, AzureAccountDataProvider]);
-        expect(dataProviders[4]).to.equal(AzureResourceDataProvider);
+        expect(dataProviders[2]).to.equal(ContainerAppsDataProvider);
+        expect(dataProviders[3]).to.equal(WebAppDataProvider);
+        expect(dataProviders[4]).to.deep.equal([IAzureAccountDataProvider, AzureAccountDataProvider]);
+        expect(dataProviders[5]).to.equal(AzureResourceDataProvider);
         expect(viewProviders).to.deep.equal([
             SettingsViewProvider,
             AcrViewProvider,
+            ContainerAppsViewProvider,
             WebAppViewProvider,
             GenericAzureViewProvider,
         ]);

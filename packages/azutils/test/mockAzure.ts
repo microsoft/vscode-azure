@@ -18,6 +18,7 @@ import type { GenericResource } from '../src/models/GenericResource';
 import type { ResourceGroup, VirtualGroup } from '../src/models/Grouping';
 import type { VirtualResource } from '../src/models/VirtualResource';
 import type { ISubscriptionClient, ISubscriptionClientProvider, Location, Subscription, TenantIdDescription } from '../src/rest/clients/SubscriptionClient';
+import type { Container, IContainerAppsClient } from '../src/rest/clients/ContainerAppsClient';
 import type { IWebAppClient } from '../src/rest/clients/WebAppClient';
 
 const defaultEnvironment: EnvironmentLike = AzurePublicCloud;
@@ -477,6 +478,84 @@ export function createMockWebAppClient(options?: MockWebAppClientOptions): MockW
                 Object.assign(settings, appSettings.properties);
                 return Promise.resolve({ properties: { ...settings } });
             }),
+        },
+    };
+}
+
+/** Options for {@linkcode createMockContainerAppsClient}. */
+export interface MockContainerAppsClientOptions {
+    /** Ingress FQDN reported by `containerApps.get`. */
+    readonly fqdn?: string;
+    /** ARM id of the hosting managed environment, returned as `environmentId`. */
+    readonly environmentId?: string;
+    /** Provisioning state reported by `containerApps.get`. */
+    readonly provisioningState?: string;
+    /** Name of the app's latest revision. */
+    readonly latestRevisionName?: string;
+    /** Containers in the app's current template. */
+    readonly containers?: readonly Container[];
+}
+
+/**
+ * An {@linkcode IContainerAppsClient} whose operations are `mock.fn()`
+ * instances, so tests can assert call counts and arguments.
+ */
+export type MockContainerAppsClient = IContainerAppsClient & {
+    readonly containerApps: { [K in keyof IContainerAppsClient['containerApps']]: Mock<IContainerAppsClient['containerApps'][K]> };
+    readonly containerAppsRevisions: { [K in keyof IContainerAppsClient['containerAppsRevisions']]: Mock<IContainerAppsClient['containerAppsRevisions'][K]> };
+    readonly managedEnvironments: { [K in keyof IContainerAppsClient['managedEnvironments']]: Mock<IContainerAppsClient['managedEnvironments'][K]> };
+};
+
+/**
+ * Creates a mock {@linkcode IContainerAppsClient} whose operations are
+ * `mock.fn()` instances, so tests can assert call counts and arguments via
+ * `client.containerApps.get.mock`.
+ *
+ * The `@azure/arm-appcontainers` modular SDK flattens ARM's `properties` bag
+ * onto the resource, so the values supplied here are returned as top-level
+ * fields, matching what the real client hands back.
+ */
+export function createMockContainerAppsClient(options?: MockContainerAppsClientOptions): MockContainerAppsClient {
+    const id = '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/MyRG/providers/Microsoft.App/containerApps/MyApp';
+    const environmentId = options?.environmentId
+        ?? '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/MyRG/providers/Microsoft.App/managedEnvironments/MyEnv';
+
+    return {
+        containerApps: {
+            get: mock.fn(() => Promise.resolve({
+                id,
+                name: 'MyApp',
+                type: 'Microsoft.App/containerApps',
+                location: 'eastus',
+                environmentId: options?.environmentId,
+                provisioningState: options?.provisioningState ?? 'Succeeded',
+                latestRevisionName: options?.latestRevisionName,
+                configuration: { ingress: { fqdn: options?.fqdn } },
+                template: { containers: options?.containers ? [...options.containers] : [] },
+            })),
+            getAuthToken: mock.fn(() => Promise.resolve({
+                id: `${id}/authtoken`,
+                name: 'MyApp',
+                type: 'Microsoft.App/containerApps',
+                location: 'eastus',
+                token: 'test-token',
+            })),
+        },
+        containerAppsRevisions: {
+            getRevision: mock.fn(() => Promise.resolve({
+                id: `${id}/revisions/rev1`,
+                name: 'rev1',
+                type: 'Microsoft.App/containerApps/revisions',
+            })),
+            restartRevision: mock.fn(() => Promise.resolve()),
+        },
+        managedEnvironments: {
+            get: mock.fn(() => Promise.resolve({
+                id: environmentId,
+                name: 'MyEnv',
+                type: 'Microsoft.App/managedEnvironments',
+                location: 'eastus',
+            })),
         },
     };
 }
