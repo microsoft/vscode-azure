@@ -53,6 +53,11 @@
                 "title": "%commands.vscode-azure/resources/browseWebsite%"
             },
             {
+                "command": "vscode-azure/resources/viewProperties",
+                "icon": "$(json)",
+                "title": "%commands.vscode-azure/resources/viewProperties%"
+            },
+            {
                 "command": "vscode-azure/installAzd",
                 "category": "%commands.category.azure%",
                 "title": "%commands.vscode-azure/installAzd%"
@@ -161,6 +166,10 @@
                     "when": "false"
                 },
                 {
+                    "command": "vscode-azure/resources/viewProperties",
+                    "when": "false"
+                },
+                {
                     "command": "vscode-azure/resources/loadMore",
                     "when": "false"
                 },
@@ -242,6 +251,10 @@
                 {
                     "command": "vscode-azure/resources/browseWebsite",
                     "when": "view == vscode-azure/resources && viewItem =~ /\\bbrowseWebsite\\b/i"
+                },
+                {
+                    "command": "vscode-azure/resources/viewProperties",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\bviewProperties\\b/i"
                 },
                 {
                     "command": "vscode-azure/settings/edit",

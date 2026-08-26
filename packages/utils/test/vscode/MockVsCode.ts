@@ -331,7 +331,7 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
     const shownDocuments: vscode.TextDocument[] = [];
 
     const showTextDocument = mock.fn(
-        (document: vscode.TextDocument) => {
+        (document: vscode.TextDocument, _options?: vscode.TextDocumentShowOptions) => {
             shownDocuments.push(document);
             return Promise.resolve({ document } as unknown as vscode.TextEditor);
         },
@@ -360,8 +360,17 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
     );
 
     const openTextDocument = mock.fn(
-        (uri: vscode.Uri): Promise<vscode.TextDocument> => {
-            const document = { uri } as vscode.TextDocument;
+        (target: vscode.Uri | { language?: string; content?: string }): Promise<vscode.TextDocument> => {
+            // `workspace.openTextDocument` is overloaded: a URI opens an existing document, while an
+            // options bag creates an untitled one from in-memory content. Both shapes are served so
+            // a caller can be tested without knowing which the mock supports.
+            const document = ('content' in target || 'language' in target)
+                ? {
+                    isUntitled: true,
+                    languageId: target.language,
+                    getText: () => target.content ?? '',
+                } as vscode.TextDocument
+                : { uri: target } as vscode.TextDocument;
             textDocuments.push(document);
             return Promise.resolve(document);
         },

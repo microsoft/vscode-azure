@@ -7,6 +7,7 @@ import { makeGenericResource } from '@microsoft/vscode-azure-azutils/testing';
 import { BrowseWebsite } from '../../src/commands/tree/BrowseWebsite';
 import { DeleteAzureResource } from '../../src/commands/tree/DeleteAzureResource';
 import { OpenInPortal } from '../../src/commands/tree/OpenInPortal';
+import { ViewProperties } from '../../src/commands/tree/ViewProperties';
 import { combineContextValues, resourceContextValue } from '../../src/tree/contextValueHelpers';
 import { setWebsiteUrl } from '../../src/tree/resources/websiteUrl';
 
@@ -29,6 +30,7 @@ describe('resourceContextValue (unit)', () => {
         expect(resourceContextValue(makeGenericResource()).split(';')).to.have.members([
             DeleteAzureResource.ResourceContextValue,
             OpenInPortal.ContextValue,
+            ViewProperties.ContextValue,
         ]);
     });
 
@@ -38,6 +40,7 @@ describe('resourceContextValue (unit)', () => {
         expect(contextValue.split(';')).to.have.members([
             DeleteAzureResource.ResourceContextValue,
             OpenInPortal.ContextValue,
+            ViewProperties.ContextValue,
             'functionApp',
         ]);
     });

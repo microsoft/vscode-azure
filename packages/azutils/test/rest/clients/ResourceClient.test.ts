@@ -228,6 +228,62 @@ describe('ResourceClient (unit)', () => {
             .to.be.rejectedWith(/does not define an API version/);
     });
 
+    it('should get a resource by ID with the resolved API version and metadata attached', async () => {
+        const resourceId = '/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.Web/sites/app1';
+        const subscription = makeSubscription();
+        const httpClient = new MockHttpClient({
+            handler: req => {
+                if (req.url.includes('/providers/Microsoft.Web?')) {
+                    return makeResponse(req, 200, JSON.stringify({
+                        namespace: 'Microsoft.Web',
+                        resourceTypes: [{ resourceType: 'sites', defaultApiVersion: '2024-04-01' }],
+                    }));
+                }
+
+                return makeResponse(req, 200, JSON.stringify({
+                    id: resourceId,
+                    name: 'app1',
+                    type: 'Microsoft.Web/sites',
+                    kind: 'functionapp',
+                    location: 'eastus',
+                    properties: { state: 'Running', defaultHostName: 'app1.azurewebsites.net' },
+                }));
+            },
+        });
+        const { ctx } = createMockCodeContext();
+        const { executor } = createTestActionExecutor();
+        const client = ResourceClient.create(ctx, executor, makeCredential(), subscription, { httpClient });
+
+        const resource = await client.resources.getById(resourceId, 'Microsoft.Web/sites');
+
+        expect(resource.name).to.equal('app1');
+        expect(resource.properties).to.deep.equal({ state: 'Running', defaultHostName: 'app1.azurewebsites.net' });
+        expect(resource.logicalType).to.equal(FunctionAppLogicalType);
+        expect(resource.subscription).to.equal(subscription);
+
+        const getRequest = httpClient.requests.find(request => request.url.includes('/sites/app1'));
+        expect(getRequest?.method).to.equal('GET');
+        expect(getRequest?.url).to.include('api-version=2024-04-01');
+    });
+
+    it('should surface the ARM failure when a resource cannot be read by ID', async () => {
+        const httpClient = new MockHttpClient({
+            handler: req => {
+                if (req.url.includes('/providers/Microsoft.Web?')) {
+                    return makeResponse(req, 200, JSON.stringify({
+                        namespace: 'Microsoft.Web',
+                        resourceTypes: [{ resourceType: 'sites', defaultApiVersion: '2024-04-01' }],
+                    }));
+                }
+
+                return makeResponse(req, 404, JSON.stringify({ error: { code: 'ResourceNotFound', message: 'Resource not found' } }));
+            },
+        });
+
+        await expect(createClient(httpClient).resources.getById('/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.Web/sites/gone', 'Microsoft.Web/sites'))
+            .to.be.rejectedWith(/Resource not found/);
+    });
+
     it('should delete a nested resource by ID and await LRO completion', async () => {
         const resourceId = '/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.Web/sites/app1/slots/staging';
         let pollCompleted = false;
