@@ -333,7 +333,11 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
     const showTextDocument = mock.fn(
         (document: vscode.TextDocument, _options?: vscode.TextDocumentShowOptions) => {
             shownDocuments.push(document);
-            return Promise.resolve({ document } as unknown as vscode.TextEditor);
+            return Promise.resolve({
+                document,
+                revealRange: mock.fn(),
+                selection: undefined,
+            } as unknown as vscode.TextEditor);
         },
     );
 
@@ -361,16 +365,22 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
 
     const openTextDocument = mock.fn(
         (target: vscode.Uri | { language?: string; content?: string }): Promise<vscode.TextDocument> => {
-            // `workspace.openTextDocument` is overloaded: a URI opens an existing document, while an
-            // options bag creates an untitled one from in-memory content. Both shapes are served so
-            // a caller can be tested without knowing which the mock supports.
-            const document = ('content' in target || 'language' in target)
-                ? {
-                    isUntitled: true,
-                    languageId: target.language,
-                    getText: () => target.content ?? '',
-                } as vscode.TextDocument
-                : { uri: target } as vscode.TextDocument;
+            // `workspace.openTextDocument` is overloaded: a URI opens the file at that path, while an
+            // options bag creates an untitled document from in-memory content. Discriminating on
+            // `scheme` follows the real overloads, so an empty options bag still opens an untitled
+            // document rather than being mistaken for a URI.
+            const isUri = 'scheme' in target;
+            const content = isUri
+                ? Buffer.from(fs.files.get(target.path) ?? new Uint8Array()).toString()
+                : target.content ?? '';
+            const document = {
+                uri: isUri ? target : MockUri.from({ scheme: 'untitled', path: '/Untitled-1' }),
+                isUntitled: !isUri,
+                languageId: isUri ? undefined : target.language,
+                getText: () => content,
+                lineAt: (line: number) => ({ text: content.split(/\r?\n/)[line] ?? '' }),
+                validateRange: (range: vscode.Range) => range,
+            } as unknown as vscode.TextDocument;
             textDocuments.push(document);
             return Promise.resolve(document);
         },

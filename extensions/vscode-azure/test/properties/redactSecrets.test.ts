@@ -23,6 +23,9 @@ const publicNames = [
     'secretUri',
     'tokenEndpoint',
     'passwordPolicy',
+    // The public half of an SSH key pair. Shaped exactly like the `keyValue` compound below, which
+    // is why the compounds are an enumerated list rather than a rule.
+    'keyData',
 ];
 
 /** Names whose value is a credential and must never be shown. */
@@ -46,6 +49,11 @@ const secretNames = [
     'authorization',
     'credentials',
     'keys',
+    // A secret word followed by a generic noun, which head-word matching alone would let through.
+    'secretValue',
+    'tokenValue',
+    'keyValue',
+    'passwordHash',
 ];
 
 describe('redactSecrets (unit)', () => {

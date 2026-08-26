@@ -57,10 +57,18 @@ const secretHeadWords = new Set([
  * `connectionString` is the one that matters in practice: its head word is `string`, but the value
  * routinely carries an embedded account key. These are anchored at the end so a qualified variant
  * (`primaryConnectionString`) is covered too.
+ *
+ * @remarks
+ * The `value`/`hash` compounds close the case where a secret word is followed by a generic noun --
+ * `secretValue`, `tokenValue`, `keyValue`, `passwordHash` -- which head-word matching alone lets
+ * through. There is no general rule to be had here, only a judgement per compound: `keyData` is
+ * exactly the same shape and holds the *public* half of an SSH key pair, so it stays visible.
+ * Extend this list rather than looking for the pattern that would cover both.
  */
 const secretNamePatterns: readonly RegExp[] = [
     /connection[_-]?strings?$/i,
     /sas[_-]?urls?$/i,
+    /(?:credential|key|password|pwd|sas|secret|token)s?[_-]?(?:value|hash)$/i,
 ];
 
 /**
