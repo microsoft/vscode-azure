@@ -112,14 +112,6 @@ export class FuncInstaller implements ToolInstaller {
         const force = options.current !== undefined;
 
         if (process.platform === 'win32') {
-            // Same shape as azd's install line -- `Invoke-Expression` over an
-            // `Invoke-RestMethod`, single quotes only. The script is wrapped in
-            // a scriptblock and the switches appended by concatenation, because
-            // the downloaded text is a script with a `param` block: piping it
-            // straight to `Invoke-Expression` would leave nowhere for the
-            // switches to bind. Concatenation rather than the documented
-            // `iex "..."` form keeps double quotes out of the command, which
-            // the task's shell would otherwise strip.
             const args = `-Prerelease${force ? ' -Force' : ''}`;
             return [{
                 name: 'install.ps1',

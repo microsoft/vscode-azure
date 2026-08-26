@@ -42,7 +42,8 @@ function createService(installer: ToolInstaller, pathResult?: string, existingFi
     return new ToolService(mockResult.vscode, processExecutor, [installer]);
 }
 
-/** The plain request another extension would make: resolve, install only if needed. */function request(overrides: Partial<AcquireToolRequest> = {}): AcquireToolRequest {
+/** The plain request another extension would make: resolve, install only if needed. */
+function request(overrides: Partial<AcquireToolRequest> = {}): AcquireToolRequest {
     return { toolId: 'azd', requestingExtensionId: 'publisher.name', ...overrides };
 }
 
