@@ -86,6 +86,17 @@ The ingress target port is detected from the project's Dockerfile `EXPOSE` instr
 Bicep parameter rather than prompted for -- the value is already declared there, and the generated Bicep
 stays editable.
 
+The image is chosen through a single combo box that suggests every tag in the user's own container
+registries and accepts anything else typed in -- a Docker Hub image, a third-party registry, a tag that does
+not exist yet. That replaces the source extension's registry-kind -> registry -> repository -> tag chain and
+removes the need for a separate "other registry" surface. It is only asked on `createNew`; the `deploy` job
+has azd build and push the image instead.
+
+After provisioning, the app's latest revision is polled until it settles. Provisioning succeeding only means
+ARM accepted the template -- the container can still fail to start on a bad image reference or a crash on
+boot. When it does, the app's own console logs are read from the environment's Log Analytics workspace and
+written to the output channel, which is where the explanation actually lives.
+
 ## What this product deliberately does not do
 
 Per the signed triage, the following are expressed in Bicep rather than as commands or tree nodes:

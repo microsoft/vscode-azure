@@ -260,11 +260,8 @@ Both resource types are handled by **one** data provider and **one** view provid
 > one error in the research: `container-apps-stack:0.4.0` takes `logAnalyticsWorkspaceName`, not
 > `logAnalyticsWorkspaceResourceId`.
 
-**Status: the create/deploy path is complete and green; five tasks below remain open.** The wizard
-provisions the full topology and `azd deploy` targets the app, which is the end-to-end path. What is not
-built is the *existing-image* path (ACA-096/098/112/113), the overwrite warning (ACA-110), and post-deploy
-start verification (ACA-105/115). None blocks the primary flow, because on the `deploy` job azd builds and
-pushes the image itself and the Bicep falls back to a placeholder until it does.
+**Status: complete.** The wizard provisions the full topology, deploys an existing image or lets azd build
+one, and verifies the app actually started.
 
 
 - [x] File the tracking issue for a real AVM container-apps topology pattern module
@@ -284,10 +281,11 @@ pushes the image itself and the Bicep falls back to a placeholder until it does.
       confirm Post-clone / Bootstrapped still skip generation when `infra/main.bicep` exists  <- ACA-002
 - [x] `CreateContainerAppContext` extending `AzdWizardContext` with the image, ingress and registry inputs
       <- ACA-002
-- [ ] `PickImageSourceStep` -- one combobox over the user's ACR repositories/tags **plus** free-text entry,
+- [x] `PickImageSourceStep` -- one combobox over the user's ACR repositories/tags **plus** free-text entry,
       instead of the source's registry-kind -> registry -> repository -> tag chain. Ships the "other
-      registry" path as free-text input in the same pick, not a separate surface  <- ACA-096, ACA-098
-- [ ] Add `@azure/container-registry` and an `AcrRepositoryClient` data-plane wrapper in azutils to back
+      registry" path as free-text input in the same pick, not a separate surface. Only asks on the
+      `createNew` job: on `deploy`, azd builds and pushes the image  <- ACA-096, ACA-098
+- [x] Add `@azure/container-registry` and an `AcrRepositoryClient` data-plane wrapper in azutils to back
       that pick (management-plane ACR is already covered by the existing `AcrClient`)  <- ACA-113, ACA-112
 - [x] **Reuse**, no code: registry creation is a line in the topology module, and everything else about
       registries belongs to the ACR product -- no container-apps-owned "create registry" command  <- ACA-048
@@ -295,13 +293,21 @@ pushes the image itself and the Bicep falls back to a placeholder until it does.
       the module's placeholder image  <- ACA-095
 - [x] Dockerfile `EXPOSE` parsing feeds the `targetPort` Bicep **parameter default**; it never prompts.
       Read the Dockerfile through the workspace index  <- ACA-104
-- [ ] Overwrite / unsupported-features warning rebuilt on the shared confirm step (`ConfirmProvisionStep`),
-      shown only when targeting an existing app  <- ACA-110
-- [ ] `VerifyContainerAppStartStep` -- after provisioning, poll the app's latest revision until it leaves a
+- [x] Overwrite warning: satisfied by **reusing** the shared `ConfirmProvisionStep`, which already
+      interrupts exactly the risky case -- re-provisioning over an existing azd environment. Its wording was
+      sharpened to say that provisioning updates already-deployed resources. The source's *unsupported
+      features* half does not carry over: it existed because the source round-tripped the app's ARM template
+      through its own model and could silently drop what it did not understand. Here Bicep is the source of
+      truth and the user can read it, so nothing is silently lost  <- ACA-110
+- [x] `VerifyContainerAppStartStep` -- after provisioning, poll the app's latest revision until it leaves a
       transient running state; on failure query the environment's Log Analytics workspace
-      (`ContainerAppConsoleLogs_CL`, last 5 minutes) and attach the output to the activity so it can be
-      explained  <- ACA-105
-- [ ] Add `@azure/monitor-query` and a `LogsQueryClient` wrapper in azutils to back that step  <- ACA-115
+      (`ContainerAppConsoleLogs_CL`, last 5 minutes) and write the output to the output channel so it can be
+      explained. Never throws: the resources exist either way, so failing the wizard here would misreport
+      what happened. Learns what was created from the consumer template's azd outputs rather than guessing
+      at the module's naming scheme  <- ACA-105
+- [x] Add `@azure/monitor-query-logs` and a `LogsQueryClient` wrapper in azutils to back that step. **Not**
+      `@azure/monitor-query` as the plan originally said (inherited from the source extension's inventory):
+      npm marks that package deprecated in favor of the split `-logs` / `-metrics` packages  <- ACA-115
 - [x] Register `CreateContainerApp` twice -- `vscode-azure/containerApps/createNew` and
       `vscode-azure/containerApps/deploy` -- via `prefixArgs`, matching the Functions precedent. This is
       where `createContainerApp`, `createManagedEnvironment`, `deployWorkspaceProject` and

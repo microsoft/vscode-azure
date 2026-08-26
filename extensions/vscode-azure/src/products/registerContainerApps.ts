@@ -3,7 +3,11 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ContainerAppsClient, IContainerAppsClientProvider } from '@microsoft/vscode-azure-azutils';
+import {
+    AcrRepositoryClient, ContainerAppsClient, IAcrRepositoryClientProvider,
+    IContainerAppsClientProvider, ICredentialFactory, ILogsQueryClientProvider, LogsQueryClient,
+    type AzureSubscription,
+} from '@microsoft/vscode-azure-azutils';
 import { selfOnly } from '@microsoft/vscode-azure-utils';
 import { CreateContainerApp } from '../commands/containerApps/CreateContainerApp';
 import { OpenContainerAppConsole, OpenContainerAppLogs } from '../commands/containerApps/portalBlades';
@@ -29,6 +33,22 @@ export function registerContainerApps(registrar: ProductRegistrar): void {
     registrar.registerBinding(container => {
         container.bind(IContainerAppLogStreamService).to(ContainerAppLogStreamService).inSingletonScope();
         container.bind(IWorkspaceDetector).toConstantValue(containerAppsDetector);
+
+        // Both are data-plane clients scoped to a service endpoint rather than
+        // to a subscription's ARM endpoint, so they are bound directly instead
+        // of through `registerAzureClientProvider`, whose `create` signature is
+        // shaped for ARM clients.
+        container.bind(IAcrRepositoryClientProvider).toFactory(context => {
+            const credentialFactory = context.get(ICredentialFactory);
+            return (subscription: AzureSubscription, loginServer: string) =>
+                AcrRepositoryClient.create(credentialFactory(subscription), loginServer, subscription.environment);
+        });
+
+        container.bind(ILogsQueryClientProvider).toFactory(context => {
+            const credentialFactory = context.get(ICredentialFactory);
+            return (subscription: AzureSubscription) =>
+                LogsQueryClient.create(credentialFactory(subscription), subscription.environment);
+        });
     });
 
     registrar.registerResourceDataProvider(ContainerAppsDataProvider);

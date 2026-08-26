@@ -22,6 +22,8 @@ import { IAzureViewDataTree } from '../../services';
 import type { ManagedCommand } from '../ManagedCommand';
 import type { CreateContainerAppContext } from './CreateContainerAppContext';
 import { DetectTargetPortStep } from './steps/DetectTargetPortStep';
+import { PickImageSourceStep } from './steps/PickImageSourceStep';
+import { VerifyContainerAppStartStep } from './steps/VerifyContainerAppStartStep';
 
 /**
  * Walks the user through creating an Azure Container App. Supports two
@@ -56,6 +58,7 @@ export class CreateContainerApp implements ManagedCommand {
             get(HydratableChooseSubscriptionStep),
             get(HydratableChooseLocationStep),
             get(ProjectNameStep),
+            get(PickImageSourceStep),
             get(DetectTargetPortStep),
             get(ConfirmProvisionStep),
         ];
@@ -71,6 +74,10 @@ export class CreateContainerApp implements ManagedCommand {
             executeSteps.push(get(AzdDeployStep));
             executeSteps.push(get(ShowEndpointUrlStep));
         }
+
+        // Last: a container can only fail to start once it has an image, which
+        // on the deploy job is only true after `azd deploy` has pushed one.
+        executeSteps.push(get(VerifyContainerAppStartStep));
 
         const wizard = new Wizard<CreateContainerAppContext>(
             this.output,

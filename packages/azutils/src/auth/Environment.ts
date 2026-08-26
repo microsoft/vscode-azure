@@ -48,6 +48,17 @@ export interface EnvironmentLike {
     readonly portalUrl: string;
 
     /**
+     * The Log Analytics query endpoint, e.g. `https://api.loganalytics.io`.
+     *
+     * This is a distinct service endpoint per cloud rather than something
+     * derivable from {@linkcode EnvironmentLike.resourceManagerEndpointUrl},
+     * and it doubles as the authentication audience for log queries. The values
+     * match `KnownMonitorLogsQueryAudience` in `@azure/monitor-query-logs`,
+     * which is what the query client accepts.
+     */
+    readonly logAnalyticsEndpoint: string;
+
+    /**
      * Build the public host/URL for a storage account's blob service, e.g.
      * `https://<accountName>.blob.core.windows.net` in public Azure.
      */
@@ -74,6 +85,8 @@ export interface EnvironmentParametersLike {
     readonly name: string;
     readonly resourceManagerEndpointUrl: string;
     readonly portalUrl: string;
+    /** Log Analytics query endpoint, e.g. `https://api.loganalytics.io`. */
+    readonly logAnalyticsEndpoint: string;
     /** Storage DNS suffix, e.g. `core.windows.net`. */
     readonly storageEndpointSuffix: string;
     /** Container registry DNS suffix, e.g. `azurecr.io`. */
@@ -105,6 +118,7 @@ export function createEnvironment(parameters: EnvironmentParametersLike, isCusto
         resourceManagerEndpointUrl,
         resourceManagerDefaultScope: `${resourceManagerEndpointUrl}/.default`,
         portalUrl: stripTrailingSlash(parameters.portalUrl),
+        logAnalyticsEndpoint: stripTrailingSlash(parameters.logAnalyticsEndpoint),
         storageEndpoint: (accountName: string) => `https://${accountName}.blob.${storageEndpointSuffix}`,
         containerRegistryEndpoint: (registryName: string) => `https://${registryName}.${containerRegistryDnsSuffix}`,
         azureWebSitesEndpoint: (siteName: string) => `https://${siteName}.${azureWebSitesEndpointSuffix}`,
@@ -121,6 +135,7 @@ const publicCloudParameters: EnvironmentParametersLike = {
     name: 'AzureCloud',
     resourceManagerEndpointUrl: 'https://management.azure.com',
     portalUrl: 'https://portal.azure.com',
+    logAnalyticsEndpoint: 'https://api.loganalytics.io',
     storageEndpointSuffix: 'core.windows.net',
     containerRegistryDnsSuffix: 'azurecr.io',
     azureWebSitesEndpointSuffix: 'azurewebsites.net',
@@ -134,6 +149,7 @@ export const AzureUSGovernment: EnvironmentLike = createEnvironment({
     name: 'AzureUSGovernment',
     resourceManagerEndpointUrl: 'https://management.usgovcloudapi.net',
     portalUrl: 'https://portal.azure.us',
+    logAnalyticsEndpoint: 'https://api.loganalytics.us',
     storageEndpointSuffix: 'core.usgovcloudapi.net',
     containerRegistryDnsSuffix: 'azurecr.us',
     azureWebSitesEndpointSuffix: 'azurewebsites.us',
@@ -144,6 +160,7 @@ export const AzureChinaCloud: EnvironmentLike = createEnvironment({
     name: 'AzureChinaCloud',
     resourceManagerEndpointUrl: 'https://management.chinacloudapi.cn',
     portalUrl: 'https://portal.azure.cn',
+    logAnalyticsEndpoint: 'https://api.loganalytics.azure.cn',
     storageEndpointSuffix: 'core.chinacloudapi.cn',
     containerRegistryDnsSuffix: 'azurecr.cn',
     azureWebSitesEndpointSuffix: 'chinacloudsites.cn',
