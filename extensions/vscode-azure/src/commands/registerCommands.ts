@@ -39,6 +39,8 @@ export function registerCommands(
     registerManagedCommand(container, AzdDownCommandId, AzdDown);
     registerManagedCommand(container, AcquireToolCommandId, AcquireTool);
     registerManagedCommand(container, 'vscode-azure/installAzd', AcquireTool, userToolRequest('azd'));
+    registerManagedCommand(container, 'vscode-azure/installFunc', AcquireTool, userToolRequest('func'));
+    registerManagedCommand(container, 'vscode-azure/installSwa', AcquireTool, userToolRequest('swa'));
 
     for (const command of productCommands) {
         registerManagedCommand(container, command.commandId, command.commandClass, ...command.prefixArgs);

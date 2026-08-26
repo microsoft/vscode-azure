@@ -27,6 +27,8 @@
     "commands.vscode-azure/signIn": "Sign in to Azure...",
     "commands.vscode-azure/selectSubscriptions": "Select Subscriptions...",
     "commands.vscode-azure/installAzd": "Install / Update Azure Developer CLI (azd)",
+    "commands.vscode-azure/installFunc": "Install / Update Azure Functions Core Tools (func)",
+    "commands.vscode-azure/installSwa": "Install / Update Azure Static Web Apps CLI (swa)",
     "commands.vscode-azure/acquireTool": "Install / Update Azure Tool",
     "settings.title": "Azure",
     "settings.vscode-azure.pageSize": "Number of items to load per page when fetching Azure resources.",

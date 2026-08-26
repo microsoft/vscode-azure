@@ -1,7 +1,8 @@
 # Tool Acquisition
 
 `IToolService` (in `extensions/vscode-azure/src/tools`) finds Azure developer
-tools that are already installed, and installs them when they are not.
+tools that are already installed, and installs them when they are not. It
+currently covers `azd`, `func`, and `swa`.
 
 ## Public contract
 
@@ -56,6 +57,24 @@ Add the id to `ToolIds`, implement `ToolInstaller`, and bind it to
 version probe, and installation methods; nothing about *how* a tool installs
 reaches the API.
 
+`toolInstallerHelpers.ts` carries the parts that recur: choosing among ordered
+install methods and running the winner as a foreground task
+(`runInstallMethod`), reading a version out of `--version` output
+(`getVersionFromOutput`), and the npm global install method and bin paths.
+
+The three installers differ enough to show the range:
+
+| | Windows | macOS | Linux |
+|---|---|---|---|
+| `azd` | winget, choco, script | brew, script | script |
+| `func` | winget, choco, npm | brew (`azure/functions` tap), npm | npm |
+| `swa` | npm | brew (core), npm | npm |
+
+`func` needs a fully-qualified formula (`azure/functions/azure-functions-core-tools@4`)
+because it is not in brew core; naming it that way makes brew tap it, so no
+separate preinstall step is needed. `swa` ships only as an npm package, so it has
+no Windows package-manager entry at all.
+
 ## Verifying what gets installed
 
 `ToolInstaller.install` receives `requireSignature`, and an installer must throw
@@ -63,8 +82,12 @@ rather than fall back to a method that cannot establish that what it downloads
 came from the publisher it claims.
 
 Package managers do this for us, which is what makes them the preferred method
-rather than merely the convenient one.
+rather than merely the convenient one. npm is treated as unverified: it checks
+the tarball against the registry's hash over HTTPS, which detects tampering in
+transit but does not establish the publisher. So npm is always last, and
+`requireSignature` skips it.
 
 In practice winget covers the large majority of Windows machines. Where it is
 absent -- Windows Server, LTSC, or a Store-blocked fleet -- a caller passing
-`requireSignature` gets a clean failure rather than an unverified install.
+`requireSignature` gets a clean failure rather than an unverified install. The
+same is true of `swa` on Windows, which has no verified method at all.

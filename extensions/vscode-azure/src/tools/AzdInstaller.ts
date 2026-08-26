@@ -3,35 +3,17 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { command, IOutputChannel, IProcessExecutor, IVsCode, type CommandLineArgs } from '@microsoft/vscode-azure-utils';
+import { command, IOutputChannel, IProcessExecutor, IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import * as path from 'node:path';
 import * as semver from 'semver';
 import type * as vscode from 'vscode';
 import { AzdCommand, getAzdVersion, MinAzdVersion } from '../azd/AzdService';
 import type { ToolId } from './ToolService';
 import type { ToolInstallOptions, ToolInstaller } from './ToolInstaller';
+import { pathUnder, runInstallMethod, type ToolInstallMethod } from './toolInstallerHelpers';
 
 /** Minimum `azd` version that supports the `azd update` command. */
 const MinAzdUpdateVersion = '1.23.14';
-
-/** A path under {@linkcode root}, or nothing when `root` is unset. */
-function pathUnder(root: string | undefined, ...segments: string[]): string[] {
-    return root ? [path.join(root, ...segments)] : [];
-}
-
-/**
- * One way of installing `azd`.
- *
- * `verified` records whether the method establishes that what it downloads
- * really came from Microsoft. Package managers do this on the extension's
- * behalf; piping an install script into a shell cannot.
- */
-interface AzdInstallMethod {
-    readonly name: string;
-    readonly command: CommandLineArgs;
-    readonly verified: boolean;
-}
 
 /** Installs the Azure Developer CLI, preferring package managers over install scripts. */
 @injectable()
@@ -79,30 +61,19 @@ export class AzdInstaller implements ToolInstaller {
     }
 
     /** @inheritdoc */
-    public async install(options: ToolInstallOptions): Promise<void> {
-        const methods = this.getInstallMethods(options);
-        const method = options.requireSignature
-            ? methods.find(candidate => candidate.verified)
-            : methods[0];
-
-        if (!method) {
-            throw new Error(this.code.l10n.t(
-                'No way to install {0} is available on this system. Install it manually from https://aka.ms/azd.',
-                this.displayName,
-            ));
-        }
-
-        if (!method.verified) {
-            this.output.warn(`[azd] Installing via ${method.name}, which cannot verify the authenticity of what it downloads.`);
-        }
-
-        await this.processExecutor.spawn({
-            execution: 'foreground',
-            command: method.command,
-            name: this.code.l10n.t('Install {0}', this.displayName),
-            source: AzdCommand,
-            focus: options.reveal,
-        }, options.cancellationToken);
+    public install(options: ToolInstallOptions): Promise<void> {
+        return runInstallMethod(
+            {
+                code: this.code,
+                processExecutor: this.processExecutor,
+                output: this.output,
+                displayName: this.displayName,
+                executableName: this.executableName,
+                manualInstallUrl: 'https://aka.ms/azd',
+            },
+            this.getInstallMethods(options),
+            options,
+        );
     }
 
     /**
@@ -111,8 +82,8 @@ export class AzdInstaller implements ToolInstaller {
      * package manager; scripts are last because they cannot verify what they
      * download.
      */
-    private getInstallMethods(options: ToolInstallOptions): readonly AzdInstallMethod[] {
-        const methods: AzdInstallMethod[] = [];
+    private getInstallMethods(options: ToolInstallOptions): readonly ToolInstallMethod[] {
+        const methods: ToolInstallMethod[] = [];
 
         if (options.current && semver.gte(options.current.version, MinAzdUpdateVersion)) {
             methods.push({

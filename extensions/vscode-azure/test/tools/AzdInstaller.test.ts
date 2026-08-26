@@ -3,50 +3,16 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { argToString, argsToStrings, type IProcessExecutor } from '@microsoft/vscode-azure-utils';
-import { MockOutputChannel, createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
-import { mock } from 'node:test';
+import { argToString, argsToStrings } from '@microsoft/vscode-azure-utils';
 import { AzdInstaller } from '../../src/tools/AzdInstaller';
-import type { ToolInstallOptions } from '../../src/tools/ToolInstaller';
-
-type SpawnOpts = { readonly command: unknown[], readonly execution?: string, readonly focus?: boolean };
+import { createInstallerHarness, installOptions, installedWith, usePlatform, type SpawnOpts } from './installerTestHelpers';
 
 function createInstaller(onPath: readonly string[] = []) {
-    const spawn = mock.fn(() => Promise.resolve({ json: { azd: { version: '1.25.0' } } }));
-    const processExecutor = {
-        spawn,
-        isOnPath: mock.fn((candidate: string) => onPath.includes(candidate)),
-    } as unknown as IProcessExecutor;
-    const output = new MockOutputChannel('test');
-
-    return {
-        installer: new AzdInstaller(createMockVsCode().vscode, processExecutor, output),
-        spawn: spawn as unknown as ReturnType<typeof mock.fn>,
-        output,
-    };
-}
-
-function installOptions(overrides: Partial<ToolInstallOptions> = {}): ToolInstallOptions {
-    return { requireSignature: false, reveal: false, ...overrides };
-}
-
-/** Returns the command line of the foreground install task. */
-function installedWith(spawn: ReturnType<typeof mock.fn>): string[] {
-    const opts = spawn.mock.calls[0].arguments[0] as SpawnOpts;
-    expect(opts.execution).to.equal('foreground');
-    return argsToStrings(opts.command as never);
+    return createInstallerHarness(AzdInstaller, onPath, { json: { azd: { version: '1.25.0' } } });
 }
 
 describe('AzdInstaller (unit)', () => {
-    const originalPlatform = process.platform;
-
-    function setPlatform(value: string): void {
-        Object.defineProperty(process, 'platform', { value, configurable: true });
-    }
-
-    afterEach(() => {
-        Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
-    });
+    const setPlatform = usePlatform();
 
     describe('getVersion', () => {
         it('should read the version from azd JSON output', async () => {
@@ -61,11 +27,8 @@ describe('AzdInstaller (unit)', () => {
         });
 
         it('should return undefined when azd cannot be run', async () => {
-            const installer = new AzdInstaller(
-                createMockVsCode().vscode,
-                { spawn: mock.fn(() => Promise.reject(new Error('ENOENT'))) } as unknown as IProcessExecutor,
-                new MockOutputChannel('test'),
-            );
+            const { installer, spawn } = createInstaller();
+            spawn.mock.mockImplementation(() => Promise.reject(new Error('ENOENT')));
 
             expect(await installer.getVersion('/tools/azd')).to.be.undefined;
         });

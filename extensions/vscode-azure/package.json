@@ -58,6 +58,16 @@
                 "title": "%commands.vscode-azure/installAzd%"
             },
             {
+                "command": "vscode-azure/installFunc",
+                "category": "%commands.category.azure%",
+                "title": "%commands.vscode-azure/installFunc%"
+            },
+            {
+                "command": "vscode-azure/installSwa",
+                "category": "%commands.category.azure%",
+                "title": "%commands.vscode-azure/installSwa%"
+            },
+            {
                 "command": "vscode-azure/acquireTool",
                 "category": "%commands.category.azure%",
                 "title": "%commands.vscode-azure/acquireTool%"
