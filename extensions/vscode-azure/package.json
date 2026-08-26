@@ -163,20 +163,6 @@
                 "title": "%commands.vscode-azure/staticWebApps/viewProperties%"
             },
             {
-                "command": "vscode-azure/staticWebApps/installOrUpdateCli",
-                "category": "%commands.category.azureStaticWebApps%",
-                "enablement": "!virtualWorkspace",
-                "icon": "$(terminal)",
-                "title": "%commands.vscode-azure/staticWebApps/installOrUpdateCli%"
-            },
-            {
-                "command": "vscode-azure/staticWebApps/uninstallCli",
-                "category": "%commands.category.azureStaticWebApps%",
-                "enablement": "!virtualWorkspace",
-                "icon": "$(trash)",
-                "title": "%commands.vscode-azure/staticWebApps/uninstallCli%"
-            },
-            {
                 "command": "vscode-azure/azdUp",
                 "category": "%commands.category.azure%",
                 "icon": "$(rocket)",
