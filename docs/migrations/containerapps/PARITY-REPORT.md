@@ -1,0 +1,154 @@
+# Azure Container Apps -- Parity Report
+
+Phase 6 verification of the Container Apps migration against the signed [TRIAGE.md](TRIAGE.md).
+
+| | |
+|---|---|
+| **Source** | `microsoft/vscode-azurecontainerapps` @ `f6c93dcd1a55b6aaf27ed4edca8f6a52b5348e16` (v0.11.2) |
+| **Triage rows** | 140 |
+| **Resolved** | 140 (0 unaccounted for) |
+| **Date** | 2026-08-26 |
+
+Evidence paths are relative to `extensions/vscode-azure/src/` unless another package is named.
+
+## Summary
+
+| Disposition | Rows | Outcome |
+|---|---|---|
+| Migrate | 10 | all landed |
+| Adapt | 18 | all landed |
+| Reuse | 11 | all wired (verified against source, not assumed) |
+| Defer | 13 | all tracked in [MIGRATION-PLAN.md](MIGRATION-PLAN.md#deferred-tracked-not-built-now) |
+| Drop | 88 | all confirmed absent from the codebase |
+| **Total** | **140** | |
+
+## Artifact check
+
+| Check | Result |
+|---|---|
+| `INVENTORY.md` tracked | yes |
+| `TRIAGE.md` tracked, signed | yes -- Brandon Waterloo (@bwateratmsft), 2026-08-21 |
+| `MIGRATION-PLAN.md` tracked, every task tagged with an ID | yes |
+| Artifacts landed before any feature code | yes -- `431c4453` is the branch's first commit |
+| No artifact exists only in scratch | yes |
+| Drift log needed | no -- branch has not rebased or merged from `main` |
+
+## Kept features (Migrate / Adapt / Reuse)
+
+| ID | Feature | Disposition | Outcome | Evidence |
+|---|---|---|---|---|
+| ACA-002 | `createContainerApp` | Adapt | landed | `commands/containerApps/CreateContainerApp.ts` + `resources/templates/containerApp/**` |
+| ACA-003 | `createManagedEnvironment` | Adapt | landed | topology module provisions the environment as supporting infra; no standalone command, as the triage anticipated |
+| ACA-004 | `deleteManagedEnvironment` | Reuse | wired | `resourceContextValue()` adds `DeleteAzureResource.ResourceContextValue` |
+| ACA-005 | `deployWorkspaceProject` | Adapt | landed | `CreateContainerApp.ts` (`deploy` job) |
+| ACA-008 | `deployContainerApp` | Adapt | landed | `CreateContainerApp.ts` (`deploy` job) |
+| ACA-011 | `deleteContainerApp` | Reuse | wired | `resourceContextValue()` |
+| ACA-013 | `browse` | Reuse | wired | `BrowseWebsite.ContextValue`, once `enrich` calls `setWebsiteUrl(fqdn)` |
+| ACA-014 | `revealInEnvironment` | Adapt | landed | `commands/containerApps/RevealContainerAppEnvironment.ts` + `AzureNodeId.forRelatedResource` |
+| ACA-015 | `openConsoleInPortal` | Reuse | wired | `OpenUrl` + `OpenInPortal.bladeUrl('/console')` |
+| ACA-016 | `startStreamingLogs` | Migrate | landed | `commands/containerApps/StartStreamingLogs.ts` |
+| ACA-017 | `stopStreamingLogs` | Migrate | landed | `commands/containerApps/StopStreamingLogs.ts` |
+| ACA-041 | `restartRevision` | Migrate | landed | `commands/containerApps/RestartContainerApp.ts` |
+| ACA-048 | `createAcr` | Reuse | wired | registry is a line in the topology module; no container-apps create-registry command |
+| ACA-060 | `deleteConfirmation` setting | Reuse | wired | `DeleteAzureResource` owns the modal confirmation; no setting contributed |
+| ACA-062 | `managedEnvironmentItem` | Adapt | landed | `tree/resources/containerApps/ManagedEnvironment.ts`; renders as a leaf |
+| ACA-063 | `containerAppItem` | Adapt | landed | `ContainerApp.ts` + `ContainerAppsDataProvider` / `ContainerAppsViewProvider`; rooted in its resource group |
+| ACA-069 | `containerItem` | Adapt | landed | `ContainerAppsDataProvider.getChildren`; image in `description` / `tooltip` |
+| ACA-083 | `logsGroupItem` | Adapt | landed | capability moved onto the app node; no group node |
+| ACA-093 | `logStreamItem` | Adapt | landed | `StartStreamingLogs.ContextValue`, inline + context menu |
+| ACA-094 | `logsItem` | Reuse | wired | `OpenUrl` + `OpenInPortal.bladeUrl('/logs')` |
+| ACA-095 | Quickstart image source | Adapt | landed | Bicep `imageName` default resolves to a placeholder image |
+| ACA-096 | ACR image source | Migrate | landed | `commands/containerApps/steps/PickImageSourceStep.ts` |
+| ACA-098 | "Other registry" free-text | Migrate | landed | same combo box, `createItemFromValue` |
+| ACA-101 | Registry creds -- managed identity | Adapt | landed | topology module: `identityType: 'UserAssigned'` + AcrPull |
+| ACA-104 | Ingress from Dockerfile `EXPOSE` | Adapt | landed | `steps/DetectTargetPortStep.ts` -> `targetPort` Bicep param |
+| ACA-105 | Start verification + log fetch | Migrate | landed | `steps/VerifyContainerAppStartStep.ts` |
+| ACA-110 | Overwrite confirm | Adapt | landed (reuse) | `azd/wizard/ConfirmProvisionStep.ts`, wording sharpened |
+| ACA-111 | Container Apps client | Migrate | landed | `packages/azutils/src/rest/clients/ContainerAppsClient.ts` |
+| ACA-112 | ACR management client | Reuse | wired | existing `AcrClient`; no `arm-containerregistry` import in this product |
+| ACA-113 | ACR data-plane client | Migrate | landed | `packages/azutils/src/rest/clients/AcrRepositoryClient.ts` |
+| ACA-114 | Authorization client | Adapt | landed | role assignment expressed in Bicep, not an ARM call |
+| ACA-115 | Logs query client | Migrate | landed | `packages/azutils/src/rest/clients/LogsQueryClient.ts` |
+| ACA-118 | Log-stream transport | Migrate | landed | `tree/resources/containerApps/ContainerAppLogStream.ts` |
+| ACA-125 | Portal URL builder | Reuse | wired | `OpenInPortal` over `AzureNodeId.toPortalUrl` (sovereign-aware) |
+| ACA-126 | Branch data provider | Adapt | landed | `products/registerContainerApps.ts` |
+| ACA-134 | Resource-provider registration | Adapt | landed | ARM registers RPs as a side effect of the deployment; no `VerifyProvidersStep` |
+| ACA-135 | Product icons | Adapt | reused | both `azureIcons/microsoft.app/*.svg` already shipped; none added |
+| ACA-136 | Activity-log integration | Reuse | wired | no product-specific activity registration |
+| ACA-137 | Output channel | Reuse | wired | no product-specific channel registration |
+
+## Dropped features -- confirmed absent
+
+Each judgment-call group was grepped across all 205 tracked source, manifest, and template files.
+
+| Group | Patterns searched | Result |
+|---|---|---|
+| Revision drafts (JC1) | `revisionDraft`, `RevisionDraft` | clean |
+| Secrets (JC2) | `addSecret`, `SecretValueStep`, `secretsItem` | clean |
+| Env vars (JC2) | `addEnvironmentVariable`, `environmentVariablesItem`, `EnvFileListStep` | clean |
+| Ingress + scaling (JC3) | `enableIngress`, `disableIngress`, `toggleVisibility`, `editTargetPort`, `scaleRule`, `minMaxReplica` | clean |
+| Remote ACR build (JC4) | `UploadSourceCode`, `TarFileStep`, `BuildImageStep`, `BuildSourceUploadUrl` | clean |
+| GitHub (JC5) | `connectToGitHub`, `disconnectRepo`, `sourcecontrols`, `github-auxiliary` | clean |
+| Webviews (JC6) | `confirmationView`, `loadingView`, `WebviewRegistry` | clean |
+| Copilot (JC7) | `deployWithCopilot`, `CopilotUserInput` | clean |
+| Walkthrough | `walkthrough` | clean |
+| V1/V2 settings | `deploymentConfigurations`, `convertV1ToV2` | clean |
+| Calls into the retired extension | `azureResourceGroups.`, `vscode-azurecontainerapps` | clean |
+| Draft JSON schema | `containerapp-template` | clean |
+
+## Tree contract
+
+All nine Container Apps `view/item/context` entries use a `\b`-anchored regex, and every one names a
+context value that is declared in source and assembled onto the node by `ContainerAppsViewProvider`:
+
+`openContainerAppConsole`, `openContainerAppLogs`, `revealContainerAppEnvironment`, `restartContainerApp`,
+`startContainerAppLogStream`, `stopContainerAppLogStream` -- plus the generic `openInPortal`,
+`deleteResource`, and `browseWebsite` contributed by `resourceContextValue()`.
+
+Two are conditional by design: `revealContainerAppEnvironment` appears only once `environmentId` is known,
+and `stopContainerAppLogStream` only while a stream is open.
+
+`ContainerAppsDataProvider` / `ContainerAppsViewProvider` are registered before the generic providers in
+`registerProducts.ts`.
+
+## Ownership, activation, and settings
+
+| Check | Result |
+|---|---|
+| New `activationEvents` entries | none |
+| New `contributes.configuration` settings | none (all 7 source settings were Drop or Reuse) |
+| `azure.yaml` authored or parsed outside `GenerateAzureYamlStep` | no |
+| Calls into the extension being retired | none |
+| `@azure/*` imports in extension source | one, pre-existing (`@azure/core-lro` in `tree/activity/ArmDeploymentDataProvider.ts`); none added by this migration |
+
+## Build gates
+
+| Gate | Result |
+|---|---|
+| `pnpm run lint` | clean |
+| `pnpm run build` | succeeds |
+| `pnpm run test` | 883 extension, 500 utils, 366 azutils; 0 failing |
+| `az bicep build` on the consumer template | compiles; all four pinned AVM modules resolve |
+
+## Known gaps
+
+Honest remainder. None is a silent omission -- each is tracked.
+
+1. **No live-Azure verification.** The log-stream transport (ACA-118) and start verification (ACA-105) are
+   covered by unit tests over stubbed I/O but have never run against a real container app. The redirect
+   behavior of the real log-stream endpoint is the most likely thing to need adjustment.
+2. **`getParent` is grouping-unaware for loaded nodes.** Affects reveal (ACA-014) under `resourceType` /
+   `location` / `armTag` grouping. **Pre-existing and not specific to this product** -- `AcrViewProvider` and
+   `WebAppViewProvider` have the identical naive implementation. Fixing it means sharing the grouping-aware
+   computation across product view providers. Recorded under Open questions in `MIGRATION-PLAN.md`.
+3. **No command-level tests** for `RestartContainerApp`, `RevealContainerAppEnvironment`,
+   `StartStreamingLogs`, `StopStreamingLogs`. They are thin orchestration over the log-stream service and
+   clients, which are tested; the ACR precedent (`DisableAcrAdminUser`) likewise has none. A deliberate
+   call, not an oversight.
+4. **`docker.remoteBuild` is unresolved.** The source never needed a local Docker daemon because it always
+   built in ACR. Preserving that means emitting `services.<name>.docker.remoteBuild: true`, but
+   `GenerateAzureYamlStep` delegates to `azd init` and this monorepo does not author files azd owns. Recorded
+   under Open questions; needs a decision.
+5. **13 Defer rows are not built**, by signed decision: the `deployImage` exported API and its shim
+   (ACA-007, ACA-127), revision activate/deactivate and their nodes (ACA-039, ACA-040, ACA-065, ACA-067),
+   the Dapr surface (ACA-082, ACA-089-092), and Docker Hub support (ACA-097, ACA-117).
