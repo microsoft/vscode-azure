@@ -44,8 +44,7 @@ export function registerStaticWebApps(registrar: ProductRegistrar): void {
         container.bind(SwaTaskLifecycle).toSelf().inSingletonScope().onActivation(pushDisposable);
     });
 
-    registrar.registerCommand('vscode-azure/staticWebApps/createNew', CreateStaticWebApp, 'basic');
-    registrar.registerCommand('vscode-azure/staticWebApps/createAdvanced', CreateStaticWebApp, 'advanced');
+    registrar.registerCommand('vscode-azure/staticWebApps/createNew', CreateStaticWebApp);
     registrar.registerCommand('vscode-azure/staticWebApps/deleteEnvironment', DeleteStaticWebAppEnvironment);
     registrar.registerCommand(DeployStaticWebAppCommandId, DeployStaticWebApp);
     registrar.registerCommand('vscode-azure/staticWebApps/createSwaConfigFile', CreateSwaConfigFile);

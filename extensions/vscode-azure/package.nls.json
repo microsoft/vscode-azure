@@ -24,7 +24,6 @@
     "commands.vscode-azure/functions/createNew": "Create Empty Function App in Azure...",
     "commands.vscode-azure/functions/deploy": "Deploy Project as Function App...",
     "commands.vscode-azure/staticWebApps/createNew": "Create Static Web App...",
-    "commands.vscode-azure/staticWebApps/createAdvanced": "Create Static Web App... (Advanced)",
     "commands.vscode-azure/staticWebApps/deleteEnvironment": "Delete Environment...",
     "commands.vscode-azure/staticWebApps/deploy": "Deploy Static Web App",
     "commands.vscode-azure/staticWebApps/createSwaConfigFile": "Create Configuration File",

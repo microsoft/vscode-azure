@@ -44,7 +44,6 @@ function createStep(remote: GitRemoteInfo | undefined, options: { readonly azdVe
 function baseContext(overrides: Partial<CreateStaticWebAppContext> = {}): CreateStaticWebAppContext {
     return {
         resourceDisplayName: 'Static Web App',
-        mode: 'basic',
         job: 'deploy',
         iacFolder: MockUri.file('/workspace'),
         buildPresetSelection: 'react',

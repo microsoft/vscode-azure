@@ -127,12 +127,6 @@
                 "title": "%commands.vscode-azure/staticWebApps/createNew%"
             },
             {
-                "command": "vscode-azure/staticWebApps/createAdvanced",
-                "category": "%commands.category.azureStaticWebApps%",
-                "icon": "$(settings-gear)",
-                "title": "%commands.vscode-azure/staticWebApps/createAdvanced%"
-            },
-            {
                 "command": "vscode-azure/staticWebApps/deleteEnvironment",
                 "category": "%commands.category.azureStaticWebApps%",
                 "icon": "$(trash)",
@@ -228,10 +222,6 @@
                 {
                     "command": "vscode-azure/staticWebApps/createNew",
                     "group": "2_create@1"
-                },
-                {
-                    "command": "vscode-azure/staticWebApps/createAdvanced",
-                    "group": "2_create@2"
                 }
             ],
             "commandPalette": [
@@ -376,11 +366,6 @@
                     "command": "vscode-azure/staticWebApps/createNew",
                     "when": "view == vscode-azure/resources && viewItem =~ /\\bStaticWebApps\\b/i && viewItem =~ /\\bazureResourceTypeGroup\\b/i",
                     "group": "1@1"
-                },
-                {
-                    "command": "vscode-azure/staticWebApps/createAdvanced",
-                    "when": "view == vscode-azure/resources && viewItem =~ /\\bStaticWebApps\\b/i && viewItem =~ /\\bazureResourceTypeGroup\\b/i",
-                    "group": "1@2"
                 },
                 {
                     "command": "vscode-azure/staticWebApps/deleteEnvironment",

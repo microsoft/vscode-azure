@@ -71,7 +71,7 @@ describe('CreateStaticWebApp (unit)', () => {
         return { command: container.get(CreateStaticWebApp), mock, azd, actionContext, gitRemote };
     }
 
-    it('should run basic mode as provision-only without a workspace', async () => {
+    it('should provision only when no workspace is open', async () => {
         const { command, mock, azd, actionContext } = createCommand(false);
         respondToPrompts(mock, [
             { pick: 'sub-1' },
@@ -82,9 +82,8 @@ describe('CreateStaticWebApp (unit)', () => {
             { input: 'build' },
         ]);
 
-        await command.execute('basic');
+        await command.execute();
 
-        expect(actionContext.telemetry.properties.mode).to.equal('basic');
         expect(actionContext.telemetry.properties.buildPreset).to.equal('React');
         expect(azd.provision.mock.callCount()).to.equal(1);
         expect(azd.deploy.mock.callCount()).to.equal(0);
@@ -93,27 +92,23 @@ describe('CreateStaticWebApp (unit)', () => {
         expect(mock.fs.copy.mock.calls.some(call => call.arguments[1].path.endsWith('/infra/main.bicep'))).to.be.true;
     });
 
-    it('should prompt for Standard and deploy supported output in advanced mode', async () => {
-        const { command, mock, azd, actionContext } = createCommand(true);
+    it('should deploy supported output when a workspace is open', async () => {
+        const { command, mock, azd } = createCommand(true);
         respondToPrompts(mock, [
             { pick: 'sub-1' },
             { pick: 'East US 2' },
             { input: 'my-swa' },
-            { pick: 'Standard' },
             { pick: 'React' },
             { input: '/' },
-            { input: 'api' },
             { input: 'build' },
         ]);
 
-        await command.execute('advanced');
+        await command.execute();
 
-        expect(actionContext.telemetry.properties.mode).to.equal('advanced');
         expect(azd.provision.mock.callCount()).to.equal(1);
         expect(azd.deploy.mock.callCount()).to.equal(1);
         const parametersPath = [...mock.fs.files.keys()].find(path => path.endsWith('/infra/main.parameters.json'));
         const parameters = JSON.parse(Buffer.from(mock.fs.files.get(parametersPath ?? '') ?? []).toString());
-        expect(parameters.parameters.staticWebAppSkuName.value).to.equal('Standard');
         expect(parameters.parameters.appLocation.value).to.equal('/');
         expect(parameters.parameters.apiLocation.value).to.equal('api');
         expect(parameters.parameters.outputLocation.value).to.equal('build');
@@ -133,7 +128,7 @@ describe('CreateStaticWebApp (unit)', () => {
                 { input: 'build' },
             ]);
 
-            await command.execute('basic');
+            await command.execute();
             // Let the fire-and-forget executeCommand().then(...) settle.
             await Promise.resolve();
 
@@ -167,7 +162,7 @@ describe('CreateStaticWebApp (unit)', () => {
                 { input: 'build' },
             ]);
 
-            await command.execute('basic');
+            await command.execute();
             await Promise.resolve();
             await Promise.resolve();
 
@@ -185,7 +180,7 @@ describe('CreateStaticWebApp (unit)', () => {
                 { input: 'build' },
             ]);
 
-            await command.execute('basic');
+            await command.execute();
 
             expect(azd.deploy.mock.callCount()).to.equal(1);
             expect(deployLaunchCount(mock)).to.equal(0);
@@ -202,7 +197,7 @@ describe('CreateStaticWebApp (unit)', () => {
                 { input: '' },
             ]);
 
-            await command.execute('basic');
+            await command.execute();
 
             expect(azd.deploy.mock.callCount()).to.equal(0);
             expect(deployLaunchCount(mock)).to.equal(0);
@@ -226,7 +221,7 @@ describe('CreateStaticWebApp (unit)', () => {
                 { input: '' },
             ]);
 
-            await command.execute('basic');
+            await command.execute();
 
             expect(azd.deploy.mock.callCount()).to.equal(0);
             expect(azd.pipelineConfig.mock.callCount()).to.equal(0);

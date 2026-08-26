@@ -37,7 +37,7 @@ export class ApiLocationStep extends PromptStep<CreateStaticWebAppContext> {
 
         if (detected.length === 1) {
             apiLocation = detected[0];
-        } else if (context.mode === 'basic' && detected.length === 0) {
+        } else if (detected.length === 0) {
             apiLocation = defaultValue;
         } else if (detected.length > 1) {
             const items: QuickPickItemWithData<ApiLocationChoice>[] = [

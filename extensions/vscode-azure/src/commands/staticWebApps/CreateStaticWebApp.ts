@@ -21,7 +21,7 @@ import { ShowEndpointUrlStep } from '../../azd/wizard/ShowEndpointUrlStep';
 import { DeployStaticWebAppCommandId } from '../../constants';
 import { IAzureViewDataTree } from '../../services';
 import type { ManagedCommand } from '../ManagedCommand';
-import { staticWebAppLocationNames, type CreateStaticWebAppContext, type CreateStaticWebAppMode } from './CreateStaticWebAppContext';
+import { staticWebAppLocationNames, type CreateStaticWebAppContext } from './CreateStaticWebAppContext';
 import type { DeployStaticWebAppArgs } from './DeployStaticWebApp';
 import type { StaticWebAppUnsupportedArtifactReason } from './deploymentRouting';
 import { ApiLocationStep } from './steps/ApiLocationStep';
@@ -30,13 +30,13 @@ import { ConfigureStaticWebAppAzureYamlStep } from './steps/ConfigureStaticWebAp
 import { DetermineStaticWebAppDeploymentRouteStep } from './steps/DetermineStaticWebAppDeploymentRouteStep';
 import { OutputLocationStep } from './steps/OutputLocationStep';
 import { PickBuildPresetStep } from './steps/PickBuildPresetStep';
-import { PickSkuStep } from './steps/PickSkuStep';
 
 /**
  * Creates and optionally deploys a Static Web App through azd-generated Bicep.
  *
- * Basic and advanced modes share the same execution path; only advanced mode
- * prompts for plan selection.
+ * The app is created on the Free plan. Upgrading is a one-line edit to the
+ * `staticWebAppSkuName` parameter of the generated Bicep followed by another
+ * provision, which Azure applies to the existing app in place.
  */
 @injectable()
 export class CreateStaticWebApp implements ManagedCommand {
@@ -49,10 +49,9 @@ export class CreateStaticWebApp implements ManagedCommand {
     ) { }
 
     /** @inheritdoc */
-    public async execute(mode: CreateStaticWebAppMode): Promise<void> {
+    public async execute(): Promise<void> {
         const get = this.container.get.bind(this.container);
         const job: AzdJob = this.ctx.code.workspace.workspaceFolders?.length ? 'deploy' : 'createNew';
-        this.actionContext.telemetry.properties.mode = mode;
 
         const promptSteps = [
             get(SelectIacFolderStep),
@@ -60,7 +59,6 @@ export class CreateStaticWebApp implements ManagedCommand {
             get(HydratableChooseSubscriptionStep),
             get(HydratableChooseLocationStep),
             get(ProjectNameStep),
-            ...(mode === 'advanced' ? [get(PickSkuStep)] : []),
             get(PickBuildPresetStep),
             get(AppLocationStep),
             get(ApiLocationStep),
@@ -73,7 +71,6 @@ export class CreateStaticWebApp implements ManagedCommand {
             get(IGenerateBicepStepFactory)<CreateStaticWebAppContext>(
                 'staticWebApp.bicep',
                 [
-                    'staticWebAppSkuName',
                     'appLocation',
                     'apiLocation',
                     'outputLocation',
@@ -91,11 +88,9 @@ export class CreateStaticWebApp implements ManagedCommand {
         const context = await new Wizard<CreateStaticWebAppContext>(
             this.output,
             {
-                mode,
                 job,
                 provision: true,
                 deploy: job === 'deploy',
-                staticWebAppSkuName: mode === 'basic' ? 'Free' : undefined,
                 allowedLocationNames: staticWebAppLocationNames,
                 // ConfigureStaticWebAppAzureYamlStep adds the `services:` entry,
                 // so hydration shouldn't warn that it's missing.

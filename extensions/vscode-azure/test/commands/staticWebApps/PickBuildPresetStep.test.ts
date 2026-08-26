@@ -20,7 +20,6 @@ describe('PickBuildPresetStep (unit)', () => {
 
         const result = await step.prompt({
             resourceDisplayName: 'Static Web App',
-            mode: 'advanced',
             iacFolder: MockUri.file('/workspace'),
         });
 
@@ -45,7 +44,6 @@ describe('PickBuildPresetStep (unit)', () => {
 
         const result = await step.prompt({
             resourceDisplayName: 'Static Web App',
-            mode: 'basic',
             iacFolder: MockUri.file('/workspace'),
         });
 

@@ -40,7 +40,6 @@ describe('Static Web Apps creation steps (unit)', () => {
 
     it('should resolve Angular output using its detected project', () => {
         const context = {
-            mode: 'basic',
             buildPreset: getStaticWebAppBuildPreset('angular'),
             angularProjectName: 'my portal',
         } as CreateStaticWebAppContext;
@@ -59,7 +58,6 @@ describe('Static Web Apps creation steps (unit)', () => {
 
         const result = await step.prompt({
             resourceDisplayName: 'Static Web App',
-            mode: 'basic',
             iacFolder: MockUri.file('/workspace'),
             buildPreset: getStaticWebAppBuildPreset('react'),
         });
@@ -85,7 +83,6 @@ describe('Static Web Apps creation steps (unit)', () => {
 
         const result = await step.prompt({
             resourceDisplayName: 'Static Web App',
-            mode: 'basic',
             iacFolder: MockUri.file('/workspace'),
             buildPreset: getStaticWebAppBuildPreset('react'),
         });
@@ -101,7 +98,6 @@ describe('Static Web Apps creation steps (unit)', () => {
 
         const result = await step.prompt({
             resourceDisplayName: 'Static Web App',
-            mode: 'basic',
             iacFolder: MockUri.file('/workspace'),
             detectedAppLocation: 'src',
             buildPreset: getStaticWebAppBuildPreset('react'),
@@ -115,7 +111,6 @@ describe('Static Web Apps creation steps (unit)', () => {
         const step = new ApiLocationStep(createActionContext('test'), ctx);
         const result = await step.prompt({
             resourceDisplayName: 'Static Web App',
-            mode: 'advanced',
             detectedApiLocations: ['services/api'],
             buildPreset: getStaticWebAppBuildPreset('react'),
         });
@@ -125,12 +120,11 @@ describe('Static Web Apps creation steps (unit)', () => {
         expect(mock.quickPicks).to.have.length(0);
     });
 
-    it('should use the preset API without prompting in basic mode', async () => {
+    it('should use the preset API without prompting', async () => {
         const { ctx, mock } = createMockCodeContext();
         const step = new ApiLocationStep(createActionContext('test'), ctx);
         const result = await step.prompt({
             resourceDisplayName: 'Static Web App',
-            mode: 'basic',
             detectedApiLocations: [],
             buildPreset: getStaticWebAppBuildPreset('react'),
         });
@@ -147,7 +141,6 @@ describe('Static Web Apps creation steps (unit)', () => {
         azd.findAzureYaml.mock.mockImplementation(() => Promise.resolve([yamlUri]));
         const step = new ConfigureStaticWebAppAzureYamlStep(ctx, azd);
         const context = {
-            mode: 'basic',
             job: 'deploy',
             iacFolder: MockUri.file('/workspace'),
             azdServiceName: 'web',
@@ -179,7 +172,6 @@ describe('Static Web Apps creation steps (unit)', () => {
 
         expect(await step.shouldExecute({
             resourceDisplayName: 'Static Web App',
-            mode: 'basic',
             job: 'deploy',
             iacFolder: MockUri.file('/workspace'),
             azdServiceName: 'web',
@@ -200,7 +192,6 @@ describe('Static Web Apps creation steps (unit)', () => {
         // then deleted; nothing ever deploys from its azure.yaml.
         expect(await step.shouldExecute({
             resourceDisplayName: 'Static Web App',
-            mode: 'basic',
             job: 'createNew',
             iacFolder: MockUri.file('/workspace'),
             azdServiceName: 'web',

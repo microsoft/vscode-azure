@@ -8,12 +8,6 @@ import type { AzdWizardContext } from '../../azd/wizard/AzdWizardContext';
 import type { StaticWebAppUnsupportedArtifactReason } from './deploymentRouting';
 import type { StaticWebAppBuildPreset, StaticWebAppBuildPresetId } from './buildPresets';
 
-/** Creation experience selected by the registered command ID. */
-export type CreateStaticWebAppMode = 'basic' | 'advanced';
-
-/** Static Web Apps plans exposed by the adapted creation wizard. */
-export type StaticWebAppSkuName = 'Free' | 'Standard';
-
 /** Languages emitted into an azd Static Web Apps service definition. */
 export type StaticWebAppAzdLanguage = 'dotnet' | 'js' | 'ts';
 
@@ -30,8 +24,6 @@ export const staticWebAppLocationNames: ICaselessSetReader = new CaselessSet([
 export interface CreateStaticWebAppContext extends AzdWizardContext, PickContext<string> {
     /** Always set; shared prompts name the product rather than assuming one. */
     readonly resourceDisplayName: string;
-    readonly mode: CreateStaticWebAppMode;
-    readonly staticWebAppSkuName?: StaticWebAppSkuName;
     readonly buildPreset?: StaticWebAppBuildPreset;
     readonly buildPresetSelection?: StaticWebAppBuildPresetId | 'custom';
     readonly detectedFrameworks?: readonly StaticWebAppBuildPresetId[];
