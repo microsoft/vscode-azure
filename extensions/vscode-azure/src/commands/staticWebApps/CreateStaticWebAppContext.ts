@@ -29,6 +29,8 @@ export interface CreateStaticWebAppContext extends AzdWizardContext, PickContext
     readonly detectedFrameworks?: readonly StaticWebAppBuildPresetId[];
     readonly detectedApiLocations?: readonly string[];
     readonly detectedAppLocation?: string;
+    /** Build output read from the project's build configuration, when it states one. */
+    readonly detectedOutputLocation?: string;
     readonly angularProjectName?: string;
     readonly detectedLanguage?: StaticWebAppAzdLanguage;
     readonly appLocation?: string;

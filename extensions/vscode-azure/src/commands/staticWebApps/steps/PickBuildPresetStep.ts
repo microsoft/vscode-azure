@@ -60,6 +60,7 @@ export class PickBuildPresetStep extends PromptStep<CreateStaticWebAppContext> {
             detectedFrameworks: detection.frameworks,
             detectedApiLocations: detection.apiLocations,
             detectedAppLocation: detection.appLocation,
+            detectedOutputLocation: detection.outputLocation,
             angularProjectName: detection.angularProjectName,
             detectedLanguage: detection.language,
         };

@@ -46,6 +46,14 @@ describe('Static Web Apps creation steps (unit)', () => {
         expect(resolveDefaultOutputLocation(context)).to.equal('dist/my-portal');
     });
 
+    it('should prefer the output the project configures over the preset convention', () => {
+        const context = {
+            buildPreset: getStaticWebAppBuildPreset('react'),
+            detectedOutputLocation: 'dist',
+        } as CreateStaticWebAppContext;
+        expect(resolveDefaultOutputLocation(context)).to.equal('dist');
+    });
+
     it('should offer the path already declared to the SWA CLI as the editable default', async () => {
         const { ctx, mock } = createMockCodeContext();
         const actionContext = createActionContext('test');

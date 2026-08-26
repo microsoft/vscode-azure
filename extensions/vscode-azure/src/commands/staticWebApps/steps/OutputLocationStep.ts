@@ -60,8 +60,16 @@ export class OutputLocationStep extends PromptStep<CreateStaticWebAppContext> {
     }
 }
 
-/** Resolves the Angular placeholder so it is never emitted into Bicep or YAML. */
+/**
+ * Resolves the build output to prefill, preferring what the project's own build configuration
+ * states over the preset's convention, and resolving the Angular placeholder so it is never
+ * emitted into Bicep or YAML.
+ */
 export function resolveDefaultOutputLocation(context: Readonly<CreateStaticWebAppContext>): string {
+    if (context.detectedOutputLocation) {
+        return context.detectedOutputLocation;
+    }
+
     const presetOutput = context.buildPreset?.outputLocation ?? 'build';
     if (presetOutput !== angularOutputPlaceholder) {
         return presetOutput;

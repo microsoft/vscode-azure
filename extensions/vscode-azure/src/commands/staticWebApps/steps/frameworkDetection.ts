@@ -39,6 +39,13 @@ export interface StaticWebAppProjectDetection {
     readonly primaryPresetId?: StaticWebAppBuildPresetId;
     readonly appLocation?: string;
     readonly apiLocations: readonly string[];
+    /**
+     * The build output directory read from the project's own build configuration.
+     *
+     * Only set when a configuration file states it, so an absent value means the preset's
+     * conventional output is still the best guess rather than a known-correct answer.
+     */
+    readonly outputLocation?: string;
     readonly angularProjectName?: string;
     readonly language?: StaticWebAppAzdLanguage;
     readonly repositoryUrl?: string;
@@ -71,6 +78,7 @@ export async function detectStaticWebAppProject(
     const frameworks: StaticWebAppBuildPresetId[] = [];
     let primaryPresetId: StaticWebAppBuildPresetId | undefined;
     let appLocation: string | undefined;
+    let outputLocation: string | undefined;
     let angularProjectName: string | undefined;
     let language: StaticWebAppAzdLanguage | undefined;
 
@@ -91,7 +99,11 @@ export async function detectStaticWebAppProject(
             appLocation = toAppLocation(directory);
             language = hasFile(files, directory, 'tsconfig.json') || hasDependency(packageJson, 'typescript') ? 'ts' : 'js';
             if (primaryPresetId === 'angular') {
-                angularProjectName = await detectAngularProjectName(code, files, directory, packageJson);
+                const angular = await detectAngularProject(code, files, directory, packageJson);
+                angularProjectName = angular.projectName;
+                outputLocation = angular.outputLocation;
+            } else if (isBundlerDrivenPreset(primaryPresetId) && usesVite(files, directory, packageJson)) {
+                outputLocation = ViteDefaultOutputLocation;
             }
         }
     }
@@ -103,7 +115,9 @@ export async function detectStaticWebAppProject(
             frameworks.push('angular');
             const directory = dirname(angularFile.relativePath);
             appLocation = toAppLocation(directory);
-            angularProjectName = await detectAngularProjectName(code, files, directory, undefined);
+            const angular = await detectAngularProject(code, files, directory, undefined);
+            angularProjectName = angular.projectName;
+            outputLocation = angular.outputLocation;
             language = hasFile(files, directory, 'tsconfig.json') ? 'ts' : 'js';
         }
     }
@@ -142,6 +156,7 @@ export async function detectStaticWebAppProject(
         primaryPresetId,
         appLocation,
         apiLocations: detectApiLocations(files),
+        outputLocation,
         angularProjectName,
         language,
         ...git,
@@ -229,26 +244,77 @@ async function isNextStaticExport(
     return !!source && /\boutput\s*:\s*['"]export['"]/.test(source);
 }
 
-async function detectAngularProjectName(
+/**
+ * Reads the Angular workspace to resolve the build target this Static Web App deploys.
+ *
+ * Falls back to the package name when there is no `angular.json`, matching the project name
+ * the Angular CLI would have used. {@linkcode StaticWebAppProjectDetection.outputLocation} is
+ * left unset unless the workspace states an `outputPath`, so a default Angular layout still
+ * falls through to the preset's conventional output.
+ */
+async function detectAngularProject(
     code: IVsCode,
     files: readonly ScannedFile[],
     directory: string,
     packageJson: PackageJson | undefined,
-): Promise<string | undefined> {
+): Promise<{ projectName: string | undefined; outputLocation: string | undefined }> {
     const angularFile = files.find(file => dirname(file.relativePath) === directory && basename(file.relativePath).toLowerCase() === 'angular.json');
     if (angularFile) {
         const angular = await tryReadJson<Record<string, unknown>>(code, angularFile.uri);
-        if (typeof angular?.defaultProject === 'string') {
-            return angular.defaultProject;
-        }
-        if (isRecord(angular?.projects)) {
-            const firstProject = Object.keys(angular.projects)[0];
-            if (firstProject) {
-                return firstProject;
-            }
+        const projects = isRecord(angular?.projects) ? angular.projects : undefined;
+        const projectName = typeof angular?.defaultProject === 'string'
+            ? angular.defaultProject
+            : projects && Object.keys(projects)[0];
+        if (projectName) {
+            const project = projects?.[projectName];
+            return { projectName, outputLocation: readAngularOutputPath(project) };
         }
     }
-    return typeof packageJson?.name === 'string' ? packageJson.name.replace(/^@[^/]+\//, '') : undefined;
+    const fallbackName = typeof packageJson?.name === 'string' ? packageJson.name.replace(/^@[^/]+\//, '') : undefined;
+    return { projectName: fallbackName, outputLocation: undefined };
+}
+
+/**
+ * Pulls the build target's `outputPath` out of one Angular project entry.
+ *
+ * Workspaces name the target collection `architect` or `targets` depending on their age, and
+ * newer schemas express the path as an object whose `base` carries the directory.
+ */
+function readAngularOutputPath(project: unknown): string | undefined {
+    if (!isRecord(project)) {
+        return undefined;
+    }
+    const targets = isRecord(project.architect) ? project.architect : isRecord(project.targets) ? project.targets : undefined;
+    const build = isRecord(targets?.build) ? targets.build : undefined;
+    const options = isRecord(build?.options) ? build.options : undefined;
+    const outputPath = options?.outputPath;
+
+    if (typeof outputPath === 'string') {
+        return outputPath || undefined;
+    }
+    if (isRecord(outputPath) && typeof outputPath.base === 'string') {
+        return outputPath.base || undefined;
+    }
+    return undefined;
+}
+
+/**
+ * Whether the preset's conventional output reflects a bundler choice the project can change.
+ *
+ * These presets predate Vite and name the output of their original toolchain, so a Vite project
+ * using one of them builds somewhere else entirely. Frameworks that own their output path are
+ * deliberately absent: they run Vite too, but always emit where their own preset already says.
+ */
+function isBundlerDrivenPreset(presetId: StaticWebAppBuildPresetId): boolean {
+    return presetId === 'react' || presetId === 'svelte' || presetId === 'vuejs';
+}
+
+/** Vite's own default for `build.outDir`, which the presets below predate. */
+const ViteDefaultOutputLocation = 'dist';
+
+function usesVite(files: readonly ScannedFile[], directory: string, packageJson: PackageJson): boolean {
+    return hasDependency(packageJson, 'vite')
+        || files.some(file => dirname(file.relativePath) === directory && /^vite\.config\.[cm]?[jt]s$/i.test(basename(file.relativePath)));
 }
 
 async function findBlazorProject(code: IVsCode, files: readonly ScannedFile[]): Promise<ScannedFile | undefined> {
