@@ -7,10 +7,10 @@ import { IActionContext, ICommandRegistry } from '@microsoft/vscode-azure-utils'
 import { Container } from 'inversify';
 import { AzdDownCommandId, AzdUpCommandId, LoadMoreCommandId } from '../constants';
 import type { ManagedCommandRegistration } from '../registration/ProductRegistrar';
+import { userToolRequest } from '../tools/ToolService';
 import { AzdDown } from './deploy/AzdDown';
 import { AzdUp } from './deploy/AzdUp';
 import { ClearActivities } from './deploy/ClearActivities';
-import { userToolRequest } from '../tools/ToolService';
 import type { ManagedCommand } from './ManagedCommand';
 import { AcquireTool } from './tools/AcquireTool';
 import { LoadMore } from './tree/LoadMore';

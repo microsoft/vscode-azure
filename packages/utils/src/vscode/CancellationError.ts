@@ -59,7 +59,11 @@ export function throwIfCancelled(token: vscode.CancellationToken | undefined, st
  * would otherwise surface as a failure much deeper in.
  */
 export function isCancellationToken(value: unknown): value is vscode.CancellationToken {
-    const token = value as vscode.CancellationToken | undefined;
-    return typeof token?.isCancellationRequested === 'boolean'
+    if (typeof value !== 'object' || value === null) {
+        return false;
+    }
+
+    const token = value as vscode.CancellationToken;
+    return typeof token.isCancellationRequested === 'boolean'
         && typeof token.onCancellationRequested === 'function';
 }
