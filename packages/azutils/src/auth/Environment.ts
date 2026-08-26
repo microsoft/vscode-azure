@@ -50,11 +50,7 @@ export interface EnvironmentLike {
     /**
      * The Log Analytics query endpoint, e.g. `https://api.loganalytics.io`.
      *
-     * This is a distinct service endpoint per cloud rather than something
-     * derivable from {@linkcode EnvironmentLike.resourceManagerEndpointUrl},
-     * and it doubles as the authentication audience for log queries. The values
-     * match `KnownMonitorLogsQueryAudience` in `@azure/monitor-query-logs`,
-     * which is what the query client accepts.
+     * Doubles as the authentication audience for log queries.
      */
     readonly logAnalyticsEndpoint: string;
 

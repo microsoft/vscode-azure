@@ -7,7 +7,7 @@ import type { AzureSubscriptionTarget, ConcreteAzureNode } from '@microsoft/vsco
 import type { DataProvider, ViewProvider } from '@microsoft/vscode-azure-utils';
 import type { Container, ServiceIdentifier } from 'inversify';
 import type { ManagedCommand } from '../commands/ManagedCommand';
-import { bindAzureClientProvider, type AzureClientCreate, type ProviderEntry } from '../services';
+import { bindAzureClientProvider, bindDataPlaneClientProvider, type AzureClientCreate, type DataPlaneClientCreate, type ProviderEntry } from '../services';
 
 /** A constructor for a command resolved in a command-scoped DI container. */
 export type ManagedCommandConstructor = new (...ctorArgs: any[]) => ManagedCommand; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -79,6 +79,25 @@ export class ProductRegistrar {
     ): void {
         this.registerBinding(container => {
             bindAzureClientProvider(container, providerId, create);
+        });
+    }
+
+    /**
+     * Add the standard subscription-scoped data-plane client provider binding.
+     *
+     * Use this for a client that addresses a service's own endpoint rather than
+     * ARM. The client factory receives a credential scoped to the requested
+     * subscription, the subscription (whose environment names the endpoint's
+     * cloud), and any further arguments that provider's identifier declares --
+     * a registry login server, for instance (see
+     * {@linkcode DataPlaneClientCreate}).
+     */
+    public registerDataPlaneClientProvider<TResult, TSubscription extends AzureSubscriptionTarget, TArgs extends unknown[]>(
+        providerId: ServiceIdentifier<(subscription: TSubscription, ...args: TArgs) => TResult>,
+        create: DataPlaneClientCreate<TResult, TSubscription, TArgs>,
+    ): void {
+        this.registerBinding(container => {
+            bindDataPlaneClientProvider(container, providerId, create);
         });
     }
 

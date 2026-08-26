@@ -6,7 +6,7 @@
 import { IActionExecutor, IVsCode, PromptStep, type AsWritable } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
-import { DockerfileTag } from '../../../tree/workspace/containerApps/containerAppsDetector';
+import { ContainerfileTag } from '../../../tree/workspace/containerApps/containerAppsDetector';
 import { IWorkspaceIndexService } from '../../../utils/workspaceIndex/WorkspaceIndexService';
 import type { CreateContainerAppContext } from '../CreateContainerAppContext';
 
@@ -14,7 +14,7 @@ import type { CreateContainerAppContext } from '../CreateContainerAppContext';
 const DefaultTargetPort = 80;
 
 /**
- * Derives the container's ingress port from the project's Dockerfile.
+ * Derives the container's ingress port from the project's Containerfile.
  *
  * This never prompts. The port is already declared by `EXPOSE`, so asking for it
  * would be asking the user to repeat themselves, and the generated Bicep remains
@@ -43,18 +43,18 @@ export class DetectTargetPortStep extends PromptStep<CreateContainerAppContext> 
         return result;
     }
 
-    /** Returns the first port exposed by the most relevant Dockerfile, if any. */
+    /** Returns the first port exposed by the most relevant Containerfile, if any. */
     private async detectPort(iacFolder: vscode.Uri | undefined): Promise<number | undefined> {
         const index = await this.indexService.getIndex();
-        const dockerfiles = index.withTag(DockerfileTag);
+        const containerfiles = index.withTag(ContainerfileTag);
 
-        // Prefer a Dockerfile inside the folder being generated into; a monorepo
-        // may hold several that have nothing to do with this app.
+        // Prefer a Containerfile inside the folder being generated into; a
+        // monorepo may hold several that have nothing to do with this app.
         const scoped = iacFolder
-            ? dockerfiles.filter(uri => uri.path.startsWith(`${iacFolder.path}/`))
+            ? containerfiles.filter(uri => uri.path.startsWith(`${iacFolder.path}/`))
             : [];
 
-        for (const uri of (scoped.length > 0 ? scoped : dockerfiles)) {
+        for (const uri of (scoped.length > 0 ? scoped : containerfiles)) {
             const port = await this.readExposedPort(uri);
             if (port !== undefined) {
                 return port;
@@ -69,7 +69,7 @@ export class DetectTargetPortStep extends PromptStep<CreateContainerAppContext> 
             const content = Buffer.from(await this.code.workspace.fs.readFile(uri)).toString();
             return parseExposedPort(content);
         } catch {
-            // A Dockerfile that vanished between indexing and reading is not
+            // A Containerfile that vanished between indexing and reading is not
             // worth failing the wizard over -- fall back to the default port.
             return undefined;
         }
@@ -77,14 +77,14 @@ export class DetectTargetPortStep extends PromptStep<CreateContainerAppContext> 
 }
 
 /**
- * Reads the first usable port from a Dockerfile's `EXPOSE` instructions.
+ * Reads the first usable port from a Containerfile's `EXPOSE` instructions.
  *
  * `EXPOSE` accepts several ports on one line, an optional `/tcp` or `/udp`
  * protocol, and port ranges. Ingress targets exactly one TCP port, so the first
  * TCP port wins and a range contributes its start.
  */
-export function parseExposedPort(dockerfile: string): number | undefined {
-    for (const line of dockerfile.split(/\r?\n/)) {
+export function parseExposedPort(containerfile: string): number | undefined {
+    for (const line of containerfile.split(/\r?\n/)) {
         const trimmed = line.trim();
         if (!/^EXPOSE\s/i.test(trimmed)) {
             continue;

@@ -6,20 +6,20 @@
 import { createMockVsCode, createTestActionExecutor, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import type * as vscode from 'vscode';
 import { DetectTargetPortStep, parseExposedPort } from '../../../src/commands/containerApps/steps/DetectTargetPortStep';
-import { DockerfileTag } from '../../../src/tree/workspace/containerApps/containerAppsDetector';
+import { ContainerfileTag } from '../../../src/tree/workspace/containerApps/containerAppsDetector';
 
-/** An index service serving the supplied Dockerfile URIs. */
-function createIndexService(dockerfiles: vscode.Uri[]) {
+/** An index service serving the supplied Containerfile URIs. */
+function createIndexService(containerfiles: vscode.Uri[]) {
     return {
         getIndex: () => Promise.resolve({
-            withTag: (tag: string) => tag === DockerfileTag ? dockerfiles : [],
+            withTag: (tag: string) => tag === ContainerfileTag ? containerfiles : [],
             has: () => false,
             valuesOf: () => [],
         }),
     };
 }
 
-/** Builds a step over a workspace containing exactly the supplied Dockerfiles. */
+/** Builds a step over a workspace containing exactly the supplied Containerfiles. */
 function createStep(files: Record<string, string>) {
     const mockResult = createMockVsCode();
     const uris: vscode.Uri[] = [];

@@ -61,7 +61,7 @@ export class ConfirmProvisionStep<TContext extends AzdWizardContext> extends Pro
 
         const picked = await showSmartQuickPick(this.ctx, items, {
             placeHolder: this.ctx.code.l10n.t(
-                'Provision \'{0}\' now? This updates the resources it has already deployed.',
+                'Provision \'{0}\' now? This updates the resources that have already been deployed.',
                 envName,
             ),
             showBack: true,

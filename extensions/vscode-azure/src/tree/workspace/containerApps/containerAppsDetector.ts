@@ -8,34 +8,34 @@ import type { WorkspaceDetector } from '../../../utils/workspaceIndex/WorkspaceD
 
 const containerApps = 'containerApps';
 
-/** A Dockerfile, which is the build contract for a container app. */
-export const DockerfileTag = createTag(containerApps, StandardTagNames.projectFile);
+/** A Containerfile, which is the build contract for a container app. */
+export const ContainerfileTag = createTag(containerApps, StandardTagNames.projectFile);
 
 /**
- * Matches the file-name spellings Docker itself recognises: a bare
- * `Dockerfile`, a suffixed `Dockerfile.dev`, and a prefixed `api.Dockerfile`.
+ * Matches the file-name spellings a container build recognises: a bare
+ * `Dockerfile`, a suffixed `Dockerfile.dev`, and a prefixed `api.Dockerfile`,
+ * each also spelled `Containerfile`. Names are matched case-insensitively.
  */
-function isDockerfile(name: string): boolean {
-    const lower = name.toLowerCase();
-    return lower === 'dockerfile'
-        || lower.startsWith('dockerfile.')
-        || lower.endsWith('.dockerfile');
+const containerfilePattern = /^(?:.+\.)?(?:docker|container)file$|^(?:docker|container)file\./i;
+
+function isContainerfile(name: string): boolean {
+    return containerfilePattern.test(name);
 }
 
 /**
- * Tags every Dockerfile in the workspace.
+ * Tags every Containerfile in the workspace.
  *
- * A container app's build contract is "there is a Dockerfile", so this is the
- * one signal the Container Apps product needs from the workspace. Indexing it
- * here keeps the product off the file system: no command walks the workspace
- * itself.
+ * A container app's build contract is "there is a Containerfile", so this is
+ * the one signal the Container Apps product needs from the workspace. Indexing
+ * it here keeps the product off the file system: no command walks the
+ * workspace itself.
  */
 export const containerAppsDetector: WorkspaceDetector = {
     id: 'containerApps',
     namespace: containerApps,
     inspect(node) {
-        if (!node.isDirectory && isDockerfile(node.name)) {
-            node.tag(DockerfileTag);
+        if (!node.isDirectory && isContainerfile(node.name)) {
+            node.tag(ContainerfileTag);
         }
     },
 };

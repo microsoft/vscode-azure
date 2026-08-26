@@ -150,6 +150,51 @@ export function bindAzureClientProvider<TResult, TSubscription extends AzureSubs
 }
 
 /**
+ * Signature shared by data-plane Azure client `create` methods.
+ *
+ * A data-plane client talks to a service's own endpoint -- a registry's login
+ * server, a cloud's Log Analytics endpoint -- rather than to ARM, so it is
+ * built from a credential plus whatever names that endpoint, and takes none of
+ * the request-pipeline pieces an {@linkcode AzureClientCreate} needs. The
+ * subscription is still supplied because it carries the cloud the endpoint
+ * lives in.
+ *
+ * `TArgs` is the extra per-call arguments the provider's identifier declares,
+ * for example a login server. It is empty for a client addressed by the
+ * subscription's cloud alone.
+ */
+export type DataPlaneClientCreate<TResult, TSubscription extends AzureSubscriptionTarget, TArgs extends unknown[]> = (
+    credential: TokenCredential,
+    subscription: TSubscription,
+    ...args: TArgs
+) => TResult;
+
+/**
+ * Bind a data-plane Azure client provider unless another product already
+ * registered the same shared provider.
+ *
+ * The management-plane counterpart is {@linkcode bindAzureClientProvider}.
+ */
+export function bindDataPlaneClientProvider<TResult, TSubscription extends AzureSubscriptionTarget, TArgs extends unknown[]>(
+    container: Container,
+    providerId: ServiceIdentifier<(subscription: TSubscription, ...args: TArgs) => TResult>,
+    create: DataPlaneClientCreate<TResult, TSubscription, TArgs>,
+): void {
+    if (container.isBound(providerId)) {
+        return;
+    }
+
+    container.bind(providerId).toFactory(context => {
+        const credentialFactory = context.get(ICredentialFactory);
+        return (subscription: TSubscription, ...args: TArgs) => create(
+            credentialFactory(subscription),
+            subscription,
+            ...args,
+        );
+    });
+}
+
+/**
  * Bind provider entries to a collection {@linkcode ServiceIdentifier}.
  * Bare classes are bound directly; `[primaryId, Class]` tuples are bound as
  * singletons under `primaryId` and aliased into the collection.

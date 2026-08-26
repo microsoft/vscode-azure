@@ -5,8 +5,7 @@
 
 import {
     AcrRepositoryClient, ContainerAppsClient, IAcrRepositoryClientProvider,
-    IContainerAppsClientProvider, ICredentialFactory, ILogsQueryClientProvider, LogsQueryClient,
-    type AzureSubscription,
+    IContainerAppsClientProvider, ILogsQueryClientProvider, LogsQueryClient,
 } from '@microsoft/vscode-azure-azutils';
 import { selfOnly } from '@microsoft/vscode-azure-utils';
 import { CreateContainerApp } from '../commands/containerApps/CreateContainerApp';
@@ -30,25 +29,18 @@ export function registerContainerApps(registrar: ProductRegistrar): void {
         return ContainerAppsClient.create(context, executor, credential, subscription);
     });
 
+    // Both are data-plane clients scoped to a service endpoint rather than to a
+    // subscription's ARM endpoint.
+    registrar.registerDataPlaneClientProvider(IAcrRepositoryClientProvider, (credential, subscription, loginServer) => {
+        return AcrRepositoryClient.create(credential, loginServer, subscription.environment);
+    });
+    registrar.registerDataPlaneClientProvider(ILogsQueryClientProvider, (credential, subscription) => {
+        return LogsQueryClient.create(credential, subscription.environment);
+    });
+
     registrar.registerBinding(container => {
         container.bind(IContainerAppLogStreamService).to(ContainerAppLogStreamService).inSingletonScope();
         container.bind(IWorkspaceDetector).toConstantValue(containerAppsDetector);
-
-        // Both are data-plane clients scoped to a service endpoint rather than
-        // to a subscription's ARM endpoint, so they are bound directly instead
-        // of through `registerAzureClientProvider`, whose `create` signature is
-        // shaped for ARM clients.
-        container.bind(IAcrRepositoryClientProvider).toFactory(context => {
-            const credentialFactory = context.get(ICredentialFactory);
-            return (subscription: AzureSubscription, loginServer: string) =>
-                AcrRepositoryClient.create(credentialFactory(subscription), loginServer, subscription.environment);
-        });
-
-        container.bind(ILogsQueryClientProvider).toFactory(context => {
-            const credentialFactory = context.get(ICredentialFactory);
-            return (subscription: AzureSubscription) =>
-                LogsQueryClient.create(credentialFactory(subscription), subscription.environment);
-        });
     });
 
     registrar.registerResourceDataProvider(ContainerAppsDataProvider);

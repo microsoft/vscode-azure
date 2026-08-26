@@ -146,6 +146,14 @@ const resources = client.resources.listByResourceGroup(rgName);
 
 So `registerAzureClientProvider` (and the `bindAzureClientProvider` / `AzureClientCreate` pair behind it) is generic in the subscription shape, constrained to `AzureSubscriptionTarget`. The provider's identifier declares the shape it wants and the `create` callback is checked against it, so every provider goes through this one path regardless -- a client that needs less does not get a bespoke binding, and `ICredentialFactory` accepts a target just as it accepts a subscription. See the registrations in [`registerGenericAzure.ts`](../extensions/vscode-azure/src/products/registerGenericAzure.ts).
 
+### Management-plane and data-plane clients
+
+The wrappers above are all **management plane**: they talk to ARM, so they share one request pipeline and are bound with `registerAzureClientProvider`.
+
+A **data-plane** client talks to the service's own endpoint instead -- `AcrRepositoryClient` reads the images inside a registry through its login server, `LogsQueryClient` queries a cloud's Log Analytics endpoint. These use their SDK's own pipeline and authenticate against a different audience, so they take a credential plus whatever names the endpoint, and none of the ARM pipeline pieces. They bind with `registerDataPlaneClientProvider` (see [Dependency Injection](dependency-injection.md)), whose `create` callback drops `ICodeContext` and `IActionExecutor` and gains any extra arguments the provider's identifier declares.
+
+A product may own clients on both planes: Container Apps registers `IContainerAppsClientProvider` on the management plane and both data-plane providers above.
+
 ## Type Re-exports
 
 Client wrappers **re-export** any Azure SDK types that appear in their public API (return types, interface fields) so that consumers import them from the wrapper — never directly from `@azure/*` packages. This isolates the rest of the codebase from SDK changes.
