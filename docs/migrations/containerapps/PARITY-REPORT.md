@@ -141,10 +141,14 @@ Honest remainder. None is a silent omission -- each is tracked.
    `location` / `armTag` grouping. **Pre-existing and not specific to this product** -- `AcrViewProvider`,
    `WebAppViewProvider` and `SettingsViewProvider` have the identical naive implementation. Tracked by
    [#331](https://github.com/microsoft/vscode-azure/issues/331).
-3. **`docker.remoteBuild` is unresolved.** The source never needed a local Docker daemon because it always
-   built in ACR. Preserving that means emitting `services.<name>.docker.remoteBuild: true`, but
-   `GenerateAzureYamlStep` delegates to `azd init` and this monorepo does not author files azd owns. Recorded
-   under Open questions; needs a decision.
-4. **13 Defer rows are not built**, by signed decision: the `deployImage` exported API and its shim
-   (ACA-007, ACA-127), revision activate/deactivate and their nodes (ACA-039, ACA-040, ACA-065, ACA-067),
-   the Dapr surface (ACA-082, ACA-089-092), and Docker Hub support (ACA-097, ACA-117).
+3. **Deploying requires a local container runtime.** The source extension always built in ACR, so it did
+   not. Accepted for now; restoring remote build is tracked by
+   [#334](https://github.com/microsoft/vscode-azure/issues/334).
+4. **13 Defer rows are not built**, by signed decision:
+
+   | Theme | IDs | Status |
+   |---|---|---|
+   | Exported `deployImage` contract | ACA-007, ACA-127 | [#332](https://github.com/microsoft/vscode-azure/issues/332) -- live contract with the Containers extension; needs an owner decision |
+   | Dapr surface | ACA-082, ACA-089-092 | [#333](https://github.com/microsoft/vscode-azure/issues/333) |
+   | Revision activate/deactivate + nodes | ACA-039, ACA-040, ACA-065, ACA-067 | on demand -- no successful uses in the telemetry window |
+   | Docker Hub browsing | ACA-097, ACA-117 | on demand -- a typed Docker Hub reference already works |

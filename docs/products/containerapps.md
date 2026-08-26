@@ -92,6 +92,10 @@ not exist yet. That replaces the source extension's registry-kind -> registry ->
 removes the need for a separate "other registry" surface. It is only asked on `createNew`; the `deploy` job
 has azd build and push the image instead.
 
+**Deploying requires a local container runtime.** azd builds the image locally with Docker or Podman, so one
+must be installed and running. Building in ACR instead would remove that requirement; it is tracked by
+[#334](https://github.com/microsoft/vscode-azure/issues/334).
+
 After provisioning, the app's latest revision is polled until it settles. Provisioning succeeding only means
 ARM accepted the template -- the container can still fail to start on a bad image reference or a crash on
 boot. When it does, the app's own console logs are read from the environment's Log Analytics workspace and
@@ -103,3 +107,8 @@ Per the signed triage, the following are expressed in Bicep rather than as comma
 environment variables, secrets, ingress, scaling, and revision mode. Secrets are avoided entirely in favor
 of managed identity and Key Vault references. Revision drafts, the confirmation webviews, and the GitHub
 connect/disconnect flow are not migrated; `azd pipeline config` owns CI/CD.
+
+Deferred, tracked separately: the exported `deployImage` contract with the Containers extension
+([#332](https://github.com/microsoft/vscode-azure/issues/332)), the Dapr surface
+([#333](https://github.com/microsoft/vscode-azure/issues/333)), revision activate/deactivate, and Docker Hub
+browsing. See [PARITY-REPORT.md](../migrations/containerapps/PARITY-REPORT.md) for the full accounting.

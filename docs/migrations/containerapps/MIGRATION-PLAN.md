@@ -371,21 +371,20 @@ verbatim reasoning.
 
 ## Open questions
 
-- **`docker.remoteBuild` in `azure.yaml`.** The source extension never required a local Docker daemon
-  because it always built in ACR. Preserving that property means emitting
-  `services.<name>.docker.remoteBuild: true`, but `GenerateAzureYamlStep` delegates to `azd init --minimal`
-  and this monorepo deliberately does not author files azd owns. Recorded in `TRIAGE.md` as a follow-up
-  idea rather than a dispositioned feature; needs a decision before Slice 3 closes.
-- **Reveal across grouping strategies.** `RevealContainerAppEnvironment` (ACA-014) reveals a node whose
-  view-layer parent depends on the active grouping strategy. When the environment is *not* yet loaded,
-  `GenericAzureViewProvider` claims the key and computes the grouping-aware parent, so reveal works. When it
-  *is* loaded, `ContainerAppsViewProvider` claims it and returns the resource group as the parent, which is
-  wrong under `resourceType` / `location` / `armTag` grouping. This is **pre-existing and not specific to
-  this product** -- `AcrViewProvider`, `WebAppViewProvider` and `SettingsViewProvider` have the identical
-  naive `getParent`. Tracked by [#331](https://github.com/microsoft/vscode-azure/issues/331).
-- **Live verification of the log stream.** The transport (ACA-118) is covered by unit tests over a stubbed
-  `fetch`, including the redirect guard, but has not been run against a real container app. The redirect
-  behavior of the real endpoint is the part most likely to need adjustment.
+- _(none currently open)_
+
+## Decisions taken after sign-off
+
+Recorded here because they change what shipped, without changing any signed disposition.
+
+- **Local Docker build, for now.** The source extension always built in ACR, so it never required a local
+  container runtime; azd defaults to a local build. Emitting `services.<name>.docker.remoteBuild: true` would
+  restore that property but means authoring a file azd owns, which this repo deliberately does not do.
+  Accepted the local-build requirement and tracked restoring remote build in
+  [#334](https://github.com/microsoft/vscode-azure/issues/334).
+- **Reveal is grouping-unaware for loaded nodes** (`RevealContainerAppEnvironment`, ACA-014). Pre-existing
+  across all four product view providers; tracked by
+  [#331](https://github.com/microsoft/vscode-azure/issues/331) rather than fixed inside this migration.
 
 ## Drift log
 
