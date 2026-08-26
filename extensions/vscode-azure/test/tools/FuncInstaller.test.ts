@@ -99,13 +99,15 @@ describe('FuncInstaller (unit)', () => {
 
             await installer.install(installOptions());
 
-            // `iex '...'` would not work: single quotes do not interpolate, so
-            // the downloaded text would be printed instead of executed, the
-            // task would still exit 0, and the failure would surface as a
-            // misleading "installed but no version found" error.
+            // Two things this pins, both of which produce a task that exits 0
+            // while installing nothing:
+            //  - the script must be wrapped in a scriptblock, or the switches
+            //    have nowhere to bind against its `param` block;
+            //  - no double quotes, which the task's shell strips, leaving a
+            //    syntax error.
             const line = installedWith(spawn).join(' ');
-            expect(line).to.include('[scriptblock]::Create');
-            expect(line).to.not.include('iex');
+            expect(line).to.include('& { ');
+            expect(line).to.not.include('"');
         });
 
         it('should add -Force on Windows when upgrading an existing install', async () => {

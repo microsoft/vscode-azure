@@ -112,19 +112,20 @@ export class FuncInstaller implements ToolInstaller {
         const force = options.current !== undefined;
 
         if (process.platform === 'win32') {
-            // Downloads the script and runs it as a scriptblock so the switches
-            // reach its param block. `iex '...'` would not: single quotes do not
-            // interpolate, so `iex` would receive the literal `$(irm ...)` text
-            // and merely echo the downloaded script. The documented form uses
-            // double quotes for that reason; building a scriptblock instead
-            // needs no quote characters at all, so nothing here depends on how
-            // the task's shell re-quotes the argument.
-            const script = `& ([scriptblock]::Create((irm https://aka.ms/func-cli/install.ps1))) -Prerelease${force ? ' -Force' : ''}`;
+            // Same shape as azd's install line -- `Invoke-Expression` over an
+            // `Invoke-RestMethod`, single quotes only. The script is wrapped in
+            // a scriptblock and the switches appended by concatenation, because
+            // the downloaded text is a script with a `param` block: piping it
+            // straight to `Invoke-Expression` would leave nowhere for the
+            // switches to bind. Concatenation rather than the documented
+            // `iex "..."` form keeps double quotes out of the command, which
+            // the task's shell would otherwise strip.
+            const args = `-Prerelease${force ? ' -Force' : ''}`;
             return [{
                 name: 'install.ps1',
                 command: command('powershell')
                     .namedArg('-ExecutionPolicy', 'Bypass')
-                    .arg('-Command', script),
+                    .arg('-Command', `Invoke-Expression ('& { ' + (Invoke-RestMethod 'https://aka.ms/func-cli/install.ps1') + ' } ${args}')`),
                 verified: false,
             }];
         }
