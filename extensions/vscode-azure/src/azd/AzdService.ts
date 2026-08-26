@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IActionExecutor, IProcessExecutor, IVsCode, command, fileExists, isProcessError, showMessage } from '@microsoft/vscode-azure-utils';
+import { CancellationError, IActionExecutor, IProcessExecutor, IVsCode, command, fileExists, isProcessError, showMessage } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
 import * as semver from 'semver';
 import type * as vscode from 'vscode';
@@ -173,7 +173,12 @@ export async function getAzdVersion(
             parseJson: true,
         }, cancellationToken);
         return semver.valid(result.json.azd.version) ?? undefined;
-    } catch {
+    } catch (error) {
+        // A cancelled probe means "we stopped looking", not "not installed", so
+        // it must not be reported as a missing tool.
+        if (CancellationError.test(error)) {
+            throw error;
+        }
         return undefined;
     }
 }

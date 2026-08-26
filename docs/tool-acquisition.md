@@ -38,12 +38,21 @@ managers often install somewhere that is not on the current process's `PATH`, so
 re-checking known locations is what makes the tool usable without a reload.
 `getResolvedPath()` hands that path to callers such as `AzdService`.
 
-Installing is serialized per tool, keyed by tool id alone. Requests that want
-*different* versions still must not drive the same package manager at once, so a
-caller arriving mid-install joins the one already running rather than starting a
-second. Each caller then re-checks the result against its own range: one install
-may satisfy several waiting callers, and any it does not satisfy fail
-individually. Resolution itself is not shared, since it only reads.
+Installing is serialized per tool, keyed by tool id *and* signature policy.
+Requests that want *different versions* still must not drive the same package
+manager at once, so a caller arriving mid-install joins the one already running
+and re-checks the result against its own range: one install may satisfy several
+waiting callers, and any it does not satisfy fail individually. A caller that
+passed `requireSignature`, however, never joins an install that did not — it
+would otherwise be handed the result of an unverified one. Resolution itself is
+not shared, since it only reads.
+
+Cancellation is per-caller: a joining caller that cancels abandons its own wait
+without terminating an install another caller started.
+
+A caller-supplied `existingPath` is returned to that caller only. It is not
+recorded as the resolved path, so one extension naming its own executable cannot
+redirect the binary this extension runs for its own operations.
 
 A request may set `force` to install even when an acceptable version is already
 present, which is how a tool gets updated. The extension's own install commands

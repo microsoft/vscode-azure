@@ -12,6 +12,7 @@ export * from './vscode/config/MockMemento';
 export * from './vscode/config/MockWorkspaceConfiguration';
 export * from './vscode/input/MockInputBox';
 export * from './vscode/input/MockQuickPick';
+export * from './vscode/MockCancellationToken';
 export * from './vscode/MockFileSystem';
 export * from './vscode/MockOutputChannel';
 export * from './vscode/MockUri';

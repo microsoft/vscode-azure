@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { fileExists, InflightMap, IProcessExecutor, isCancellationToken, IVsCode } from '@microsoft/vscode-azure-utils';
+import { CancellationError, fileExists, InflightMap, IProcessExecutor, isCancellationToken, IVsCode, stringifyError, throwIfCancelled } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, multiInject, type ServiceIdentifier } from 'inversify';
 import * as path from 'node:path';
 import * as semver from 'semver';
@@ -212,8 +212,10 @@ export class ToolService implements IToolService {
         request: NormalizedToolRequest,
         versionRange: string | undefined,
     ): Promise<AcquireToolResult> {
+        throwIfCancelled(request.cancellationToken);
         request.progress?.(this.code.l10n.t('Looking for {0}...', installer.displayName));
         const found = await this.resolve(installer, request, versionRange);
+        throwIfCancelled(request.cancellationToken);
 
         // A caller-managed executable is used as-is or not at all -- it is
         // never installed over, so `force` does not apply to it.
@@ -225,7 +227,11 @@ export class ToolService implements IToolService {
                     versionRange ?? '*',
                 ));
             }
-            return this.succeed(installer, found.satisfying.executablePath);
+
+            // Deliberately not recorded as the resolved path: this one belongs
+            // to the caller that named it, and `getResolvedPath` feeds the
+            // extension's own invocations of the tool.
+            return { executablePath: found.satisfying.executablePath };
         }
 
         // A forced request resolves first anyway, so the installer can offer
@@ -235,19 +241,8 @@ export class ToolService implements IToolService {
         }
 
         request.progress?.(this.code.l10n.t('Installing {0}...', installer.displayName));
-        // Installing mutates machine-wide state, so at most one install per
-        // tool runs at a time -- keyed by tool alone, because two callers
-        // wanting *different* versions must still not drive the same package
-        // manager at once. A caller that arrives mid-install joins the one in
-        // flight rather than starting a second, then re-checks below against
-        // its own range; an install started for someone else may or may not
-        // satisfy it. (Joining also means the first caller's `reveal` wins.)
-        await this.installs.getOrRun(installer.id, () => installer.install({
-            current: found.satisfying ?? found.rejected,
-            requireSignature: request.requireSignature,
-            reveal: request.revealInstallTask,
-            cancellationToken: request.cancellationToken,
-        }));
+        await this.install(installer, request, found);
+        throwIfCancelled(request.cancellationToken);
 
         request.progress?.(this.code.l10n.t('Verifying {0}...', installer.displayName));
         const installed = await this.resolve(installer, request, versionRange);
@@ -260,6 +255,60 @@ export class ToolService implements IToolService {
         }
 
         return this.succeed(installer, installed.satisfying.executablePath);
+    }
+
+    /**
+     * Runs the installer, sharing one install between concurrent callers.
+     *
+     * Installing mutates machine-wide state, so at most one runs per tool --
+     * keyed by tool *and* signature policy, since a caller that demands
+     * verification must not be handed the result of an unverified install
+     * someone else started. Version range is deliberately not part of the key:
+     * callers wanting different versions still must not drive the same package
+     * manager at once, so they share the install and each re-checks the result
+     * against its own range afterward.
+     *
+     * A joining caller waits on the shared install but keeps its own
+     * cancellation: cancelling only abandons that caller's wait, and the
+     * underlying task is left to the caller that started it. (Joining does mean
+     * the first caller's `reveal` wins.)
+     */
+    private async install(
+        installer: ToolInstaller,
+        request: NormalizedToolRequest,
+        found: { satisfying?: ResolvedTool, rejected?: ResolvedTool },
+    ): Promise<void> {
+        const key = `${installer.id}|${request.requireSignature ? 'verified' : 'any'}`;
+        const shared = this.installs.getOrRun(key, () => installer.install({
+            current: found.satisfying ?? found.rejected,
+            requireSignature: request.requireSignature,
+            reveal: request.revealInstallTask,
+            cancellationToken: request.cancellationToken,
+        }));
+
+        const token = request.cancellationToken;
+        if (!token) {
+            return shared;
+        }
+
+        // Race the shared install against this caller's own token, so one
+        // caller cancelling never rejects another. `shared` is always awaited
+        // by whoever started it, so abandoning it here cannot orphan a
+        // rejection.
+        await new Promise<void>((resolve, reject) => {
+            const subscription = token.onCancellationRequested(() => {
+                subscription.dispose();
+                reject(new CancellationError());
+            });
+
+            shared.then(
+                () => { subscription.dispose(); resolve(); },
+                (error: unknown) => {
+                    subscription.dispose();
+                    reject(error instanceof Error ? error : new Error(stringifyError(error)));
+                },
+            );
+        });
     }
 
     private succeed(installer: ToolInstaller, executablePath: string): AcquireToolResult {

@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { IProcessExecutor } from '@microsoft/vscode-azure-utils';
-import { MockUri, createMockVsCode, waitFor } from '@microsoft/vscode-azure-utils/testing';
+import { MockCancellationToken, MockUri, createMockVsCode, waitFor } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import type { ToolInstallOptions, ToolInstaller } from '../../src/tools/ToolInstaller';
 import { ToolService, userToolRequest, validateAcquireToolRequest, type AcquireToolRequest } from '../../src/tools/ToolService';
@@ -42,8 +42,7 @@ function createService(installer: ToolInstaller, pathResult?: string, existingFi
     return new ToolService(mockResult.vscode, processExecutor, [installer]);
 }
 
-/** The plain request another extension would make: resolve, install only if needed. */
-function request(overrides: Partial<AcquireToolRequest> = {}): AcquireToolRequest {
+/** The plain request another extension would make: resolve, install only if needed. */function request(overrides: Partial<AcquireToolRequest> = {}): AcquireToolRequest {
     return { toolId: 'azd', requestingExtensionId: 'publisher.name', ...overrides };
 }
 
@@ -236,6 +235,82 @@ describe('ToolService (unit)', () => {
         expect((await satisfied).executablePath).to.equal('/tools/azd');
         await expect(unsatisfiable).to.be.rejectedWith(/no version satisfying/);
         expect(install.mock.callCount()).to.equal(1);
+    });
+
+    it('should not let a signature-requiring caller join an unverified install', async () => {
+        const versions = new Map<string, string>();
+        const releases: (() => void)[] = [];
+        const install = mock.fn((_options: ToolInstallOptions) => new Promise<void>(resolve => {
+            releases.push(() => {
+                versions.set('/tools/azd', '1.25.0');
+                resolve();
+            });
+        }));
+        const { installer } = createInstaller(versions, { getKnownPaths: () => ['/tools/azd'], install });
+        const service = createService(installer, undefined, ['/tools/azd']);
+
+        const unverified = service.acquire(request());
+        const verified = service.acquire(request({ requireSignature: true }));
+        // Two separate installs, so both have to be released.
+        await waitFor(() => releases.length === 2, 'both installs to start');
+        releases.forEach(release => { release(); });
+
+        expect((await unverified).executablePath).to.equal('/tools/azd');
+        expect((await verified).executablePath).to.equal('/tools/azd');
+
+        // Sharing on tool id alone would have handed the second caller the
+        // result of an install that never had to verify anything.
+        expect(install.mock.callCount()).to.equal(2);
+        expect(install.mock.calls.map(c => c.arguments[0].requireSignature).sort()).to.deep.equal([false, true]);
+    });
+
+    it('should not let one caller cancelling reject another', async () => {
+        const versions = new Map<string, string>();
+        let finishInstall: (() => void) | undefined;
+        const install = mock.fn(() => new Promise<void>(resolve => {
+            finishInstall = () => {
+                versions.set('/tools/azd', '1.25.0');
+                resolve();
+            };
+        }));
+        const { installer } = createInstaller(versions, { getKnownPaths: () => ['/tools/azd'], install });
+        const service = createService(installer, undefined, ['/tools/azd']);
+        const joinerToken = new MockCancellationToken();
+
+        const starter = service.acquire(request());
+        const joiner = service.acquire(request({ cancellationToken: joinerToken }));
+        await waitFor(() => finishInstall !== undefined);
+        joinerToken.cancel();
+
+        await expect(joiner).to.be.rejectedWith(/Canceled/);
+        finishInstall?.();
+
+        // The caller that started the install still gets its result.
+        expect((await starter).executablePath).to.equal('/tools/azd');
+        expect(install.mock.callCount()).to.equal(1);
+    });
+
+    it('should surface cancellation rather than installing', async () => {
+        const { installer, install } = createInstaller(new Map());
+        const service = createService(installer);
+        const token = new MockCancellationToken();
+        token.cancel();
+
+        await expect(service.acquire(request({ cancellationToken: token })))
+            .to.be.rejectedWith(/Canceled/);
+        expect(install.mock.callCount()).to.equal(0);
+    });
+
+    it('should not record a caller-supplied path as the resolved path', async () => {
+        const { installer } = createInstaller(new Map([['/caller/azd', '1.25.1']]));
+        const service = createService(installer);
+
+        const result = await service.acquire(request({ existingPath: '/caller/azd' }));
+
+        // Another extension naming its own executable must not redirect the
+        // binary this extension runs for its own operations.
+        expect(result.executablePath).to.equal('/caller/azd');
+        expect(service.getResolvedPath('azd')).to.be.undefined;
     });
 });
 

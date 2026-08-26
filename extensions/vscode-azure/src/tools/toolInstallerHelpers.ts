@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { command, type CommandLineArgs, type IOutputChannel, type IProcessExecutor, type IVsCode } from '@microsoft/vscode-azure-utils';
+import { CancellationError, command, type CommandLineArgs, type IOutputChannel, type IProcessExecutor, type IVsCode } from '@microsoft/vscode-azure-utils';
 import * as path from 'node:path';
 import * as semver from 'semver';
 import type * as vscode from 'vscode';
@@ -104,6 +104,10 @@ export function npmInstallMethod(packageName: string): ToolInstallMethod {
  * For tools that print a bare version rather than structured output. Returns
  * `undefined` when the executable is missing, fails, or prints something no
  * version can be read from -- all of which mean "not usable" to a caller.
+ *
+ * @throws {@linkcode CancellationError} when cancelled. A cancelled probe means
+ *   "we stopped looking", not "not installed", and swallowing it would let the
+ *   caller carry on and install something.
  */
 export async function getVersionFromOutput(
     processExecutor: IProcessExecutor,
@@ -117,7 +121,10 @@ export async function getVersionFromOutput(
             command: command(executablePath).arg('--version'),
         }, cancellationToken);
         stdout = result.stdout;
-    } catch {
+    } catch (error) {
+        if (CancellationError.test(error)) {
+            throw error;
+        }
         return undefined;
     }
 

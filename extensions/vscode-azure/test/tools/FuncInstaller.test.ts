@@ -93,6 +93,21 @@ describe('FuncInstaller (unit)', () => {
             expect(line).to.not.include('-Force');
         });
 
+        it('should build a PowerShell command that runs the script rather than echoing it', async () => {
+            setPlatform('win32');
+            const { installer, spawn } = createInstaller();
+
+            await installer.install(installOptions());
+
+            // `iex '...'` would not work: single quotes do not interpolate, so
+            // the downloaded text would be printed instead of executed, the
+            // task would still exit 0, and the failure would surface as a
+            // misleading "installed but no version found" error.
+            const line = installedWith(spawn).join(' ');
+            expect(line).to.include('[scriptblock]::Create');
+            expect(line).to.not.include('iex');
+        });
+
         it('should add -Force on Windows when upgrading an existing install', async () => {
             setPlatform('win32');
             const { installer, spawn } = createInstaller();

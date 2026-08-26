@@ -112,13 +112,19 @@ export class FuncInstaller implements ToolInstaller {
         const force = options.current !== undefined;
 
         if (process.platform === 'win32') {
-            const script = `& { $(irm https://aka.ms/func-cli/install.ps1) } -Prerelease${force ? ' -Force' : ''}`;
+            // Downloads the script and runs it as a scriptblock so the switches
+            // reach its param block. `iex '...'` would not: single quotes do not
+            // interpolate, so `iex` would receive the literal `$(irm ...)` text
+            // and merely echo the downloaded script. The documented form uses
+            // double quotes for that reason; building a scriptblock instead
+            // needs no quote characters at all, so nothing here depends on how
+            // the task's shell re-quotes the argument.
+            const script = `& ([scriptblock]::Create((irm https://aka.ms/func-cli/install.ps1))) -Prerelease${force ? ' -Force' : ''}`;
             return [{
                 name: 'install.ps1',
                 command: command('powershell')
                     .namedArg('-ExecutionPolicy', 'Bypass')
-                    .arg('-Command')
-                    .quotedArg(`iex '${script}'`),
+                    .arg('-Command', script),
                 verified: false,
             }];
         }
