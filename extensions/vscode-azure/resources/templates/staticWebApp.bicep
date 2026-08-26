@@ -51,9 +51,5 @@ module staticWebApp 'br/public:avm/res/web/static-site:0.9.5' = {
       outputLocation: outputLocation
     }
     provider: 'None'
-    enableTelemetry: false
   }
 }
-
-output staticWebAppName string = staticWebApp.outputs.name
-output staticWebAppEndpoint string = 'https://${staticWebApp.outputs.defaultHostname}'
