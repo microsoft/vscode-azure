@@ -5,7 +5,7 @@
 
 import type { Client as RestClient, ClientOptions as RestClientOptions } from '@azure-rest/core-client';
 import type { TokenCredential } from '@azure/core-auth';
-import type { IActionExecutor, ICodeContext, SyncFactory } from '@microsoft/vscode-azure-utils';
+import { Limiter, type IActionExecutor, type ICodeContext, type SyncFactory } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
 import type { AzureSubscription } from '../../auth/AzureSubscription';
 import type { EnvironmentLike } from '../../auth/Environment';
@@ -170,13 +170,14 @@ export class AcrRepositoryClient implements IAcrRepositoryClient {
     public async listRepositoryTags(): Promise<readonly RepositoryTags[]> {
         const repositories = await this.listRepositories();
 
-        // Each repository's manifests are a separate round trip, so they are
-        // issued together rather than serially -- a registry with many
-        // repositories would otherwise take one latency per repository.
-        const results = await Promise.all(repositories.map(async repository => ({
+        // Each repository's manifests are a separate round trip. Keep several
+        // in flight to avoid serial latency without overwhelming a registry
+        // that contains many repositories.
+        const limiter = new Limiter<RepositoryTags>(5);
+        const results = await Promise.all(repositories.map(repository => limiter.queue(async () => ({
             repository,
             tags: await this.listTags(repository),
-        })));
+        }))));
 
         return results.filter(result => result.tags.length > 0);
     }

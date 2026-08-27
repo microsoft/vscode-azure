@@ -137,6 +137,53 @@ describe('AcrRepositoryClient (unit)', () => {
         ]);
     });
 
+    it('should load manifests from at most five repositories concurrently', async () => {
+        const repositories = Array.from({ length: 6 }, (_, index) => `store/app-${index}`);
+        const fiveStarted = Promise.withResolvers<boolean>();
+        const sixStarted = Promise.withResolvers<boolean>();
+        const releases: Array<() => void> = [];
+        let active = 0;
+        let maxActive = 0;
+        let started = 0;
+
+        const httpClient = new MockHttpClient({
+            handler: req => {
+                if (!req.url.includes('_manifests')) {
+                    return makeResponse(req, 200, JSON.stringify({ repositories }));
+                }
+
+                active++;
+                started++;
+                maxActive = Math.max(maxActive, active);
+                if (started === 5) {
+                    fiveStarted.resolve(true);
+                } else if (started === 6) {
+                    sixStarted.resolve(true);
+                }
+
+                return new Promise<PipelineResponse>(resolve => {
+                    releases.push(() => {
+                        active--;
+                        resolve(makeResponse(req, 200, JSON.stringify({ manifests: [] })));
+                    });
+                });
+            },
+        });
+
+        const result = createClient(httpClient).listRepositoryTags();
+        await fiveStarted.promise;
+
+        expect(started).to.equal(5);
+        releases.shift()?.();
+        await sixStarted.promise;
+        expect(maxActive).to.equal(5);
+
+        for (const release of releases) {
+            release();
+        }
+        await result;
+    });
+
     it('should follow the Link header rather than stopping at the first page', async () => {
         // A registry caps a response at its own page size, so a listing that
         // reads one response silently truncates.
