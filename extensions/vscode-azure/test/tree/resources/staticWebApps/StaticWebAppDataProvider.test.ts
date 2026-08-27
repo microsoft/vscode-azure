@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureNodeId, isVirtualResource, type ConcreteAzureNode, type StaticSiteBuildARMResource } from '@microsoft/vscode-azure-azutils';
-import { asPages, createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
+import { createMockVsCode, createTestActionExecutor, pagesOf } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import {
     getStaticWebAppEnvironmentSortKey,
@@ -48,9 +48,9 @@ describe('StaticWebAppDataProvider (unit)', () => {
                     branch: 'main',
                     defaultHostname: 'site.azurestaticapps.net',
                 })),
-                listStaticSiteBuilds: mock.fn(() => asPages(builds)),
-                listStaticSiteFunctions: mock.fn(() => asPages(options?.functions ?? [])),
-                listStaticSiteBuildFunctions: mock.fn(() => asPages(options?.functions ?? [])),
+                listStaticSiteBuilds: mock.fn(() => pagesOf(builds)),
+                listStaticSiteFunctions: mock.fn(() => pagesOf(options?.functions ?? [])),
+                listStaticSiteBuildFunctions: mock.fn(() => pagesOf(options?.functions ?? [])),
                 listStaticSiteFunctionAppSettings: productionProbe,
                 listStaticSiteBuildFunctionAppSettings: buildProbe,
             },

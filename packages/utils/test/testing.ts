@@ -7,7 +7,6 @@ export { NullTelemetryReporter } from '../src/base/ITelemetryReporter';
 export { DebugOutputChannel } from '../src/vscode/IOutputChannel';
 export * from './base/ManualDebounceScheduler';
 export * from './createTestActionExecutor';
-export * from './data/asPages';
 export * from './data/asyncIterables';
 export * from './describeLongRunning';
 export * from './vscode/config/MockMemento';
