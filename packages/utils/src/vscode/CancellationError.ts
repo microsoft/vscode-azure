@@ -48,3 +48,22 @@ export function throwIfCancelled(token: vscode.CancellationToken | undefined, st
         throw new CancellationError(undefined, stepName);
     }
 }
+
+/**
+ * Type guard for a {@linkcode vscode.CancellationToken CancellationToken}.
+ *
+ * Structural rather than `instanceof`, because VS Code exposes no constructor
+ * to test against and a token may legitimately come from another extension
+ * host or a test double. Use it when a token arrives from outside the
+ * extension -- across a command boundary, say -- where an unchecked value
+ * would otherwise surface as a failure much deeper in.
+ */
+export function isCancellationToken(value: unknown): value is vscode.CancellationToken {
+    if (typeof value !== 'object' || value === null) {
+        return false;
+    }
+
+    const token = value as vscode.CancellationToken;
+    return typeof token.isCancellationRequested === 'boolean'
+        && typeof token.onCancellationRequested === 'function';
+}

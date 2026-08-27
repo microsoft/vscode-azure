@@ -14,7 +14,7 @@ import type * as vscode from 'vscode';
 import { URI as Uri } from 'vscode-uri';
 import { command, type CommandLineArgs } from '../../src/base/CommandLineBuilder';
 import { delay } from '../../src/base/delay';
-import { ProcessExecutor, type SpawnFn } from '../../src/base/IProcessExecutor';
+import { ProcessExecutor, type ResolveExecutableFn, type SpawnFn } from '../../src/base/IProcessExecutor';
 import { CancellationError } from '../../src/vscode/CancellationError';
 import { EventEmitter } from '../../src/vscode/EventEmitter';
 import { createMockVsCode } from '../vscode/MockVsCode';
@@ -498,6 +498,33 @@ describe('ProcessExecutor (unit)', () => {
             const taskExecution = await getTaskExecution(m);
             m.taskProcessEndEmitter.fire({ execution: taskExecution, exitCode: 0 });
             await promise;
+        });
+    });
+
+    describe('resolveExecutable', () => {
+        it('should resolve commands with Windows batch files enabled', () => {
+            const { vscode: code } = createMockVsCode();
+            const executablePath = path.resolve('tool.cmd');
+            const resolveExecutableFn = mock.fn<ResolveExecutableFn>(() => executablePath);
+            const executor = new ProcessExecutor(code, createMockSpawn(), resolveExecutableFn);
+
+            const result = executor.resolveExecutable('tool');
+
+            expect(result).to.equal(executablePath);
+            expect(resolveExecutableFn.mock.calls[0].arguments).to.deep.equal([
+                'tool',
+                { allowWindowsBatchFiles: true },
+            ]);
+        });
+
+        it('should return undefined when the resolver does not find the command', () => {
+            const { vscode: code } = createMockVsCode();
+            const resolveExecutableFn = mock.fn<ResolveExecutableFn>(() => undefined);
+            const executor = new ProcessExecutor(code, createMockSpawn(), resolveExecutableFn);
+
+            const result = executor.resolveExecutable('missing');
+
+            expect(result).to.be.undefined;
         });
     });
 });

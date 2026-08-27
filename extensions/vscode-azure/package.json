@@ -75,6 +75,21 @@
                 "title": "%commands.vscode-azure/installAzd%"
             },
             {
+                "command": "vscode-azure/installFunc",
+                "category": "%commands.category.azure%",
+                "title": "%commands.vscode-azure/installFunc%"
+            },
+            {
+                "command": "vscode-azure/installSwa",
+                "category": "%commands.category.azure%",
+                "title": "%commands.vscode-azure/installSwa%"
+            },
+            {
+                "command": "vscode-azure/acquireTool",
+                "category": "%commands.category.azure%",
+                "title": "%commands.vscode-azure/acquireTool%"
+            },
+            {
                 "command": "vscode-azure/acr/disableAdminUser",
                 "category": "%commands.category.azure%",
                 "title": "Disable Admin User"
@@ -209,6 +224,10 @@
                 }
             ],
             "commandPalette": [
+                {
+                    "command": "vscode-azure/acquireTool",
+                    "when": "false"
+                },
                 {
                     "command": "vscode-azure/resources/refresh",
                     "when": "false"
@@ -553,7 +572,7 @@
     },
     "devDependencies": {
         "@azure/identity": "^4.13.1",
-        "@types/semver": "^7.7.1",
+        "@types/semver": "catalog:",
         "@vscode/test-cli": "catalog:",
         "@vscode/test-electron": "catalog:",
         "esbuild": "catalog:",
@@ -567,7 +586,8 @@
         "@vscode/extension-telemetry": "catalog:",
         "inversify": "catalog:",
         "jsonc-parser": "^3.3.1",
-        "semver": "^7.8.4",
-        "yaml": "^2.8.1"
+        "semver": "catalog:",
+        "yaml": "^2.8.1",
+        "zod": "catalog:"
     }
 }
