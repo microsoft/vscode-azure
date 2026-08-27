@@ -240,7 +240,7 @@ describe('createShellTask (unit)', () => {
         // The task runs in the shell's working directory, not this process's, so
         // resolving the caller's relative path here could name a different file.
         const m = createMockVsCode();
-        const directory = await fs.mkdtemp(path.join(process.cwd(), 'shell-task-'));
+        const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'shell-task-'));
         try {
             const extension = process.platform === 'win32' ? '.cmd' : '';
             const planted = path.join(directory, `planted${extension}`);
