@@ -43,7 +43,6 @@ module staticWebApp 'br/public:avm/res/web/static-site:0.9.5' = {
     name: take('${environmentName}-${uniqueString(subscription().id, environmentName)}', 40)
     location: location
     sku: staticWebAppSkuName
-    // Tag the Static Web App (only) with `azd-service-name` so `azd deploy` can target it.
     tags: union(tags, { 'azd-service-name': azdServiceName })
     buildProperties: {
       appLocation: appLocation

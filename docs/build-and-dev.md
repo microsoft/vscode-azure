@@ -216,12 +216,6 @@ pnpm --filter vscode-azure run testcov                   # With coverage (vscode
 
 See [Testing](testing.md) for details on test runners and coverage.
 
-Static Web Apps npm latest-version checks should not run during normal
-activation. Keep the registry request behind an explicit SWA entry point (for
-example, a local task, debug, install/update, or deploy flow) so generic Azure
-activation stays deterministic and offline; unit tests that exercise the
-registry parser inject HTTP responses.
-
 ## Packaging
 
 ```bash
