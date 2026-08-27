@@ -146,6 +146,34 @@ const resources = client.resources.listByResourceGroup(rgName);
 
 So `registerAzureClientProvider` (and the `bindAzureClientProvider` / `AzureClientCreate` pair behind it) is generic in the subscription shape, constrained to `AzureSubscriptionTarget`. The provider's identifier declares the shape it wants and the `create` callback is checked against it, so every provider goes through this one path regardless -- a client that needs less does not get a bespoke binding, and `ICredentialFactory` accepts a target just as it accepts a subscription. See the registrations in [`registerGenericAzure.ts`](../extensions/vscode-azure/src/products/registerGenericAzure.ts).
 
+### Management-plane and data-plane clients
+
+The wrappers above are all **management plane**: they talk to ARM, so they share one request pipeline and are bound with `registerAzureClientProvider`.
+
+A **data-plane** client talks to the service's own endpoint instead. It binds through the same `registerAzureClientProvider`, with any extra arguments that name the endpoint declared on the provider's identifier and appended to `create`'s parameters.
+
+### Writing a data-plane client
+
+Data-plane operations are written directly against the REST endpoint with `@azure-rest/core-client`, rather than by wrapping a service SDK. A service SDK carries its own pipeline, its own serializer, and models for every operation in the service -- so a wrapper that uses three read-only operations still pays for all of it, and its requests skip our policies entirely. Writing the calls keeps a data-plane request on the same pipeline as a management request, and matches the shape of the newer modular ARM packages.
+
+Build the client with `createDataPlaneRestClient`, which shares its policy set with the ARM factories:
+
+```typescript
+createDataPlaneRestClient(ctx, executor, {
+    name: 'example-service',
+    endpoint,
+    credential,
+    scopes: [`${endpoint}/.default`],
+}, options);
+```
+
+Two conventions keep this maintainable:
+
+- **Declare the wire types locally, matching the SDK's model shape.** The request and response types for the handful of operations we use are small, so they live beside the client. Mirror the corresponding SDK model's property names and optionality, and note in JSDoc wherever the SDK renames a wire field. A modular package for that service can then be dropped in without reworking call sites.
+- **Follow the service's own paging.** A collection endpoint caps its response and points at the rest with an RFC 5988 `Link` header. An SDK's async iterator hides that; hand-written calls must walk it, or a large result silently truncates.
+
+Some data-plane services do not accept an Entra ID token directly. `DataPlaneClientConfig.challengeCallbacks` hooks a service-specific exchange into the standard `bearerTokenAuthenticationPolicy`, so the required scope can come from the service challenge while the Entra ID leg retains the pipeline's token cache and conditional-access step-up.
+
 ## Type Re-exports
 
 Client wrappers **re-export** any Azure SDK types that appear in their public API (return types, interface fields) so that consumers import them from the wrapper — never directly from `@azure/*` packages. This isolates the rest of the codebase from SDK changes.

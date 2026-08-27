@@ -5,4 +5,5 @@
 
 export * from './mockAzure';
 export * from './mockPipeline';
+export * from './rest/mockPaging';
 export * from './tree/mockTree';
