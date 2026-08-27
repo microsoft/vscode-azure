@@ -380,6 +380,104 @@ describe('uiHelpers (unit)', () => {
             expect(cItem?.description).to.include('recently selected');
         });
 
+        describe('shouldRememberItem', () => {
+            const items = () => [{ label: 'A' }, { label: 'B' }, { label: 'Load More...' }];
+            const isLoadMore = (item: { label: string }) => item.label === 'Load More...';
+            const rememberChoicesOnly = (item: { label: string }) => !isLoadMore(item);
+
+            it('should not remember an action item as the recent choice', async () => {
+                const { ctx, mock } = createMockCodeContext();
+
+                respondToPrompts(mock, [{ pick: 'Load More...' }]);
+                await showSmartQuickPick(ctx, items(), { shouldRememberItem: rememberChoicesOnly });
+
+                // Restoring the action would open the picker with it
+                // pre-highlighted, so accepting the default would trigger it
+                // instead of choosing anything.
+                respondToPrompts(mock, [{ pick: 'A' }]);
+                await showSmartQuickPick(ctx, items(), { shouldRememberItem: rememberChoicesOnly });
+
+                const qp = mock.quickPicks[1];
+                expect(qp.items[0].label).to.equal('A');
+                expect(qp.items.find(isLoadMore)?.description).to.be.undefined;
+            });
+
+            it('should leave a genuinely-pickable recent choice in place', async () => {
+                const { ctx, mock } = createMockCodeContext();
+
+                respondToPrompts(mock, [{ pick: 'B' }]);
+                await showSmartQuickPick(ctx, items(), { shouldRememberItem: rememberChoicesOnly });
+
+                respondToPrompts(mock, [{ pick: 'Load More...' }]);
+                await showSmartQuickPick(ctx, items(), { shouldRememberItem: rememberChoicesOnly });
+
+                // Accepting the action must not clobber what the user last chose.
+                respondToPrompts(mock, [{ pick: 'A' }]);
+                await showSmartQuickPick(ctx, items(), { shouldRememberItem: rememberChoicesOnly });
+
+                const qp = mock.quickPicks[2];
+                expect(qp.items[0].label).to.equal('B');
+                expect(qp.items[0].description).to.include('recently selected');
+            });
+
+            it('should not pre-check an action item in multi-select mode', async () => {
+                const { ctx, mock } = createMockCodeContext();
+
+                respondToPrompts(mock, [{ pickMany: ['A', 'Load More...'] }]);
+                await showSmartQuickPick(ctx, items(), { canPickMany: true, shouldRememberItem: rememberChoicesOnly });
+
+                respondToPrompts(mock, [{ pickMany: ['B'] }]);
+                await showSmartQuickPick(ctx, items(), { canPickMany: true, shouldRememberItem: rememberChoicesOnly });
+
+                const qp = mock.quickPicks[1];
+                expect(qp.items.find(i => i.label === 'A')?.description).to.include('recently selected');
+                expect(qp.items.find(isLoadMore)?.description).to.be.undefined;
+            });
+        });
+
+        describe('onDidChangeValue', () => {
+            it('should report the raw typed value', async () => {
+                const { ctx, mock } = createMockCodeContext();
+                const seen: string[] = [];
+
+                const resultPromise = showSmartQuickPick(ctx, [{ label: 'A' }], {
+                    onDidChangeValue: value => seen.push(value),
+                });
+
+                const qp = mock.quickPicks[0];
+                qp.changeValue('a');
+                qp.changeValue('a ');
+
+                // Untrimmed, so a caller can hand the value straight back as the
+                // preset filter of a follow-up pick.
+                expect(seen).to.deep.equal(['a', 'a ']);
+
+                qp.activeItems = [qp.items[0]];
+                qp.accept();
+                await resultPromise;
+            });
+
+            it('should report the value alongside a combo box factory', async () => {
+                const { ctx, mock } = createMockCodeContext();
+                const seen: string[] = [];
+
+                const resultPromise = showSmartQuickPick(ctx, [{ label: 'A' }], {
+                    onDidChangeValue: value => seen.push(value),
+                    createItemFromValue: value => value ? { label: `Use ${value}` } : undefined,
+                });
+
+                const qp = mock.quickPicks[0];
+                qp.changeValue('custom');
+
+                expect(seen).to.deep.equal(['custom']);
+                expect(qp.items.map(i => i.label)).to.deep.equal(['A', 'Use custom']);
+
+                qp.accept();
+                const result = await resultPromise;
+                expect(result.label).to.equal('Use custom');
+            });
+        });
+
         it('should use isActiveItem to pre-highlight an item', async () => {
             const { ctx, mock } = createMockCodeContext();
 
@@ -485,6 +583,28 @@ describe('uiHelpers (unit)', () => {
 
                 // Suggestions come first; the synthetic "use what I typed" entry is last.
                 expect(qp.items.map(i => i.label)).to.deep.equal(['Alpha', 'Bravo', 'Use typed-id']);
+
+                qp.accept();
+                expect((await resultPromise).data).to.equal('typed-id');
+            });
+
+            it('should list the synthetic item above an always-shown suggestion', async () => {
+                const { ctx, mock } = createMockCodeContext();
+                const createItemFromValue = (value: string) => value ? { label: `Use ${value}`, data: value } : undefined;
+
+                const resultPromise = showSmartQuickPick(ctx, [
+                    { label: 'Alpha', data: 'a' },
+                    { label: 'Load More...', data: 'more', alwaysShow: true },
+                ], { createItemFromValue });
+
+                const qp = mock.quickPicks[0];
+                qp.changeValue('typed-id');
+
+                // An always-shown row survives the filter just as the synthetic
+                // item does, so listing it first would hand it the highlight and
+                // let Enter trigger it instead of using what the user typed.
+                expect(qp.items.map(i => i.label)).to.deep.equal(['Alpha', 'Use typed-id', 'Load More...']);
+                expect(qp.activeItems.map(i => i.label)).to.deep.equal(['Use typed-id']);
 
                 qp.accept();
                 expect((await resultPromise).data).to.equal('typed-id');

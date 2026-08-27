@@ -90,6 +90,28 @@ export interface ExtendedQuickPickOptions<TItem extends vscode.QuickPickItem> ex
     readonly onDidTriggerItemButton?: (event: vscode.QuickPickItemButtonEvent<TItem>) => void;
 
     /**
+     * Called with the raw (untrimmed) filter text whenever the user changes it.
+     *
+     * Useful for carrying the typed text across a re-show -- pass it back as
+     * {@linkcode ExtendedQuickPickOptions.value value} so the user does not have
+     * to retype their filter.
+     */
+    readonly onDidChangeValue?: (value: string) => void;
+
+    /**
+     * Whether an item takes part in the recently-picked memory. Defaults to
+     * remembering everything.
+     *
+     * Return `false` for rows that act on the picker rather than being a choice
+     * -- a "Load more..." row, for example. Such an item is then neither
+     * recorded when accepted nor restored on a later show. Remembering one
+     * would clobber a genuinely-pickable recent choice and, worse, leave the
+     * picker opening with the action pre-highlighted, so that accepting the
+     * default triggers it instead of choosing anything.
+     */
+    readonly shouldRememberItem?: (item: TItem) => boolean;
+
+    /**
      * Turns the quick pick into a combo box ("pick or enter"): builds a synthetic,
      * always-shown item from the user's typed text whenever it does not already match
      * a suggestion. It receives the **trimmed** typed value and should return `undefined`
@@ -100,10 +122,13 @@ export interface ExtendedQuickPickOptions<TItem extends vscode.QuickPickItem> ex
      * the user never sees two identical-looking rows. Otherwise the synthetic item is
      * listed *after* the suggestions, so any real item matching the current filter is
      * shown -- and highlighted -- first, with the synthetic "use what I typed" entry as
-     * the fallback below them. When the user accepts the synthetic item, it is returned
-     * from {@linkcode showSmartQuickPick} like any other item, but is intentionally not
-     * stored as the "recently picked" choice (its label is not one of the suggestions,
-     * so it could never be restored).
+     * the fallback below them. It does, however, sit *above* any item the caller
+     * marked {@linkcode vscode.QuickPickItem.alwaysShow alwaysShow}: those survive
+     * every filter just as the synthetic item does, and of the rows still standing
+     * the one the user typed is the one that should be highlighted. When the user
+     * accepts the synthetic item, it is returned from {@linkcode showSmartQuickPick}
+     * like any other item, but is intentionally not stored as the "recently picked"
+     * choice (its label is not one of the suggestions, so it could never be restored).
      *
      * Ignored when {@linkcode vscode.QuickPickOptions.canPickMany} is `true` (combo box is single-select only).
      */
@@ -131,6 +156,7 @@ export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(ctx: ICod
     const showBack = options?.showBack ?? false;
     const quickPick = ctx.code.window.createQuickPick<TItem>();
     const recentKey = quickPickRecentKey(items, options);
+    const shouldRememberItem = options?.shouldRememberItem ?? (() => true);
     quickPick.items = items;
 
     if (showBack) {
@@ -159,7 +185,7 @@ export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(ctx: ICod
         // For single-select, try to pre-highlight a recently chosen item
         const recentLabels = ctx.extensionContext.workspaceState.get<string[]>(recentKey);
         if (recentLabels && recentLabels.length > 0) {
-            const recentItem = items.find(item => item.label === recentLabels[0]);
+            const recentItem = items.find(item => item.label === recentLabels[0] && shouldRememberItem(item));
             if (recentItem) {
                 recentItem.description = recentItem.description ?
                     ctx.code.l10n.t('{0} (recently selected)', recentItem.description) :
@@ -177,13 +203,13 @@ export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(ctx: ICod
         const recentLabels = ctx.extensionContext.workspaceState.get<string[]>(recentKey);
         if (recentLabels && recentLabels.length > 0) {
             const recentSet = new Set(recentLabels);
-            const recentItems = items.filter(item => recentSet.has(item.label));
+            const recentItems = items.filter(item => recentSet.has(item.label) && shouldRememberItem(item));
             for (const item of recentItems) {
                 item.description = item.description ?
                     ctx.code.l10n.t('{0} (recently selected)', item.description) :
                     ctx.code.l10n.t('(recently selected)');
             }
-            quickPick.items = [...recentItems, ...items.filter(item => !recentSet.has(item.label))];
+            quickPick.items = [...recentItems, ...items.filter(item => !recentItems.includes(item))];
             quickPick.selectedItems = recentItems;
         }
     }
@@ -195,6 +221,7 @@ export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(ctx: ICod
     // accepting it does not pollute the "recently picked" memory with an
     // un-restorable label (it is never part of `items`).
     let syntheticItem: TItem | undefined;
+    let syncItems: ((rawValue: string) => void) | undefined;
     if (createItemFromValue) {
         // Snapshot the current item list (after any recent-item reordering above)
         // so the synthetic item can be appended/removed without losing the
@@ -203,7 +230,14 @@ export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(ctx: ICod
         // suggestion takes precedence and the synthetic is highlighted only when
         // nothing else matches (and a removed synthetic can never linger active).
         const baseItems = quickPick.items;
-        const syncItems = (rawValue: string) => {
+        // Rows the caller marked alwaysShow (a "load more" action, say) survive
+        // every filter, and so does the synthetic item -- so with both present
+        // the one listed first is the one Enter takes. The user's own typing
+        // has to win over a row that merely refuses to be filtered out, so the
+        // synthetic goes above them and below everything filterable.
+        const filterable = baseItems.filter(item => !item.alwaysShow);
+        const sticky = baseItems.filter(item => item.alwaysShow);
+        syncItems = (rawValue: string) => {
             const typedItem = createItemFromValue(rawValue.trim());
             // If the typed value resolves to a label that already matches a real
             // suggestion, prefer that suggestion over offering a duplicate
@@ -211,11 +245,10 @@ export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(ctx: ICod
             // identical-looking entries and lets the accepted choice be remembered.
             const existing = typedItem ? baseItems.find(item => item.label === typedItem.label) : undefined;
             if (typedItem && !existing) {
-                // List the synthetic item *after* the suggestions and mark it
-                // alwaysShow so it stays visible as a fallback below any real item
-                // that matches the current filter.
+                // Marked alwaysShow so it stays visible as a fallback below any
+                // real suggestion that matches the current filter.
                 syntheticItem = { ...typedItem, alwaysShow: true };
-                quickPick.items = [...baseItems, syntheticItem];
+                quickPick.items = [...filterable, syntheticItem, ...sticky];
             } else {
                 syntheticItem = undefined;
                 quickPick.items = baseItems;
@@ -226,7 +259,14 @@ export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(ctx: ICod
         if (quickPick.value) {
             syncItems(quickPick.value);
         }
-        quickPick.onDidChangeValue(value => { syncItems(value); });
+    }
+
+    const valueChanged = options?.onDidChangeValue;
+    if (syncItems || valueChanged) {
+        quickPick.onDidChangeValue(value => {
+            syncItems?.(value);
+            valueChanged?.(value);
+        });
     }
 
     const { promise, resolve, reject } = Promise.withResolvers<TItem | TItem[]>();
@@ -245,7 +285,7 @@ export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(ctx: ICod
                 const selected = [...quickPick.selectedItems];
                 if (selected.length > 0) {
                     finish(() => {
-                        void ctx.extensionContext.workspaceState.update(recentKey, selected.map(s => s.label));
+                        void ctx.extensionContext.workspaceState.update(recentKey, selected.filter(item => shouldRememberItem(item)).map(s => s.label));
                         resolve(selected);
                     });
                 } else {
@@ -264,8 +304,10 @@ export function showSmartQuickPick<TItem extends vscode.QuickPickItem>(ctx: ICod
                     finish(() => {
                         // Don't remember a typed/synthesized value: its label is not
                         // one of the suggestions, so it could never be restored and
-                        // would clobber a genuinely-pickable recent choice.
-                        if (selected !== syntheticItem) {
+                        // would clobber a genuinely-pickable recent choice. An action
+                        // item is excluded for the same reason, plus one worse
+                        // consequence -- it would be pre-highlighted next time.
+                        if (selected !== syntheticItem && shouldRememberItem(selected)) {
                             void ctx.extensionContext.workspaceState.update(recentKey, [selected.label]);
                         }
                         resolve(selected);
