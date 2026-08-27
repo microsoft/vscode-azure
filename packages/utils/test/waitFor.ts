@@ -23,7 +23,7 @@ export async function waitFor(
 ): Promise<void> {
     const deadline = Date.now() + timeoutMs;
     while (!condition() && Date.now() < deadline) {
-        await new Promise(resolve => setTimeout(resolve, 1));
+        await new Promise(resolve => setImmediate(resolve));
     }
 
     if (!condition()) {
