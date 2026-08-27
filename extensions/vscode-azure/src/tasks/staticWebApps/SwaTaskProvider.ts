@@ -8,6 +8,7 @@ import {
     IActionExecutor,
     isProcessError,
     IVsCode,
+    ShellQuoting,
     type IActionExecutor as ActionExecutor,
     type IVsCode as VsCode,
 } from '@microsoft/vscode-azure-utils';
@@ -16,12 +17,10 @@ import type * as vscode from 'vscode';
 import { getStaticWebAppBuildPreset } from '../../commands/staticWebApps/buildPresets';
 import { detectStaticWebAppProject } from '../../commands/staticWebApps/steps/frameworkDetection';
 import { getFolderContainingDatabaseConfig } from '../../staticWebApps/DatabaseConfigDetector';
+import { FunctionsEmulatorAddress, tryGetStaticWebAppsCliConfig } from '../../staticWebApps/SwaCliConfig';
+import { SwaCommand } from '../../tools/SwaInstaller';
+import { IToolService } from '../../tools/ToolService';
 import { IWorkspaceIndexService } from '../../utils/workspaceIndex/WorkspaceIndexService';
-import {
-    FunctionsEmulatorAddress,
-    swaCliCommandLine,
-} from '../../staticWebApps/swaCli';
-import { tryGetStaticWebAppsCliConfig } from '../../staticWebApps/SwaCliConfig';
 
 /** Source assigned to all generated Static Web Apps tasks. */
 export const SwaTaskSource = 'swa';
@@ -30,10 +29,6 @@ export const SwaWatchProblemMatcher = '$swa-watch';
 
 /**
  * Marks a task as one this provider generated.
- *
- * @remarks
- * The executable cannot serve as the marker: every generated task now runs
- * `npx`, which no more identifies a SWA task than it would any other package's.
  */
 export const SwaTaskDefinition: vscode.TaskDefinition = { type: 'shell', swaCli: true };
 
@@ -55,6 +50,7 @@ export class SwaTaskProvider implements vscode.TaskProvider {
         @inject(IVsCode) private readonly code: VsCode,
         @inject(IActionExecutor) private readonly executor: ActionExecutor,
         @inject(IWorkspaceIndexService) private readonly indexService: IWorkspaceIndexService,
+        @inject(IToolService) private readonly tools: IToolService,
     ) { }
 
     /** Generated tasks are authoritative and are not resolved from persisted definitions. */
@@ -118,12 +114,10 @@ export class SwaTaskProvider implements vscode.TaskProvider {
     private async discoverTasksForWorkspaceFolder(
         workspaceFolder: vscode.WorkspaceFolder,
     ): Promise<WorkspaceTaskDiscovery> {
-        // Task discovery runs for any workspace, including one on a machine
-        // without Node, and createShellTask rejects an executable it cannot
-        // resolve rather than handing it to a shell. Reporting no tasks is the
-        // honest answer there, since a task naming a missing `npx` could only
-        // fail in the terminal. Only that one cause is swallowed; anything else
-        // still surfaces.
+        // Task discovery runs for any workspace, and createShellTask rejects an
+        // executable it cannot resolve rather than handing it to a shell.
+        // Reporting no tasks is the honest answer until the CLI is acquired.
+        // Only that one cause is swallowed; anything else still surfaces.
         let configTasks: vscode.Task[];
         let detectedTasks: vscode.Task[];
         try {
@@ -198,8 +192,12 @@ export class SwaTaskProvider implements vscode.TaskProvider {
         args: readonly string[],
         env?: Readonly<Record<string, string>>,
     ): vscode.Task {
+        const resolvedPath = this.tools.getResolvedPath('swa');
+        const executable = resolvedPath
+            ? { value: resolvedPath, quoting: ShellQuoting.Strong }
+            : SwaCommand;
         return createShellTask(this.code, {
-            command: swaCliCommandLine(...args),
+            command: [executable, ...args],
             definition: { ...SwaTaskDefinition },
             scope: workspaceFolder,
             name,

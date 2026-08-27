@@ -16,16 +16,16 @@ import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 import { staticWebAppsCliSetupUrl } from '../../commands/staticWebApps/staticWebAppLinks';
 import { detectStaticWebAppProject } from '../../commands/staticWebApps/steps/frameworkDetection';
-import { IWorkspaceIndexService } from '../../utils/workspaceIndex/WorkspaceIndexService';
+import { ExtensionId } from '../../constants';
 import {
     FunctionsEmulatorAddress,
     SwaEmulatorAddress,
-} from '../../staticWebApps/swaCli';
-import {
     SwaCliConfigFileName,
     tryGetStaticWebAppsCliConfig,
     type StaticWebAppsCliConfigFile,
 } from '../../staticWebApps/SwaCliConfig';
+import { IToolService } from '../../tools/ToolService';
+import { IWorkspaceIndexService } from '../../utils/workspaceIndex/WorkspaceIndexService';
 
 /** Debugger type used for the SWA dynamic/initial configuration picker. */
 export const SwaDebugType = 'swa';
@@ -62,6 +62,7 @@ export class SwaDebugConfigurationProvider implements vscode.DebugConfigurationP
         @inject(IVsCode) private readonly code: VsCode,
         @inject(IActionExecutor) private readonly executor: ActionExecutor,
         @inject(IWorkspaceIndexService) private readonly indexService: IWorkspaceIndexService,
+        @inject(IToolService) private readonly tools: IToolService,
     ) { }
 
     /** @inheritdoc */
@@ -141,6 +142,12 @@ export class SwaDebugConfigurationProvider implements vscode.DebugConfigurationP
             context.telemetry.properties.resolveOutcome = 'missingWorkspaceFolder';
             return undefined;
         }
+
+        await this.tools.acquire({
+            toolId: 'swa',
+            requestingExtensionId: ExtensionId,
+            cancellationToken,
+        });
 
         const detection = await detectStaticWebAppProject(this.code, this.indexService, folder.uri);
         context.telemetry.properties.hasApi = String(detection.apiLocations.length > 0);

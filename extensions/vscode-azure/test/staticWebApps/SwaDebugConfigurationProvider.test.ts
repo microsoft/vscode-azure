@@ -8,7 +8,17 @@ import { mock } from 'node:test';
 import type * as vscode from 'vscode';
 import { staticWebAppProjectDetector } from '../../src/commands/staticWebApps/steps/frameworkDetection';
 import { SwaDebugConfigurationProvider } from '../../src/debug/staticWebApps/SwaDebugConfigurationProvider';
+import type { AcquireToolRequest, IToolService } from '../../src/tools/ToolService';
 import { createTestIndexService } from '../utils/workspaceIndex/createTestIndexService';
+
+function createToolService() {
+    const acquire = mock.fn((_request: AcquireToolRequest) => Promise.resolve({ executablePath: '/tools/swa' }));
+    const tools: IToolService = {
+        acquire,
+        getResolvedPath: mock.fn(() => '/tools/swa'),
+    };
+    return { acquire, tools };
+}
 
 describe('SwaDebugConfigurationProvider (unit)', () => {
     it('should generate exact named config and detected browser launches', async () => {
@@ -35,6 +45,7 @@ describe('SwaDebugConfigurationProvider (unit)', () => {
             mockResult.vscode,
             executor,
             createTestIndexService(mockResult.vscode, [staticWebAppProjectDetector]),
+            createToolService().tools,
         );
 
         const configurations = await provider.provideDebugConfigurations(folder);
@@ -88,6 +99,7 @@ describe('SwaDebugConfigurationProvider (unit)', () => {
             mockResult.vscode,
             executor,
             createTestIndexService(mockResult.vscode, [staticWebAppProjectDetector]),
+            createToolService().tools,
         );
         const configuration = { name: 'Launch Chrome', request: 'launch', type: 'pwa-chrome' };
 
@@ -121,10 +133,12 @@ describe('SwaDebugConfigurationProvider (unit)', () => {
                 dispose: () => Promise.resolve(),
             },
         });
+        const { acquire, tools } = createToolService();
         const provider = new SwaDebugConfigurationProvider(
             mockResult.vscode,
             executor,
             createTestIndexService(mockResult.vscode, [staticWebAppProjectDetector]),
+            tools,
         );
 
         await provider.resolveDebugConfiguration(
@@ -141,6 +155,11 @@ describe('SwaDebugConfigurationProvider (unit)', () => {
             configurations: { named: { apiLocation: string } };
         };
         expect(saved.configurations.named.apiLocation).to.equal('http://localhost:7071');
+        expect(acquire.mock.callCount()).to.equal(1);
+        expect(acquire.mock.calls[0].arguments[0]).to.include({
+            toolId: 'swa',
+            requestingExtensionId: 'ms-azuretools.vscode-azure',
+        });
         expect(mockResult.debug.startDebugging.mock.callCount()).to.equal(1);
         expect(mockResult.commands.executeCommand.mock.callCount()).to.equal(0);
         expect(sendTelemetryErrorEvent.mock.calls[0].arguments[0])
