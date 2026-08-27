@@ -5,7 +5,7 @@
 
 import { AzurePublicCloud, type AzureSubscriptionTarget, type CredentialFactoryOptions } from '@microsoft/vscode-azure-azutils';
 import { createMockAccountDataProvider } from '@microsoft/vscode-azure-azutils/testing';
-import { createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
+import { createMockVsCode, createTestActionExecutor, waitFor } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import { ArmDeploymentDataProvider, isNestedDeploymentOp, isVisibleOperation, parseDeploymentId, type ArmDeploymentActivity } from '../../../src/tree/activity/ArmDeploymentDataProvider';
 import { CredentialOptionsScope } from '../../../src/utils/CredentialOptionsScope';
@@ -24,7 +24,8 @@ function createMockClient(
     return {
         deployments: {
             getAtScope: mock.fn((_scope: string, _name: string, options?: { onResponse?: (r: { status: number; headers: { get: (name: string) => string | undefined } }) => void }) => {
-                if (attempt++ === failAtAttempt) {
+                const currentAttempt = attempt++;
+                if (currentAttempt === failAtAttempt) {
                     return Promise.reject(new Error('transient failure'));
                 }
                 options?.onResponse?.({ status: 200, headers: { get: name => name === 'retry-after' ? retryAfter : undefined } });
@@ -398,37 +399,56 @@ describe('ArmDeploymentDataProvider (unit)', () => {
             expect(activity.endTime).to.be.instanceOf(Date);
         });
 
-        it('should wait the server-provided retry-after interval between polls', async () => {
-            // The first poll response sets the pace, so the wait before the
-            // final poll is the 1s retry-after rather than the 10s default.
-            const client = createMockClient([], ['Running', 'Running', 'Succeeded'], '1');
-            const provider = createProvider(client);
-            provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/d1');
-            const activity = provider.getChildren()[0];
-            const completed = waitForCompletedStatus(provider, activity);
+        describe('poll timing', () => {
+            beforeEach(() => {
+                mock.timers.enable({ apis: ['setTimeout'] });
+            });
 
-            const started = Date.now();
-            await provider.enrich(activity);
-            await completed;
+            afterEach(() => {
+                mock.timers.reset();
+            });
 
-            const elapsed = Date.now() - started;
-            expect(client.deployments.getAtScope.mock.callCount()).to.equal(3);
-            expect(elapsed).to.be.greaterThan(900);
-            expect(elapsed).to.be.lessThan(8000);
-        });
+            it('should wait the server-provided retry-after interval between polls', async () => {
+                // The first poll response sets the pace, so the wait before the
+                // final poll is the 1s retry-after rather than the 10s default.
+                const client = createMockClient([], ['Running', 'Running', 'Succeeded'], '1');
+                const provider = createProvider(client);
+                provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/d1');
+                const activity = provider.getChildren()[0];
+                const completed = waitForCompletedStatus(provider, activity);
 
-        it('should keep polling after a transient request failure', async () => {
-            const client = createMockClient([], ['Running', 'Running', 'Succeeded'], '1', 2);
-            const provider = createProvider(client);
-            provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/d1');
-            const activity = provider.getChildren()[0];
-            const completed = waitForCompletedStatus(provider, activity);
+                await provider.enrich(activity);
+                await waitFor(() => client.deployments.getAtScope.mock.callCount() === 2, 'the initial deployment polls');
+                expect(client.deployments.getAtScope.mock.callCount()).to.equal(2);
 
-            await provider.enrich(activity);
-            await completed;
+                mock.timers.tick(999);
+                expect(client.deployments.getAtScope.mock.callCount()).to.equal(2);
 
-            expect(activity.status).to.equal('Completed');
-            expect(client.deployments.getAtScope.mock.callCount()).to.equal(4);
+                mock.timers.tick(1);
+                await completed;
+                expect(client.deployments.getAtScope.mock.callCount()).to.equal(3);
+            });
+
+            it('should keep polling after a transient request failure', async () => {
+                const client = createMockClient([], ['Running', 'Running', 'Succeeded'], '1', 2);
+                const provider = createProvider(client);
+                provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/d1');
+                const activity = provider.getChildren()[0];
+                const completed = waitForCompletedStatus(provider, activity);
+
+                await provider.enrich(activity);
+                await waitFor(() => client.deployments.getAtScope.mock.callCount() === 2, 'the initial deployment polls');
+                expect(client.deployments.getAtScope.mock.callCount()).to.equal(2);
+
+                mock.timers.tick(1000);
+                await waitFor(() => client.deployments.getAtScope.mock.callCount() === 3, 'the transient deployment poll');
+                expect(client.deployments.getAtScope.mock.callCount()).to.equal(3);
+
+                mock.timers.tick(1000);
+                await completed;
+                expect(activity.status).to.equal('Completed');
+                expect(client.deployments.getAtScope.mock.callCount()).to.equal(4);
+            });
         });
 
         it('should deduplicate operations by target resource ID, keeping highest rank', async () => {

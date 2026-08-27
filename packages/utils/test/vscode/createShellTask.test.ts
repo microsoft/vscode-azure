@@ -240,15 +240,13 @@ describe('createShellTask (unit)', () => {
         // The task runs in the shell's working directory, not this process's, so
         // resolving the caller's relative path here could name a different file.
         const m = createMockVsCode();
-        const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'shell-task-'));
-        const originalCwd = process.cwd();
+        const directory = await fs.mkdtemp(path.join(process.cwd(), 'shell-task-'));
         try {
-            // A real executable, so resolution would genuinely succeed.
-            const planted = path.join(directory, `planted${path.extname(process.execPath)}`);
-            await fs.copyFile(process.execPath, planted);
-            process.chdir(directory);
+            const extension = process.platform === 'win32' ? '.cmd' : '';
+            const planted = path.join(directory, `planted${extension}`);
+            await fs.writeFile(planted, process.platform === 'win32' ? '@echo off\r\n' : '#!/bin/sh\n', { mode: 0o755 });
 
-            const relative = `./${path.basename(planted)}`;
+            const relative = `./${path.relative(process.cwd(), planted)}`;
             const task = createShellTask(m.vscode, {
                 command: [relative],
                 name: 'Example task',
@@ -257,7 +255,6 @@ describe('createShellTask (unit)', () => {
             const execution = task.execution as vscode.ShellExecution;
             expect(execution.command).to.equal(relative);
         } finally {
-            process.chdir(originalCwd);
             await fs.rm(directory, { recursive: true, force: true });
         }
     });
