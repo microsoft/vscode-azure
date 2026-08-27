@@ -127,7 +127,7 @@ export class DisableAcrAdminUser implements ManagedCommand {
 
 Commands with no behavior of their own can instead export a plain metadata object that pairs the context value with a resolver. `OpenInPortal` does this: it exports `ContextValue` and a `getUrl` resolver, and is registered against the shared `OpenUrl` command.
 
-For a portal page *beneath* a resource's own page, use `OpenInPortal.bladeUrl('/blade')` rather than writing a product-specific navigation command. It returns a resolver that appends the blade path to the node's portal URL, so the command still inherits `OpenUrl`'s telemetry, error handling, and scheme check, and stays sovereign-cloud aware. Container Apps registers its console and logs blades this way in [`portalBlades.ts`](../extensions/vscode-azure/src/commands/containerApps/portalBlades.ts).
+For a portal page *beneath* a resource's own page, use `OpenInPortal.bladeUrl('/blade')` rather than writing a product-specific navigation command. It returns a resolver that appends the blade path to the node's portal URL, so the command still inherits `OpenUrl`'s telemetry, error handling, and scheme check, and stays sovereign-cloud aware.
 
 View providers assign these to tree items using `combineContextValues` (from `src/tree/contextValueHelpers.ts`):
 

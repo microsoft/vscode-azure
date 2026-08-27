@@ -150,9 +150,7 @@ So `registerAzureClientProvider` (and the `bindAzureClientProvider` / `AzureClie
 
 The wrappers above are all **management plane**: they talk to ARM, so they share one request pipeline and are bound with `registerAzureClientProvider`.
 
-A **data-plane** client talks to the service's own endpoint instead -- `AcrRepositoryClient` reads the images inside a registry through its login server, `LogsQueryClient` queries a cloud's Log Analytics endpoint. They bind through the same `registerAzureClientProvider`, with any extra arguments that name the endpoint declared on the provider's identifier and appended to `create`'s parameters.
-
-A product may own clients on both planes: Container Apps registers `IContainerAppsClientProvider` on the management plane and both data-plane providers above.
+A **data-plane** client talks to the service's own endpoint instead. It binds through the same `registerAzureClientProvider`, with any extra arguments that name the endpoint declared on the provider's identifier and appended to `create`'s parameters.
 
 ### Writing a data-plane client
 
@@ -162,19 +160,19 @@ Build the client with `createDataPlaneRestClient`, which shares its policy set w
 
 ```typescript
 createDataPlaneRestClient(ctx, executor, {
-    name: 'logs',
-    endpoint: `${environment.logAnalyticsEndpoint}/v1`,
+    name: 'example-service',
+    endpoint,
     credential,
-    scopes: [`${environment.logAnalyticsEndpoint}/.default`],
+    scopes: [`${endpoint}/.default`],
 }, options);
 ```
 
 Two conventions keep this maintainable:
 
-- **Declare the wire types locally, matching the SDK's model shape.** The request and response types for the handful of operations we use are small, so they live beside the client. Mirror the corresponding SDK model's property names and optionality, and note in JSDoc wherever the SDK renames a wire field (`ManifestAttributesBase` exposes `imageSize` as `size`, for instance). A modular package for that service can then be dropped in without reworking call sites.
+- **Declare the wire types locally, matching the SDK's model shape.** The request and response types for the handful of operations we use are small, so they live beside the client. Mirror the corresponding SDK model's property names and optionality, and note in JSDoc wherever the SDK renames a wire field. A modular package for that service can then be dropped in without reworking call sites.
 - **Follow the service's own paging.** A collection endpoint caps its response and points at the rest with an RFC 5988 `Link` header. An SDK's async iterator hides that; hand-written calls must walk it, or a large result silently truncates.
 
-Some data-plane services do not accept an Entra ID token directly. A container registry answers with a `401` naming the scope the caller needs, and that token has to be traded -- once for a registry refresh token, then per scope for an access token. `DataPlaneClientConfig.challengeCallbacks` hooks that exchange into the standard `bearerTokenAuthenticationPolicy`, so the scope comes from the service rather than being guessed, and the Entra ID leg keeps the pipeline's token cache and conditional-access step-up. See [`AcrTokenExchange.ts`](../packages/azutils/src/rest/clients/AcrTokenExchange.ts).
+Some data-plane services do not accept an Entra ID token directly. `DataPlaneClientConfig.challengeCallbacks` hooks a service-specific exchange into the standard `bearerTokenAuthenticationPolicy`, so the required scope can come from the service challenge while the Entra ID leg retains the pipeline's token cache and conditional-access step-up.
 
 ## Type Re-exports
 

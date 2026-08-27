@@ -458,7 +458,7 @@ export class AzureNodeId {
             throw new Error('Cannot derive a related resource from an account node ID');
         }
 
-        if (!armResourceId.startsWith('/subscriptions/')) {
+        if (!/^\/subscriptions\//i.test(armResourceId)) {
             throw new Error(`Not an absolute ARM resource id: ${armResourceId}`);
         }
 

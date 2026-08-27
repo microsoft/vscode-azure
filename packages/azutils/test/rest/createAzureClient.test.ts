@@ -10,9 +10,9 @@ import { delay } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import { AzurePublicCloud } from '../../src/auth/Environment';
-import { createArmRestClient, createArmRestSubscriptionClient } from '../../src/rest/createAzureClient';
+import { createArmRestClient, createArmRestSubscriptionClient, createDataPlaneRestClient } from '../../src/rest/createAzureClient';
 import { makeCredential, makeSubscription } from '../mockAzure';
-import { makeRequest, makeResponse } from '../mockPipeline';
+import { makeRequest, makeResponse, MockHttpClient } from '../mockPipeline';
 
 /** ARM endpoint of {@linkcode AzurePublicCloud} (stored without a trailing slash). */
 const publicArmEndpoint = AzurePublicCloud.resourceManagerEndpointUrl;
@@ -372,5 +372,54 @@ describe('createArmRestClient (unit)', () => {
 
         expect(policyNames).to.include('CustomPolicy');
         expect(policyNames).to.include('DedupeRequestPolicy');
+    });
+});
+
+describe('createDataPlaneRestClient (unit)', () => {
+    it('should send requests through the configured endpoint and standard pipeline', async () => {
+        const { ctx } = createMockCodeContext();
+        const { executor } = createTestActionExecutor();
+        const httpClient = new MockHttpClient({
+            handler: request => makeResponse(request),
+        });
+        const client = createDataPlaneRestClient(ctx, executor, {
+            name: 'example-service',
+            endpoint: 'https://example.test',
+        }, { httpClient });
+
+        // The untyped core REST client exposes route operations dynamically.
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+        await client.path('/items').get();
+
+        expect(httpClient.requests).to.have.length(1);
+        expect(httpClient.requests[0].url).to.equal('https://example.test/items');
+        expect(httpClient.requests[0].headers.get('user-agent')).to.contain('test-publisher.test-extension/0.0.0-test');
+    });
+
+    it('should acquire a token for the configured scope', async () => {
+        const { ctx } = createMockCodeContext();
+        const { executor } = createTestActionExecutor();
+        const getToken = mock.fn((_scopes: string | string[]) => Promise.resolve({
+            token: 'data-plane-token',
+            expiresOnTimestamp: Date.now() + 3600000,
+        }));
+        const credential: TokenCredential = { getToken };
+        const httpClient = new MockHttpClient({
+            handler: request => makeResponse(request),
+        });
+        const client = createDataPlaneRestClient(ctx, executor, {
+            name: 'example-service',
+            endpoint: 'https://example.test',
+            credential,
+            scopes: ['https://example.test/.default'],
+        }, { httpClient });
+
+        // The untyped core REST client exposes route operations dynamically.
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+        await client.path('/items').get();
+
+        expect(getToken.mock.callCount()).to.equal(1);
+        expect(getToken.mock.calls[0].arguments[0]).to.deep.equal(['https://example.test/.default']);
+        expect(httpClient.requests[0].headers.get('authorization')).to.equal('Bearer data-plane-token');
     });
 });

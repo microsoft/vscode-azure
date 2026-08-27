@@ -151,17 +151,7 @@ The resulting `IResourceClientProvider` type is a `SyncFactory<IResourceClient, 
 
 The helper is generic in the subscription argument, constrained to `AzureSubscriptionTarget`, so a provider whose client needs only an endpoint and a token (`IDeploymentClientProvider`) binds through the same call as one that needs a listed subscription. See [Azure Clients](azure-clients.md) for details on the client wrappers and which need which.
 
-Data-plane clients bind through the same call. They address a service's own endpoint rather than ARM, so their identifier declares whatever extra per-call arguments name that endpoint, and `create` receives them after the subscription:
-
-```typescript
-registrar.registerAzureClientProvider(
-    IAcrRepositoryClientProvider,
-    (context, executor, credential, subscription, loginServer) =>
-        AcrRepositoryClient.create(context, executor, credential, loginServer, subscription.environment),
-);
-```
-
-The subscription is still passed because it carries the cloud the endpoint lives in, and because the credential has to be scoped to the account and tenant that can reach it.
+Data-plane clients bind through the same call. They address a service's own endpoint rather than ARM, so their identifier declares whatever extra per-call arguments name that endpoint, and `create` receives them after the subscription. The subscription is still passed because it carries the cloud the endpoint lives in, and because the credential has to be scoped to the account and tenant that can reach it.
 
 The same pattern handles any class that needs **both** injected services and caller-supplied arguments — for example `GenerateBicepStep`, which needs an injected `ICodeContext` plus a per-command template name and parameter keys. `IGenerateBicepStepFactory` is bound with `.toFactory()`; it captures `ICodeContext` and returns a function taking the config, so the step is fully constructed in one call and its config fields stay `readonly`.
 

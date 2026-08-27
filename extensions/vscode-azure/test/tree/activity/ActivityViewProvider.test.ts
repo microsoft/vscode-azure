@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
-import * as vscode from 'vscode';
 import type { Activity } from '../../../src/tree/activity/Activity';
 import { ActivityViewProvider, toActivityTreeItem } from '../../../src/tree/activity/ActivityViewProvider';
 import { makeActivity } from './mockActivity';
@@ -88,10 +87,12 @@ describe('ActivityViewProvider (unit)', () => {
 });
 
 describe('toActivityTreeItem (unit)', () => {
+    const { vscode: code } = createMockVsCode();
+
     it('should create a collapsed tree item for deployment activities', () => {
         const activity = makeActivity({ id: 'deploy-1', type: 'armDeployment', title: 'My Deployment', description: 'Running' });
 
-        const item = toActivityTreeItem(vscode, activity, 'deploy-1');
+        const item = toActivityTreeItem(code, activity, 'deploy-1');
 
         expect(item.label).to.equal('My Deployment');
         expect(item.description).to.equal('Running');
@@ -101,7 +102,7 @@ describe('toActivityTreeItem (unit)', () => {
     it('should create a non-collapsible tree item for leaf activities', () => {
         const activity = makeActivity({ id: 'op-1', type: 'armDeploymentOperation', status: 'Completed', title: 'Create resource' });
 
-        const item = toActivityTreeItem(vscode, activity, 'op-1');
+        const item = toActivityTreeItem(code, activity, 'op-1');
 
         expect(item.label).to.equal('Create resource');
     });
@@ -109,7 +110,7 @@ describe('toActivityTreeItem (unit)', () => {
     it('should create a non-collapsible tree item for generic activities', () => {
         const activity = makeActivity({ id: 'gen-1', status: 'NotStarted', title: 'Generic task' });
 
-        const item = toActivityTreeItem(vscode, activity, 'gen-1');
+        const item = toActivityTreeItem(code, activity, 'gen-1');
 
         expect(item.label).to.equal('Generic task');
     });
@@ -117,8 +118,8 @@ describe('toActivityTreeItem (unit)', () => {
     it('should collapse code deployment activities', () => {
         const activity = makeActivity({ id: 'cd-1', type: 'codeDeployment', title: 'Code Deploy' });
 
-        const item = toActivityTreeItem(vscode, activity, 'cd-1');
-        expect(item.collapsibleState).to.equal(vscode.TreeItemCollapsibleState.Collapsed);
+        const item = toActivityTreeItem(code, activity, 'cd-1');
+        expect(item.collapsibleState).to.equal(code.TreeItemCollapsibleState.Collapsed);
     });
 
     it('should set icon based on status', () => {
@@ -127,7 +128,7 @@ describe('toActivityTreeItem (unit)', () => {
         for (const status of statuses) {
             const activity = makeActivity({ id: `test-${status}`, status, title: status });
 
-            const item = toActivityTreeItem(vscode, activity, activity.id);
+            const item = toActivityTreeItem(code, activity, activity.id);
             expect(item.iconPath).to.not.be.undefined;
         }
     });
