@@ -18,7 +18,7 @@ const MainParametersFileName = 'main.parameters.json';
  * local Bicep module alongside its `main.bicep` ships both and keeps the module
  * boundary in the generated project.
  */
-export type BicepTemplateName = 'functionApp' | 'containerApp';
+export type BicepTemplateName = 'functionApp';
 
 /**
  * Generates infra files: copies the chosen template directory from the
@@ -52,11 +52,8 @@ export class GenerateBicepStep<TContext extends AzdWizardContext> extends Execut
 
         const infraFolder = this.ctx.code.Uri.joinPath(context.iacFolder, InfraFolderName);
 
-        for (const fileName of [MainBicepFileName, MainParametersFileName]) {
-            if (await fileExists(this.ctx.code, this.ctx.code.Uri.joinPath(infraFolder, fileName))) {
-                // At least one file already exists; skip generation
-                return false;
-            }
+        if (await fileExists(this.ctx.code, infraFolder)) {
+            return false;
         }
 
         return true;
@@ -65,6 +62,10 @@ export class GenerateBicepStep<TContext extends AzdWizardContext> extends Execut
     public async execute(context: Readonly<TContext>): Promise<void> {
         const templateUri = this.ctx.code.Uri.joinPath(this.ctx.extensionContext.extensionUri, 'resources', 'templates', this.templateName);
         const bicepFolder = this.ctx.code.Uri.joinPath(context.iacFolder!, InfraFolderName); // eslint-disable-line @typescript-eslint/no-non-null-assertion
+
+        if (await fileExists(this.ctx.code, bicepFolder)) {
+            throw new Error(this.ctx.code.l10n.t('Cannot generate infrastructure because the infra folder already exists.'));
+        }
 
         const parameters = JSON.stringify({
             $schema: 'https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#',

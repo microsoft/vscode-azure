@@ -15,13 +15,14 @@ function getUrl(...args: unknown[]): string | undefined {
  * Builds a resolver for a portal page *beneath* a resource's own page, such as
  * a resource's console or logs blade.
  *
- * @param blade - Path appended to the resource's portal URL, leading slash
- *   included (for example `/console`).
+ * @param blade - Path appended to the resource's portal URL (for example
+ *   `/console` or `console`).
  */
 function bladeUrl(blade: string): (...args: unknown[]) => string | undefined {
+    const normalizedBlade = blade.startsWith('/') ? blade : `/${blade}`;
     return (...args: unknown[]) => {
         const url = getUrl(...args);
-        return url ? `${url}${blade}` : undefined;
+        return url ? `${url}${normalizedBlade}` : undefined;
     };
 }
 

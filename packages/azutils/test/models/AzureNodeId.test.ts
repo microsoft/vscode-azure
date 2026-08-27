@@ -477,6 +477,14 @@ describe('AzureNodeId (unit)', () => {
                 .to.throw('Not an absolute ARM resource id');
         });
 
+        it('should accept a resource id with differently-cased ARM segments', () => {
+            const resource = makeGenericResource();
+            const differentlyCasedResourceId = '/SUBSCRIPTIONS/test-sub/resourceGroups/rg1/providers/Microsoft.Web/sites/site1';
+
+            expect(AzureNodeId.from(resource).forRelatedResource(differentlyCasedResourceId).toString())
+                .to.contain(differentlyCasedResourceId);
+        });
+
         it('should reject deriving from an account node, which has no tenant to inherit', () => {
             const account = AzureNodeId.from(makeAccount());
 
