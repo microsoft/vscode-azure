@@ -14,6 +14,7 @@ import type { ManagedCommand } from '../ManagedCommand';
 import { getStaticWebAppServiceConfig, hasConflictingProviderWorkflow, resolveStaticWebAppServiceProjectFolder, type StaticWebAppAutoDeployEligibility } from './deploymentRouting';
 import { detectStaticWebAppProject } from './steps/frameworkDetection';
 import { canAzdDeployStaticWebApp } from './steps/locationUtils';
+import { IWorkspaceIndexService } from '../../utils/workspaceIndex/WorkspaceIndexService';
 
 /**
  * Known-good context for {@linkcode DeployStaticWebApp}, supplied by a caller
@@ -81,6 +82,7 @@ export class DeployStaticWebApp implements ManagedCommand {
         @inject(IAzdService) private readonly azd: IAzdService,
         @inject(IGitRemoteService) private readonly gitRemote: IGitRemoteService,
         @inject(ICodeDeploymentDataProvider) private readonly codeProvider: ICodeDeploymentDataProvider,
+        @inject(IWorkspaceIndexService) private readonly indexService: IWorkspaceIndexService,
     ) { }
 
     /** @inheritdoc */
@@ -242,7 +244,7 @@ export class DeployStaticWebApp implements ManagedCommand {
             return 'invalidServiceConfig';
         }
 
-        const detection = await detectStaticWebAppProject(this.ctx.code, projectFolder);
+        const detection = await detectStaticWebAppProject(this.ctx.code, this.indexService, projectFolder);
         if (detection.primaryPresetId === 'nextjs') {
             return 'hybridSsr';
         }

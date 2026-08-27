@@ -78,8 +78,8 @@ describe('CreateStaticWebApp (unit)', () => {
             { pick: 'East US 2' },
             { input: 'my-swa' },
             { pick: 'React' },
-            { input: '/' },
-            { input: 'build' },
+            'acceptDefault',
+            'acceptDefault',
         ]);
 
         await command.execute();
@@ -99,8 +99,8 @@ describe('CreateStaticWebApp (unit)', () => {
             { pick: 'East US 2' },
             { input: 'my-swa' },
             { pick: 'React' },
-            { input: '/' },
-            { input: 'build' },
+            'acceptDefault',
+            'acceptDefault',
         ]);
 
         await command.execute();
@@ -124,8 +124,8 @@ describe('CreateStaticWebApp (unit)', () => {
                 { pick: 'East US 2' },
                 { input: 'my-swa' },
                 { pick: 'React' },
-                { input: '/' },
-                { input: 'build' },
+                'acceptDefault',
+                'acceptDefault',
             ]);
 
             await command.execute();
@@ -158,8 +158,8 @@ describe('CreateStaticWebApp (unit)', () => {
                 { pick: 'East US 2' },
                 { input: 'my-swa' },
                 { pick: 'React' },
-                { input: '/' },
-                { input: 'build' },
+                'acceptDefault',
+                'acceptDefault',
             ]);
 
             await command.execute();
@@ -176,8 +176,8 @@ describe('CreateStaticWebApp (unit)', () => {
                 { pick: 'East US 2' },
                 { input: 'my-swa' },
                 { pick: 'React' },
-                { input: '/' },
-                { input: 'build' },
+                'acceptDefault',
+                'acceptDefault',
             ]);
 
             await command.execute();
@@ -193,8 +193,8 @@ describe('CreateStaticWebApp (unit)', () => {
                 { pick: 'East US 2' },
                 { input: 'my-swa' },
                 { pick: 'Next.js (SSR)' },
-                { input: '/' },
-                { input: '' },
+                'acceptDefault',
+                'acceptDefault',
             ]);
 
             await command.execute();
@@ -217,8 +217,8 @@ describe('CreateStaticWebApp (unit)', () => {
                 { pick: 'East US 2' },
                 { input: 'my-swa' },
                 { pick: 'Next.js (SSR)' },
-                { input: '/' },
-                { input: '' },
+                'acceptDefault',
+                'acceptDefault',
             ]);
 
             await command.execute();

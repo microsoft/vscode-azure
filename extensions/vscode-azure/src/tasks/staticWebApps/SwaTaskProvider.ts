@@ -160,7 +160,7 @@ export class SwaTaskProvider implements vscode.TaskProvider {
     }
 
     private async getDetectedTasks(workspaceFolder: vscode.WorkspaceFolder): Promise<vscode.Task[]> {
-        const detection = await detectStaticWebAppProject(this.code, workspaceFolder.uri);
+        const detection = await detectStaticWebAppProject(this.code, this.indexService, workspaceFolder.uri);
         if (!detection.primaryPresetId || !detection.appLocation) {
             return [];
         }

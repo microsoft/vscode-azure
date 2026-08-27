@@ -3,21 +3,24 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createMockVsCode, MockUri } from '@microsoft/vscode-azure-utils/testing';
+import { addWorkspaceFolder, createMockVsCode, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import * as path from 'node:path';
 import { mock as nodeMock } from 'node:test';
 import type * as vscode from 'vscode';
 import type { CreateStaticWebAppContext } from '../../../src/commands/staticWebApps/CreateStaticWebAppContext';
 import { resolveWindowsProjectPath } from '../../../src/commands/staticWebApps/deploymentRouting';
 import { DetermineStaticWebAppDeploymentRouteStep } from '../../../src/commands/staticWebApps/steps/DetermineStaticWebAppDeploymentRouteStep';
+import { staticWebAppProjectDetector } from '../../../src/commands/staticWebApps/steps/frameworkDetection';
 import type { GitRemoteInfo, IGitRemoteService } from '../../../src/staticWebApps/GitRemoteService';
 import { createMockAzdService } from '../../azd/MockAzdService';
+import { createTestIndexService } from '../../utils/workspaceIndex/createTestIndexService';
 
 function createStep(remote: GitRemoteInfo | undefined, options: { readonly azdVersionOk?: boolean; readonly conflictingWorkflowPath?: string; readonly azureYaml?: string } = {}) {
-    const { vscode: code, fs } = createMockVsCode();
+    const mockResult = createMockVsCode();
+    const { vscode: code, fs } = mockResult;
     // Every test uses /workspace as the iacFolder; register it as a real directory so
     // resolveStaticWebAppServiceProjectFolder's workspace.fs.stat check succeeds for `project: .`.
-    fs.directories.add('/workspace');
+    addWorkspaceFolder(mockResult, '/workspace');
     if (options.conflictingWorkflowPath) {
         fs.addFile(MockUri.file(options.conflictingWorkflowPath), 'trigger: none');
     }
@@ -37,7 +40,12 @@ function createStep(remote: GitRemoteInfo | undefined, options: { readonly azdVe
             return [];
         }
     });
-    const step = new DetermineStaticWebAppDeploymentRouteStep(code, gitRemote, azd);
+    const step = new DetermineStaticWebAppDeploymentRouteStep(
+        code,
+        gitRemote,
+        azd,
+        createTestIndexService(code, [staticWebAppProjectDetector]),
+    );
     return { step, azd, getRemoteInfo, fs, code };
 }
 

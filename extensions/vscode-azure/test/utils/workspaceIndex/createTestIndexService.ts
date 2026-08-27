@@ -20,9 +20,9 @@ export function createTestIndexService(
     code: IVsCode,
     detectors: readonly WorkspaceDetector[],
 ): IWorkspaceIndexService {
-    const index = buildWorkspaceIndex(code, detectors);
+    let index: ReturnType<typeof buildWorkspaceIndex> | undefined;
     return {
-        getIndex: () => index,
+        getIndex: () => index ??= buildWorkspaceIndex(code, detectors),
         onDidChangeIndex: () => ({ dispose: () => { /* never fires */ } }),
     };
 }

@@ -26,6 +26,7 @@ import { IWorkspaceDetector } from '../utils/workspaceIndex/WorkspaceDetector';
 import { SwaTaskProvider } from '../tasks/staticWebApps/SwaTaskProvider';
 import { IStaticWebAppDataProvider, StaticWebAppDataProvider } from '../tree/resources/staticWebApps/StaticWebAppDataProvider';
 import { StaticWebAppViewProvider } from '../tree/resources/staticWebApps/StaticWebAppViewProvider';
+import { staticWebAppProjectDetector } from '../commands/staticWebApps/steps/frameworkDetection';
 
 /** Contribute all Azure Static Web Apps services and UI integrations. */
 export function registerStaticWebApps(registrar: ProductRegistrar): void {
@@ -38,6 +39,7 @@ export function registerStaticWebApps(registrar: ProductRegistrar): void {
         container.bind(StaticWebAppSettingsAdapter).toSelf().inSingletonScope();
         container.bind(IGitRemoteService).to(GitRemoteService).inSingletonScope();
         container.bind(IWorkspaceDetector).toConstantValue(staticWebAppDatabaseDetector);
+        container.bind(IWorkspaceDetector).toConstantValue(staticWebAppProjectDetector);
         container.bind(SwaTaskProvider).toSelf().inSingletonScope();
         container.bind(SwaDebugConfigurationProvider).toSelf().inSingletonScope();
         container.bind(IProcessTerminator).to(ProcessTerminator).inSingletonScope();

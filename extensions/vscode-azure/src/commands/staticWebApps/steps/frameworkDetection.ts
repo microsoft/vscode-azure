@@ -6,8 +6,15 @@
 import { readText, relativePath, type IVsCode } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
 import type { StaticWebAppAzdLanguage } from '../CreateStaticWebAppContext';
+import type { IWorkspaceIndexService } from '../../../utils/workspaceIndex/WorkspaceIndexService';
+import type { WorkspaceDetector } from '../../../utils/workspaceIndex/WorkspaceDetector';
+import { createTag, StandardTagNames } from '../../../utils/workspaceIndex/tags';
 import { walkDirectory } from '../../../utils/workspaceIndex/walkWorkspace';
 import type { StaticWebAppBuildPresetId } from '../buildPresets';
+
+const staticWebAppsProject = 'staticWebAppsProject';
+const StaticWebAppProjectFileTag = createTag(staticWebAppsProject, StandardTagNames.projectFile);
+const projectFilePattern = /^(?:package\.json|angular\.json|tsconfig\.json|host\.json|index\.html|(?:next|vite)\.config\.[cm]?[jt]s|(?:hugo|config)\.(?:toml|ya?ml|json)|.+\.csproj)$/i;
 
 interface ScannedFile {
     readonly relativePath: string;
@@ -33,6 +40,17 @@ interface GitExtension {
     };
 }
 
+/** Tags files that contribute to Static Web Apps framework and API detection. */
+export const staticWebAppProjectDetector: WorkspaceDetector = {
+    id: 'staticWebAppsProject',
+    namespace: staticWebAppsProject,
+    inspect(node) {
+        if (!node.isDirectory && projectFilePattern.test(node.name)) {
+            node.tag(StaticWebAppProjectFileTag);
+        }
+    },
+};
+
 /** Reusable workspace signals consumed by creation now and local task generation later. */
 export interface StaticWebAppProjectDetection {
     readonly frameworks: readonly StaticWebAppBuildPresetId[];
@@ -53,24 +71,21 @@ export interface StaticWebAppProjectDetection {
 }
 
 /**
- * Detects retained framework presets and Function API roots using only VS Code
- * workspace APIs.
+ * Detects retained framework presets and Function API roots from the shared
+ * workspace index.
  *
  * @remarks
- * Traversal is the shared {@linkcode walkDirectory}, so the exclusion set,
- * entry budget, symlink handling, and ordering match every other consumer of
- * the workspace index. Only the Static Web Apps preset mapping lives here.
- *
- * {@linkcode IWorkspaceIndexService} is deliberately not used: it indexes the
- * open workspace folders in the background, whereas this runs on demand
- * against one azd service's project folder, which need not be a workspace
- * folder or even inside one.
+ * The index is shared across products and kept fresh by one watcher. Results
+ * are narrowed to {@linkcode workspaceRoot}, so monorepo services do not see
+ * each other's signals. Project roots outside the open workspace are scanned
+ * on demand because the shared index cannot cover them.
  */
 export async function detectStaticWebAppProject(
     code: IVsCode,
+    indexService: IWorkspaceIndexService,
     workspaceRoot: vscode.Uri,
 ): Promise<StaticWebAppProjectDetection> {
-    const files = await scanWorkspace(code, workspaceRoot);
+    const files = await getProjectFiles(code, indexService, workspaceRoot);
     const packageFiles = files
         .filter(file => basename(file.relativePath).toLowerCase() === 'package.json')
         .sort(compareShallowFirst);
@@ -164,23 +179,68 @@ export async function detectStaticWebAppProject(
 }
 
 /**
- * Flattens the shared walk into the root-relative file list the detectors
- * below index by path.
+ * Returns Static Web Apps project files beneath `root`.
+ *
+ * Open-workspace roots use the shared index. Other roots use the index
+ * subsystem's bounded arbitrary-root walker.
  */
-async function scanWorkspace(code: IVsCode, root: vscode.Uri): Promise<ScannedFile[]> {
+async function getProjectFiles(
+    code: IVsCode,
+    indexService: IWorkspaceIndexService,
+    root: vscode.Uri,
+): Promise<ScannedFile[]> {
+    const isIndexedRoot = code.workspace.workspaceFolders?.some(
+        folder => relativeProjectPath(folder.uri, root) !== undefined,
+    ) ?? false;
+    if (!isIndexedRoot) {
+        return scanProjectFiles(code, root);
+    }
+
+    const index = await indexService.getIndex();
     const files: ScannedFile[] = [];
 
-    for await (const directory of walkDirectory(code, root)) {
-        const relativeDirectory = relativePath(root, directory.uri) ?? '';
-        for (const name of directory.fileNames) {
+    for (const uri of index.withTag(StaticWebAppProjectFileTag)) {
+        const path = relativeProjectPath(root, uri);
+        if (path !== undefined) {
             files.push({
-                relativePath: relativeDirectory ? `${relativeDirectory}/${name}` : name,
-                uri: code.Uri.joinPath(directory.uri, name),
+                relativePath: path,
+                uri,
             });
         }
     }
 
     return files;
+}
+
+async function scanProjectFiles(code: IVsCode, root: vscode.Uri): Promise<ScannedFile[]> {
+    const files: ScannedFile[] = [];
+    for await (const directory of walkDirectory(code, root)) {
+        for (const name of directory.fileNames) {
+            if (projectFilePattern.test(name)) {
+                const uri = code.Uri.joinPath(directory.uri, name);
+                const path = relativeProjectPath(root, uri);
+                if (path !== undefined) {
+                    files.push({ relativePath: path, uri });
+                }
+            }
+        }
+    }
+    return files;
+}
+
+function relativeProjectPath(root: vscode.Uri, uri: vscode.Uri): string | undefined {
+    if (process.platform !== 'win32' || root.scheme !== 'file' || uri.scheme !== 'file') {
+        return relativePath(root, uri);
+    }
+
+    const rootPath = root.path.replace(/\/+$/, '');
+    if (uri.path.localeCompare(rootPath, undefined, { sensitivity: 'accent' }) === 0) {
+        return '';
+    }
+    const prefix = `${rootPath}/`;
+    return uri.path.slice(0, prefix.length).localeCompare(prefix, undefined, { sensitivity: 'accent' }) === 0
+        ? uri.path.slice(prefix.length)
+        : undefined;
 }
 
 /**
@@ -419,4 +479,3 @@ function segments(value: string): string[] {
 function isRecord(value: unknown): value is Record<string, unknown> {
     return !!value && typeof value === 'object' && !Array.isArray(value);
 }
-

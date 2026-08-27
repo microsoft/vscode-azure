@@ -3,16 +3,19 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createMockVsCode, createTestActionExecutor, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
+import { addWorkspaceFolder, createMockVsCode, createTestActionExecutor, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
+import { staticWebAppProjectDetector } from '../../src/commands/staticWebApps/steps/frameworkDetection';
 import { SwaDebugConfigurationProvider } from '../../src/debug/staticWebApps/SwaDebugConfigurationProvider';
+import { createTestIndexService } from '../utils/workspaceIndex/createTestIndexService';
 
 describe('SwaDebugConfigurationProvider (unit)', () => {
     it('should generate exact named config and detected browser launches', async () => {
         const mockResult = createMockVsCode();
         const root = mockResult.vscode.Uri.file('/workspace');
         const folder = { uri: root, name: 'workspace', index: 0 } as vscode.WorkspaceFolder;
+        addWorkspaceFolder(mockResult, '/workspace');
         mockResult.fs.addFile(
             mockResult.vscode.Uri.joinPath(root, 'swa-cli.config.json'),
             JSON.stringify({ configurations: { named: { appLocation: 'client' } } }),
@@ -31,6 +34,7 @@ describe('SwaDebugConfigurationProvider (unit)', () => {
         const provider = new SwaDebugConfigurationProvider(
             mockResult.vscode,
             executor,
+            createTestIndexService(mockResult.vscode, [staticWebAppProjectDetector]),
         );
 
         const configurations = await provider.provideDebugConfigurations(folder);
@@ -83,6 +87,7 @@ describe('SwaDebugConfigurationProvider (unit)', () => {
         const provider = new SwaDebugConfigurationProvider(
             mockResult.vscode,
             executor,
+            createTestIndexService(mockResult.vscode, [staticWebAppProjectDetector]),
         );
         const configuration = { name: 'Launch Chrome', request: 'launch', type: 'pwa-chrome' };
 
@@ -98,6 +103,7 @@ describe('SwaDebugConfigurationProvider (unit)', () => {
         const mockResult = createMockVsCode();
         const root = mockResult.vscode.Uri.file('/workspace');
         const folder = { uri: root, name: 'workspace', index: 0 } as vscode.WorkspaceFolder;
+        addWorkspaceFolder(mockResult, '/workspace');
         const configUri = mockResult.vscode.Uri.joinPath(root, 'swa-cli.config.json');
         mockResult.fs.addFile(
             configUri,
@@ -118,6 +124,7 @@ describe('SwaDebugConfigurationProvider (unit)', () => {
         const provider = new SwaDebugConfigurationProvider(
             mockResult.vscode,
             executor,
+            createTestIndexService(mockResult.vscode, [staticWebAppProjectDetector]),
         );
 
         await provider.resolveDebugConfiguration(

@@ -12,6 +12,7 @@ import type { CreateStaticWebAppContext } from '../CreateStaticWebAppContext';
 import { getStaticWebAppServiceConfig, hasConflictingProviderWorkflow, resolveStaticWebAppServiceProjectFolder, type StaticWebAppAutoDeployEligibility } from '../deploymentRouting';
 import { canAzdDeployStaticWebApp } from './locationUtils';
 import { detectStaticWebAppProject } from './frameworkDetection';
+import { IWorkspaceIndexService } from '../../../utils/workspaceIndex/WorkspaceIndexService';
 
 /**
  * Silently routes Static Web Apps deployment during creation, without ever
@@ -83,6 +84,7 @@ export class DetermineStaticWebAppDeploymentRouteStep extends PromptStep<CreateS
         @inject(IVsCode) private readonly code: IVsCode,
         @inject(IGitRemoteService) private readonly gitRemote: IGitRemoteService,
         @inject(IAzdService) private readonly azd: IAzdService,
+        @inject(IWorkspaceIndexService) private readonly indexService: IWorkspaceIndexService,
     ) {
         super();
     }
@@ -157,7 +159,7 @@ export class DetermineStaticWebAppDeploymentRouteStep extends PromptStep<CreateS
             return 'invalidServiceConfig';
         }
 
-        const detection = await detectStaticWebAppProject(this.code, projectFolder);
+        const detection = await detectStaticWebAppProject(this.code, this.indexService, projectFolder);
         if (detection.primaryPresetId === 'nextjs') {
             return 'hybridSsr';
         }

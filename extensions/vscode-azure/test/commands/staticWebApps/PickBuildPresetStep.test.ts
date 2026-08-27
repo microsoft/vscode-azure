@@ -4,17 +4,20 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createActionContext } from '@microsoft/vscode-azure-utils';
-import { createMockCodeContext, MockUri, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
+import { addWorkspaceFolder, createMockCodeContext, MockUri, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { PickBuildPresetStep } from '../../../src/commands/staticWebApps/steps/PickBuildPresetStep';
+import { staticWebAppProjectDetector } from '../../../src/commands/staticWebApps/steps/frameworkDetection';
+import { createTestIndexService } from '../../utils/workspaceIndex/createTestIndexService';
 
 describe('PickBuildPresetStep (unit)', () => {
     it('should group presets and offer Custom', async () => {
         const { ctx, mock } = createMockCodeContext();
-        mock.fs.directories.add('/workspace');
+        addWorkspaceFolder(mock, '/workspace');
         const actionContext = createActionContext('test');
         const step = new PickBuildPresetStep(
             actionContext,
             ctx,
+            createTestIndexService(ctx.code, [staticWebAppProjectDetector]),
         );
         respondToPrompts(mock, [{ pick: '$(keyboard) Custom' }]);
 
@@ -32,6 +35,7 @@ describe('PickBuildPresetStep (unit)', () => {
 
     it('should preselect a detected framework', async () => {
         const { ctx, mock } = createMockCodeContext();
+        addWorkspaceFolder(mock, '/workspace');
         mock.fs.addFile(MockUri.file('/workspace/package.json'), JSON.stringify({
             dependencies: { react: '19.0.0' },
         }));
@@ -39,6 +43,7 @@ describe('PickBuildPresetStep (unit)', () => {
         const step = new PickBuildPresetStep(
             actionContext,
             ctx,
+            createTestIndexService(ctx.code, [staticWebAppProjectDetector]),
         );
         respondToPrompts(mock, ['acceptDefault']);
 

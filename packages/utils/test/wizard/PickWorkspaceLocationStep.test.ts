@@ -10,6 +10,7 @@ import {
     type PickWorkspaceLocationOptions,
     type WorkspaceLocation,
 } from '../../src/wizard/PickWorkspaceLocationStep';
+import { MockUri } from '../vscode/MockUri';
 import { createMockCodeContext, respondToPrompts } from '../vscode/MockVsCode';
 
 interface TestContext {
@@ -101,6 +102,96 @@ describe('PickWorkspaceLocationStep (unit)', () => {
         expect(mock.quickPicks[0].items.map(item => item.label)).to.deep.equal([
             'api',
         ]);
+        tracker.assertAllConsumed();
+    });
+
+    it('returns locations relative to a configured base', async () => {
+        const { step, mock } = createStep(['**/*'], {
+            kind: 'folder',
+            relativeTo: MockUri.file('/repo/apps/web'),
+            suggestedRelativePaths: ['dist'],
+            value: 'dist',
+            strings: {
+                ...strings,
+                placeHolder: 'Choose the output folder',
+            },
+        });
+        const tracker = respondToPrompts(mock, ['acceptDefault']);
+
+        const result = await step.prompt({});
+
+        expect(result.location?.relativePath).to.equal('dist');
+        expect(result.location?.uri.path).to.equal('/repo/apps/web/dist');
+        tracker.assertAllConsumed();
+    });
+
+    it('normalizes a root initial value to the displayed root label', async () => {
+        const { step, mock } = createStep(['**/*'], {
+            kind: 'folder',
+            relativeTo: MockUri.file('/repo'),
+            suggestedRelativePaths: ['/'],
+            value: '/',
+            allowCustom: true,
+            strings,
+        });
+        const tracker = respondToPrompts(mock, ['acceptDefault']);
+
+        const result = await step.prompt({});
+
+        expect(mock.quickPicks[0].value).to.equal('.');
+        expect(result.location?.relativePath).to.equal('');
+        tracker.assertAllConsumed();
+    });
+
+    it('preserves an empty initial value for an explicit none choice', async () => {
+        const { step, mock } = createStep(['**/*'], {
+            kind: 'folder',
+            relativeTo: MockUri.file('/repo'),
+            suggestedRelativePaths: ['/'],
+            value: '',
+            allowCustom: true,
+            noneLabel: 'No output',
+            strings,
+        });
+        const tracker = respondToPrompts(mock, ['acceptDefault']);
+
+        const result = await step.prompt({});
+
+        expect(mock.quickPicks[0].value).to.equal('');
+        expect(result).to.have.property('location', undefined);
+        tracker.assertAllConsumed();
+    });
+
+    it('accepts a custom location that stays inside the workspace', async () => {
+        const { step, mock } = createStep(['**/*'], {
+            kind: 'folder',
+            relativeTo: MockUri.file('/repo/apps/web'),
+            allowCustom: true,
+            strings: {
+                ...strings,
+                placeHolder: 'Choose the output folder',
+            },
+        });
+        const tracker = respondToPrompts(mock, [{ value: '../shared' }]);
+
+        const result = await step.prompt({});
+
+        expect(result.location?.relativePath).to.equal('../shared');
+        expect(result.location?.uri.path).to.equal('/repo/apps/shared');
+        tracker.assertAllConsumed();
+    });
+
+    it('returns undefined for an explicit none choice', async () => {
+        const { step, mock } = createStep(['**/*'], {
+            kind: 'folder',
+            noneLabel: 'No output',
+            strings,
+        });
+        const tracker = respondToPrompts(mock, [{ pick: 'No output' }]);
+
+        const result = await step.prompt({});
+
+        expect(result).to.have.property('location', undefined);
         tracker.assertAllConsumed();
     });
 });

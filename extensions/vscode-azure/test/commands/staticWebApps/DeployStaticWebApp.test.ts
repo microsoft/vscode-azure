@@ -4,15 +4,17 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createActionContext } from '@microsoft/vscode-azure-utils';
-import { createMockCodeContext, MockUri, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
+import { addWorkspaceFolder, createMockCodeContext, MockUri, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import * as path from 'node:path';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
 import { resolveWindowsProjectPath } from '../../../src/commands/staticWebApps/deploymentRouting';
 import { DeployStaticWebApp, type DeployStaticWebAppArgs } from '../../../src/commands/staticWebApps/DeployStaticWebApp';
+import { staticWebAppProjectDetector } from '../../../src/commands/staticWebApps/steps/frameworkDetection';
 import type { GitRemoteInfo, IGitRemoteService } from '../../../src/staticWebApps/GitRemoteService';
 import { createMockAzdService } from '../../azd/MockAzdService';
 import { createMockCodeProvider } from '../../tree/activity/MockActivityProviders';
+import { createTestIndexService } from '../../utils/workspaceIndex/createTestIndexService';
 
 const azureYaml = 'services:\n  web:\n    host: staticwebapp\n    project: .\n    dist: build\n';
 
@@ -47,7 +49,14 @@ function createCommand(options: { readonly remote?: GitRemoteInfo; readonly azdV
     const gitRemote = createMockGitRemoteService(options.remote);
     const codeProvider = createMockCodeProvider();
 
-    const command = new DeployStaticWebApp(actionContext, ctx, azd, gitRemote, codeProvider);
+    const command = new DeployStaticWebApp(
+        actionContext,
+        ctx,
+        azd,
+        gitRemote,
+        codeProvider,
+        createTestIndexService(ctx.code, [staticWebAppProjectDetector]),
+    );
     return { command, ctx, mockResult, actionContext, azd, gitRemote, codeProvider };
 }
 
@@ -123,6 +132,7 @@ describe('DeployStaticWebApp (unit)', () => {
             const { command, azd, mockResult, gitRemote } = createCommand({
                 remote: { provider: 'github', url: 'https://github.com/o/r.git', hasUpstream: true },
             });
+            addWorkspaceFolder(mockResult, '/workspace');
             mockResult.fs.addFile(MockUri.file('/workspace/package.json'), JSON.stringify({ dependencies: { next: '15.0.0' } }));
 
             await command.execute({ ...args, provider: 'github' });
@@ -409,6 +419,7 @@ describe('DeployStaticWebApp (unit)', () => {
                 const { command, azd, mockResult } = createCommand({
                     azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: ./frontend\n    dist: build\n',
                 });
+                addWorkspaceFolder(mockResult, '/workspace');
                 mockResult.fs.directories.add('/workspace/frontend');
                 mockResult.fs.addFile(MockUri.file('/workspace/package.json'), JSON.stringify({ dependencies: { next: '15.0.0' } }));
                 mockResult.fs.addFile(MockUri.file('/workspace/frontend/package.json'), JSON.stringify({ dependencies: { react: '19.0.0' } }));
@@ -422,6 +433,7 @@ describe('DeployStaticWebApp (unit)', () => {
                 const { command, azd, mockResult } = createCommand({
                     azureYaml: 'services:\n  web:\n    host: staticwebapp\n    project: ./frontend\n    dist: build\n',
                 });
+                addWorkspaceFolder(mockResult, '/workspace');
                 mockResult.fs.directories.add('/workspace/frontend');
                 mockResult.fs.addFile(MockUri.file('/workspace/frontend/package.json'), JSON.stringify({ dependencies: { next: '15.0.0' } }));
 

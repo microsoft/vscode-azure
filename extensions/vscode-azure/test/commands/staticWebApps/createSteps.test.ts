@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createActionContext } from '@microsoft/vscode-azure-utils';
-import { createMockCodeContext, MockUri, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
+import { addWorkspaceFolder, createMockCodeContext, MockUri, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { parse } from 'yaml';
 import { createMockAzdService } from '../../azd/MockAzdService';
 import type { CreateStaticWebAppContext } from '../../../src/commands/staticWebApps/CreateStaticWebAppContext';
@@ -12,7 +12,7 @@ import { getStaticWebAppBuildPreset } from '../../../src/commands/staticWebApps/
 import { ApiLocationStep } from '../../../src/commands/staticWebApps/steps/ApiLocationStep';
 import { AppLocationStep } from '../../../src/commands/staticWebApps/steps/AppLocationStep';
 import { ConfigureStaticWebAppAzureYamlStep } from '../../../src/commands/staticWebApps/steps/ConfigureStaticWebAppAzureYamlStep';
-import { resolveDefaultOutputLocation } from '../../../src/commands/staticWebApps/steps/OutputLocationStep';
+import { OutputLocationStep, resolveDefaultOutputLocation } from '../../../src/commands/staticWebApps/steps/OutputLocationStep';
 import { addLocationTelemetry, canAzdDeployStaticWebApp, isYamlSafeLocation } from '../../../src/commands/staticWebApps/steps/locationUtils';
 
 describe('Static Web Apps creation steps (unit)', () => {
@@ -56,6 +56,7 @@ describe('Static Web Apps creation steps (unit)', () => {
 
     it('should offer the path already declared to the SWA CLI as the editable default', async () => {
         const { ctx, mock } = createMockCodeContext();
+        addWorkspaceFolder(mock, '/workspace');
         const actionContext = createActionContext('test');
         const step = new AppLocationStep(actionContext, ctx);
         respondToPrompts(mock, ['acceptDefault']);
@@ -74,10 +75,13 @@ describe('Static Web Apps creation steps (unit)', () => {
         // path outranks the framework guess.
         expect(result.appLocation).to.equal('frontend');
         expect(actionContext.telemetry.properties.appLocation).to.equal('setting');
+        expect(mock.quickPicks).to.have.length(1);
+        expect(mock.inputBoxes).to.have.length(0);
     });
 
     it('should resolve the first configuration when the SWA CLI config names several', async () => {
         const { ctx, mock } = createMockCodeContext();
+        addWorkspaceFolder(mock, '/workspace');
         const step = new AppLocationStep(createActionContext('test'), ctx);
         respondToPrompts(mock, ['acceptDefault']);
         // No caller passes --config-name, so the CLI resolves the first entry.
@@ -100,6 +104,7 @@ describe('Static Web Apps creation steps (unit)', () => {
 
     it('should fall back to the detected path when the SWA CLI config is unreadable', async () => {
         const { ctx, mock } = createMockCodeContext();
+        addWorkspaceFolder(mock, '/workspace');
         const step = new AppLocationStep(createActionContext('test'), ctx);
         respondToPrompts(mock, ['acceptDefault']);
         mock.fs.addFile(MockUri.file('/workspace/swa-cli.config.json'), '{ not json');
@@ -112,6 +117,27 @@ describe('Static Web Apps creation steps (unit)', () => {
         });
 
         expect(result.appLocation).to.equal('src');
+    });
+
+    it('should pick build output relative to the application location', async () => {
+        const { ctx, mock } = createMockCodeContext();
+        addWorkspaceFolder(mock, '/workspace');
+        mock.fs.addFile(MockUri.file('/workspace/frontend/dist/index.html'), '<html></html>');
+        const step = new OutputLocationStep(createActionContext('test'), ctx);
+        respondToPrompts(mock, [{ pick: 'dist' }]);
+
+        const result = await step.prompt({
+            resourceDisplayName: 'Static Web App',
+            job: 'deploy',
+            iacFolder: MockUri.file('/workspace'),
+            appLocation: 'frontend',
+            buildPreset: getStaticWebAppBuildPreset('vuejs'),
+        });
+
+        expect(result.outputLocation).to.equal('dist');
+        expect(result.deploy).to.be.true;
+        expect(mock.quickPicks).to.have.length(1);
+        expect(mock.inputBoxes).to.have.length(0);
     });
 
     it('should auto-select exactly one detected Functions API', async () => {

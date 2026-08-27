@@ -16,6 +16,7 @@ import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 import { staticWebAppsCliSetupUrl } from '../../commands/staticWebApps/staticWebAppLinks';
 import { detectStaticWebAppProject } from '../../commands/staticWebApps/steps/frameworkDetection';
+import { IWorkspaceIndexService } from '../../utils/workspaceIndex/WorkspaceIndexService';
 import {
     FunctionsEmulatorAddress,
     SwaEmulatorAddress,
@@ -60,6 +61,7 @@ export class SwaDebugConfigurationProvider implements vscode.DebugConfigurationP
     public constructor(
         @inject(IVsCode) private readonly code: VsCode,
         @inject(IActionExecutor) private readonly executor: ActionExecutor,
+        @inject(IWorkspaceIndexService) private readonly indexService: IWorkspaceIndexService,
     ) { }
 
     /** @inheritdoc */
@@ -78,7 +80,7 @@ export class SwaDebugConfigurationProvider implements vscode.DebugConfigurationP
                     configurations.push(this.createDebugConfiguration(name, options.appLocation, true));
                 }
 
-                const detection = await detectStaticWebAppProject(this.code, folder.uri);
+                const detection = await detectStaticWebAppProject(this.code, this.indexService, folder.uri);
                 const hasDetectedApp = !!detection.primaryPresetId && !!detection.appLocation;
                 if (detection.primaryPresetId && detection.appLocation) {
                     const appName = getDetectedAppName(folder, detection.appLocation);
@@ -140,7 +142,7 @@ export class SwaDebugConfigurationProvider implements vscode.DebugConfigurationP
             return undefined;
         }
 
-        const detection = await detectStaticWebAppProject(this.code, folder.uri);
+        const detection = await detectStaticWebAppProject(this.code, this.indexService, folder.uri);
         context.telemetry.properties.hasApi = String(detection.apiLocations.length > 0);
         if (detection.apiLocations.length > 0) {
             const swaConfig = await tryGetStaticWebAppsCliConfig(this.code, folder.uri);

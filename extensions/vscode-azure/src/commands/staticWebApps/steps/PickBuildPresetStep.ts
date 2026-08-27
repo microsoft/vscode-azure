@@ -9,6 +9,7 @@ import type * as vscode from 'vscode';
 import type { CreateStaticWebAppContext } from '../CreateStaticWebAppContext';
 import { staticWebAppBuildPresets, type StaticWebAppBuildPreset } from '../buildPresets';
 import { staticWebAppsBuildPresetsUrl } from '../staticWebAppLinks';
+import { IWorkspaceIndexService } from '../../../utils/workspaceIndex/WorkspaceIndexService';
 import { detectStaticWebAppProject } from './frameworkDetection';
 
 interface BuildPresetPick extends vscode.QuickPickItem {
@@ -22,6 +23,7 @@ export class PickBuildPresetStep extends PromptStep<CreateStaticWebAppContext> {
     public constructor(
         @inject(IActionContext) private readonly actionContext: IActionContext,
         @inject(ICodeContext) private readonly ctx: ICodeContext,
+        @inject(IWorkspaceIndexService) private readonly indexService: IWorkspaceIndexService,
     ) {
         super();
     }
@@ -32,7 +34,7 @@ export class PickBuildPresetStep extends PromptStep<CreateStaticWebAppContext> {
 
     public async prompt(context: Readonly<CreateStaticWebAppContext>): Promise<Partial<CreateStaticWebAppContext>> {
         const detection = context.iacFolder
-            ? await detectStaticWebAppProject(this.ctx.code, context.iacFolder)
+            ? await detectStaticWebAppProject(this.ctx.code, this.indexService, context.iacFolder)
             : { frameworks: [], apiLocations: [] };
         const items: BuildPresetPick[] = [
             { label: this.ctx.code.l10n.t('Framework'), kind: this.ctx.code.QuickPickItemKind.Separator },
