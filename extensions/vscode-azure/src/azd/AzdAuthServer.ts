@@ -47,6 +47,12 @@ interface StartedState {
  * factory backed by another {@linkcode TokenCredential}.
  *
  * @remarks
+ * Both transports keep other local users out on their own: the POSIX
+ * socket is mode 0o600 inside a mode 0o700 directory, and the Windows
+ * pipe's default DACL grants non-administrators read access only, so
+ * they cannot write a request. `AZD_AUTH_KEY` is a second layer rather
+ * than the trust boundary, which is why a plain comparison is enough.
+ *
  * The protocol is defined by the azd CLI's `RemoteCredential`
  * (see [external-authentication.md](https://github.com/Azure/azure-dev/blob/main/cli/azd/docs/external-authentication.md)).
  * `RemoteCredential` only decodes the response body when the HTTP
@@ -87,6 +93,12 @@ export class AzdAuthServer implements IAzdAuthServer, Disposable {
             /* eslint-disable @typescript-eslint/naming-convention -- azd env var names */
             AZD_AUTH_ENDPOINT: socketPathToUrl(socketPath),
             AZD_AUTH_KEY: key,
+            // The spawn env inherits `process.env`, so a certificate left over
+            // from some other external-auth host would be picked up alongside
+            // this server's endpoint. azd requires an `https` endpoint whenever
+            // a certificate is set, which a socket endpoint can never be, so
+            // the stale value is cleared. azd treats empty as absent.
+            AZD_AUTH_CERT: '',
             /* eslint-enable @typescript-eslint/naming-convention */
         };
     }
@@ -111,7 +123,23 @@ export class AzdAuthServer implements IAzdAuthServer, Disposable {
             throw new Error(this.code.l10n.t('The AZD authentication server has been disposed.'));
         }
 
-        this.startPromise ??= this.start();
+        if (!this.startPromise) {
+            const attempt: Promise<StartedState> = this.start().catch((err: unknown) => {
+                // A rejected start is not memoized. Startup can fail for
+                // transient reasons (the temp directory could not be created,
+                // the socket could not be bound), and caching the rejection
+                // would leave every later azd command replaying that one error
+                // for the life of the extension host. Once disposed the memo is
+                // left in place so `dispose` still observes a settled start.
+                if (this.startPromise === attempt && !this.disposed) {
+                    this.startPromise = undefined;
+                }
+
+                throw err;
+            });
+            this.startPromise = attempt;
+        }
+
         return this.startPromise;
     }
 
@@ -163,6 +191,11 @@ export class AzdAuthServer implements IAzdAuthServer, Disposable {
             this.cleanupDir = undefined;
             this.removeCleanupDir(cleanupDir);
         });
+        // `close` only stops new connections and waits for existing ones to end
+        // on their own. azd's HTTP client keeps connections alive, so without
+        // this an in-flight client could hold the server open past disposal --
+        // still serving tokens, and deferring the cleanup above with it.
+        server.closeAllConnections();
     }
 
     private removeCleanupDir(dir: string | undefined): void {
@@ -180,6 +213,14 @@ export class AzdAuthServer implements IAzdAuthServer, Disposable {
         credential: TokenCredential,
     ): Promise<void> {
         try {
+            // A request that arrived just before disposal must not still be
+            // answered with a token; `closeAllConnections` races in-flight
+            // requests rather than cancelling them.
+            if (this.disposed) {
+                res.writeHead(503).end();
+                return;
+            }
+
             // Only POST /token is supported. Protocol-level rejections return a
             // bare HTTP status with no body, because azd's `RemoteCredential`
             // only parses the body when the response status is 200.
@@ -276,6 +317,13 @@ function listen(server: Server, socketPath: string): Promise<void> {
  * UDS file lives in a user-private location and `cleanupDir` can later
  * be removed wholesale. On Windows, returns a randomly-named Named Pipe
  * with no filesystem state.
+ *
+ * @remarks
+ * The random Windows pipe name is not itself an access control -- any
+ * local user can enumerate `\\.\pipe\*`, and Node cannot pass a security
+ * descriptor to the underlying `CreateNamedPipe` call. The default DACL
+ * that results is what restricts the pipe: it grants non-administrators
+ * read access only, so they cannot write a request to it.
  */
 async function createSocketPath(): Promise<{ socketPath: string; cleanupDir: string | undefined }> {
     if (process.platform === 'win32') {

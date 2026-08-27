@@ -6,9 +6,11 @@
 import { createDefaultCredentialFactory } from '@microsoft/vscode-azure-azutils';
 import { makeCredential } from '@microsoft/vscode-azure-azutils/testing';
 import { Disposable } from '@microsoft/vscode-azure-utils';
-import { createMockVsCode, MockOutputChannel } from '@microsoft/vscode-azure-utils/testing';
+import { createMockVsCode, MockOutputChannel, waitFor } from '@microsoft/vscode-azure-utils/testing';
+import { existsSync } from 'node:fs';
 import { stat } from 'node:fs/promises';
-import { request as httpRequest } from 'node:http';
+import { Agent, request as httpRequest } from 'node:http';
+import { dirname } from 'node:path';
 import { mock } from 'node:test';
 import { AzdAuthApiVersion, AzdAuthServer } from '../../src/azd/AzdAuthServer';
 
@@ -33,8 +35,9 @@ function postJson(
     path: string,
     body: unknown,
     headers: Record<string, string>,
+    agent?: Agent,
 ): Promise<{ statusCode: number; body: TokenResponse | undefined }> {
-    return sendRequest('POST', endpoint, path, JSON.stringify(body), headers);
+    return sendRequest('POST', endpoint, path, JSON.stringify(body), headers, agent);
 }
 
 function postRaw(
@@ -52,6 +55,7 @@ function sendRequest(
     path: string,
     rawBody: string,
     headers: Record<string, string>,
+    agent?: Agent,
 ): Promise<{ statusCode: number; body: TokenResponse | undefined }> {
     // Inverse of the `unix://` / `npipe://` URLs returned by
     // `AzdAuthServer.getEnv()`, back to the OS-level socket path that
@@ -71,6 +75,7 @@ function sendRequest(
             socketPath,
             path,
             method,
+            agent,
             headers: {
                 'Content-Type': 'application/json',
                 'Content-Length': Buffer.byteLength(rawBody),
@@ -141,6 +146,102 @@ describe('AzdAuthServer (unit)', () => {
 
             const socketStat = await stat(socketPath);
             expect(socketStat.mode & 0o777).to.equal(0o600);
+        });
+
+        it('should clear an inherited certificate that would contradict the socket endpoint', async () => {
+            const { vscode: code } = createMockVsCode();
+            const server = new AzdAuthServer(code, new MockOutputChannel('test'), createDefaultCredentialFactory(code));
+            servers.push(server);
+
+            const env = await server.getEnv();
+
+            // azd requires an https endpoint whenever a certificate is set, so a
+            // stale value inherited from the host environment would hard-fail.
+            expect(env.AZD_AUTH_CERT).to.equal('');
+        });
+
+        it('should retry after a failed start rather than caching the failure', async () => {
+            const { vscode: code } = createMockVsCode();
+            let attempts = 0;
+            const factory = mock.fn(() => {
+                attempts++;
+                if (attempts === 1) {
+                    throw new Error('credential factory unavailable');
+                }
+
+                return makeCredential();
+            });
+            const server = new AzdAuthServer(code, new MockOutputChannel('test'), factory);
+            servers.push(server);
+
+            await expect(server.getEnv()).to.be.rejectedWith('credential factory unavailable');
+
+            const env = await server.getEnv();
+            expect(env.AZD_AUTH_ENDPOINT).to.be.a('string').with.length.greaterThan(0);
+        });
+    });
+
+    describe('dispose', () => {
+        it('should reject requests that arrive after disposal', async () => {
+            const { vscode: code } = createMockVsCode();
+            const server = new AzdAuthServer(code, new MockOutputChannel('test'), () => makeCredential());
+            const env = await server.getEnv();
+            const agent = new Agent({ keepAlive: true });
+
+            try {
+                server.dispose();
+
+                await expect(postJson(
+                    env.AZD_AUTH_ENDPOINT,
+                    `/token?api-version=${AzdAuthApiVersion}`,
+                    { scopes: ['https://management.azure.com/.default'] },
+                    { Authorization: `Bearer ${env.AZD_AUTH_KEY}` },
+                    agent,
+                )).to.be.rejected;
+            } finally {
+                agent.destroy();
+            }
+        });
+
+        it('should remove the socket directory even while a client holds a connection open', async function () {
+            if (process.platform === 'win32') {
+                this.skip();
+            }
+
+            const { vscode: code } = createMockVsCode();
+            const server = new AzdAuthServer(code, new MockOutputChannel('test'), () => makeCredential());
+            const env = await server.getEnv();
+            const socketDir = dirname(env.AZD_AUTH_ENDPOINT.slice('unix://'.length));
+            // A keep-alive agent holds the connection after the response, which
+            // is what azd's HTTP client does.
+            const agent = new Agent({ keepAlive: true });
+
+            try {
+                const result = await postJson(
+                    env.AZD_AUTH_ENDPOINT,
+                    `/token?api-version=${AzdAuthApiVersion}`,
+                    { scopes: ['https://management.azure.com/.default'] },
+                    { Authorization: `Bearer ${env.AZD_AUTH_KEY}` },
+                    agent,
+                );
+                expect(result.statusCode).to.equal(200);
+
+                server.dispose();
+
+                await waitFor(() => !existsSync(socketDir), 'the socket directory to be removed');
+            } finally {
+                agent.destroy();
+            }
+        });
+
+        it('should reject getEnv after disposal', async () => {
+            const { vscode: code } = createMockVsCode();
+            const server = new AzdAuthServer(code, new MockOutputChannel('test'), () => makeCredential());
+            await server.getEnv();
+
+            server.dispose();
+
+            await expect(server.getEnv()).to.be.rejectedWith(/disposed/);
         });
     });
 
