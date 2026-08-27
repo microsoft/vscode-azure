@@ -61,9 +61,9 @@ export class GenerateBicepStep<TContext extends AzdWizardContext> extends Execut
 
     public async execute(context: Readonly<TContext>): Promise<void> {
         const templateUri = this.ctx.code.Uri.joinPath(this.ctx.extensionContext.extensionUri, 'resources', 'templates', this.templateName);
-        const bicepFolder = this.ctx.code.Uri.joinPath(context.iacFolder!, InfraFolderName); // eslint-disable-line @typescript-eslint/no-non-null-assertion
+        const infraFolder = this.ctx.code.Uri.joinPath(context.iacFolder!, InfraFolderName); // eslint-disable-line @typescript-eslint/no-non-null-assertion
 
-        if (await fileExists(this.ctx.code, bicepFolder)) {
+        if (await fileExists(this.ctx.code, infraFolder)) {
             throw new Error(this.ctx.code.l10n.t('Cannot generate infrastructure because the infra folder already exists.'));
         }
 
@@ -83,14 +83,14 @@ export class GenerateBicepStep<TContext extends AzdWizardContext> extends Execut
         // `main.bicep` still resolve.
         await this.ctx.code.workspace.fs.copy(
             templateUri,
-            bicepFolder,
+            infraFolder,
             { overwrite: true }, // We shouldn't actually be overwriting, due to `shouldExecute()`'s guard, but just in case...
         );
 
         // After the copy: it creates the destination directory, and on some file
         // systems copying onto an existing directory is refused.
         await this.ctx.code.workspace.fs.writeFile(
-            this.ctx.code.Uri.joinPath(bicepFolder, MainParametersFileName),
+            this.ctx.code.Uri.joinPath(infraFolder, MainParametersFileName),
             Buffer.from(parameters),
         );
     }
