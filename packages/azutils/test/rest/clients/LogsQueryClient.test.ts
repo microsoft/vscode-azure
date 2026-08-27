@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { AzureChinaCloud, AzurePublicCloud } from '../../../src/auth/Environment';
 import { LogsQueryClient } from '../../../src/rest/clients/LogsQueryClient';
 import { makeCredential } from '../../mockAzure';
@@ -19,6 +20,13 @@ function tableBody(rows: unknown[][], columns = ['TimeGenerated', 'Log_s']): str
     });
 }
 
+/** Builds a client over a canned handler, with the contexts the pipeline needs. */
+function createClient(httpClient: MockHttpClient, environment = AzurePublicCloud) {
+    const { ctx } = createMockCodeContext();
+    const { executor } = createTestActionExecutor();
+    return LogsQueryClient.create(ctx, executor, makeCredential(), environment, { httpClient });
+}
+
 describe('LogsQueryClient (unit)', () => {
     it('should flatten each result row into one line', async () => {
         const httpClient = new MockHttpClient({
@@ -28,8 +36,7 @@ describe('LogsQueryClient (unit)', () => {
             ])),
         });
 
-        const client = LogsQueryClient.create(makeCredential(), AzurePublicCloud, { httpClient });
-        const lines = await client.queryWorkspace('workspace-guid', 'ContainerAppConsoleLogs_CL', 5);
+        const lines = await createClient(httpClient).queryWorkspace('workspace-guid', 'ContainerAppConsoleLogs_CL', 5);
 
         expect(lines).to.deep.equal([
             '2026-01-01T00:00:00Z starting up',
@@ -45,8 +52,7 @@ describe('LogsQueryClient (unit)', () => {
             )),
         });
 
-        const client = LogsQueryClient.create(makeCredential(), AzurePublicCloud, { httpClient });
-        const [line] = await client.queryWorkspace('workspace-guid', 'query', 5);
+        const [line] = await createClient(httpClient).queryWorkspace('workspace-guid', 'query', 5);
 
         expect(line).to.not.contain('[object Object]');
         expect(line).to.contain('42');
@@ -61,9 +67,31 @@ describe('LogsQueryClient (unit)', () => {
             handler: req => makeResponse(req, 403, JSON.stringify({ error: { message: 'Forbidden' } })),
         });
 
-        const client = LogsQueryClient.create(makeCredential(), AzurePublicCloud, { httpClient });
+        expect(await createClient(httpClient).queryWorkspace('workspace-guid', 'query', 5)).to.be.empty;
+    });
 
-        expect(await client.queryWorkspace('workspace-guid', 'query', 5)).to.be.empty;
+    it('should return an empty result rather than throwing when the body is not a result table', async () => {
+        const httpClient = new MockHttpClient({
+            handler: req => makeResponse(req, 200, JSON.stringify({ unexpected: true })),
+        });
+
+        expect(await createClient(httpClient).queryWorkspace('workspace-guid', 'query', 5)).to.be.empty;
+    });
+
+    it('should keep the rows a partly-failed query managed to read', async () => {
+        // Partial logs still explain the failure the caller is investigating.
+        const httpClient = new MockHttpClient({
+            handler: req => makeResponse(req, 200, JSON.stringify({
+                tables: [{
+                    name: 'PrimaryResult',
+                    columns: [{ name: 'Log_s', type: 'string' }],
+                    rows: [['partial line']],
+                }],
+                error: { code: 'PartialError', message: 'Query ran over the limit' },
+            })),
+        });
+
+        expect(await createClient(httpClient).queryWorkspace('workspace-guid', 'query', 5)).to.deep.equal(['partial line']);
     });
 
     it('should return an empty result when the query matched nothing', async () => {
@@ -71,9 +99,35 @@ describe('LogsQueryClient (unit)', () => {
             handler: req => makeResponse(req, 200, tableBody([])),
         });
 
-        const client = LogsQueryClient.create(makeCredential(), AzurePublicCloud, { httpClient });
+        expect(await createClient(httpClient).queryWorkspace('workspace-guid', 'query', 5)).to.be.empty;
+    });
 
-        expect(await client.queryWorkspace('workspace-guid', 'query', 5)).to.be.empty;
+    it('should post the query to the versioned workspace path', async () => {
+        const httpClient = new MockHttpClient({
+            handler: req => makeResponse(req, 200, tableBody([])),
+        });
+
+        await createClient(httpClient).queryWorkspace('workspace-guid', 'ContainerAppConsoleLogs_CL', 5);
+
+        const [request] = httpClient.requests;
+        expect(request.method).to.equal('POST');
+        // Omitting the `/v1` segment reaches an endpoint that does not exist,
+        // and the caller swallows the failure, so nothing else would catch it.
+        expect(request.url).to.equal('https://api.loganalytics.io/v1/workspaces/workspace-guid/query');
+        expect(JSON.parse(request.body as string).query).to.equal('ContainerAppConsoleLogs_CL');
+    });
+
+    it('should ask for exactly the requested timespan', async () => {
+        const httpClient = new MockHttpClient({
+            handler: req => makeResponse(req, 200, tableBody([])),
+        });
+
+        await createClient(httpClient).queryWorkspace('workspace-guid', 'query', 5);
+
+        // The API takes one ISO 8601 interval, not a pair of instants.
+        const { timespan } = JSON.parse(httpClient.requests[0].body as string) as { timespan: string };
+        const [start, end] = timespan.split('/').map(value => new Date(value).getTime());
+        expect(end - start).to.equal(5 * 60 * 1000);
     });
 
     it('should query the cloud\'s own Log Analytics endpoint', async () => {
@@ -81,8 +135,7 @@ describe('LogsQueryClient (unit)', () => {
             handler: req => makeResponse(req, 200, tableBody([])),
         });
 
-        const client = LogsQueryClient.create(makeCredential(), AzureChinaCloud, { httpClient });
-        await client.queryWorkspace('workspace-guid', 'query', 5);
+        await createClient(httpClient, AzureChinaCloud).queryWorkspace('workspace-guid', 'query', 5);
 
         // A sovereign-cloud workspace is not reachable at the public endpoint.
         expect(httpClient.requests[0].url).to.contain('api.loganalytics.azure.cn');

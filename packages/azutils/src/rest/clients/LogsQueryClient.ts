@@ -3,17 +3,15 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import type { Client as RestClient, ClientOptions as RestClientOptions } from '@azure-rest/core-client';
 import type { TokenCredential } from '@azure/core-auth';
-import {
-    LogsQueryClient as SdkLogsQueryClient, LogsQueryResultStatus,
-    type LogsQueryClientOptions, type LogsQueryResult,
-} from '@azure/monitor-query-logs';
-import type { SyncFactory } from '@microsoft/vscode-azure-utils';
+import type { IActionExecutor, ICodeContext, SyncFactory } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
 import type { AzureSubscription } from '../../auth/AzureSubscription';
 import type { EnvironmentLike } from '../../auth/Environment';
+import { createDataPlaneRestClient } from '../createAzureClient';
 
-export type { LogsQueryClientOptions };
+export type LogsQueryClientOptions = RestClientOptions;
 
 /** Factory that creates an {@linkcode ILogsQueryClient} for a subscription's cloud. */
 export const ILogsQueryClientProvider: ServiceIdentifier<ILogsQueryClientProvider> = Symbol.for('ILogsQueryClientProvider');
@@ -37,17 +35,58 @@ export interface ILogsQueryClient {
     queryWorkspace(workspaceId: string, query: string, timespanInMinutes: number): Promise<readonly string[]>;
 }
 
+/** Path segment carrying the API version, which the query endpoint takes in the URL rather than a query parameter. */
+const LogsApiVersion = 'v1';
+
 /**
- * Wrapper around the `@azure/monitor-query-logs` SDK.
+ * One result column.
  *
- * Supersedes `@azure/monitor-query`, which the Azure SDK team deprecated in
- * favor of the split `-logs` and `-metrics` packages.
+ * Mirrors `Column` in `@azure/monitor-query-logs`.
+ */
+interface Column {
+    readonly name: string;
+    /** Kusto column type, e.g. `string`, `datetime`, `dynamic`. */
+    readonly type: string;
+}
+
+/**
+ * One result table.
+ *
+ * Mirrors `Table` in `@azure/monitor-query-logs`. Cells arrive as raw JSON, so
+ * a `datetime` column is an ISO 8601 string rather than a `Date`.
+ */
+interface Table {
+    readonly name: string;
+    readonly columns: readonly Column[];
+    readonly rows: readonly (readonly unknown[])[];
+}
+
+/**
+ * Response body of `POST /v1/workspaces/{workspaceId}/query`.
+ *
+ * Mirrors `QueryResults` in `@azure/monitor-query-logs`. A partly-successful
+ * query returns both `tables` and an `error`, so rows are still worth reading
+ * when the service reports a failure.
+ */
+interface QueryResults {
+    readonly tables: readonly Table[];
+    readonly statistics?: unknown;
+    readonly render?: unknown;
+    readonly error?: unknown;
+}
+
+/**
+ * Client for the Log Analytics query API.
+ *
+ * Issues the one query operation we need directly against the REST endpoint, so
+ * requests run on the shared pipeline (see
+ * {@linkcode createDataPlaneRestClient}) and no query SDK has to be bundled.
  *
  * Use the static {@linkcode create} factory to construct.
  */
 export class LogsQueryClient implements ILogsQueryClient {
     private constructor(
-        private readonly inner: SdkLogsQueryClient,
+        private readonly client: RestClient,
     ) { }
 
     /**
@@ -57,15 +96,18 @@ export class LogsQueryClient implements ILogsQueryClient {
      *   whose audience the credential is scoped to.
      */
     public static create(
+        ctx: ICodeContext,
+        executor: IActionExecutor,
         credential: TokenCredential,
         environment: EnvironmentLike,
         options?: LogsQueryClientOptions,
     ): LogsQueryClient {
-        return new LogsQueryClient(new SdkLogsQueryClient(credential, {
-            endpoint: environment.logAnalyticsEndpoint,
-            audience: environment.logAnalyticsEndpoint,
-            ...options,
-        }));
+        return new LogsQueryClient(createDataPlaneRestClient(ctx, executor, {
+            name: 'logs',
+            endpoint: `${environment.logAnalyticsEndpoint}/${LogsApiVersion}`,
+            credential,
+            scopes: [`${environment.logAnalyticsEndpoint}/.default`],
+        }, options));
     }
 
     /** @inheritdoc */
@@ -73,29 +115,41 @@ export class LogsQueryClient implements ILogsQueryClient {
         const endTime = new Date();
         const startTime = new Date(endTime.getTime() - timespanInMinutes * 60 * 1000);
 
-        let result: LogsQueryResult;
         try {
-            result = await this.inner.queryWorkspace(workspaceId, query, { startTime, endTime });
+            const response = await this.client
+                .pathUnchecked(`/workspaces/${encodeURIComponent(workspaceId)}/query`)
+                .post({
+                    body: {
+                        query,
+                        // The API takes a single ISO 8601 interval rather than a
+                        // pair of instants.
+                        timespan: `${startTime.toISOString()}/${endTime.toISOString()}`,
+                    },
+                });
+
+            if (response.status !== '200') {
+                return [];
+            }
+
+            // A partial failure still carries the rows it managed to read, and
+            // partial logs still explain a failure, so they are kept rather
+            // than discarded alongside the error.
+            //
+            // Parsing stays inside the `try` so a body that does not match the
+            // declared shape yields no rows rather than replacing the caller's
+            // original error with a parse failure.
+            const rows = (response.body as QueryResults).tables.at(0)?.rows;
+            if (!rows) {
+                return [];
+            }
+
+            // Rows are heterogeneous cell arrays; the callers of this are
+            // attaching log text to an activity, so each row is flattened to
+            // one line.
+            return rows.map(row => row.map(cell => formatCell(cell)).join(' '));
         } catch {
             return [];
         }
-
-        // A partial failure still carries the rows it managed to read, and
-        // partial logs still explain a failure, so they are kept rather than
-        // discarded alongside the error.
-        // `.at()` rather than `[0]`: an empty table array is possible at
-        // runtime, which the SDK's index signature does not model.
-        const table = result.status === LogsQueryResultStatus.PartialFailure
-            ? result.partialTables.at(0)
-            : result.tables.at(0);
-
-        if (!table) {
-            return [];
-        }
-
-        // Rows are heterogeneous cell arrays; the callers of this are attaching
-        // log text to an activity, so each row is flattened to one line.
-        return table.rows.map(row => row.map((cell: unknown) => formatCell(cell)).join(' '));
     }
 }
 
@@ -103,9 +157,6 @@ export class LogsQueryClient implements ILogsQueryClient {
 function formatCell(cell: unknown): string {
     if (cell === null || cell === undefined) {
         return '';
-    }
-    if (cell instanceof Date) {
-        return cell.toISOString();
     }
     if (typeof cell === 'string') {
         return cell;

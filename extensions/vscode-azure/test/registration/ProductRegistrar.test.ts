@@ -170,7 +170,7 @@ describe('ProductRegistrar (unit)', () => {
         expect(provider(makeSubscription()).source).to.equal('first');
     });
 
-    it('passes a scoped credential and the caller argument to a data-plane client provider', () => {
+    it('passes the contexts, a scoped credential, and the caller argument to a client provider', () => {
         interface ClientResult {
             readonly loginServer: string;
             readonly cloud: string;
@@ -180,13 +180,19 @@ describe('ProductRegistrar (unit)', () => {
         const container = new Container();
         const providerId: ServiceIdentifier<(subscription: AzureSubscription, loginServer: string) => ClientResult> =
             Symbol('ITestDataPlaneClientProvider');
+        const codeContext = {} as ICodeContext;
+        const executor = {} as IActionExecutor;
         const credential: TokenCredential = { getToken: mock.fn(() => Promise.resolve(null)) };
         const credentialFactory = mock.fn((_input?: CredentialFactoryInput) => credential);
+        container.bind(ICodeContext).toConstantValue(codeContext);
+        container.bind(IActionExecutor).toConstantValue(executor);
         container.bind(ICredentialFactory).toConstantValue(credentialFactory);
 
-        // A data-plane client gets neither the code context nor the executor, so
-        // nothing else needs binding for this registration to resolve.
-        registrar.registerDataPlaneClientProvider(providerId, (actualCredential, subscription, loginServer) => {
+        // A data-plane client is addressed by an endpoint rather than by ARM, so
+        // its identifier declares the extra argument that names one.
+        registrar.registerAzureClientProvider(providerId, (actualContext, actualExecutor, actualCredential, subscription, loginServer) => {
+            expect(actualContext).to.equal(codeContext);
+            expect(actualExecutor).to.equal(executor);
             expect(actualCredential).to.equal(credential);
             return { loginServer, cloud: subscription.environment.name };
         });
@@ -199,25 +205,5 @@ describe('ProductRegistrar (unit)', () => {
         expect(result.loginServer).to.equal('contoso.azurecr.io');
         expect(result.cloud).to.equal(subscription.environment.name);
         expect(credentialFactory.mock.calls[0].arguments[0]).to.equal(subscription);
-    });
-
-    it('does not replace a shared data-plane client provider binding', () => {
-        interface ClientResult {
-            readonly source: string;
-        }
-
-        const registrar = new ProductRegistrar();
-        const container = new Container();
-        const providerId: ServiceIdentifier<(subscription: AzureSubscription) => ClientResult> =
-            Symbol('ISharedDataPlaneClientProvider');
-        const credential: TokenCredential = { getToken: mock.fn(() => Promise.resolve(null)) };
-        container.bind(ICredentialFactory).toConstantValue(() => credential);
-        registrar.registerDataPlaneClientProvider(providerId, () => ({ source: 'first' }));
-        registrar.registerDataPlaneClientProvider(providerId, () => ({ source: 'second' }));
-
-        registrar.applyBindings(container);
-        const provider = container.get<(subscription: AzureSubscription) => ClientResult>(providerId);
-
-        expect(provider(makeSubscription()).source).to.equal('first');
     });
 });

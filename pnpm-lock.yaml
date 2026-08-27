@@ -115,15 +115,9 @@ importers:
       '@azure/arm-resourcesdeployments':
         specifier: ^1.0.0-beta.2
         version: 1.0.0
-      '@azure/container-registry':
-        specifier: ^1.1.2
-        version: 1.1.2
       '@azure/logger':
         specifier: ^1.3.0
         version: 1.4.0
-      '@azure/monitor-query-logs':
-        specifier: ^1.0.0
-        version: 1.0.0
       '@microsoft/vscode-azure-utils':
         specifier: workspace:^
         version: link:../utils
@@ -197,10 +191,6 @@ packages:
     resolution: {integrity: sha512-qbMwDTlik8t7fP8x/m1UIqCn2w+8lnxmLZbSgJxyJTEEgnrnJeK7vJvgsEqb8Ri6sGVrM1e5kT2eewvjacB6vw==}
     engines: {node: '>=22.0.0'}
 
-  '@azure/container-registry@1.1.2':
-    resolution: {integrity: sha512-XGhsf29YEs+2E0nyyTIS7MiWOiE2dUpN7CEy26p/muMalDu+PfrIbacXAxHZ2fVeS3VrddcImlqT+i3BXjdDXg==}
-    engines: {node: '>=20.0.0'}
-
   '@azure/core-auth@1.11.0':
     resolution: {integrity: sha512-IUZydyTUkDnYdstOW9pFOOUQlBjAepK5teihDE3x6yxsPJs/hsAaaYpeGxdxrgtOiJbBKSjKW7MDk7AEhb4LRg==}
     engines: {node: '>=22.0.0'}
@@ -240,10 +230,6 @@ packages:
   '@azure/logger@1.4.0':
     resolution: {integrity: sha512-rbAE25KUfjU/s3XHUdJgceoCP5dEOpMx85J04kF+QMdta73XkuG9JGHHinch+XIoKpBdqljin+KqURpJriSzLA==}
     engines: {node: '>=22.0.0'}
-
-  '@azure/monitor-query-logs@1.0.0':
-    resolution: {integrity: sha512-5mZzLGZKAZ1vrVm0le2Jh+5VXu/4U+1tSpmgssdMyYzT+VA9J1EstXpni6q/unsTtkJAdo4jsVpigfr95Sl7hg==}
-    engines: {node: '>=20.0.0'}
 
   '@azure/msal-browser@5.17.1':
     resolution: {integrity: sha512-zBhRGzABKSI7hfWh5EaZmril5ybZ7imBN1qEZl5sDTaelr+l8SnPjZO50Q4dnKnm347YPIlBMSnXKZyh3Yu5DQ==}
@@ -1853,19 +1839,6 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@azure/container-registry@1.1.2':
-    dependencies:
-      '@azure/abort-controller': 2.2.0
-      '@azure/core-auth': 1.11.0
-      '@azure/core-client': 1.11.0
-      '@azure/core-paging': 1.7.0
-      '@azure/core-rest-pipeline': 1.25.0
-      '@azure/core-tracing': 1.4.0
-      '@azure/logger': 1.4.0
-      tslib: 2.8.1
-    transitivePeerDependencies:
-      - supports-color
-
   '@azure/core-auth@1.11.0':
     dependencies:
       '@azure/abort-controller': 2.2.0
@@ -1944,20 +1917,6 @@ snapshots:
   '@azure/logger@1.4.0':
     dependencies:
       '@typespec/ts-http-runtime': 0.3.7
-      tslib: 2.8.1
-    transitivePeerDependencies:
-      - supports-color
-
-  '@azure/monitor-query-logs@1.0.0':
-    dependencies:
-      '@azure-rest/core-client': 2.8.0
-      '@azure/core-auth': 1.11.0
-      '@azure/core-client': 1.11.0
-      '@azure/core-paging': 1.7.0
-      '@azure/core-rest-pipeline': 1.25.0
-      '@azure/core-tracing': 1.4.0
-      '@azure/core-util': 1.14.0
-      '@azure/logger': 1.4.0
       tslib: 2.8.1
     transitivePeerDependencies:
       - supports-color

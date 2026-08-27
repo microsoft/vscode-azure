@@ -151,13 +151,13 @@ The resulting `IResourceClientProvider` type is a `SyncFactory<IResourceClient, 
 
 The helper is generic in the subscription argument, constrained to `AzureSubscriptionTarget`, so a provider whose client needs only an endpoint and a token (`IDeploymentClientProvider`) binds through the same call as one that needs a listed subscription. See [Azure Clients](azure-clients.md) for details on the client wrappers and which need which.
 
-Data-plane clients use the sibling `registrar.registerDataPlaneClientProvider(<providerId>, create)`. They address a service's own endpoint rather than ARM, so they take no request-pipeline pieces, and they may need extra per-call arguments that name the endpoint:
+Data-plane clients bind through the same call. They address a service's own endpoint rather than ARM, so their identifier declares whatever extra per-call arguments name that endpoint, and `create` receives them after the subscription:
 
 ```typescript
-registrar.registerDataPlaneClientProvider(
+registrar.registerAzureClientProvider(
     IAcrRepositoryClientProvider,
-    (credential, subscription, loginServer) =>
-        AcrRepositoryClient.create(credential, loginServer, subscription.environment),
+    (context, executor, credential, subscription, loginServer) =>
+        AcrRepositoryClient.create(context, executor, credential, loginServer, subscription.environment),
 );
 ```
 

@@ -29,13 +29,13 @@ export function registerContainerApps(registrar: ProductRegistrar): void {
         return ContainerAppsClient.create(context, executor, credential, subscription);
     });
 
-    // Both are data-plane clients scoped to a service endpoint rather than to a
-    // subscription's ARM endpoint.
-    registrar.registerDataPlaneClientProvider(IAcrRepositoryClientProvider, (credential, subscription, loginServer) => {
-        return AcrRepositoryClient.create(credential, loginServer, subscription.environment);
+    // Both are data-plane clients addressed by a service endpoint -- a registry
+    // login server, a cloud's Log Analytics endpoint -- rather than by ARM.
+    registrar.registerAzureClientProvider(IAcrRepositoryClientProvider, (context, executor, credential, subscription, loginServer) => {
+        return AcrRepositoryClient.create(context, executor, credential, loginServer, subscription.environment);
     });
-    registrar.registerDataPlaneClientProvider(ILogsQueryClientProvider, (credential, subscription) => {
-        return LogsQueryClient.create(credential, subscription.environment);
+    registrar.registerAzureClientProvider(ILogsQueryClientProvider, (context, executor, credential, subscription) => {
+        return LogsQueryClient.create(context, executor, credential, subscription.environment);
     });
 
     registrar.registerBinding(container => {
