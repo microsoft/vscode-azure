@@ -434,6 +434,44 @@ export class AzureNodeId {
     }
 
     /**
+     * Builds the node ID of another ARM resource reachable through the same
+     * account, tenant, and cloud as this node.
+     *
+     * Use this to cross a *reference* between resources that the tree does not
+     * model as containment -- for example jumping from a container app to the
+     * managed environment named by its `environmentId`. The target's own node
+     * object may not be loaded yet, so its id has to be derived rather than
+     * looked up.
+     *
+     * Only the ARM resource id differs; the identity segments are inherited
+     * verbatim, which is what keeps the result inside this node's own account
+     * and cloud.
+     *
+     * @param armResourceId - Absolute ARM resource id of the target, starting
+     *   with `/subscriptions/`.
+     * @throws if this is an account node, which has no tenant to inherit, or if
+     *   {@linkcode armResourceId} is not an absolute ARM resource id.
+     */
+    public forRelatedResource(armResourceId: string): AzureNodeId {
+        const d = this.data;
+        if (d.kind === 'account') {
+            throw new Error('Cannot derive a related resource from an account node ID');
+        }
+
+        if (!/^\/subscriptions\//i.test(armResourceId)) {
+            throw new Error(`Not an absolute ARM resource id: ${armResourceId}`);
+        }
+
+        return new AzureNodeId({
+            kind: 'resource',
+            accountId: d.accountId,
+            portalHost: d.portalHost,
+            tenantId: d.tenantId,
+            armResourceId,
+        });
+    }
+
+    /**
      * Returns the grouping strategy and value for grouping nodes
      * (both resource groups and virtual groups), or `undefined` for
      * non-grouping nodes.

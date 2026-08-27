@@ -6,14 +6,13 @@
 import { AzureNodeId } from '@microsoft/vscode-azure-azutils';
 import { createMockDataItemTree, makeGenericResource, makeVirtualResource } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
-import * as vscode from 'vscode';
 import { OpenUrl } from '../../../src/commands/OpenUrl';
 import { BrowseWebsite } from '../../../src/commands/tree/BrowseWebsite';
 import { setWebsiteUrl } from '../../../src/tree/resources/websiteUrl';
 
 describe('BrowseWebsite (unit)', () => {
     function createCommand(hostname?: string) {
-        const mockResult = createMockVsCode({ Uri: vscode.Uri });
+        const mockResult = createMockVsCode();
         const resource = makeGenericResource();
         setWebsiteUrl(resource, hostname);
         const dataTree = createMockDataItemTree([resource]);
@@ -42,7 +41,7 @@ describe('BrowseWebsite (unit)', () => {
         // A Static Web Apps environment is a virtual node with a hostname of its own, so
         // requiring an ARM resource here would force each such product to ship a browse
         // command of its own. Carrying a URL is the capability, not being an ARM resource.
-        const mockResult = createMockVsCode({ Uri: vscode.Uri });
+        const mockResult = createMockVsCode();
         const environment = makeVirtualResource({ virtualType: 'environment', virtualPath: 'environments/pr-42' });
         setWebsiteUrl(environment, 'preview.azurestaticapps.net');
         const dataTree = createMockDataItemTree([environment]);

@@ -3,12 +3,13 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
-import * as vscode from 'vscode';
 import { defaultLoadMoreOptions, LoadMore } from '../../../src/commands/tree/LoadMore';
 
 describe('defaultLoadMoreOptions (unit)', () => {
-    const options = defaultLoadMoreOptions(vscode);
+    const { vscode: code } = createMockVsCode();
+    const options = defaultLoadMoreOptions(code);
 
     it('should identify load-more keys by suffix', () => {
         expect(options.isLoadMoreKey('parent/~loadMore')).to.be.true;

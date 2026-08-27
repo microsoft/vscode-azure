@@ -198,6 +198,52 @@ const subscription = makeSubscription({ subscriptionId: 'sub-1' });
 
 If the shared factory can't express what you need, change the shared factory.
 
+### Producing Async Iterables and Pages
+
+Anything that fetches lazily -- tree data providers, wrapped Azure clients,
+listing fetchers -- hands back an async iterable rather than an array, so a test
+that stands one of these in needs to *produce* one. Use the shared builders
+instead of hand-rolling a `[Symbol.asyncIterator]` object.
+
+From `@microsoft/vscode-azure-utils/testing`:
+
+| Helper | Produces | Use for |
+| --- | --- | --- |
+| `asAsyncIterable(values)` | `AsyncIterable<T>` | Any fixed sequence, replayable from the start on each iteration |
+| `pagesOf(...pages)` | `AsyncIterable<Page<T>>` | The project-standard paged shape; one array per page, `hasMore` set on all but the last |
+| `rejectingAsyncIterable(error)` | `AsyncIterable<T>` that rejects on first read | Failure paths, where the service refuses mid-iteration |
+
+From `@microsoft/vscode-azure-azutils/testing`:
+
+| Helper | Produces | Use for |
+| --- | --- | --- |
+| `makePagedAsyncIterable(...pages)` | `PagedAsyncIterableIterator<T, T[]>` | A client that hands back the raw Azure SDK pager, with `byPage()` and continuation tokens |
+
+```typescript
+// GOOD -- one page of resource groups, no more to come
+resourceGroups: { list: () => pagesOf(groups) }
+
+// GOOD -- two pages, so the first reports hasMore: true
+getChildren: () => pagesOf([{ id: 'p1' }], [{ id: 'p2' }])
+
+// GOOD -- conditional access refuses the tenant listing
+mock.method(SubscriptionClient, 'create', () => ({
+    tenants: { list: () => rejectingAsyncIterable(new Error('interaction_required')) },
+}));
+```
+
+These are the produce-side counterparts to the drain helpers `collectAsync`,
+`collectPages`, and `collectPageItems`, also in
+`@microsoft/vscode-azure-utils/testing`.
+
+Keep a local builder only when the iteration *mechanics* are the subject of the
+test rather than a fixture of convenience -- for example
+`packages/azutils/test/rest/toPages.test.ts`, which deliberately exercises both
+continuation-token shapes and a multi-page result carrying no tokens at all, and
+the `loadMore` tests in `DataItemTree.test.ts` / `ViewItemTree.test.ts`, whose
+iterables behave specially on later `next()` calls. Bending a shared helper to
+cover those would grow it options that no other caller wants.
+
 ### Debounced Work
 
 Code that debounces work should depend on `IDebounceScheduler` rather than

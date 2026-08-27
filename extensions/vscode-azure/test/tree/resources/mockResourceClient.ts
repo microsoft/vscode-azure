@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { IResourceClient } from '@microsoft/vscode-azure-azutils';
-import { asPages } from '@microsoft/vscode-azure-utils/testing';
+import { pagesOf } from '@microsoft/vscode-azure-utils/testing';
 
 /**
  * Creates an {@linkcode IResourceClient} that returns fixed resource groups and
@@ -20,11 +20,11 @@ export function createMockResourceClient(
     resourcesByRg: Record<string, unknown[]> | unknown[],
 ): IResourceClient {
     return {
-        resourceGroups: { list: () => asPages(resourceGroups) },
+        resourceGroups: { list: () => pagesOf(resourceGroups) },
         resources: {
             listByResourceGroup: Array.isArray(resourcesByRg)
-                ? () => asPages(resourcesByRg)
-                : (rgName: string) => asPages(resourcesByRg[rgName] ?? []),
+                ? () => pagesOf(resourcesByRg)
+                : (rgName: string) => pagesOf(resourcesByRg[rgName] ?? []),
         },
     } as unknown as IResourceClient;
 }

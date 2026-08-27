@@ -31,6 +31,44 @@ export class MockThemeIcon implements vscode.ThemeIcon {
     constructor(public readonly id: string, public readonly color?: vscode.ThemeColor) { }
 }
 
+/**
+ * Test stand-in for {@linkcode vscode.MarkdownString}.
+ *
+ * The editor's implementation parses and renders the markdown; this one only
+ * accumulates it, which is all a test needs to assert what a tree item's
+ * tooltip says.
+ */
+export class MockMarkdownString implements vscode.MarkdownString {
+    public supportThemeIcons?: boolean;
+    public supportHtml?: boolean;
+    public baseUri?: vscode.Uri;
+
+    constructor(
+        public value: string = '',
+        public isTrusted?: boolean | { readonly enabledCommands: readonly string[] },
+    ) { }
+
+    public appendText(value: string): vscode.MarkdownString {
+        this.value += escapeMarkdown(value);
+        return this;
+    }
+
+    public appendMarkdown(value: string): vscode.MarkdownString {
+        this.value += value;
+        return this;
+    }
+
+    public appendCodeblock(value: string, language: string = ''): vscode.MarkdownString {
+        this.value += `\n\`\`\`${language}\n${value}\n\`\`\`\n`;
+        return this;
+    }
+}
+
+/** Escapes the markdown control characters, matching `appendText`'s contract. */
+function escapeMarkdown(value: string): string {
+    return value.replace(/[\\`*_{}[\]()#+\-.!]/g, '\\$&');
+}
+
 /** Test stand-in for {@linkcode vscode.ShellExecution} created from a command and arguments. */
 export class MockShellExecution implements vscode.ShellExecution {
     public readonly commandLine: string | undefined = undefined;
@@ -123,6 +161,8 @@ type ForwardCheckThemeColor = Satisfies<MockThemeColor, vscode.ThemeColor>;
 type ReverseCheckThemeColor = Satisfies<vscode.ThemeColor, MockThemeColor>;
 type ForwardCheckThemeIcon = Satisfies<MockThemeIcon, vscode.ThemeIcon>;
 type ReverseCheckThemeIcon = Satisfies<vscode.ThemeIcon, MockThemeIcon>;
+type ForwardCheckMarkdownString = Satisfies<MockMarkdownString, vscode.MarkdownString>;
+type ReverseCheckMarkdownString = Satisfies<vscode.MarkdownString, MockMarkdownString>;
 type ForwardCheckShellExecution = Satisfies<MockShellExecution, vscode.ShellExecution>;
 type ReverseCheckShellExecution = Satisfies<vscode.ShellExecution, MockShellExecution>;
 type ForwardCheckTask = Satisfies<MockTask, vscode.Task>;

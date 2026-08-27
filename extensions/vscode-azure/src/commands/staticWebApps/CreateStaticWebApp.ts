@@ -69,7 +69,7 @@ export class CreateStaticWebApp implements ManagedCommand {
 
         const executeSteps: ExecuteStep<CreateStaticWebAppContext>[] = [
             get(IGenerateBicepStepFactory)<CreateStaticWebAppContext>(
-                'staticWebApp.bicep',
+                'staticWebApp',
                 [
                     'appLocation',
                     'apiLocation',

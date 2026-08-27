@@ -169,4 +169,41 @@ describe('ProductRegistrar (unit)', () => {
 
         expect(provider(makeSubscription()).source).to.equal('first');
     });
+
+    it('passes the contexts, a scoped credential, and the caller argument to a client provider', () => {
+        interface ClientResult {
+            readonly loginServer: string;
+            readonly cloud: string;
+        }
+
+        const registrar = new ProductRegistrar();
+        const container = new Container();
+        const providerId: ServiceIdentifier<(subscription: AzureSubscription, loginServer: string) => ClientResult> =
+            Symbol('ITestDataPlaneClientProvider');
+        const codeContext = {} as ICodeContext;
+        const executor = {} as IActionExecutor;
+        const credential: TokenCredential = { getToken: mock.fn(() => Promise.resolve(null)) };
+        const credentialFactory = mock.fn((_input?: CredentialFactoryInput) => credential);
+        container.bind(ICodeContext).toConstantValue(codeContext);
+        container.bind(IActionExecutor).toConstantValue(executor);
+        container.bind(ICredentialFactory).toConstantValue(credentialFactory);
+
+        // A data-plane client is addressed by an endpoint rather than by ARM, so
+        // its identifier declares the extra argument that names one.
+        registrar.registerAzureClientProvider(providerId, (actualContext, actualExecutor, actualCredential, subscription, loginServer) => {
+            expect(actualContext).to.equal(codeContext);
+            expect(actualExecutor).to.equal(executor);
+            expect(actualCredential).to.equal(credential);
+            return { loginServer, cloud: subscription.environment.name };
+        });
+        registrar.applyBindings(container);
+
+        const subscription = makeSubscription();
+        const provider = container.get<(subscription: AzureSubscription, loginServer: string) => ClientResult>(providerId);
+        const result = provider(subscription, 'contoso.azurecr.io');
+
+        expect(result.loginServer).to.equal('contoso.azurecr.io');
+        expect(result.cloud).to.equal(subscription.environment.name);
+        expect(credentialFactory.mock.calls[0].arguments[0]).to.equal(subscription);
+    });
 });
