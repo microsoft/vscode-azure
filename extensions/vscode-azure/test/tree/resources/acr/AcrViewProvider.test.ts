@@ -5,8 +5,7 @@
 
 import { AzureNodeId, type ConcreteAzureNode, type VirtualResource } from '@microsoft/vscode-azure-azutils';
 import { makeGenericResource, makeVirtualResource } from '@microsoft/vscode-azure-azutils/testing';
-import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
-import * as vscode from 'vscode';
+import { createMockCodeContext, createTestActionExecutor, MockTreeItemCollapsibleState } from '@microsoft/vscode-azure-utils/testing';
 import { DisableAcrAdminUser } from '../../../../src/commands/acr/DisableAcrAdminUser';
 import { OpenInPortal } from '../../../../src/commands/tree/OpenInPortal';
 import { AcrResourceType } from '../../../../src/tree/resources/acr/AcrRegistry';
@@ -127,7 +126,7 @@ describe('AcrViewProvider (unit)', () => {
             const item = provider.getTreeItem(key);
             expect(item.label).to.equal('Repositories');
             expect(item.contextValue).to.equal('acrCategory');
-            expect(item.collapsibleState).to.equal(vscode.TreeItemCollapsibleState.Collapsed);
+            expect(item.collapsibleState).to.equal(MockTreeItemCollapsibleState.Collapsed);
         });
 
         it('should render a leaf virtual resource as non-collapsible', () => {
@@ -139,7 +138,7 @@ describe('AcrViewProvider (unit)', () => {
             const item = provider.getTreeItem(key);
             expect(item.label).to.equal('myimage');
             expect(item.contextValue).to.equal('acrItem');
-            expect(item.collapsibleState).to.equal(vscode.TreeItemCollapsibleState.None);
+            expect(item.collapsibleState).to.equal(MockTreeItemCollapsibleState.None);
         });
 
         it('should return a fallback tree item for an unknown key', () => {

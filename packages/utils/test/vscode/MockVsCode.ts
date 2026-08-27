@@ -16,7 +16,7 @@ import { MockQuickPick } from './input/MockQuickPick';
 import { MockFileChangeType, MockFilePermission, MockFileSystem, MockFileSystemError, MockFileType } from './MockFileSystem';
 import { MockOutputChannel } from './MockOutputChannel';
 import { MockUri } from './MockUri';
-import { MockConfigurationTarget, MockProgressLocation, MockRelativePattern, MockShellExecution, MockTask, MockTaskScope, MockThemeColor, MockThemeIcon, MockTreeItemCollapsibleState } from './MockValueTypes';
+import { MockConfigurationTarget, MockMarkdownString, MockProgressLocation, MockRelativePattern, MockShellExecution, MockTask, MockTaskScope, MockThemeColor, MockThemeIcon, MockTreeItemCollapsibleState } from './MockValueTypes';
 import { MockTreeItem } from './tree/MockTreeItem';
 
 /**
@@ -436,6 +436,7 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         ProgressLocation: MockProgressLocation,
         ThemeIcon: MockThemeIcon,
         ThemeColor: MockThemeColor,
+        MarkdownString: MockMarkdownString,
         ShellExecution: MockShellExecution,
         RelativePattern: MockRelativePattern,
         Task: MockTask,
