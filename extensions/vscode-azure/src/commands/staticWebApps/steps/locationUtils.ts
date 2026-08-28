@@ -3,8 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { NoWorkspaceLocationError, showSmartInputBox, type IActionContext, type ICodeContext } from '@microsoft/vscode-azure-utils';
-import type * as vscode from 'vscode';
+import { showSmartInputBox, type IActionContext, type ICodeContext } from '@microsoft/vscode-azure-utils';
 import { parseDocument } from 'yaml';
 
 /** Telemetry taxonomy retained from the source location prompts. */
@@ -61,22 +60,6 @@ export function canAzdDeployStaticWebApp(outputLocation: string): boolean {
     return normalized.length > 0 && normalized !== '/' && normalized !== '.';
 }
 
-/**
- * Returns the folder a location picker measures against, once it is known to sit
- * inside an open workspace folder.
- *
- * @throws {@linkcode NoWorkspaceLocationError} when the project folder is unknown
- *   or lies outside the workspace, so the caller falls back to a typed path
- *   rather than offering a picker that can only produce candidates the workspace
- *   cannot express.
- */
-export function requireWorkspaceBase(ctx: ICodeContext, folder: vscode.Uri | undefined): vscode.Uri {
-    if (!folder || !ctx.code.workspace.getWorkspaceFolder(folder)) {
-        throw new NoWorkspaceLocationError(ctx.code.l10n.t('Open the project folder before selecting a location.'));
-    }
-    return folder;
-}
-
 /** Prompts for a Static Web Apps path that survives the workflow YAML it is written into. */
 export async function promptForYamlSafeLocation(
     ctx: ICodeContext,
@@ -97,23 +80,4 @@ export async function promptForYamlSafeLocation(
                 ? undefined
                 : ctx.code.l10n.t('Enter a value that is safe to use in YAML.')),
     })).trim();
-}
-
-/**
- * Wraps an async derivation so every option resolver of one prompt shares a
- * single evaluation, keyed on the context the wizard passes in. A later prompt
- * of the same step receives a rebuilt context and so re-derives.
- */
-export function derivePerPrompt<TContext extends object, TValue>(
-    derive: (context: TContext) => Promise<TValue>,
-): (context: TContext) => Promise<TValue> {
-    const derived = new WeakMap<TContext, Promise<TValue>>();
-    return context => {
-        let pending = derived.get(context);
-        if (!pending) {
-            pending = derive(context);
-            derived.set(context, pending);
-        }
-        return pending;
-    };
 }

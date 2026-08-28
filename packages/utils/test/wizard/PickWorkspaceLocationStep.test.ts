@@ -5,18 +5,16 @@
 
 import type * as vscode from 'vscode';
 import {
-    NoWorkspaceLocationError,
     PickWorkspaceLocationStep,
-    type PickWorkspaceLocationOptions,
+    pickWorkspaceLocation,
+    type PickWorkspaceLocationArgs,
     type WorkspaceLocation,
 } from '../../src/wizard/PickWorkspaceLocationStep';
 import { MockUri } from '../vscode/MockUri';
 import { createMockCodeContext, respondToPrompts } from '../vscode/MockVsCode';
 
 interface TestContext {
-    readonly appFolder?: string;
     readonly location?: WorkspaceLocation;
-    readonly relativePath?: string;
 }
 
 const strings = {
@@ -39,31 +37,21 @@ function createMockWorkspace(): ReturnType<typeof createMockCodeContext> {
     return context;
 }
 
-function createStep(
-    options: Omit<PickWorkspaceLocationOptions<TestContext>, 'contextProperty' | 'toContext'>,
-): { step: PickWorkspaceLocationStep<TestContext>; mock: ReturnType<typeof createMockCodeContext>['mock'] } {
+function createPicker(args: PickWorkspaceLocationArgs): {
+    pick: () => Promise<WorkspaceLocation | undefined>;
+    mock: ReturnType<typeof createMockCodeContext>['mock'];
+} {
     const { ctx, mock } = createMockWorkspace();
 
-    return {
-        step: new PickWorkspaceLocationStep(ctx, { ...options, contextProperty: 'location' }),
-        mock,
-    };
+    return { pick: () => pickWorkspaceLocation(ctx, args), mock };
 }
 
-describe('PickWorkspaceLocationStep (unit)', () => {
+describe('pickWorkspaceLocation (unit)', () => {
     it('fails before prompting when no workspace folder is open', async () => {
         const { ctx, mock } = createMockCodeContext();
-        const step = new PickWorkspaceLocationStep<TestContext>(ctx, {
-            kind: 'folder',
-            strings,
-            contextProperty: 'location',
-            findFiles: ['package.json'],
-        });
 
-        await expect(step.prompt({})).to.be.rejectedWith(
-            NoWorkspaceLocationError,
-            'Open a workspace folder before selecting a location.',
-        );
+        await expect(pickWorkspaceLocation(ctx, { kind: 'folder', strings, findFiles: ['package.json'] }))
+            .to.be.rejectedWith('Open a workspace folder before selecting a location.');
         expect(mock.workspace.findFiles.mock.calls).to.have.length(0);
         expect(mock.quickPicks).to.have.length(0);
     });
@@ -73,7 +61,7 @@ describe('PickWorkspaceLocationStep (unit)', () => {
             isCancellationRequested: false,
             onCancellationRequested: () => ({ dispose: () => undefined }),
         };
-        const { step, mock } = createStep({
+        const { pick, mock } = createPicker({
             kind: 'file',
             strings,
             findFiles: ['**/*.csproj', '**/obj/**', 12, token],
@@ -82,10 +70,10 @@ describe('PickWorkspaceLocationStep (unit)', () => {
         await createFile(mock.vscode, file);
         const tracker = respondToPrompts(mock, [{ pick: 'src/app.csproj' }]);
 
-        const result = await step.prompt({});
+        const location = await pick();
 
-        expect(result.location?.uri.toString()).to.equal(file.toString());
-        expect(result.location?.relativePath).to.equal('src/app.csproj');
+        expect(location?.uri.toString()).to.equal(file.toString());
+        expect(location?.relativePath).to.equal('src/app.csproj');
         expect(mock.workspace.findFiles.mock.calls).to.have.length(1);
         expect(mock.workspace.findFiles.mock.calls[0].arguments).to.deep.equal([
             '**/*.csproj',
@@ -97,7 +85,7 @@ describe('PickWorkspaceLocationStep (unit)', () => {
     });
 
     it('deduplicates containing folders found from matching files', async () => {
-        const { step, mock } = createStep({
+        const { pick, mock } = createPicker({
             kind: 'folder',
             strings: {
                 ...strings,
@@ -109,9 +97,9 @@ describe('PickWorkspaceLocationStep (unit)', () => {
         await createFile(mock.vscode, mock.vscode.Uri.from({ scheme: 'file', path: '/repo/api/host.json' }));
         const tracker = respondToPrompts(mock, [{ pick: 'api' }]);
 
-        const result = await step.prompt({});
+        const location = await pick();
 
-        expect(result.location?.relativePath).to.equal('api');
+        expect(location?.relativePath).to.equal('api');
         expect(mock.quickPicks[0].items.map(item => item.label)).to.deep.equal([
             'api',
         ]);
@@ -119,7 +107,7 @@ describe('PickWorkspaceLocationStep (unit)', () => {
     });
 
     it('returns locations relative to a configured base', async () => {
-        const { step, mock } = createStep({
+        const { pick, mock } = createPicker({
             kind: 'folder',
             relativeTo: MockUri.file('/repo/apps/web'),
             suggestedRelativePaths: ['dist'],
@@ -132,71 +120,15 @@ describe('PickWorkspaceLocationStep (unit)', () => {
         });
         const tracker = respondToPrompts(mock, ['acceptDefault']);
 
-        const result = await step.prompt({});
+        const location = await pick();
 
-        expect(result.location?.relativePath).to.equal('dist');
-        expect(result.location?.uri.path).to.equal('/repo/apps/web/dist');
-        tracker.assertAllConsumed();
-    });
-
-    it('derives options from the context when the step runs', async () => {
-        const { step, mock } = createStep({
-            kind: 'folder',
-            strings,
-            findFiles: context => Promise.resolve([`${context.appFolder}/**/*.json`]),
-            relativeTo: context => Promise.resolve(MockUri.file(`/repo/${context.appFolder}`)),
-            suggestedRelativePaths: () => Promise.resolve(['dist']),
-            value: () => Promise.resolve('dist'),
-        });
-        const tracker = respondToPrompts(mock, ['acceptDefault']);
-
-        const result = await step.prompt({ appFolder: 'apps/web' });
-
-        expect(mock.workspace.findFiles.mock.calls[0].arguments).to.deep.equal(['apps/web/**/*.json']);
-        expect(result.location?.uri.path).to.equal('/repo/apps/web/dist');
-        tracker.assertAllConsumed();
-    });
-
-    it('projects the selection when the context stores something other than a location', async () => {
-        const { ctx, mock } = createMockWorkspace();
-        const step = new PickWorkspaceLocationStep<TestContext>(ctx, {
-            kind: 'folder',
-            strings,
-            findFiles: ['**/*'],
-            relativeTo: MockUri.file('/repo'),
-            suggestedRelativePaths: ['dist'],
-            value: 'dist',
-            noneLabel: 'No output',
-            toContext: location => ({ relativePath: location?.relativePath ?? '' }),
-        });
-        const tracker = respondToPrompts(mock, ['acceptDefault']);
-
-        const result = await step.prompt({});
-
-        expect(result).to.deep.equal({ relativePath: 'dist' });
-        tracker.assertAllConsumed();
-    });
-
-    it('projects an explicit none choice as an absent selection', async () => {
-        const { ctx, mock } = createMockWorkspace();
-        const step = new PickWorkspaceLocationStep<TestContext>(ctx, {
-            kind: 'folder',
-            strings,
-            findFiles: ['**/*'],
-            relativeTo: MockUri.file('/repo'),
-            noneLabel: 'No output',
-            toContext: location => ({ relativePath: location?.relativePath ?? '' }),
-        });
-        const tracker = respondToPrompts(mock, [{ pick: 'No output' }]);
-
-        const result = await step.prompt({});
-
-        expect(result).to.deep.equal({ relativePath: '' });
+        expect(location?.relativePath).to.equal('dist');
+        expect(location?.uri.path).to.equal('/repo/apps/web/dist');
         tracker.assertAllConsumed();
     });
 
     it('normalizes a root initial value to the displayed root label', async () => {
-        const { step, mock } = createStep({
+        const { pick, mock } = createPicker({
             kind: 'folder',
             relativeTo: MockUri.file('/repo'),
             suggestedRelativePaths: ['/'],
@@ -207,15 +139,15 @@ describe('PickWorkspaceLocationStep (unit)', () => {
         });
         const tracker = respondToPrompts(mock, ['acceptDefault']);
 
-        const result = await step.prompt({});
+        const location = await pick();
 
         expect(mock.quickPicks[0].value).to.equal('.');
-        expect(result.location?.relativePath).to.equal('');
+        expect(location?.relativePath).to.equal('');
         tracker.assertAllConsumed();
     });
 
     it('preserves an empty initial value for an explicit none choice', async () => {
-        const { step, mock } = createStep({
+        const { pick, mock } = createPicker({
             kind: 'folder',
             relativeTo: MockUri.file('/repo'),
             suggestedRelativePaths: ['/'],
@@ -227,15 +159,15 @@ describe('PickWorkspaceLocationStep (unit)', () => {
         });
         const tracker = respondToPrompts(mock, ['acceptDefault']);
 
-        const result = await step.prompt({});
+        const location = await pick();
 
         expect(mock.quickPicks[0].value).to.equal('');
-        expect(result).to.have.property('location', undefined);
+        expect(location).to.equal(undefined);
         tracker.assertAllConsumed();
     });
 
     it('accepts a custom location that stays inside the workspace', async () => {
-        const { step, mock } = createStep({
+        const { pick, mock } = createPicker({
             kind: 'folder',
             relativeTo: MockUri.file('/repo/apps/web'),
             allowCustom: true,
@@ -247,15 +179,15 @@ describe('PickWorkspaceLocationStep (unit)', () => {
         });
         const tracker = respondToPrompts(mock, [{ value: '../shared' }]);
 
-        const result = await step.prompt({});
+        const location = await pick();
 
-        expect(result.location?.relativePath).to.equal('../shared');
-        expect(result.location?.uri.path).to.equal('/repo/apps/shared');
+        expect(location?.relativePath).to.equal('../shared');
+        expect(location?.uri.path).to.equal('/repo/apps/shared');
         tracker.assertAllConsumed();
     });
 
     it('returns undefined for an explicit none choice', async () => {
-        const { step, mock } = createStep({
+        const { pick, mock } = createPicker({
             kind: 'folder',
             noneLabel: 'No output',
             strings,
@@ -263,9 +195,26 @@ describe('PickWorkspaceLocationStep (unit)', () => {
         });
         const tracker = respondToPrompts(mock, [{ pick: 'No output' }]);
 
+        expect(await pick()).to.equal(undefined);
+        tracker.assertAllConsumed();
+    });
+});
+
+describe('PickWorkspaceLocationStep (unit)', () => {
+    it('stores the picked location on the configured context property', async () => {
+        const { ctx, mock } = createMockWorkspace();
+        const step = new PickWorkspaceLocationStep<TestContext>(ctx, ['*.json'], {
+            kind: 'folder',
+            strings,
+            contextProperty: 'location',
+        });
+        await createFile(mock.vscode, mock.vscode.Uri.from({ scheme: 'file', path: '/repo/api/package.json' }));
+        const tracker = respondToPrompts(mock, [{ pick: 'api' }]);
+
         const result = await step.prompt({});
 
-        expect(result).to.have.property('location', undefined);
+        expect(result.location?.relativePath).to.equal('api');
+        expect(mock.workspace.findFiles.mock.calls[0].arguments).to.deep.equal(['*.json']);
         tracker.assertAllConsumed();
     });
 });
