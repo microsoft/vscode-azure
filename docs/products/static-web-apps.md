@@ -49,14 +49,8 @@ linked workflow runs.
 
 ## Local Tooling
 
-Static Web Apps owns its local CLI and task integration through product-specific
-DI bindings:
-
-- `SwaInstaller` integrates the SWA CLI with the shared tool service.
-- The task provider is a singleton binding so commands and the VS Code
-  registration share state.
-- `registerStaticWebApps()` declares an activation on the `ProductRegistrar` that
-  pushes the VS Code task registration into `IExtensionContext.subscriptions`.
+`SwaInstaller` integrates the SWA CLI with the shared tool service and exposes
+the install/update command.
 
 ## Settings
 

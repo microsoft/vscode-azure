@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { IStaticWebAppClientProvider, StaticWebAppClient } from '@microsoft/vscode-azure-azutils';
-import { IExtensionContext, IVsCode } from '@microsoft/vscode-azure-utils';
 import { DeployStaticWebAppCommandId } from '../constants';
 import { CreateStaticWebApp } from '../commands/staticWebApps/CreateStaticWebApp';
 import { CreateSwaConfigFile } from '../commands/staticWebApps/CreateSwaConfigFile';
@@ -19,7 +18,6 @@ import { StaticWebAppSettingsAdapter } from '../settings/adapters/StaticWebAppSe
 import { GitRemoteService, IGitRemoteService } from '../staticWebApps/GitRemoteService';
 import { staticWebAppDatabaseDetector } from '../staticWebApps/DatabaseConfigDetector';
 import { IWorkspaceDetector } from '../utils/workspaceIndex/WorkspaceDetector';
-import { SwaTaskProvider } from '../tasks/staticWebApps/SwaTaskProvider';
 import { IStaticWebAppDataProvider, StaticWebAppDataProvider } from '../tree/resources/staticWebApps/StaticWebAppDataProvider';
 import { StaticWebAppViewProvider } from '../tree/resources/staticWebApps/StaticWebAppViewProvider';
 import { staticWebAppProjectDetector } from '../commands/staticWebApps/steps/frameworkDetection';
@@ -36,7 +34,6 @@ export function registerStaticWebApps(registrar: ProductRegistrar): void {
         container.bind(IGitRemoteService).to(GitRemoteService).inSingletonScope();
         container.bind(IWorkspaceDetector).toConstantValue(staticWebAppDatabaseDetector);
         container.bind(IWorkspaceDetector).toConstantValue(staticWebAppProjectDetector);
-        container.bind(SwaTaskProvider).toSelf().inSingletonScope();
     });
 
     registrar.registerCommand('vscode-azure/staticWebApps/createNew', CreateStaticWebApp);
@@ -49,14 +46,4 @@ export function registerStaticWebApps(registrar: ProductRegistrar): void {
 
     registrar.registerResourceDataProvider([IStaticWebAppDataProvider, StaticWebAppDataProvider]);
     registrar.registerResourceViewProvider(StaticWebAppViewProvider);
-
-    registrar.registerActivation(container => {
-        const code = container.get(IVsCode);
-        const extensionContext = container.get(IExtensionContext);
-        const taskProvider = container.get(SwaTaskProvider);
-
-        extensionContext.subscriptions.push(
-            code.tasks.registerTaskProvider('shell', taskProvider),
-        );
-    });
 }

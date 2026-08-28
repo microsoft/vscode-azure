@@ -163,12 +163,3 @@ Some providers need to be injected directly by commands *and* retrieved collecti
 2. `container.bind(IActivityViewDataProviders).toService(IArmDeploymentDataProvider)`
 
 So `ClearActivities` can inject `IArmDeploymentDataProvider` directly and get the *same instance* the tree sees through `container.getAll(IActivityViewDataProviders)`. Without the singleton scope the two would be different objects, and the command's mutations would never reach the tree.
-
-## Activation-Owned Local Tooling
-
-Static Web Apps local tooling follows the same ownership model as tree providers:
-
-- The task provider is a singleton binding so commands and the VS Code
-  registration share state.
-- `registerStaticWebApps()` declares an activation on the `ProductRegistrar` that
-  pushes the VS Code task registration into `IExtensionContext.subscriptions`.

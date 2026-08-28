@@ -10,7 +10,7 @@ Telemetry usage: not collected for this artifact because the PR task explicitly 
 
 ## Migration disposition summary
 
-Disposition counts in this inventory: **32 migrated**, **13 replaced-by-monorepo-equivalent**, **19 dropped**, **3 deferred**, **0 UNKNOWN**. A feature is counted once in the table below; target-only features are listed later under discrepancies, not counted as source features.
+Disposition counts in this inventory: **30 migrated**, **13 replaced-by-monorepo-equivalent**, **19 dropped**, **5 deferred**, **0 UNKNOWN**. A feature is counted once in the table below; target-only features are listed later under discrepancies, not counted as source features.
 
 | # | Source feature | Disposition | One-line rationale | Evidence |
 |---|---|---|---|---|
@@ -64,12 +64,12 @@ Disposition counts in this inventory: **32 migrated**, **13 replaced-by-monorepo
 | 48 | `invalidFunction` placeholder | migrated | Reimplemented as `InvalidStaticWebAppNode` with the same context value. | Source: `FunctionsTreeItem.ts`; target: `StaticWebAppDataProvider.ts`, `StaticWebApp.ts`. |
 | 49 | `invalidActionTreeItem` / `invalidJobTreeItem` / `invalidStepTreeItem` placeholders | dropped | Dropped with the GitHub Actions tree. | Source: `ActionsTreeItem.ts`, `ActionTreeItem.ts`, `JobTreeItem.ts`; target search. |
 | 50 | SWA debug configuration provider | deferred | Deferred until Azure Functions debugging is available in the monorepo extension. | Source: `StaticWebAppDebugProvider.ts`; target issue #339. |
-| 51 | SWA task provider | migrated | Reimplemented as `SwaTaskProvider`, still using shell tasks and `$swa-watch`. | Source: `cli/SwaCliTaskProvider.ts`; target: `tasks/staticWebApps/SwaTaskProvider.ts`. |
+| 51 | SWA task provider | deferred | Deferred with SWA debugging because its generated emulator tasks support that workflow. | Source: `cli/SwaCliTaskProvider.ts`; target issue #339. |
 | 52 | Stop SWA task on top-level debug termination | deferred | Deferred with the SWA debug configuration provider. | Source: `commands/cli/swaCliTask.ts`; target issue #339. |
 | 53 | `swa-cli.config.json` parsing | migrated | Reimplemented with `vscode.workspace.fs` and the same option surface. | Source: `cli/tryGetStaticWebAppsCliConfig.ts`; target: `staticWebApps/SwaCliConfig.ts`. |
 | 54 | Data API builder config detection | migrated | Reimplemented as bounded workspace walk for `staticwebapp.database.config.json`. | Source: `cli/dab.ts`; target: `staticWebApps/DatabaseConfigDetector.ts`. |
 | 55 | JSON validation for `staticwebapp.config.json` and `swa-cli.config.json` | migrated | Same schema registrations exist in the target manifest. | Source and target `package.json`. |
-| 56 | `$swa-watch` problem matcher | migrated | Same matcher name and background end pattern exist in target manifest, with owner normalized to `swa`. | Source and target `package.json`. |
+| 56 | `$swa-watch` problem matcher | deferred | Deferred with the SWA task provider and debugging workflow. | Source: `package.json`; target issue #339. |
 | 57 | SWA CLI install/update/uninstall/version helpers | migrated | Reimplemented as injectable `SwaCliService`. | Source: `commands/cli/*`; target: `SwaCliService.ts`, CLI command classes. |
 | 58 | Activation-time outdated SWA CLI warning | migrated | Reimplemented in `registerStaticWebApps()` and gated by workspace project detection plus the target warning setting. | Source: `validateSwaCliIsLatest.ts`, `extension.ts`; target: `registerStaticWebApps.ts`, `SwaCliService.ts`. |
 | 59 | GitHub auth + Octokit Actions integration | dropped | No target Octokit usage; target deployment routing uses read-only Git metadata and azd. | Source: `extension.ts`, `createOctokitClient.ts`, `github/*`; target search and `GitRemoteService.ts`. |
@@ -89,8 +89,8 @@ Disposition counts in this inventory: **32 migrated**, **13 replaced-by-monorepo
 - Source capabilities (A): virtual workspaces supported `limited`; command gates include `!isWeb` and `!virtualWorkspace`. Target keeps virtual workspaces `limited` and keeps gates on deploy/config/CLI commands where applicable.
 - Source `x-azResources` (A): branch type `StaticWebApps`, create command `staticWebApps.createStaticWebApp`, activation on ARM type `microsoft.web/staticsites`. Target replaces this with monorepo product registration, `StaticWebAppDataProvider`, `StaticWebAppViewProvider`, and `StaticWebAppResourceType` in `packages/azutils/src/rest/clients/ResourceClient.ts`.
 - Source exported API (B): `activate()` returned `RemoteRepoApi`, which implemented Remote Repositories/Git API methods/events plus Azure extension API `getApi()` exposing `revealTreeItem` v1.0.0. Target has no source-specific exported SWA API found.
-- Source activation wiring (B): output channel, UI/azureutils globals, activation telemetry, optional GitHub auth session, GitHub log folding provider, debug providers, shell task provider, Azure Resources resolver, RemoteRepo API, task events, commands, experimentation service. Target wires DI bindings, commands, data/view providers, the shell task provider, and CLI validation in `registerStaticWebApps.ts`.
-- Telemetry (B): commands use their command ids; non-command callback ids include `staticWebApps.activate`, `resolveResource`, `staticWebApps.postCreateStaticWebApp`, `staticWebApps.showSwaCreated`, `staticWebApps.provideDebugConfigurations`, `staticWebApps.resolveDebugConfiguration`, `staticWebApps.provideTasks`, `staticWebApps.provideTasksForWorkspaceFolder`, `staticWebApps.validateStaticWebAppsCliIsLatest`, `staticWebApps.onDidTerminateDebugSession`, `staticWebApps.onDidStartTask`, and `api.revealTreeItem`. Target retains analogous callback ids for tasks and CLI validation and adds target command ids.
+- Source activation wiring (B): output channel, UI/azureutils globals, activation telemetry, optional GitHub auth session, GitHub log folding provider, debug providers, shell task provider, Azure Resources resolver, RemoteRepo API, task events, commands, experimentation service. Target wires DI bindings, commands, data/view providers, and SWA CLI acquisition.
+- Telemetry (B): commands use their command ids; non-command callback ids include `staticWebApps.activate`, `resolveResource`, `staticWebApps.postCreateStaticWebApp`, `staticWebApps.showSwaCreated`, `staticWebApps.provideDebugConfigurations`, `staticWebApps.resolveDebugConfiguration`, `staticWebApps.provideTasks`, `staticWebApps.provideTasksForWorkspaceFolder`, `staticWebApps.validateStaticWebAppsCliIsLatest`, `staticWebApps.onDidTerminateDebugSession`, `staticWebApps.onDidStartTask`, and `api.revealTreeItem`. The target task and debug callback ids are deferred with those workflows.
 
 ## 1. Commands (A + B)
 
@@ -256,10 +256,10 @@ Submenus: source `staticWebApps.submenus.workspaceActions` migrated to target `v
 
 - Debuggers (A): source contributed debugger `{ type: 'swa', label: 'Azure Static Web Apps' }`; target defers the debugger contribution until Azure Functions debugging is available in the monorepo extension (issue #339).
 - Debug provider behavior (B): source `StaticWebAppDebugProvider` generated `pwa-chrome` configs from `swa-cli.config.json` and detected app folders, used `SWA: Run <name>`, `url: http://localhost:4280`, `preLaunchTask: swa: start <name>`, `timeout: 30000`, validated `swa` CLI, optionally fixed config `apiLocation` to `http://localhost:7071`, and started Azure Functions attach debugging. Target defers this behavior to issue #339.
-- Task providers (B): source registered a `shell` task provider and generated background `swa` tasks from named `swa-cli.config.json` configurations plus detected projects; target `SwaTaskProvider` does the same, deduplicating by label.
-- Source generated task command shape: `swa start [context] --app-location <path> --api-location http://localhost:7071 --run <command> --data-api-location <folder> --devserver-timeout=90000`, env `BROWSER=none`, problem matcher `$swa-watch`. Target preserves this command shape.
-- Problem matcher (A): source `swa-watch`, owner `Azure Static Web Apps`, source `swa`, background `activeOnStart: true`, `beginsPattern: '.'`, `endsPattern: 'Azure Static Web Apps emulator started'`. Target preserves name/source/background pattern; owner is `swa`.
-- No source or target `taskDefinitions` contribution exists; both use the built-in `shell` task type.
+- Task providers (B): source registered a `shell` task provider and generated background `swa` tasks from named `swa-cli.config.json` configurations plus detected projects. Target defers this provider with the debugging workflow to issue #339.
+- Source generated task command shape: `swa start [context] --app-location <path> --api-location http://localhost:7071 --run <command> --data-api-location <folder> --devserver-timeout=90000`, env `BROWSER=none`, problem matcher `$swa-watch`. Target defers this behavior to issue #339.
+- Problem matcher (A): source `swa-watch`, owner `Azure Static Web Apps`, source `swa`, background `activeOnStart: true`, `beginsPattern: '.'`, `endsPattern: 'Azure Static Web Apps emulator started'`. Target defers the matcher with the task provider.
+- The source has no `taskDefinitions` contribution and uses the built-in `shell` task type.
 
 ## 5. Wizards (B)
 

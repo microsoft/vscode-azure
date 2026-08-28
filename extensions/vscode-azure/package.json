@@ -523,25 +523,6 @@
                 "fileMatch": "swa-cli.config.json",
                 "url": "https://raw.githubusercontent.com/Azure/static-web-apps-cli/main/schema/swa-cli.config.schema.json"
             }
-        ],
-        "problemMatchers": [
-            {
-                "name": "swa-watch",
-                "label": "%problemMatchers.vscode-azure/staticWebApps/swaWatch%",
-                "owner": "swa",
-                "source": "swa",
-                "pattern": {
-                    "regexp": ".",
-                    "file": 1,
-                    "location": 2,
-                    "message": 3
-                },
-                "background": {
-                    "activeOnStart": true,
-                    "beginsPattern": ".",
-                    "endsPattern": "Azure Static Web Apps emulator started"
-                }
-            }
         ]
     },
     "scripts": {
