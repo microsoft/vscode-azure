@@ -70,8 +70,8 @@ are context values consumed by shared commands.
   portal URLs for Functions. <- SWA-009, SWA-020
 - [x] Keep Static Web Apps and Functions documentation commands.
   <- SWA-024, SWA-028
-- [x] Keep environment properties as a product command pending adoption of the
-  shared implementation in PR #327. <- SWA-027
+- [x] Serve environment properties through the shared `ViewProperties` command
+  with a product `PropertiesAdapter`. <- SWA-027
 - [x] Retain both JSON schema associations. <- SWA-055
 
 ## Slice 3 -- Creation with azd and Bicep
@@ -176,10 +176,6 @@ Mapping: `SwaInstaller` implements the shared `ToolInstaller` contract;
 
 ## Open follow-ups
 
-- [ ] Replace the product-specific environment properties command when the
-  shared implementation in
-  [PR #327](https://github.com/microsoft/vscode-azure/pull/327) lands.
-  <- SWA-027
 - [ ] Resolve the four ownership-boundary review threads on PR #237 before
   declaring creation/deployment architecture final.
   <- SWA-012, SWA-061, SWA-064, SWA-065, SWA-066, SWA-067
@@ -191,3 +187,10 @@ its earlier rebase/merge history was not recorded as migration drift at the
 time. The 2026-08-28 branch audit verified the current shared abstractions:
 workspace location picking, resource selection, related-resource portal URLs,
 paging, settings, and tool acquisition. No historical per-rebase claim is made.
+
+Sweeps recorded from that audit onward:
+
+| Merge | Swept result |
+|---|---|
+| `main` (after #338) | Adopted the newly shared primitives it brought in; no product copy remained. |
+| #327, shared View Properties | Replaced the product properties command with `StaticWebAppEnvironmentPropertiesAdapter`. This branch is now based on `alexweininger-shared-view-properties`, so #327 merges first. |

@@ -45,12 +45,14 @@ than silently disappearing.
 | Deploy Static Web App... | palette / post-create route | Uses azd for direct deployment or CI/CD setup |
 | Create Configuration File | workspace | Creates `staticwebapp.config.json` |
 | Delete Environment... | preview environment | Deletes the selected build |
-| View Properties | environment | Shows the selected environment payload |
 | Documentation | palette | Opens Static Web Apps documentation |
 | Azure Functions Documentation | Functions help | Opens managed API guidance |
 | Install / Update Azure Static Web Apps CLI | palette | Shared tool acquisition for `swa` |
 
-Open in Portal, Browse Website, and root-resource Delete are shared commands.
+Open in Portal, Browse Website, root-resource Delete, and View Properties are
+shared commands. View Properties reads an environment through
+`StaticWebAppEnvironmentPropertiesAdapter`, because the payload worth showing is
+the build behind the virtual node rather than what an ARM GET returns.
 
 ## Environments, settings, and managed Functions
 
@@ -128,7 +130,7 @@ Two similarly named files have separate owners:
 | `staticwebapp.config.json` | Service routing, fallback, authentication, and related runtime configuration |
 | `swa-cli.config.json` | Local SWA CLI configuration; creation reads location defaults from it |
 
-The manifest associates the public schemas for the first two files.
+The manifest associates the public schemas for both files.
 
 `SwaInstaller` registers the `swa` executable with the shared tool service. The
 independent install/update command acquires version 2 or later through
@@ -145,8 +147,6 @@ npm package. No CLI check or outdated-version warning runs at activation.
 - GitHub Actions run/job/step browsing and native SWA workflow parsing are not
   part of the product.
 - Repository bootstrap is not implemented and has no linked tracking issue.
-- Environment properties remain product-specific pending the shared command in
-  [PR #327](https://github.com/microsoft/vscode-azure/pull/327).
 
 See [PARITY-REPORT.md](../migrations/swa/PARITY-REPORT.md) for row-by-row
 accounting.

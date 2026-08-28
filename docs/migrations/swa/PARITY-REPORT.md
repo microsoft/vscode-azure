@@ -139,12 +139,9 @@ searched for the source-specific command IDs/types:
    The current branch parses/edits `azure.yaml`, owns a build-preset picker, and
    wraps azd deployment routing. Review feedback asks whether these belong in
    azd instead. Rows are reported as landed, not as finally accepted design.
-2. **Environment properties are still product-specific.** PR
-   [#327](https://github.com/microsoft/vscode-azure/pull/327) tracks/adopts a
-   shared resource-properties command.
-3. **Debugging and generated tasks are not present.** Issue
+2. **Debugging and generated tasks are not present.** Issue
    [#339](https://github.com/microsoft/vscode-azure/issues/339) tracks the five
    related deferred rows after native Functions debugging.
-4. **Repository bootstrap has no linked issue.** It is a genuine deferred
+3. **Repository bootstrap has no linked issue.** It is a genuine deferred
    decision, not a landed capability.
-5. **No live-Azure verification is claimed by this documentation audit.**
+4. **No live-Azure verification is claimed by this documentation audit.**
