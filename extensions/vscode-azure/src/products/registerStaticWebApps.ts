@@ -15,7 +15,6 @@ import { ViewStaticWebAppProperties } from '../commands/staticWebApps/ViewStatic
 import type { ProductRegistrar } from '../registration/ProductRegistrar';
 import { StaticWebAppSettingsAdapter } from '../settings/adapters/StaticWebAppSettingsAdapter';
 import { GitRemoteService, IGitRemoteService } from '../staticWebApps/GitRemoteService';
-import { staticWebAppDatabaseDetector } from '../staticWebApps/DatabaseConfigDetector';
 import { IWorkspaceDetector } from '../utils/workspaceIndex/WorkspaceDetector';
 import { IStaticWebAppDataProvider, StaticWebAppDataProvider } from '../tree/resources/staticWebApps/StaticWebAppDataProvider';
 import { StaticWebAppViewProvider } from '../tree/resources/staticWebApps/StaticWebAppViewProvider';
@@ -30,7 +29,6 @@ export function registerStaticWebApps(registrar: ProductRegistrar): void {
     registrar.registerBinding(container => {
         container.bind(StaticWebAppSettingsAdapter).toSelf().inSingletonScope();
         container.bind(IGitRemoteService).to(GitRemoteService).inSingletonScope();
-        container.bind(IWorkspaceDetector).toConstantValue(staticWebAppDatabaseDetector);
         container.bind(IWorkspaceDetector).toConstantValue(staticWebAppProjectDetector);
     });
 

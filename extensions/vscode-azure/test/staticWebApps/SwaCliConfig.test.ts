@@ -4,28 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
-import type * as vscode from 'vscode';
-import {
-    getFolderContainingDatabaseConfig,
-    staticWebAppDatabaseDetector,
-} from '../../src/staticWebApps/DatabaseConfigDetector';
-import { createTestIndexService } from '../utils/workspaceIndex/createTestIndexService';
 import { SwaCliConfigFileName, tryGetStaticWebAppsCliConfig } from '../../src/staticWebApps/SwaCliConfig';
 
-/** Indexes the mock workspace exactly as the extension does, then queries it. */
-async function findDatabaseConfigFolder(
-    mockResult: ReturnType<typeof createMockVsCode>,
-    root: vscode.Uri,
-    siblingFolders: readonly vscode.Uri[] = [],
-): Promise<vscode.Uri | undefined> {
-    for (const [index, uri] of [root, ...siblingFolders].entries()) {
-        mockResult.workspaceFolders.push({ uri, name: `workspace${index}`, index });
-    }
-    const indexService = createTestIndexService(mockResult.vscode, [staticWebAppDatabaseDetector]);
-    return getFolderContainingDatabaseConfig(mockResult.vscode, indexService, root);
-}
-
-describe('Static Web Apps local config detection (unit)', () => {
+describe('SwaCliConfig (unit)', () => {
     it('should parse the complete SWA CLI option surface', async () => {
         const mockResult = createMockVsCode();
         const root = mockResult.vscode.Uri.file('/workspace');
@@ -95,67 +76,4 @@ describe('Static Web Apps local config detection (unit)', () => {
         expect((error as Error).message).to.contain('parse');
     });
 
-    it('should prefer the shallowest database config outside excluded directories', async () => {
-        const mockResult = createMockVsCode();
-        const root = mockResult.vscode.Uri.file('/workspace');
-        mockResult.fs.addFile(
-            mockResult.vscode.Uri.joinPath(root, 'node_modules', 'staticwebapp.database.config.json'),
-        );
-        mockResult.fs.addFile(
-            mockResult.vscode.Uri.joinPath(root, 'too', 'deep', 'staticwebapp.database.config.json'),
-        );
-        mockResult.fs.addFile(
-            mockResult.vscode.Uri.joinPath(root, 'data', 'staticwebapp.database.config.json'),
-        );
-
-        const result = await findDatabaseConfigFolder(mockResult, root);
-
-        expect(result?.path).to.equal('/workspace/data');
-    });
-
-    it('should not treat a root database config as a match', async () => {
-        const mockResult = createMockVsCode();
-        const root = mockResult.vscode.Uri.file('/workspace');
-        mockResult.fs.addFile(
-            mockResult.vscode.Uri.joinPath(root, 'staticwebapp.database.config.json'),
-        );
-
-        expect(await findDatabaseConfigFolder(mockResult, root)).to.equal(undefined);
-    });
-
-    it('should find a nested database config when nothing shallower has one', async () => {
-        const mockResult = createMockVsCode();
-        const root = mockResult.vscode.Uri.file('/workspace');
-        mockResult.fs.addFile(
-            mockResult.vscode.Uri.joinPath(root, 'one', 'two', 'staticwebapp.database.config.json'),
-        );
-
-        const result = await findDatabaseConfigFolder(mockResult, root);
-
-        expect(result?.path).to.equal('/workspace/one/two');
-    });
-
-    it('should ignore a database config in a sibling workspace folder', async () => {
-        const mockResult = createMockVsCode();
-        const root = mockResult.vscode.Uri.file('/workspace');
-        const sibling = mockResult.vscode.Uri.file('/other');
-        mockResult.fs.addFile(
-            mockResult.vscode.Uri.joinPath(sibling, 'data', 'staticwebapp.database.config.json'),
-        );
-
-        expect(await findDatabaseConfigFolder(mockResult, root, [sibling])).to.equal(undefined);
-    });
-
-    it('should ignore a database config inside an excluded directory', async () => {
-        const mockResult = createMockVsCode();
-        const root = mockResult.vscode.Uri.file('/workspace');
-        mockResult.fs.addFile(
-            mockResult.vscode.Uri.joinPath(root, 'node_modules', 'pkg', 'staticwebapp.database.config.json'),
-        );
-        mockResult.fs.addFile(
-            mockResult.vscode.Uri.joinPath(root, 'dist', 'staticwebapp.database.config.json'),
-        );
-
-        expect(await findDatabaseConfigFolder(mockResult, root)).to.equal(undefined);
-    });
 });

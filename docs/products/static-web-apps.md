@@ -1,124 +1,152 @@
-# Static Web Apps
+# Azure Static Web Apps
 
-How the Static Web Apps product is built on the shared monorepo frameworks.
-For the frameworks themselves see [Resource Creation](../resource-creation.md),
-[Settings](../settings.md), and [Tree Views](../tree-views.md).
+Current product documentation for Static Web Apps features in
+`extensions/vscode-azure`.
 
-## Creation
+The migration records are:
+[INVENTORY.md](../migrations/swa/INVENTORY.md) for source-extension facts,
+[TRIAGE.md](../migrations/swa/TRIAGE.md) for decisions,
+[MIGRATION-PLAN.md](../migrations/swa/MIGRATION-PLAN.md) for the reconstructed
+implementation sequence, and
+[PARITY-REPORT.md](../migrations/swa/PARITY-REPORT.md) for current coverage and
+open gaps.
 
-`CreateStaticWebApp` registers `vscode-azure/staticWebApps/createNew` (basic)
-and `vscode-azure/staticWebApps/createAdvanced` (advanced). An open workspace
-selects the `deploy` job; without one, creation uses temporary IaC and
-provisions only. Basic mode defaults to the Free SKU. Advanced mode adds the
-Free/Standard SKU prompt.
-The shared location step is constrained to Central US, East US 2, East Asia,
-West Europe, and West US 2 for this resource type.
+## Tree shape
 
-After the shared folder, hydration, subscription, location, and project-name
-steps, the wizard selects a grouped build preset and prompts for application,
-Functions API, and output locations. Detection reads workspace files through
-`vscode.workspace.fs`, preselects retained frameworks, resolves Angular
-`dist/<project-name>`, and prefers Functions APIs in root, one-level, then
-deeper order. The three location prompts honor:
+```text
+Static Web App
+|- Production environment
+|  |- Application Settings
+|  `- Functions (or Functions help)
+`- Preview environment xN
+   |- Application Settings
+   `- Functions (or Functions help)
+```
 
-- `vscode-azure.staticWebApps.appSubpath`
-- `vscode-azure.staticWebApps.apiSubpath`
-- `vscode-azure.staticWebApps.outputSubpath`
+The root is a `Microsoft.Web/staticSites` ARM resource. Environments come from
+the Static Sites builds API and are virtual nodes, not first-class ARM
+resources. The build id `default` identifies production; all other builds are
+preview environments. Production is sorted first.
 
-Execution generates `staticWebApp.bicep` plus its resource-group module,
-initializes `azure.yaml`, adds a `host: staticwebapp` service when the selected
-artifact shape is supported, creates the azd environment, provisions, and
-deploys when applicable. The Bicep resource uses
-`Microsoft.Web/staticSites@2023-12-01`, emits its HTTPS endpoint, and tags the
-site with `azd-env-name` and `azd-service-name`.
+Preview labels can contain service-provided pull request titles and branches.
+Virtual paths use the stable build id, not those display values. Fork branch
+values are normalized for display without changing production's source branch.
+Each build carries its own hostname, so the root and every environment can use
+the shared Browse Website command.
 
-Existing GitHub remote and branch metadata is retained only when the remote is
-on github.com. No token is written, workflow generation is disabled, and the
-wizard never creates a repository or pushes code. Repository bootstrap is
-intentionally deferred until it can be an explicit, independently confirmed
-flow.
+Malformed environments and functions remain visible as warning nodes rather
+than silently disappearing.
 
-Current azd Static Web Apps deployment requires an artifact directory distinct
-from the source directory. Empty, `/`, and `.` output locations therefore
-provision the resource but skip service generation and `azd deploy`; the
-resource remains available in the refreshed Azure tree. A selected Functions
-path is retained as Bicep build metadata, but direct azd deployment does not
-create a managed Functions workflow. Direct azd deployments also do not poll
-GitHub Actions; the existing 15-second/20-minute poller is reserved for actual
-linked workflow runs.
+## Commands
 
-## Local Tooling
+| Command | Acts on | Notes |
+|---|---|---|
+| Create Static Web App... | palette / workspace | azd+Bicep creation; Free plan by default |
+| Deploy Static Web App... | palette / post-create route | Uses azd for direct deployment or CI/CD setup |
+| Create Configuration File | workspace | Creates `staticwebapp.config.json` |
+| Delete Environment... | preview environment | Deletes the selected build |
+| View Properties | environment | Shows the selected environment payload |
+| Documentation | palette | Opens Static Web Apps documentation |
+| Azure Functions Documentation | Functions help | Opens managed API guidance |
+| Install / Update Azure Static Web Apps CLI | palette | Shared tool acquisition for `swa` |
 
-`SwaInstaller` integrates the SWA CLI with the shared tool service and exposes
-the install/update command.
+Open in Portal, Browse Website, and root-resource Delete are shared commands.
 
-## Settings
+## Environments, settings, and managed Functions
 
-Static Web Apps keeps no application settings on the site itself, so the site
-node has no settings document. Each *environment* -- production plus one per
-open pull request -- owns its own dictionary, and they come from different ARM
-endpoints: production reads and writes at the site level, while every other
-environment is keyed by its build id.
+Production and preview environments use different Static Sites endpoints:
+site-level endpoints for production and build-level endpoints for previews.
+That distinction applies to settings and managed Functions.
 
-`StaticWebAppDataProvider` therefore passes the environment's virtual node to
-`getSettingsNodes` rather than the ARM resource, which keys the settings node
-beneath the environment at `environments/<buildId>/settings`, and passes a
-document name so sibling environments open as distinguishable editor tabs.
-`StaticWebAppSettingsAdapter` reads the environment back off the owner it is
-handed and picks the matching endpoint. See [Settings](../settings.md) for the
-framework's ownership model.
+Each environment owns an independent application-settings dictionary.
+`StaticWebAppSettingsAdapter` reads and replaces the appropriate site/build
+dictionary through the shared JSONC settings editor. The site root has no
+settings document. Full-dictionary replacement means concurrent edits can
+overwrite one another.
 
-## CI/CD Routing
+The provider probes the corresponding function-app-settings endpoint to
+determine whether an environment has a managed API. A successful probe adds a
+Functions group whose children come from the site/build Functions endpoint. A
+rejected probe produces a help row instead. The settings editor deliberately
+uses the application-settings endpoints, which remain available independently
+of that managed-API probe.
 
-After creation, `CreateStaticWebApp` routes deployment based only on the
-project's *existing* Git remote -- it never assists with initializing,
-adding, or pushing one. The decision is made silently by
-`DetermineStaticWebAppDeploymentRouteStep`, the last prompt step in the
-wizard, once `iacFolder` and `outputLocation` are already known:
+Functions portal navigation uses a related-resource URL derived from the
+environment build id. Resource selection, portal URL construction, and paging
+come from shared monorepo abstractions.
 
-| Condition | Outcome |
+## Creation and provisioning
+
+`CreateStaticWebApp` runs one wizard. With an open workspace it uses the
+`deploy` job; without one it uses `createNew`. Shared steps select the IaC
+folder, hydrate azd state, choose subscription/location, choose the project
+name, confirm, generate Bicep/`azure.yaml`, create the azd environment,
+provision, deploy when eligible, and show the endpoint.
+
+Product steps select one of 13 retained build presets and resolve application,
+Functions API, and output locations. Defaults come from framework detection,
+the selected preset, and `swa-cli.config.json`.
+
+The generated Bicep provisions a Static Web App through the pinned
+`avm/res/web/static-site:0.9.5` module. The plan defaults to Free; changing the
+`staticWebAppSkuName` parameter and provisioning again applies a different
+supported SKU. The resource receives the shared azd environment/service tags.
+
+The `host: staticwebapp` azd service records `project` and `dist` for deployable
+static artifacts. Empty, `/`, and `.` output locations can provision the ARM
+resource but do not produce an azd deploy target. Server-rendered Next.js also
+stops with explicit guidance rather than reporting a deployment.
+
+## Deployment routing
+
+The current implementation inspects existing Git metadata but never creates a
+repository, adds a remote, or pushes a branch.
+
+- No supported remote: run direct `azd deploy` for a valid static artifact.
+- Supported GitHub/Azure DevOps remote without an upstream branch: explain the
+  prerequisite and offer direct deployment.
+- Supported pushed remote with a sufficient azd version: run interactive
+  `azd pipeline config`.
+- Invalid/missing `host: staticwebapp` service or unsupported artifact: stop
+  with reason-specific guidance.
+
+Before configuring one provider, the command checks for the other provider's
+canonical azd workflow file and asks for confirmation. It does not delete or
+overwrite pipeline files itself.
+
+This routing is under active ownership review on PR #237. Review feedback asks
+whether parsing/editing `azure.yaml`, build-preset scaffolding, and the routing
+decision should move further into azd. The implementation above is current
+branch behavior, not a settled exception to that boundary.
+
+## Configuration and local tooling
+
+Two similarly named files have separate owners:
+
+| File | Purpose |
 |---|---|
-| Supported (GitHub or Azure DevOps), pushed remote, and `azd` version `>=` the pipeline gate (any artifact shape) | `deploy: false` + `deploymentRoute` set. `AzdDeployStep` is skipped by the merge (no changes to that shared step); after the wizard finishes successfully, `CreateStaticWebApp` launches the standalone `DeployStaticWebApp` command (`vscode-azure/staticWebApps/deploy`) as a **separate command/event**, passing the already-known project/provider/branch. Its own interactivity (`azd pipeline config` runs as a foreground task), failure, or cancellation never alters the already-successful create result. |
-| CI/CD not currently possible (no/unsupported remote, unpushed branch, or `azd` below the gate), but the artifact can be deployed directly (static/export-capable output) | Context untouched -- `AzdDeployStep` runs the existing, unmodified `azd deploy` exactly as it does today. |
-| CI/CD not currently possible **and** the artifact cannot be deployed directly (Next.js hybrid/SSR, or any other shape `OutputLocationStep` already flags as unsupported) | `deploy: false` is forced explicitly (defensive -- not reliant on `OutputLocationStep`'s own gating), and `deploymentBlockedReason` (`noRemote` / `unsupportedRemote` / `notPushed` / `azdVersionTooLow`) is set. `CreateStaticWebApp` shows a single, reason-specific toast that never claims a deployment occurred, with a "Deploy Static Web App" action. |
+| `staticwebapp.config.json` | Service routing, fallback, authentication, and related runtime configuration |
+| `swa-cli.config.json` | Local SWA CLI configuration; creation reads location defaults from it |
 
-`DeployStaticWebApp` is a standalone, repeatable command (not tied to
-creation): invoked with known context it skips rediscovery entirely; invoked
-from the command palette it resolves the target project itself (enumerating
-open workspace folders for a `host: staticwebapp` service, prompting with a
-`QuickPick` when more than one matches). Its routing:
+The manifest associates the public schemas for the first two files.
 
-- No / unsupported remote -> direct deploy, i.e. the existing, unmodified
-  `IAzdService.deploy()`. For a `host: staticwebapp` service this uploads the
-  configured `dist` artifact through azd's own Static Web Apps CLI
-  integration -- the extension does not invoke `swa build` itself and makes
-  no claim that a separate build step runs.
-- Supported remote not yet pushed, or `azd` below the pipeline version gate
-  -> explains the prerequisite and offers a "Deploy Directly Instead"
-  fallback action. Never mutates Git state.
-- Supported, pushed remote and a sufficient `azd` version -> checks whether
-  the *other* provider's canonical workflow file already exists (GitHub:
-  `.github/workflows/azure-dev.{yml,yaml}`; Azure DevOps:
-  `.azdo/pipelines/azure-dev.{yml,yaml}` and
-  `.azuredevops/pipelines/azure-dev.{yml,yaml}`) and requires explicit
-  confirmation before continuing if so, so two pipelines are never silently
-  enabled. It never deletes or overwrites a workflow file -- `azd pipeline
-  config` (gated on `azd >= 1.30.0`, run as an interactive foreground task,
-  never `--no-prompt`) owns that.
-- Next.js hybrid/SSR with no eligible CI/CD path -> stops with guidance
-  instead of calling `azd deploy` (which cannot deploy server-rendered
-  content), so a failed/skipped deployment is never reported as successful.
+`SwaInstaller` registers the `swa` executable with the shared tool service. The
+independent install/update command acquires version 2 or later through
+Homebrew, where available, or the
+[`@azure/static-web-apps-cli`](https://www.npmjs.com/package/@azure/static-web-apps-cli)
+npm package. No CLI check or outdated-version warning runs at activation.
 
-`azd pipeline config`-based CI/CD is production-only -- it does not create
-GitHub PR preview environments the way the native Static Web Apps GitHub
-Actions workflow does. This is a known, disclosed limitation, not something
-this feature works around.
+## Current limitations
 
-**Known gap:** Existing GitHub Actions tree support recognizes only the legacy
-native `Azure/static-web-apps-deploy` workflow shape. It does not yet recognize
-azd-generated pipeline workflow files such as
-`.github/workflows/azure-dev.yml` or `.github/workflows/azure-dev.yaml`
-(GitHub Actions) and their Azure Pipelines equivalents. A project deployed
-through this feature's CI/CD path therefore will not show its workflow runs in
-those tree nodes. Extending the parser for the generic workflow shape is tracked
-as a follow-up, not implemented as part of this feature.
+- Static Web Apps browser/Functions debugging, generated emulator tasks, Data
+  API location discovery, task lifecycle coordination, and `$swa-watch` are
+  tracked together by
+  [#339](https://github.com/microsoft/vscode-azure/issues/339).
+- GitHub Actions run/job/step browsing and native SWA workflow parsing are not
+  part of the product.
+- Repository bootstrap is not implemented and has no linked tracking issue.
+- Environment properties remain product-specific pending the shared command in
+  [PR #327](https://github.com/microsoft/vscode-azure/pull/327).
+
+See [PARITY-REPORT.md](../migrations/swa/PARITY-REPORT.md) for row-by-row
+accounting.
