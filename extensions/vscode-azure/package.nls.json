@@ -30,7 +30,6 @@
     "commands.vscode-azure/staticWebApps/createSwaConfigFile": "Create Configuration File",
     "commands.vscode-azure/staticWebApps/showDocumentation": "Documentation",
     "commands.vscode-azure/staticWebApps/showFunctionsDocumentation": "Azure Functions Documentation",
-    "commands.vscode-azure/staticWebApps/viewProperties": "View Properties",
     "commands.vscode-azure/azdUp": "Provision & Deploy",
     "commands.vscode-azure/azdDown": "Delete Deployment",
     "commands.vscode-azure/signIn": "Sign in to Azure...",

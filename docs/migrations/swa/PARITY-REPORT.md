@@ -54,7 +54,7 @@ root is named.
 | SWA-024 | Show documentation | Migrate | landed | `products/registerStaticWebApps.ts` registers the documentation URL. |
 | SWA-025 | Toggle setting visibility | Drop | absent | Shared settings tree shows no individual values. |
 | SWA-026 | Uninstall CLI | Drop | absent | Shared acquisition has install/update only. |
-| SWA-027 | View properties | Adapt | landed, follow-up open | `commands/staticWebApps/ViewStaticWebAppProperties.ts`; shared replacement is PR #327. |
+| SWA-027 | View properties | Adapt | landed | Shared `ViewProperties` command; `properties/adapters/StaticWebAppEnvironmentPropertiesAdapter.ts` supplies the environment payload. |
 | SWA-028 | Functions documentation | Migrate | landed | `products/registerStaticWebApps.ts`; `commands/staticWebApps/ShowDocumentation.ts`. |
 | SWA-029 | Output timestamps setting | Drop | absent | No corresponding target setting. |
 | SWA-030 | App subpath setting | Drop | absent | No corresponding target setting; creation uses detection, presets, and CLI config. |

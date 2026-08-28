@@ -15,7 +15,7 @@ import type * as vscode from 'vscode';
 import { BrowseWebsite } from '../../../commands/tree/BrowseWebsite';
 import { DeleteStaticWebAppEnvironment } from '../../../commands/staticWebApps/DeleteStaticWebAppEnvironment';
 import { ShowFunctionsDocumentation } from '../../../commands/staticWebApps/ShowDocumentation';
-import { ViewStaticWebAppProperties } from '../../../commands/staticWebApps/ViewStaticWebAppProperties';
+import { ViewProperties } from '../../../commands/tree/ViewProperties';
 import { OpenInPortal } from '../../../commands/tree/OpenInPortal';
 import { IAzureViewDataTree } from '../../../services';
 import { combineContextValues, resourceContextValue } from '../../contextValueHelpers';
@@ -128,7 +128,7 @@ export class StaticWebAppViewProvider implements ViewProvider<string> {
                 'azureStaticEnvironment',
                 BrowseWebsite.ContextValue,
                 DeleteStaticWebAppEnvironment.ContextValue,
-                ViewStaticWebAppProperties.ContextValue,
+                ViewProperties.ContextValue,
             ),
             true,
             'server-environment',

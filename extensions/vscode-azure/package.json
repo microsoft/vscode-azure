@@ -166,12 +166,6 @@
                 "title": "%commands.vscode-azure/staticWebApps/showFunctionsDocumentation%"
             },
             {
-                "command": "vscode-azure/staticWebApps/viewProperties",
-                "category": "%commands.category.azureStaticWebApps%",
-                "icon": "$(list-tree)",
-                "title": "%commands.vscode-azure/staticWebApps/viewProperties%"
-            },
-            {
                 "command": "vscode-azure/azdUp",
                 "category": "%commands.category.azure%",
                 "icon": "$(rocket)",
@@ -289,10 +283,6 @@
                 {
                     "command": "vscode-azure/staticWebApps/showFunctionsDocumentation",
                     "when": "false"
-                },
-                {
-                    "command": "vscode-azure/staticWebApps/viewProperties",
-                    "when": "false"
                 }
             ],
             "view/title": [
@@ -376,11 +366,6 @@
                     "command": "vscode-azure/staticWebApps/deleteEnvironment",
                     "when": "view == vscode-azure/resources && viewItem =~ /\\b(?:deleteStaticWebAppEnvironment|azureStaticEnvironment)\\b/i",
                     "group": "3@2"
-                },
-                {
-                    "command": "vscode-azure/staticWebApps/viewProperties",
-                    "when": "view == vscode-azure/resources && viewItem =~ /\\b(?:viewStaticWebAppProperties|azureStaticEnvironment)\\b/i",
-                    "group": "9@1"
                 },
                 {
                     "command": "vscode-azure/resources/refresh",

@@ -11,7 +11,8 @@ import { DeleteStaticWebAppEnvironment } from '../commands/staticWebApps/DeleteS
 import { DeployStaticWebApp } from '../commands/staticWebApps/DeployStaticWebApp';
 import { ShowFunctionsDocumentation, ShowStaticWebAppsDocumentation } from '../commands/staticWebApps/ShowDocumentation';
 import { OpenUrl } from '../commands/OpenUrl';
-import { ViewStaticWebAppProperties } from '../commands/staticWebApps/ViewStaticWebAppProperties';
+import { IPropertiesAdapter } from '../properties/PropertiesAdapter';
+import { StaticWebAppEnvironmentPropertiesAdapter } from '../properties/adapters/StaticWebAppEnvironmentPropertiesAdapter';
 import type { ProductRegistrar } from '../registration/ProductRegistrar';
 import { StaticWebAppSettingsAdapter } from '../settings/adapters/StaticWebAppSettingsAdapter';
 import { GitRemoteService, IGitRemoteService } from '../staticWebApps/GitRemoteService';
@@ -30,6 +31,7 @@ export function registerStaticWebApps(registrar: ProductRegistrar): void {
         container.bind(StaticWebAppSettingsAdapter).toSelf().inSingletonScope();
         container.bind(IGitRemoteService).to(GitRemoteService).inSingletonScope();
         container.bind(IWorkspaceDetector).toConstantValue(staticWebAppProjectDetector);
+        container.bind(IPropertiesAdapter).to(StaticWebAppEnvironmentPropertiesAdapter).inSingletonScope();
     });
 
     registrar.registerCommand('vscode-azure/staticWebApps/createNew', CreateStaticWebApp);
@@ -38,7 +40,6 @@ export function registerStaticWebApps(registrar: ProductRegistrar): void {
     registrar.registerCommand('vscode-azure/staticWebApps/createSwaConfigFile', CreateSwaConfigFile);
     registrar.registerCommand('vscode-azure/staticWebApps/showDocumentation', OpenUrl, ShowStaticWebAppsDocumentation.Url);
     registrar.registerCommand('vscode-azure/staticWebApps/showFunctionsDocumentation', OpenUrl, ShowFunctionsDocumentation.Url);
-    registrar.registerCommand('vscode-azure/staticWebApps/viewProperties', ViewStaticWebAppProperties);
 
     registrar.registerResourceDataProvider([IStaticWebAppDataProvider, StaticWebAppDataProvider]);
     registrar.registerResourceViewProvider(StaticWebAppViewProvider);
