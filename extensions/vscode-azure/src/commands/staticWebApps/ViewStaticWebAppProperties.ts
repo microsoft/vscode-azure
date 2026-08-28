@@ -6,13 +6,9 @@
 import { IStaticWebAppClientProvider, parseAzureResourceId } from '@microsoft/vscode-azure-azutils';
 import { IActionContext, ICodeContext } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import {
-    StaticWebAppVirtualTypes,
-    type StaticWebAppEnvironment,
-    type StaticWebAppVirtualNode,
-} from '../../tree/resources/staticWebApps/StaticWebApp';
+import { IResourceSelector } from '../../tree/resources/ResourceSelector';
+import { isStaticWebAppEnvironment, type StaticWebAppEnvironment } from '../../tree/resources/staticWebApps/StaticWebApp';
 import type { ManagedCommand } from '../ManagedCommand';
-import { StaticWebAppCommandResolver } from './StaticWebAppCommandResolver';
 
 type PropertyNode = StaticWebAppEnvironment;
 
@@ -26,12 +22,12 @@ export class ViewStaticWebAppProperties implements ManagedCommand {
         @inject(IActionContext) private readonly context: IActionContext,
         @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IStaticWebAppClientProvider) private readonly createClient: IStaticWebAppClientProvider,
-        @inject(StaticWebAppCommandResolver) private readonly resolver: StaticWebAppCommandResolver,
+        @inject(IResourceSelector) private readonly selector: IResourceSelector,
     ) { }
 
     /** @inheritdoc */
     public async execute(key?: string): Promise<void> {
-        const node = this.resolver.resolveVirtual<PropertyNode>(key, isPropertyNode);
+        const node = this.selector.resolve(key, isStaticWebAppEnvironment);
         const properties = await this.getCurrentProperties(node);
         this.context.telemetry.properties.propertyType = node.virtualType;
 
@@ -53,10 +49,6 @@ export class ViewStaticWebAppProperties implements ManagedCommand {
             node.buildId,
         );
     }
-}
-
-function isPropertyNode(node: StaticWebAppVirtualNode): node is PropertyNode {
-    return node.virtualType === StaticWebAppVirtualTypes.Environment;
 }
 
 function sanitizeProperties(value: unknown, seen = new WeakSet<object>()): unknown {

@@ -7,9 +7,6 @@ import { createWebSiteManagement, type WebSiteManagementClientOptionalParams, ty
 import {
     createOrUpdateStaticSiteAppSettings as sdkCreateOrUpdateStaticSiteAppSettings,
     createOrUpdateStaticSiteBuildAppSettings as sdkCreateOrUpdateStaticSiteBuildAppSettings,
-    createOrUpdateStaticSiteBuildFunctionAppSettings as sdkCreateOrUpdateStaticSiteBuildFunctionAppSettings,
-    createOrUpdateStaticSiteFunctionAppSettings as sdkCreateOrUpdateStaticSiteFunctionAppSettings,
-    deleteStaticSite as sdkDeleteStaticSite,
     deleteStaticSiteBuild as sdkDeleteStaticSiteBuild,
     getStaticSite as sdkGetStaticSite,
     getStaticSiteBuild as sdkGetStaticSiteBuild,
@@ -22,10 +19,7 @@ import {
     listStaticSiteFunctions as sdkListStaticSiteFunctions,
     type StaticSitesCreateOrUpdateStaticSiteAppSettingsOptionalParams,
     type StaticSitesCreateOrUpdateStaticSiteBuildAppSettingsOptionalParams,
-    type StaticSitesCreateOrUpdateStaticSiteBuildFunctionAppSettingsOptionalParams,
-    type StaticSitesCreateOrUpdateStaticSiteFunctionAppSettingsOptionalParams,
     type StaticSitesDeleteStaticSiteBuildOptionalParams,
-    type StaticSitesDeleteStaticSiteOptionalParams,
     type StaticSitesGetStaticSiteBuildOptionalParams,
     type StaticSitesGetStaticSiteOptionalParams,
     type StaticSitesListStaticSiteAppSettingsOptionalParams,
@@ -53,10 +47,7 @@ export type { WebSiteManagementClientOptionalParams } from '@azure/arm-appservic
 export type {
     StaticSitesCreateOrUpdateStaticSiteAppSettingsOptionalParams,
     StaticSitesCreateOrUpdateStaticSiteBuildAppSettingsOptionalParams,
-    StaticSitesCreateOrUpdateStaticSiteBuildFunctionAppSettingsOptionalParams,
-    StaticSitesCreateOrUpdateStaticSiteFunctionAppSettingsOptionalParams,
     StaticSitesDeleteStaticSiteBuildOptionalParams,
-    StaticSitesDeleteStaticSiteOptionalParams,
     StaticSitesGetStaticSiteBuildOptionalParams,
     StaticSitesGetStaticSiteOptionalParams,
     StaticSitesListStaticSiteAppSettingsOptionalParams,
@@ -99,9 +90,6 @@ export interface IStaticWebAppClient {
         createOrUpdateStaticSiteBuildAppSettings(resourceGroupName: string, name: string, environmentName: string, appSettings: StringDictionary, options?: StaticSitesCreateOrUpdateStaticSiteBuildAppSettingsOptionalParams): Promise<StringDictionary>;
         listStaticSiteFunctionAppSettings(resourceGroupName: string, name: string, options?: StaticSitesListStaticSiteFunctionAppSettingsOptionalParams): Promise<StringDictionary>;
         listStaticSiteBuildFunctionAppSettings(resourceGroupName: string, name: string, environmentName: string, options?: StaticSitesListStaticSiteBuildFunctionAppSettingsOptionalParams): Promise<StringDictionary>;
-        createOrUpdateStaticSiteFunctionAppSettings(resourceGroupName: string, name: string, appSettings: StringDictionary, options?: StaticSitesCreateOrUpdateStaticSiteFunctionAppSettingsOptionalParams): Promise<StringDictionary>;
-        createOrUpdateStaticSiteBuildFunctionAppSettings(resourceGroupName: string, name: string, environmentName: string, appSettings: StringDictionary, options?: StaticSitesCreateOrUpdateStaticSiteBuildFunctionAppSettingsOptionalParams): Promise<StringDictionary>;
-        deleteStaticSite(resourceGroupName: string, name: string, options?: StaticSitesDeleteStaticSiteOptionalParams): Promise<void>;
     };
 }
 
@@ -148,11 +136,6 @@ export class StaticWebAppClient implements IStaticWebAppClient {
             createOrUpdateStaticSiteBuildAppSettings: (...args) => sdkCreateOrUpdateStaticSiteBuildAppSettings(this.inner, ...args),
             listStaticSiteFunctionAppSettings: (...args) => sdkListStaticSiteFunctionAppSettings(this.inner, ...args),
             listStaticSiteBuildFunctionAppSettings: (...args) => sdkListStaticSiteBuildFunctionAppSettings(this.inner, ...args),
-            createOrUpdateStaticSiteFunctionAppSettings: (...args) => sdkCreateOrUpdateStaticSiteFunctionAppSettings(this.inner, ...args),
-            createOrUpdateStaticSiteBuildFunctionAppSettings: (...args) => sdkCreateOrUpdateStaticSiteBuildFunctionAppSettings(this.inner, ...args),
-            deleteStaticSite: async (...args) => {
-                await sdkDeleteStaticSite(this.inner, ...args).pollUntilDone();
-            },
         };
     }
 }

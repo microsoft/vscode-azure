@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { PipelineRequest } from '@azure/core-rest-pipeline';
 import { collectPageItems } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { StaticWebAppClient } from '../../../src/rest/clients/StaticWebAppClient';
@@ -80,12 +79,9 @@ describe('StaticWebAppClient (unit)', () => {
         expect(buildFunctions[0].functionName).to.equal('previewApi');
     });
 
-    it('should list and update production and build function app settings', async () => {
+    it('should list production and build function app settings', async () => {
         const httpClient = new MockHttpClient({
             handler: (req) => {
-                if (req.method === 'PUT') {
-                    return makeResponse(req, 200, requestBody(req));
-                }
                 return makeResponse(req, 200, JSON.stringify({
                     properties: {
                         greeting: req.url.includes('/builds/') ? 'preview' : 'production',
@@ -97,36 +93,21 @@ describe('StaticWebAppClient (unit)', () => {
 
         const production = await client.staticSites.listStaticSiteFunctionAppSettings('rg1', 'site1');
         const build = await client.staticSites.listStaticSiteBuildFunctionAppSettings('rg1', 'site1', 'preview');
-        const updatedProduction = await client.staticSites.createOrUpdateStaticSiteFunctionAppSettings(
-            'rg1',
-            'site1',
-            { properties: { greeting: 'updated-production' } },
-        );
-        const updatedBuild = await client.staticSites.createOrUpdateStaticSiteBuildFunctionAppSettings(
-            'rg1',
-            'site1',
-            'preview',
-            { properties: { greeting: 'updated-preview' } },
-        );
 
         expect(production.properties?.greeting).to.equal('production');
         expect(build.properties?.greeting).to.equal('preview');
-        expect(updatedProduction.properties?.greeting).to.equal('updated-production');
-        expect(updatedBuild.properties?.greeting).to.equal('updated-preview');
-        expect(httpClient.requests.filter(req => req.method === 'PUT')).to.have.length(2);
     });
 
-    it('should wait for static site and build deletions', async () => {
+    it('should wait for static site build deletion', async () => {
         const httpClient = new MockHttpClient({
             handler: (req) => makeResponse(req, 200),
         });
         const client = createClient(httpClient);
 
         await client.staticSites.deleteStaticSiteBuild('rg1', 'site1', 'preview');
-        await client.staticSites.deleteStaticSite('rg1', 'site1');
 
         const deleteRequests = httpClient.requests.filter(req => req.method === 'DELETE');
-        expect(deleteRequests).to.have.length(2);
+        expect(deleteRequests).to.have.length(1);
         expect(deleteRequests[0].url).to.include('/builds/preview');
     });
 });
@@ -159,11 +140,4 @@ function createClient(httpClient: MockHttpClient): StaticWebAppClient {
     const { ctx } = createMockCodeContext();
     const { executor } = createTestActionExecutor();
     return StaticWebAppClient.create(ctx, executor, makeCredential(), makeSubscription(), { httpClient });
-}
-
-function requestBody(request: PipelineRequest): string {
-    if (typeof request.body !== 'string') {
-        throw new TypeError('Expected a string request body.');
-    }
-    return request.body;
 }

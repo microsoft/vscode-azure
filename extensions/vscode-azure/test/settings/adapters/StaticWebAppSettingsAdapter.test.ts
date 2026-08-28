@@ -18,8 +18,6 @@ function createAdapter(properties: Record<string, string> = {}) {
         // Present so the tests below can assert this adapter never reaches for them.
         listStaticSiteFunctionAppSettings: mock.fn(() => Promise.resolve({ properties })),
         listStaticSiteBuildFunctionAppSettings: mock.fn(() => Promise.resolve({ properties })),
-        createOrUpdateStaticSiteFunctionAppSettings: mock.fn(() => Promise.resolve({ properties })),
-        createOrUpdateStaticSiteBuildFunctionAppSettings: mock.fn(() => Promise.resolve({ properties })),
     };
 
     const adapter = new StaticWebAppSettingsAdapter(code.vscode, () => ({ staticSites }) as never);
@@ -79,7 +77,7 @@ describe('StaticWebAppSettingsAdapter (unit)', () => {
         ]);
     });
 
-    it('should use the app settings dictionary, never the function app settings one', async () => {
+    it('should read the app settings dictionary, never the function app settings one', async () => {
         // ARM rejects the function app settings endpoints with 'A function must first be deployed
         // to use this method.' until a managed API exists, so reaching for them would make the
         // document unopenable on any site without one. App settings have no such precondition.
@@ -87,13 +85,9 @@ describe('StaticWebAppSettingsAdapter (unit)', () => {
 
         await adapter.read(makeStaticWebAppEnvironment());
         await adapter.read(makeStaticWebAppEnvironment({ isProduction: false, buildId: '7' }));
-        await adapter.write(makeStaticWebAppEnvironment(), [{ key: 'A', value: '1' }]);
-        await adapter.write(makeStaticWebAppEnvironment({ isProduction: false, buildId: '7' }), [{ key: 'A', value: '1' }]);
 
         expect(staticSites.listStaticSiteFunctionAppSettings.mock.callCount()).to.equal(0);
         expect(staticSites.listStaticSiteBuildFunctionAppSettings.mock.callCount()).to.equal(0);
-        expect(staticSites.createOrUpdateStaticSiteFunctionAppSettings.mock.callCount()).to.equal(0);
-        expect(staticSites.createOrUpdateStaticSiteBuildFunctionAppSettings.mock.callCount()).to.equal(0);
     });
 
     it('should reject a blank setting name before calling Azure', async () => {

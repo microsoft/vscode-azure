@@ -14,6 +14,7 @@ import { IArmDeploymentDataProvider } from '../../src/tree/activity/ArmDeploymen
 import { ICodeDeploymentDataProvider } from '../../src/tree/activity/CodeDeploymentDataProvider';
 import { IGitRemoteService } from '../../src/staticWebApps/GitRemoteService';
 import { IWorkspaceIndexService } from '../../src/utils/workspaceIndex/WorkspaceIndexService';
+import { createTestIndexService } from '../utils/workspaceIndex/createTestIndexService';
 
 /** Mocked services a wizard command (and its steps) may resolve in unit tests. */
 export interface WizardCommandMocks {
@@ -55,14 +56,9 @@ export function createWizardCommandContainer(mocks: WizardCommandMocks): Contain
     container.bind(ITempDirManager).toConstantValue(mocks.tempManager ?? new TempDirManager(mocks.ctx));
     container.bind(IAzureViewDataTree).toConstantValue(mocks.dataTree);
     container.bind(ISubscriptionResolver).toConstantValue(mocks.subscriptionResolver ?? (() => Promise.resolve(undefined)));
-    container.bind(IWorkspaceIndexService).toConstantValue(mocks.workspaceIndexService ?? {
-        getIndex: () => Promise.resolve({
-            withTag: () => [],
-            has: () => false,
-            valuesOf: () => [],
-        }),
-        onDidChangeIndex: () => ({ dispose: () => undefined }),
-    });
+    container.bind(IWorkspaceIndexService).toConstantValue(
+        mocks.workspaceIndexService ?? createTestIndexService(mocks.ctx.code, []),
+    );
 
     container.bind(IGenerateBicepStepFactory).toFactory(context => createGenerateBicepStepFactory(context.get(ICodeContext)));
 

@@ -7,7 +7,6 @@ import {
     IActionContext,
     ICodeContext,
     PickWorkspaceLocationStep,
-    PromptStep,
     showSmartInputBox,
     type WorkspaceLocation,
 } from '@microsoft/vscode-azure-utils';
@@ -20,36 +19,70 @@ import { addLocationTelemetry, canAzdDeployStaticWebApp, isYamlSafeLocation } fr
 const angularOutputPlaceholder = 'dist/<project-name>';
 const excludedDependencyDirectories = '**/{.git,.hg,.svn,node_modules,bower_components,vendor,.venv,venv,__pycache__,.tox,.gradle,.terraform}/**';
 
-interface OutputLocationPickContext {
-    readonly location?: WorkspaceLocation;
+interface OutputLocationStepContext extends CreateStaticWebAppContext {
+    readonly selectedLocation?: WorkspaceLocation;
 }
 
 /** Prompts for build output and gates unsupported direct azd deployment shapes. */
 @injectable()
-export class OutputLocationStep extends PromptStep<CreateStaticWebAppContext> {
+export class OutputLocationStep extends PickWorkspaceLocationStep<OutputLocationStepContext> {
     public constructor(
         @inject(IActionContext) private readonly actionContext: IActionContext,
-        @inject(ICodeContext) private readonly ctx: ICodeContext,
+        @inject(ICodeContext) ctx: ICodeContext,
     ) {
-        super();
+        super(
+            ctx,
+            [
+                '**/*',
+                excludedDependencyDirectories,
+                1000,
+            ],
+            {
+                kind: 'folder',
+                contextProperty: 'selectedLocation',
+                allowCustom: true,
+                noneLabel: ctx.code.l10n.t('$(circle-slash) No build output'),
+                isValidRelativePath: input => input !== angularOutputPlaceholder
+                    && isYamlSafeLocation(input, 'output_location'),
+                strings: {
+                    title: ctx.code.l10n.t('Select the build output location'),
+                    placeHolder: ctx.code.l10n.t('Choose a folder, enter a location relative to the app, or select no build output'),
+                },
+            },
+        );
     }
 
     public override shouldPrompt(context: Readonly<CreateStaticWebAppContext>): boolean {
         return !context.hasInfra && context.outputLocation === undefined;
     }
 
-    public async prompt(context: Readonly<CreateStaticWebAppContext>): Promise<Partial<CreateStaticWebAppContext>> {
+    public override async prompt(context: Readonly<OutputLocationStepContext>): Promise<Partial<OutputLocationStepContext>> {
         const defaultValue = resolveDefaultOutputLocation(context);
         const declared = await getStaticWebAppCliLocation(this.ctx.code, 'outputLocation', context.iacFolder);
         const initialValue = declared || defaultValue;
         const appRoot = this.resolveAppRoot(context);
-        const outputLocation = appRoot && this.ctx.code.workspace.getWorkspaceFolder(appRoot)
-            ? await this.pickLocation(appRoot, initialValue, [
-                initialValue,
-                context.detectedOutputLocation,
-                context.buildPreset?.outputLocation,
-            ])
-            : await this.promptForLocation(initialValue);
+        let outputLocation: string;
+        if (appRoot && this.ctx.code.workspace.getWorkspaceFolder(appRoot)) {
+            const selectedLocation = await this.pickLocation(context, {
+                findFilesOptions: [
+                    { base: appRoot.fsPath, baseUri: appRoot, pattern: '**/*' },
+                    { base: appRoot.fsPath, baseUri: appRoot, pattern: excludedDependencyDirectories },
+                    1000,
+                ],
+                relativeTo: appRoot,
+                value: initialValue,
+                suggestedRelativePaths: [
+                    initialValue,
+                    context.detectedOutputLocation,
+                    context.buildPreset?.outputLocation,
+                ].filter(
+                    (item): item is string => !!item && item !== angularOutputPlaceholder,
+                ),
+            });
+            outputLocation = selectedLocation ? selectedLocation.relativePath || '/' : '';
+        } else {
+            outputLocation = await this.promptForLocation(initialValue);
+        }
         addLocationTelemetry(this.actionContext, 'outputLocation', outputLocation, defaultValue, declared);
 
         const deploySupported = canAzdDeployStaticWebApp(outputLocation);
@@ -71,40 +104,6 @@ export class OutputLocationStep extends PromptStep<CreateStaticWebAppContext> {
         const appLocation = context.appLocation ?? context.detectedAppLocation ?? context.buildPreset?.appLocation ?? '/';
         const normalized = appLocation.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
         return normalized ? this.ctx.code.Uri.joinPath(context.iacFolder, normalized) : context.iacFolder;
-    }
-
-    private async pickLocation(
-        appRoot: WorkspaceLocation['uri'],
-        value: string,
-        suggestions: readonly (string | undefined)[],
-    ): Promise<string> {
-        const step = new PickWorkspaceLocationStep<OutputLocationPickContext>(
-            this.ctx,
-            [
-                { base: appRoot.fsPath, baseUri: appRoot, pattern: '**/*' },
-                { base: appRoot.fsPath, baseUri: appRoot, pattern: excludedDependencyDirectories },
-                1000,
-            ],
-            {
-                kind: 'folder',
-                contextProperty: 'location',
-                relativeTo: appRoot,
-                suggestedRelativePaths: suggestions.filter(
-                    (item): item is string => !!item && item !== angularOutputPlaceholder,
-                ),
-                value,
-                allowCustom: true,
-                noneLabel: this.ctx.code.l10n.t('$(circle-slash) No build output'),
-                isValidRelativePath: input => input !== angularOutputPlaceholder
-                    && isYamlSafeLocation(input, 'output_location'),
-                strings: {
-                    title: this.ctx.code.l10n.t('Select the build output location'),
-                    placeHolder: this.ctx.code.l10n.t('Choose a folder, enter a location relative to the app, or select no build output'),
-                },
-            },
-        );
-        const result = await step.prompt({});
-        return result.location ? result.location.relativePath || '/' : '';
     }
 
     private async promptForLocation(value: string): Promise<string> {

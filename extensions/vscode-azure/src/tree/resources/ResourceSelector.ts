@@ -32,6 +32,26 @@ export class ResourceSelector {
     ) { }
 
     /**
+     * Resolves and validates a tree item by its data-cache key.
+     *
+     * @throws If no key is supplied, the key is stale, or the item does not
+     * satisfy {@linkcode guard}.
+     */
+    public resolve<T>(key: string | undefined, guard: (resource: unknown) => resource is T): T {
+        if (!key) {
+            throw new Error(this.ctx.code.l10n.t('Run this command from a supported item in the Resources view.'));
+        }
+
+        const resource = this.cache.get(key);
+        if (!resource) {
+            throw new Error(this.ctx.code.l10n.t('Resource not found in the resources view. Try refreshing the resources view and running the command again.'));
+        } else if (!guard(resource)) {
+            throw new Error(this.ctx.code.l10n.t('The selected item does not support this command.'));
+        }
+        return resource;
+    }
+
+    /**
      * Resolves a resource of type {@linkcode T}.
      *
      * @param logicalType - The logical resource type to filter on

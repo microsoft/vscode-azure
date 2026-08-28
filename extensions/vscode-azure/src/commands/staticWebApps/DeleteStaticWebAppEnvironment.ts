@@ -8,9 +8,9 @@ import { IActionContext, IVsCode, showMessage } from '@microsoft/vscode-azure-ut
 import { inject, injectable } from 'inversify';
 import { IAzureViewDataTree } from '../../services';
 import { IGenericActivityDataProvider } from '../../tree/activity/GenericActivityDataProvider';
+import { IResourceSelector } from '../../tree/resources/ResourceSelector';
 import { getStaticWebAppEnvironmentLabel, isStaticWebAppEnvironment, type StaticWebAppEnvironment } from '../../tree/resources/staticWebApps/StaticWebApp';
 import type { ManagedCommand } from '../ManagedCommand';
-import { StaticWebAppCommandResolver } from './StaticWebAppCommandResolver';
 
 /**
  * Deletes a non-production Static Web Apps environment after confirmation.
@@ -33,14 +33,14 @@ export class DeleteStaticWebAppEnvironment implements ManagedCommand {
         @inject(IActionContext) private readonly context: IActionContext,
         @inject(IVsCode) private readonly code: IVsCode,
         @inject(IStaticWebAppClientProvider) private readonly createClient: IStaticWebAppClientProvider,
-        @inject(StaticWebAppCommandResolver) private readonly resolver: StaticWebAppCommandResolver,
+        @inject(IResourceSelector) private readonly selector: IResourceSelector,
         @inject(IAzureViewDataTree) private readonly dataTree: IAzureViewDataTree,
         @inject(IGenericActivityDataProvider) private readonly activityProvider: IGenericActivityDataProvider,
     ) { }
 
     /** @inheritdoc */
     public async execute(key?: string): Promise<void> {
-        const environment = this.resolver.resolveVirtual<StaticWebAppEnvironment>(key, isStaticWebAppEnvironment);
+        const environment: StaticWebAppEnvironment = this.selector.resolve(key, isStaticWebAppEnvironment);
         this.context.telemetry.properties.isProduction = String(environment.isProduction);
         if (environment.isProduction) {
             this.context.errorHandling.suppress = 'reportIssue';

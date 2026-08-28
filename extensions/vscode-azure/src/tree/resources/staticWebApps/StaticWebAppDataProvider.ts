@@ -4,10 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
+    AzureNodeId,
     getNodeType,
     IStaticWebAppClientProvider,
     parseAzureResourceId,
-    portalUrlForArmResource,
     type ConcreteAzureNode,
     type IStaticWebAppClient,
     type StaticSiteBuildARMResource,
@@ -205,10 +205,9 @@ export class StaticWebAppDataProvider implements DataProvider<ConcreteAzureNode>
             azureResource: environment.azureResource,
             // The portal models a build's functions as their own page, so this
             // node opens there rather than at the parent static site.
-            portalUrl: portalUrlForArmResource(
-                environment.azureResource.subscription,
-                `${environmentResourceId}/functions`,
-            ),
+            portalUrl: AzureNodeId.from(environment.azureResource)
+                .forRelatedResource(`${environmentResourceId}/functions`)
+                .toPortalUrl(),
             environmentBuildId: environment.buildId,
             isProduction: environment.isProduction,
         };

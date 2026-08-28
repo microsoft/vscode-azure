@@ -49,6 +49,25 @@ describe('ResourceSelector (unit)', () => {
             .to.be.rejectedWith(/Resource not found/);
     });
 
+    it('should resolve a cached tree item accepted by a type guard', () => {
+        const { ctx } = createMockCodeContext();
+        const cache = createMockDataItemTree([site1]);
+        const selector = new ResourceSelector(ctx, output, cache, undefined as unknown as IAzureViewViewItemTree);
+
+        const result = selector.resolve(site1Id, (value): value is GenericResource => value === site1);
+
+        expect(result).to.equal(site1);
+    });
+
+    it('should reject a cached tree item not accepted by a type guard', () => {
+        const { ctx } = createMockCodeContext();
+        const cache = createMockDataItemTree([site1]);
+        const selector = new ResourceSelector(ctx, output, cache, undefined as unknown as IAzureViewViewItemTree);
+
+        expect(() => selector.resolve(site1Id, (_value): _value is GenericResource => false))
+            .to.throw('does not support this command');
+    });
+
     it('should prompt the user with a resource picker when no key is provided', async () => {
         const { ctx, mock: mockResult } = createMockCodeContext();
         const viewTree = createMockViewItemTree({

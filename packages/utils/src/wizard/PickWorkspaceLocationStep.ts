@@ -60,6 +60,17 @@ export interface PickWorkspaceLocationOptions<TContext> {
 }
 
 /**
+ * Per-invocation values used by subclasses that derive picker state
+ * asynchronously before prompting.
+ */
+export interface PickWorkspaceLocationPromptOverrides {
+    readonly findFilesOptions?: FindWorkspaceFilesOptions;
+    readonly relativeTo?: vscode.Uri;
+    readonly suggestedRelativePaths?: readonly string[];
+    readonly value?: string;
+}
+
+/**
  * Prompts for a file or folder in the workspace, using {@linkcode vscode.workspace.findFiles}
  * results as suggestions.
  *
@@ -69,7 +80,7 @@ export interface PickWorkspaceLocationOptions<TContext> {
  */
 export class PickWorkspaceLocationStep<TContext> extends PromptStep<TContext> {
     public constructor(
-        private readonly ctx: ICodeContext,
+        protected readonly ctx: ICodeContext,
         private readonly findFilesOptions: FindWorkspaceFilesOptions,
         private readonly options: PickWorkspaceLocationOptions<TContext>,
     ) {
@@ -78,20 +89,37 @@ export class PickWorkspaceLocationStep<TContext> extends PromptStep<TContext> {
 
     /** @inheritdoc */
     public async prompt(context: Readonly<TContext>): Promise<Partial<TContext>> {
+        const location = await this.pickLocation(context);
+        return { [this.options.contextProperty]: location } as Partial<TContext>;
+    }
+
+    /**
+     * Runs the configured picker and returns its selected location.
+     *
+     * Subclasses may provide values resolved asynchronously for the current
+     * invocation while retaining the shared picker behavior.
+     */
+    protected async pickLocation(
+        context: Readonly<TContext>,
+        overrides: PickWorkspaceLocationPromptOverrides = {},
+    ): Promise<WorkspaceLocation | undefined> {
         if (!this.ctx.code.workspace.workspaceFolders?.length) {
             throw new Error(this.ctx.code.l10n.t('Open a workspace folder before selecting a location.'));
         }
 
-        const relativeTo = resolveOption(this.options.relativeTo, context);
-        const value = resolveOption(this.options.value, context);
+        const relativeTo = overrides.relativeTo ?? resolveOption(this.options.relativeTo, context);
+        const value = overrides.value ?? resolveOption(this.options.value, context);
         const normalizedValue = normalizeRelativePath(value);
         const pickerValue = normalizedValue === ''
             && (!this.options.noneLabel || value?.trim() !== '')
             ? '.'
             : normalizedValue;
-        const matches = await this.ctx.code.workspace.findFiles(...this.findFilesOptions);
+        const matches = await this.ctx.code.workspace.findFiles(...(overrides.findFilesOptions ?? this.findFilesOptions));
         const locations = this.toLocations(matches, relativeTo);
-        for (const path of resolveOption(this.options.suggestedRelativePaths, context) ?? []) {
+        const suggestedRelativePaths = overrides.suggestedRelativePaths
+            ?? resolveOption(this.options.suggestedRelativePaths, context)
+            ?? [];
+        for (const path of suggestedRelativePaths) {
             const location = relativeTo && this.toRelativeLocation(relativeTo, path);
             if (location && this.isValidRelativePath(location.relativePath)) {
                 locations.set(location.uri.toString(), location);
@@ -128,7 +156,7 @@ export class PickWorkspaceLocationStep<TContext> extends PromptStep<TContext> {
                 : undefined,
         });
 
-        return { [this.options.contextProperty]: choice.data } as Partial<TContext>;
+        return choice.data;
     }
 
     private toLocations(

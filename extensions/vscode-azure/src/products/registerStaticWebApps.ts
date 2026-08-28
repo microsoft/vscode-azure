@@ -11,7 +11,6 @@ import { DeleteStaticWebAppEnvironment } from '../commands/staticWebApps/DeleteS
 import { DeployStaticWebApp } from '../commands/staticWebApps/DeployStaticWebApp';
 import { ShowFunctionsDocumentation, ShowStaticWebAppsDocumentation } from '../commands/staticWebApps/ShowDocumentation';
 import { OpenUrl } from '../commands/OpenUrl';
-import { StaticWebAppCommandResolver } from '../commands/staticWebApps/StaticWebAppCommandResolver';
 import { ViewStaticWebAppProperties } from '../commands/staticWebApps/ViewStaticWebAppProperties';
 import type { ProductRegistrar } from '../registration/ProductRegistrar';
 import { StaticWebAppSettingsAdapter } from '../settings/adapters/StaticWebAppSettingsAdapter';
@@ -29,7 +28,6 @@ export function registerStaticWebApps(registrar: ProductRegistrar): void {
     });
 
     registrar.registerBinding(container => {
-        container.bind(StaticWebAppCommandResolver).toSelf();
         container.bind(StaticWebAppSettingsAdapter).toSelf().inSingletonScope();
         container.bind(IGitRemoteService).to(GitRemoteService).inSingletonScope();
         container.bind(IWorkspaceDetector).toConstantValue(staticWebAppDatabaseDetector);

@@ -7,7 +7,6 @@ import {
     IActionContext,
     ICodeContext,
     PickWorkspaceLocationStep,
-    PromptStep,
     showSmartInputBox,
     type WorkspaceLocation,
 } from '@microsoft/vscode-azure-utils';
@@ -17,8 +16,8 @@ import { getStaticWebAppCliLocation } from '../../../staticWebApps/SwaCliConfig'
 import { staticWebAppsAppLocationUrl } from '../staticWebAppLinks';
 import { addLocationTelemetry, isYamlSafeLocation } from './locationUtils';
 
-interface AppLocationPickContext {
-    readonly location?: WorkspaceLocation;
+interface AppLocationStepContext extends CreateStaticWebAppContext {
+    readonly selectedLocation?: WorkspaceLocation;
 }
 
 const projectFileGlob = '**/{package.json,angular.json,index.html,*.csproj,hugo.toml,hugo.yaml,hugo.yml,config.toml,config.yaml,config.yml,config.json}';
@@ -26,61 +25,56 @@ const excludedProjectDirectories = '**/{.git,.hg,.svn,node_modules,bower_compone
 
 /** Prompts for application source relative to the selected workspace root. */
 @injectable()
-export class AppLocationStep extends PromptStep<CreateStaticWebAppContext> {
+export class AppLocationStep extends PickWorkspaceLocationStep<AppLocationStepContext> {
     public constructor(
         @inject(IActionContext) private readonly actionContext: IActionContext,
-        @inject(ICodeContext) private readonly ctx: ICodeContext,
+        @inject(ICodeContext) ctx: ICodeContext,
     ) {
-        super();
+        super(
+            ctx,
+            [
+                projectFileGlob,
+                excludedProjectDirectories,
+            ],
+            {
+                kind: 'folder',
+                contextProperty: 'selectedLocation',
+                allowCustom: true,
+                isValidRelativePath: input => isYamlSafeLocation(input, 'app_location'),
+                strings: {
+                    title: ctx.code.l10n.t('Select the application code location'),
+                    placeHolder: ctx.code.l10n.t('Choose a project folder or enter a location relative to the workspace root'),
+                },
+            },
+        );
     }
 
     public override shouldPrompt(context: Readonly<CreateStaticWebAppContext>): boolean {
         return !context.hasInfra && context.appLocation === undefined;
     }
 
-    public async prompt(context: Readonly<CreateStaticWebAppContext>): Promise<Partial<CreateStaticWebAppContext>> {
+    public override async prompt(context: Readonly<AppLocationStepContext>): Promise<Partial<AppLocationStepContext>> {
         const defaultValue = context.detectedAppLocation ?? context.buildPreset?.appLocation ?? '/';
         const declared = await getStaticWebAppCliLocation(this.ctx.code, 'appLocation', context.iacFolder);
         const initialValue = declared || defaultValue;
         const appLocation = context.iacFolder && this.ctx.code.workspace.getWorkspaceFolder(context.iacFolder)
-            ? await this.pickLocation(context.iacFolder, initialValue, [
-                initialValue,
-                context.detectedAppLocation,
-                context.buildPreset?.appLocation,
-                '/',
-            ])
+            ? (await this.pickLocation(context, {
+                findFilesOptions: [
+                    { base: context.iacFolder.fsPath, baseUri: context.iacFolder, pattern: projectFileGlob },
+                    { base: context.iacFolder.fsPath, baseUri: context.iacFolder, pattern: excludedProjectDirectories },
+                ],
+                relativeTo: context.iacFolder,
+                value: initialValue,
+                suggestedRelativePaths: [
+                    initialValue,
+                    context.detectedAppLocation,
+                    context.buildPreset?.appLocation,
+                    '/',
+                ].filter((item): item is string => item !== undefined),
+            }))?.relativePath || '/'
             : await this.promptForLocation(initialValue);
         addLocationTelemetry(this.actionContext, 'appLocation', appLocation, defaultValue, declared);
         return { appLocation };
-    }
-
-    private async pickLocation(
-        workspaceRoot: WorkspaceLocation['uri'],
-        value: string,
-        suggestions: readonly (string | undefined)[],
-    ): Promise<string> {
-        const step = new PickWorkspaceLocationStep<AppLocationPickContext>(
-            this.ctx,
-            [
-                { base: workspaceRoot.fsPath, baseUri: workspaceRoot, pattern: projectFileGlob },
-                { base: workspaceRoot.fsPath, baseUri: workspaceRoot, pattern: excludedProjectDirectories },
-            ],
-            {
-                kind: 'folder',
-                contextProperty: 'location',
-                relativeTo: workspaceRoot,
-                suggestedRelativePaths: suggestions.filter((item): item is string => item !== undefined),
-                value,
-                allowCustom: true,
-                isValidRelativePath: input => isYamlSafeLocation(input, 'app_location'),
-                strings: {
-                    title: this.ctx.code.l10n.t('Select the application code location'),
-                    placeHolder: this.ctx.code.l10n.t('Choose a project folder or enter a location relative to the workspace root'),
-                },
-            },
-        );
-        const result = await step.prompt({});
-        return result.location?.relativePath || '/';
     }
 
     private async promptForLocation(value: string): Promise<string> {
