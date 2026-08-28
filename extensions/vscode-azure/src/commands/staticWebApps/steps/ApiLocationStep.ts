@@ -3,12 +3,12 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IActionContext, ICodeContext, PromptStep, showSmartInputBox, showSmartQuickPick, type QuickPickItemWithData } from '@microsoft/vscode-azure-utils';
+import { IActionContext, ICodeContext, PromptStep, showSmartQuickPick, type QuickPickItemWithData } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type { CreateStaticWebAppContext } from '../CreateStaticWebAppContext';
 import { getStaticWebAppCliLocation } from '../../../staticWebApps/SwaCliConfig';
 import { staticWebAppsApiLocationUrl } from '../staticWebAppLinks';
-import { addLocationTelemetry, isYamlSafeLocation } from './locationUtils';
+import { addLocationTelemetry, promptForYamlSafeLocation } from './locationUtils';
 
 interface ApiLocationChoice {
     readonly location?: string;
@@ -75,16 +75,13 @@ export class ApiLocationStep extends PromptStep<CreateStaticWebAppContext> {
     }
 
     private promptForLocation(value: string): Promise<string> {
-        return showSmartInputBox(this.ctx, {
+        return promptForYamlSafeLocation(this.ctx, {
+            key: 'api_location',
             value,
             prompt: this.ctx.code.l10n.t(
                 'Enter the Azure Functions code location, or leave it blank for no API. Learn more: {0}',
                 staticWebAppsApiLocationUrl,
             ),
-            showBack: true,
-            validateInput: input => isYamlSafeLocation(input, 'api_location')
-                ? undefined
-                : this.ctx.code.l10n.t('Enter a value that is safe to use in YAML.'),
         });
     }
 }

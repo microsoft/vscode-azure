@@ -6,88 +6,69 @@
 import {
     IActionContext,
     ICodeContext,
+    NoWorkspaceLocationError,
     PickWorkspaceLocationStep,
-    showSmartInputBox,
-    type WorkspaceLocation,
+    type FindWorkspaceFilesOptions,
+    type PickWorkspaceLocationOptions,
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
+import type * as vscode from 'vscode';
 import type { CreateStaticWebAppContext } from '../CreateStaticWebAppContext';
 import { getStaticWebAppCliLocation } from '../../../staticWebApps/SwaCliConfig';
 import { staticWebAppsOutputLocationUrl } from '../staticWebAppLinks';
-import { addLocationTelemetry, canAzdDeployStaticWebApp, isYamlSafeLocation } from './locationUtils';
+import {
+    addLocationTelemetry,
+    canAzdDeployStaticWebApp,
+    derivePerPrompt,
+    isYamlSafeLocation,
+    promptForYamlSafeLocation,
+    requireWorkspaceBase,
+} from './locationUtils';
 
 const angularOutputPlaceholder = 'dist/<project-name>';
 const excludedDependencyDirectories = '**/{.git,.hg,.svn,node_modules,bower_components,vendor,.venv,venv,__pycache__,.tox,.gradle,.terraform}/**';
 
-interface OutputLocationStepContext extends CreateStaticWebAppContext {
-    readonly selectedLocation?: WorkspaceLocation;
+/**
+ * Configuration for the shared picker, plus the typed-path prompt used when the
+ * workspace cannot offer folders to pick from. Both are built together so they
+ * share one derivation of the prefill, its telemetry, and the deployability
+ * verdict.
+ */
+interface OutputLocationParts {
+    readonly options: PickWorkspaceLocationOptions<CreateStaticWebAppContext>;
+    readonly promptForTypedLocation: (
+        context: Readonly<CreateStaticWebAppContext>,
+    ) => Promise<Partial<CreateStaticWebAppContext>>;
 }
 
-/** Prompts for build output and gates unsupported direct azd deployment shapes. */
-@injectable()
-export class OutputLocationStep extends PickWorkspaceLocationStep<OutputLocationStepContext> {
-    public constructor(
-        @inject(IActionContext) private readonly actionContext: IActionContext,
-        @inject(ICodeContext) ctx: ICodeContext,
-    ) {
-        super(
-            ctx,
-            [
-                '**/*',
-                excludedDependencyDirectories,
-                1000,
-            ],
-            {
-                kind: 'folder',
-                contextProperty: 'selectedLocation',
-                allowCustom: true,
-                noneLabel: ctx.code.l10n.t('$(circle-slash) No build output'),
-                isValidRelativePath: input => input !== angularOutputPlaceholder
-                    && isYamlSafeLocation(input, 'output_location'),
-                strings: {
-                    title: ctx.code.l10n.t('Select the build output location'),
-                    placeHolder: ctx.code.l10n.t('Choose a folder, enter a location relative to the app, or select no build output'),
-                },
-            },
-        );
-    }
-
-    public override shouldPrompt(context: Readonly<CreateStaticWebAppContext>): boolean {
-        return !context.hasInfra && context.outputLocation === undefined;
-    }
-
-    public override async prompt(context: Readonly<OutputLocationStepContext>): Promise<Partial<OutputLocationStepContext>> {
+function createOutputLocationParts(ctx: ICodeContext, actionContext: IActionContext): OutputLocationParts {
+    const derive = derivePerPrompt(async (context: Readonly<CreateStaticWebAppContext>) => {
         const defaultValue = resolveDefaultOutputLocation(context);
-        const declared = await getStaticWebAppCliLocation(this.ctx.code, 'outputLocation', context.iacFolder);
-        const initialValue = declared || defaultValue;
-        const appRoot = this.resolveAppRoot(context);
-        let outputLocation: string;
-        if (appRoot && this.ctx.code.workspace.getWorkspaceFolder(appRoot)) {
-            const selectedLocation = await this.pickLocation(context, {
-                findFilesOptions: [
-                    { base: appRoot.fsPath, baseUri: appRoot, pattern: '**/*' },
-                    { base: appRoot.fsPath, baseUri: appRoot, pattern: excludedDependencyDirectories },
-                    1000,
-                ],
-                relativeTo: appRoot,
-                value: initialValue,
-                suggestedRelativePaths: [
-                    initialValue,
-                    context.detectedOutputLocation,
-                    context.buildPreset?.outputLocation,
-                ].filter(
-                    (item): item is string => !!item && item !== angularOutputPlaceholder,
-                ),
-            });
-            outputLocation = selectedLocation ? selectedLocation.relativePath || '/' : '';
-        } else {
-            outputLocation = await this.promptForLocation(initialValue);
-        }
-        addLocationTelemetry(this.actionContext, 'outputLocation', outputLocation, defaultValue, declared);
+        const declared = await getStaticWebAppCliLocation(ctx.code, 'outputLocation', context.iacFolder);
+        return { defaultValue, declared, initialValue: declared || defaultValue };
+    });
+
+    /** Build output is named relative to the app, not to the workspace root. */
+    const resolveAppRoot = (context: Readonly<CreateStaticWebAppContext>): vscode.Uri => {
+        const appLocation = context.appLocation ?? context.detectedAppLocation ?? context.buildPreset?.appLocation ?? '/';
+        const normalized = appLocation.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+        const iacFolder = context.iacFolder;
+        return requireWorkspaceBase(
+            ctx,
+            iacFolder && normalized ? ctx.code.Uri.joinPath(iacFolder, normalized) : iacFolder,
+        );
+    };
+
+    const toResult = async (
+        context: Readonly<CreateStaticWebAppContext>,
+        outputLocation: string,
+    ): Promise<Partial<CreateStaticWebAppContext>> => {
+        const { defaultValue, declared } = await derive(context);
+        addLocationTelemetry(actionContext, 'outputLocation', outputLocation, defaultValue, declared);
 
         const deploySupported = canAzdDeployStaticWebApp(outputLocation);
         if (context.job === 'deploy' && !deploySupported) {
-            void this.ctx.code.window.showWarningMessage(this.ctx.code.l10n.t(
+            void ctx.code.window.showWarningMessage(ctx.code.l10n.t(
                 'The current azd Static Web Apps target requires a build output folder distinct from the source folder. The resource will be provisioned, but code deployment will be skipped for this output location.',
             ));
         }
@@ -95,34 +76,85 @@ export class OutputLocationStep extends PickWorkspaceLocationStep<OutputLocation
             outputLocation,
             deploy: context.job === 'deploy' ? deploySupported : false,
         };
-    }
+    };
 
-    private resolveAppRoot(context: Readonly<CreateStaticWebAppContext>): WorkspaceLocation['uri'] | undefined {
-        if (!context.iacFolder) {
-            return undefined;
-        }
-        const appLocation = context.appLocation ?? context.detectedAppLocation ?? context.buildPreset?.appLocation ?? '/';
-        const normalized = appLocation.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
-        return normalized ? this.ctx.code.Uri.joinPath(context.iacFolder, normalized) : context.iacFolder;
-    }
-
-    private async promptForLocation(value: string): Promise<string> {
-        return (await showSmartInputBox(this.ctx, {
-            value,
-            prompt: this.ctx.code.l10n.t(
+    return {
+        options: {
+            kind: 'folder',
+            allowCustom: true,
+            noneLabel: ctx.code.l10n.t('$(circle-slash) No build output'),
+            isValidRelativePath: input => input !== angularOutputPlaceholder
+                && isYamlSafeLocation(input, 'output_location'),
+            strings: {
+                title: ctx.code.l10n.t('Select the build output location'),
+                placeHolder: ctx.code.l10n.t('Choose a folder, enter a location relative to the app, or select no build output'),
+            },
+            relativeTo: resolveAppRoot,
+            findFiles: (context): FindWorkspaceFilesOptions => {
+                const appRoot = resolveAppRoot(context);
+                return [
+                    { base: appRoot.fsPath, baseUri: appRoot, pattern: '**/*' },
+                    { base: appRoot.fsPath, baseUri: appRoot, pattern: excludedDependencyDirectories },
+                    1000,
+                ];
+            },
+            value: async context => (await derive(context)).initialValue,
+            suggestedRelativePaths: async context => [
+                (await derive(context)).initialValue,
+                context.detectedOutputLocation,
+                context.buildPreset?.outputLocation,
+            ].filter((item): item is string => !!item && item !== angularOutputPlaceholder),
+            toContext: (location, context) => toResult(context, location ? location.relativePath || '/' : ''),
+        },
+        promptForTypedLocation: async context => toResult(context, await promptForYamlSafeLocation(ctx, {
+            key: 'output_location',
+            value: (await derive(context)).initialValue,
+            prompt: ctx.code.l10n.t(
                 'Enter the build output relative to the app location, or leave it blank if there is no build. Learn more: {0}',
                 staticWebAppsOutputLocationUrl,
             ),
-            showBack: true,
-            validateInput: input => {
-                if (input === angularOutputPlaceholder) {
-                    return this.ctx.code.l10n.t('The Angular project name must be resolved before deployment.');
-                }
-                return isYamlSafeLocation(input, 'output_location')
-                    ? undefined
-                    : this.ctx.code.l10n.t('Enter a value that is safe to use in YAML.');
-            },
-        })).trim();
+            validate: input => input === angularOutputPlaceholder
+                ? ctx.code.l10n.t('The Angular project name must be resolved before deployment.')
+                : undefined,
+        })),
+    };
+}
+
+/** Prompts for build output and gates unsupported direct azd deployment shapes. */
+@injectable()
+export class OutputLocationStep extends PickWorkspaceLocationStep<CreateStaticWebAppContext> {
+    private readonly promptForTypedLocation: OutputLocationParts['promptForTypedLocation'];
+
+    public constructor(
+        @inject(IActionContext) actionContext: IActionContext,
+        @inject(ICodeContext) ctx: ICodeContext,
+    ) {
+        const parts = createOutputLocationParts(ctx, actionContext);
+        super(ctx, parts.options);
+        this.promptForTypedLocation = parts.promptForTypedLocation;
+    }
+
+    public override shouldPrompt(context: Readonly<CreateStaticWebAppContext>): boolean {
+        return !context.hasInfra && context.outputLocation === undefined;
+    }
+
+    /**
+     * @inheritdoc
+     * @remarks
+     * An app folder outside the workspace leaves the picker nothing valid to
+     * offer, so the location is typed instead.
+     */
+    public override async prompt(
+        context: Readonly<CreateStaticWebAppContext>,
+    ): Promise<Partial<CreateStaticWebAppContext>> {
+        try {
+            return await super.prompt(context);
+        } catch (error) {
+            if (!(error instanceof NoWorkspaceLocationError)) {
+                throw error;
+            }
+            return await this.promptForTypedLocation(context);
+        }
     }
 }
 
