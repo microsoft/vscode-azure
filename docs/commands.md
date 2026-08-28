@@ -75,6 +75,41 @@ A product only needs its own delete command for targets the generic command
 cannot express -- for example a virtual child node that maps to a
 service-specific API rather than an ARM resource ID.
 
+### Viewing resource properties
+
+`ViewProperties` opens a node's live properties as a JSON document. It owns the
+node lookup, telemetry, error messages, redaction, and document presentation;
+what differs per resource type is only *where the properties come from*, which
+is supplied by a `PropertiesAdapter`:
+
+```typescript
+export interface PropertiesAdapter<TNode extends ConcreteAzureNode = ConcreteAzureNode> {
+    canHandle(node: ConcreteAzureNode): node is TNode;
+    read(node: TNode): Promise<unknown>;
+    readonly redact?: RedactionPolicy;
+}
+```
+
+Adapters are `@multiInject`ed and dispatched first-match-wins, so a product
+binds its adapter in its own `register*.ts` and gets priority over
+`GenericArmPropertiesAdapter`, which is bound from `registerGenericAzure.ts` —
+registered last — and reads any ARM resource or resource group through
+`ResourceClient.resources.getById`.
+
+Most products need no adapter at all. Write one only when the properties worth
+showing are not what an ARM GET returns, for example a virtual child node backed
+by a data-plane API.
+
+Redaction is **declared, not implemented**: an adapter sets `redact` and the
+command applies it. `redact: true` withholds the property names
+`isSecretPropertyName` recognizes; `{ alsoRedact: [...] }` adds names specific to
+that payload. Omit it to open the payload unchanged. Redacted values are
+replaced with a visible marker rather than dropped, so the reader can tell a
+withheld property from an absent one.
+
+The opened JSON document is a readonly snapshot of the current state. Editable
+resource configuration belongs in the settings framework instead.
+
 ### `prefixArgs` Pattern
 
 Both registration functions accept optional trailing `...prefixArgs`, which are prepended to the arguments VS Code passes to `execute()`. This lets one command class be registered several times with different fixed arguments instead of being split into near-identical subclasses:

@@ -332,9 +332,13 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
     const shownDocuments: vscode.TextDocument[] = [];
 
     const showTextDocument = mock.fn(
-        (document: vscode.TextDocument) => {
+        (document: vscode.TextDocument, _options?: vscode.TextDocumentShowOptions) => {
             shownDocuments.push(document);
-            return Promise.resolve({ document } as unknown as vscode.TextEditor);
+            return Promise.resolve({
+                document,
+                revealRange: mock.fn(),
+                selection: undefined,
+            } as unknown as vscode.TextEditor);
         },
     );
 
@@ -355,20 +359,58 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
     const taskProcessEndEmitter = new EventEmitter<vscode.TaskProcessEndEvent>();
 
     const textDocuments: vscode.TextDocument[] = [];
+    const textDocumentContentProviders = new Map<string, vscode.TextDocumentContentProvider>();
+    let untitledDocumentCount = 0;
 
     const registerFileSystemProvider = mock.fn(
         (_scheme: string, _provider: vscode.FileSystemProvider) => ({ dispose: () => undefined }),
     );
 
+    const registerTextDocumentContentProvider = mock.fn(
+        (scheme: string, provider: vscode.TextDocumentContentProvider) => {
+            if (textDocumentContentProviders.has(scheme)) {
+                throw new Error(`A text document content provider is already registered for '${scheme}'.`);
+            }
+
+            textDocumentContentProviders.set(scheme, provider);
+            return {
+                dispose: () => {
+                    textDocumentContentProviders.delete(scheme);
+                },
+            };
+        },
+    );
+
+    const readUriText = async (uri: vscode.Uri): Promise<string> => {
+        const provider = textDocumentContentProviders.get(uri.scheme);
+        if (provider) {
+            const token = {
+                isCancellationRequested: false,
+                onCancellationRequested: () => Disposable.None,
+            } satisfies vscode.CancellationToken;
+            return (await Promise.resolve(provider.provideTextDocumentContent(uri, token))) ?? '';
+        }
+
+        return Buffer.from(fs.files.get(uri.path) ?? new Uint8Array()).toString();
+    };
+
+    const nextUntitledUri = (): vscode.Uri => {
+        untitledDocumentCount += 1;
+        return MockUri.from({ scheme: 'untitled', path: `/Untitled-${untitledDocumentCount}` });
+    };
+
     const openTextDocument = mock.fn(
-        (uriOrOptions: vscode.Uri | { content?: string; language?: string }): Promise<vscode.TextDocument> => {
-            const isUri = 'scheme' in uriOrOptions;
-            const uri = isUri ? uriOrOptions : MockUri.from({ scheme: 'untitled', path: '/Untitled-1' });
-            const content = isUri
-                ? Buffer.from(fs.files.get(uriOrOptions.path) ?? new Uint8Array()).toString()
-                : uriOrOptions.content ?? '';
+        async (target: vscode.Uri | { language?: string; content?: string }): Promise<vscode.TextDocument> => {
+            // `workspace.openTextDocument` is overloaded: a URI opens the file at that path, while an
+            // options bag creates an untitled document from in-memory content. Discriminating on
+            // `scheme` follows the real overloads, so an empty options bag still opens an untitled
+            // document rather than being mistaken for a URI.
+            const isUri = 'scheme' in target;
+            const content = isUri ? await readUriText(target) : target.content ?? '';
             const document = {
-                uri,
+                uri: isUri ? target : nextUntitledUri(),
+                isUntitled: !isUri,
+                languageId: isUri ? languageFromPath(target.path) : target.language ?? 'plaintext',
                 getText: () => content,
                 lineAt: (line: number) => ({ text: content.split(/\r?\n/)[line] ?? '' }),
                 validateRange: (range: vscode.Range) => range,
@@ -413,6 +455,7 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         get workspaceFolders() { return workspaceFolders.length > 0 ? workspaceFolders : undefined; },
         fs,
         registerFileSystemProvider,
+        registerTextDocumentContentProvider,
         openTextDocument,
     };
 
@@ -484,6 +527,18 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         textDocuments,
         shownDocuments,
     } as unknown as MockVsCodeResult;
+}
+
+function languageFromPath(path: string): string | undefined {
+    if (path.endsWith('.json')) {
+        return 'json';
+    }
+
+    if (path.endsWith('.jsonc')) {
+        return 'jsonc';
+    }
+
+    return undefined;
 }
 
 /**
