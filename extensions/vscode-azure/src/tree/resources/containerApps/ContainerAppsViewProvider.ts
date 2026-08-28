@@ -10,12 +10,10 @@ import { OpenContainerAppConsole, OpenContainerAppLogs } from '../../../commands
 import { RestartContainerApp } from '../../../commands/containerApps/RestartContainerApp';
 import { RevealContainerAppEnvironment } from '../../../commands/containerApps/RevealContainerAppEnvironment';
 import { StartStreamingLogs } from '../../../commands/containerApps/StartStreamingLogs';
-import { StopStreamingLogs } from '../../../commands/containerApps/StopStreamingLogs';
 import { IAzureViewDataTree } from '../../../services';
 import { resourceContextValue } from '../../contextValueHelpers';
 import { getResourceTypeIconUri } from '../../iconPath';
 import { isContainerApp, type ContainerApp } from './ContainerApp';
-import { IContainerAppLogStreamService } from './ContainerAppLogStream';
 import { isContainerNode } from './ContainerAppsDataProvider';
 import { isManagedEnvironment } from './ManagedEnvironment';
 
@@ -36,7 +34,6 @@ export class ContainerAppsViewProvider implements ViewProvider<string> {
         @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IAzureViewDataTree) private readonly tree: IAzureViewDataTree,
-        @inject(IContainerAppLogStreamService) private readonly streams: IContainerAppLogStreamService,
     ) { }
 
     /** @inheritdoc */
@@ -98,12 +95,7 @@ export class ContainerAppsViewProvider implements ViewProvider<string> {
         return item;
     }
 
-    /**
-     * Context values for the commands that act on a container app.
-     *
-     * Stopping a stream is only offered while one is open, so the node has to be
-     * re-rendered when that changes -- the log-stream service invalidates it.
-     */
+    /** Context values for the commands that act on a container app. */
     private appContextValues(resource: ContainerApp): string[] {
         const values = [
             OpenContainerAppConsole.ContextValue,
@@ -114,10 +106,6 @@ export class ContainerAppsViewProvider implements ViewProvider<string> {
 
         if (resource.environmentId) {
             values.push(RevealContainerAppEnvironment.ContextValue);
-        }
-
-        if (this.streams.isStreaming(resource.id)) {
-            values.push(StopStreamingLogs.ContextValue);
         }
 
         return values;

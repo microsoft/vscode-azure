@@ -172,7 +172,7 @@ Both resource types are handled by **one** data provider and **one** view provid
 | Node | contextValue (assembled) | Children |
 |---|---|---|
 | Container Apps environment | `openInPortal;deleteResource` | none (leaf) |
-| Container app | `openInPortal;deleteResource;browseWebsite;restartContainerApp;revealContainerAppEnvironment;openContainerAppConsole;openContainerAppLogs;startContainerAppLogStream` (+ `stopContainerAppLogStream` while a stream is live) | one node per container |
+| Container app | `openInPortal;deleteResource;browseWebsite;restartContainerApp;revealContainerAppEnvironment;openContainerAppConsole;openContainerAppLogs;startContainerAppLogStream` | one node per container |
 | Container | `containerAppContainer` | none (leaf) |
 
 - [x] `ContainerAppsDataProvider.canHandle` -> `isContainerApp(r) || isManagedEnvironment(r)` plus this
@@ -222,16 +222,13 @@ Both resource types are handled by **one** data provider and **one** view provid
       `parse()`/`from()` are public) to derive a sibling resource node id without string surgery; add it in
       azutils, do not fork  <- ACA-014
 - [x] `ContainerAppLogStream` service -- ARM `containerApps.getAuthToken` for a short-lived data-plane
-      token, GET the per-container `logStreamEndpoint` with cross-origin redirects allowed, pipe the
-      chunked response into a per-replica output channel, track live streams with an `AbortController`
-      each, and fire an event when the live set changes  <- ACA-118
+      token, GET the per-container `logStreamEndpoint` with guarded cross-origin redirects, and pipe the
+      chunked response into a per-replica pseudoterminal backed by an `AbortController`  <- ACA-118
 - [x] `StartStreamingLogs` -- `ContextValue = 'startContainerAppLogStream'`; picks revision -> replica ->
       container, then opens the stream. Absorbs the source's `logStreamItem` leaf and the `Logs` group node
       <- ACA-016, ACA-083, ACA-093
-- [x] `StopStreamingLogs` -- `ContextValue = 'stopContainerAppLogStream'`, added to the app's
-      `contextValue` only while a stream is live; the view provider re-renders on the service's change
-      event. Offers "stop all" when several streams are open  <- ACA-017
-- [x] Contribute all four commands, their `%key%` titles, `commandPalette` visibility, and `\b`-anchored
+- [x] Closing a log terminal automatically aborts its stream, with no separate stop command  <- ACA-017
+- [x] Contribute all three commands, their `%key%` titles, `commandPalette` visibility, and `\b`-anchored
       `when` clauses to `package.json` + `package.nls.json`  <- ACA-016, ACA-017, ACA-041, ACA-014
 
 ## Slice 3 -- Create / Deploy (azd + Bicep)   [Adapt]

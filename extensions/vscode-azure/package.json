@@ -143,12 +143,6 @@
                 "title": "%commands.vscode-azure/containerApps/startStreamingLogs%"
             },
             {
-                "command": "vscode-azure/containerApps/stopStreamingLogs",
-                "category": "%commands.category.azure%",
-                "icon": "$(debug-stop)",
-                "title": "%commands.vscode-azure/containerApps/stopStreamingLogs%"
-            },
-            {
                 "command": "vscode-azure/containerApps/createNew",
                 "category": "%commands.category.azure%",
                 "title": "%commands.vscode-azure/containerApps/createNew%"
@@ -350,15 +344,6 @@
                     "command": "vscode-azure/containerApps/startStreamingLogs",
                     "when": "view == vscode-azure/resources && viewItem =~ /\\bstartContainerAppLogStream\\b/i",
                     "group": "inline@1"
-                },
-                {
-                    "command": "vscode-azure/containerApps/stopStreamingLogs",
-                    "when": "view == vscode-azure/resources && viewItem =~ /\\bstopContainerAppLogStream\\b/i"
-                },
-                {
-                    "command": "vscode-azure/containerApps/stopStreamingLogs",
-                    "when": "view == vscode-azure/resources && viewItem =~ /\\bstopContainerAppLogStream\\b/i",
-                    "group": "inline@2"
                 },
                 {
                     "command": "vscode-azure/workspace/revealInExplorer",

@@ -5,10 +5,10 @@
 
 import { getResourceGroupName, IContainerAppsClientProvider, type GenericResource } from '@microsoft/vscode-azure-azutils';
 import {
-    createOutputChannel, Disposable, EventEmitter, IActionExecutor, IVsCode,
-    stringifyError, type IOutputChannel,
+    Disposable, EventEmitter, IActionExecutor, IVsCode, stringifyError,
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
+import type * as vscode from 'vscode';
 
 /** Service identifier for {@linkcode ContainerAppLogStreamService}. */
 export const IContainerAppLogStreamService: ServiceIdentifier<IContainerAppLogStreamService> = Symbol.for('IContainerAppLogStreamService');
@@ -22,12 +22,6 @@ export interface LogStreamTarget {
     readonly containerName: string;
 }
 
-/** A live log stream, as surfaced to the stop picker. */
-export interface ActiveLogStream {
-    readonly id: string;
-    readonly label: string;
-    readonly appId: string;
-}
 /**
  * Hosts on which a data-plane token may be presented.
  *
@@ -42,10 +36,9 @@ const LogStreamHostSuffix = '.azurecontainerapps.io';
 const MaxRedirects = 5;
 
 interface RunningStream {
-    readonly stream: ActiveLogStream;
-    readonly app: GenericResource;
     readonly abort: AbortController;
-    readonly channel: IOutputChannel;
+    readonly terminal: vscode.Terminal;
+    readonly pty: LogStreamPseudoterminal;
 }
 
 /**
@@ -54,21 +47,11 @@ interface RunningStream {
  * The Container Apps log stream is chunked HTTP, not a web socket: an ARM call
  * exchanges the user's credentials for a short-lived data-plane token, which is
  * then presented to the container's `logStreamEndpoint`. Each stream writes into
- * its own output channel and is cancelled through its own `AbortController`.
- *
- * {@linkcode onDidChangeStreams} fires whenever a stream starts or stops, so the
- * tree can re-render the affordance for stopping one.
+ * its own pseudoterminal and is cancelled when the user closes that terminal.
  */
 @injectable()
 export class ContainerAppLogStreamService implements Disposable {
     private readonly streams = new Map<string, RunningStream>();
-    private readonly changeEmitter = new EventEmitter<GenericResource>();
-
-    /**
-     * Fires with the owning container app whenever one of its streams starts or
-     * stops, so a listener can re-render exactly that node.
-     */
-    public readonly onDidChangeStreams = this.changeEmitter.event;
 
     public constructor(
         @inject(IVsCode) private readonly code: IVsCode,
@@ -76,25 +59,10 @@ export class ContainerAppLogStreamService implements Disposable {
         @inject(IContainerAppsClientProvider) private readonly createClient: IContainerAppsClientProvider,
     ) { }
 
-    /** Returns `true` when at least one stream is open for the given app. */
-    public isStreaming(appId: string): boolean {
-        for (const { stream } of this.streams.values()) {
-            if (stream.appId.toLowerCase() === appId.toLowerCase()) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /** Returns every live stream, for the stop picker. */
-    public getActiveStreams(): readonly ActiveLogStream[] {
-        return [...this.streams.values()].map(running => running.stream);
-    }
-
     /**
-     * Opens a log stream for one container and shows its output channel.
+     * Opens a log stream for one container and shows its terminal.
      *
-     * Starting a stream that is already open re-focuses its channel rather than
+     * Starting a stream that is already open re-focuses its terminal rather than
      * opening a second connection to the same container.
      *
      * @throws if the container exposes no log-stream endpoint, or if the
@@ -104,7 +72,7 @@ export class ContainerAppLogStreamService implements Disposable {
         const id = streamId(target);
         const existing = this.streams.get(id);
         if (existing) {
-            existing.channel.show();
+            existing.terminal.show();
             return;
         }
 
@@ -137,26 +105,30 @@ export class ContainerAppLogStreamService implements Disposable {
         const response = await this.connect(endpoint, token);
 
         const label = this.code.l10n.t('{0} ({1})', target.replicaName, target.containerName);
-        const channel = createOutputChannel(this.code.l10n.t('Logs: {0}', label), this.code);
         const abort = new AbortController();
+        const pty = new LogStreamPseudoterminal(() => {
+            this.stop(id, false);
+        });
+        const terminal = this.code.window.createTerminal({
+            name: this.code.l10n.t('Logs: {0}', label),
+            pty,
+        });
         const running: RunningStream = {
-            stream: { id, label, appId: target.app.id },
-            app: target.app,
             abort,
-            channel,
+            terminal,
+            pty,
         };
 
         this.streams.set(id, running);
-        channel.show();
-        this.changeEmitter.fire(target.app);
+        terminal.show();
 
         // Deliberately not awaited: the pump runs until the stream ends or is
         // cancelled, which is the lifetime of the feature, not of this call.
         void this.pump(id, response, running);
     }
 
-    /** Stops one stream by id. Unknown ids are ignored. */
-    public stop(id: string): void {
+    /** Stops one stream when its terminal closes. */
+    private stop(id: string, disposeTerminal: boolean): void {
         const running = this.streams.get(id);
         if (!running) {
             return;
@@ -164,21 +136,21 @@ export class ContainerAppLogStreamService implements Disposable {
 
         this.streams.delete(id);
         running.abort.abort();
-        running.channel.dispose();
-        this.changeEmitter.fire(running.app);
+        if (disposeTerminal) {
+            running.terminal.dispose();
+        }
     }
 
     /** Stops every live stream. */
-    public stopAll(): void {
+    private stopAll(): void {
         for (const id of [...this.streams.keys()]) {
-            this.stop(id);
+            this.stop(id, true);
         }
     }
 
     /** @inheritdoc */
     public dispose(): void {
         this.stopAll();
-        this.changeEmitter.dispose();
     }
 
     /**
@@ -220,32 +192,57 @@ export class ContainerAppLogStreamService implements Disposable {
         throw new Error(this.code.l10n.t('The log stream endpoint redirected too many times.'));
     }
 
-    /** Writes decoded chunks into the stream's channel until it ends. */
+    /** Writes decoded chunks into the stream's terminal until it ends. */
     private async pump(id: string, response: Response, running: RunningStream): Promise<void> {
         const decoder = new TextDecoder();
 
         try {
             // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- `connect` rejects a body-less response
             for await (const chunk of streamChunks(response.body!, running.abort.signal)) {
-                for (const line of decoder.decode(chunk, { stream: true }).split(/\r?\n/)) {
-                    if (line) {
-                        running.channel.appendLine(line);
-                    }
-                }
+                running.pty.write(decoder.decode(chunk, { stream: true }));
             }
+            running.pty.write(decoder.decode());
         } catch (error) {
-            // An abort is how `stop` ends the stream, so it is not a failure.
+            // An abort is how closing the terminal ends the stream, so it is not a failure.
             if (!running.abort.signal.aborted) {
                 this.executor.output.error(`[containerApps] log stream failed: ${stringifyError(error)}`);
-                running.channel.appendLine(this.code.l10n.t('The log stream ended unexpectedly: {0}', stringifyError(error)));
+                running.pty.write(this.code.l10n.t('The log stream ended unexpectedly: {0}', stringifyError(error)));
             }
         } finally {
-            // Only clear the entry if it is still ours; `stop` may have already
+            // Only clear the entry if it is still ours; closing the terminal may have already
             // removed it and a later stream may have reused the id.
             if (this.streams.get(id) === running) {
                 this.streams.delete(id);
-                this.changeEmitter.fire(running.app);
             }
+        }
+    }
+}
+
+/** Writable terminal endpoint whose closure cancels its associated stream. */
+class LogStreamPseudoterminal implements vscode.Pseudoterminal {
+    private readonly writeEmitter = new EventEmitter<string>();
+    private closed = false;
+
+    public readonly onDidWrite = this.writeEmitter.event;
+
+    public constructor(private readonly onClose: () => void) { }
+
+    public open(): void { /* The stream starts before VS Code opens its terminal. */ }
+
+    public close(): void {
+        if (this.closed) {
+            return;
+        }
+
+        this.closed = true;
+        this.onClose();
+        this.writeEmitter.dispose();
+    }
+
+    /** Writes stream text using the CRLF line endings expected by terminals. */
+    public write(value: string): void {
+        if (!this.closed && value) {
+            this.writeEmitter.fire(value.replace(/\r?\n/g, '\r\n'));
         }
     }
 }

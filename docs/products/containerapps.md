@@ -36,7 +36,6 @@ product.
 | Restart Container App | app node | Restarts the latest revision |
 | Reveal Environment | app node | Jumps to the hosting managed environment |
 | Start Streaming Logs... | app node | Live log stream from one container of one replica |
-| Stop Streaming Logs... | app node | Only offered while a stream is open |
 | Open Console in Portal | app node | Portal `/console` blade |
 | Open Logs in Portal | app node | Portal `/logs` blade |
 
@@ -48,7 +47,7 @@ The Container Apps log stream is **chunked HTTP, not a web socket**:
 
 1. `containerApps.getAuthToken` exchanges the user's ARM credentials for a short-lived data-plane token.
 2. That token is presented to the container's `logStreamEndpoint`, read from the replica.
-3. The chunked response is written into a per-replica output channel until it ends or is cancelled.
+3. The chunked response is written into a per-replica terminal. Closing the terminal cancels the stream.
 
 Redirects are followed **manually**. The fetch specification strips `Authorization` across origins, and
 following a redirect blindly would instead hand an Azure credential to whatever host the response names, so

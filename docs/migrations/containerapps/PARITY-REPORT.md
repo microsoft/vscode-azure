@@ -47,7 +47,7 @@ Evidence paths are relative to `extensions/vscode-azure/src/` unless another pac
 | ACA-014 | `revealInEnvironment` | Adapt | landed | `commands/containerApps/RevealContainerAppEnvironment.ts` + `AzureNodeId.forRelatedResource` |
 | ACA-015 | `openConsoleInPortal` | Reuse | wired | `OpenUrl` + `OpenInPortal.bladeUrl('/console')` |
 | ACA-016 | `startStreamingLogs` | Migrate | landed | `commands/containerApps/StartStreamingLogs.ts` |
-| ACA-017 | `stopStreamingLogs` | Migrate | landed | `commands/containerApps/StopStreamingLogs.ts` |
+| ACA-017 | `stopStreamingLogs` | Migrate | landed | Closing the per-stream terminal automatically stops the stream. |
 | ACA-041 | `restartRevision` | Migrate | landed | `commands/containerApps/RestartContainerApp.ts` |
 | ACA-048 | `createAcr` | Reuse | wired | registry is a line in the topology module; no container-apps create-registry command |
 | ACA-060 | `deleteConfirmation` setting | Reuse | wired | `DeleteAzureResource` owns the modal confirmation; no setting contributed |
@@ -98,15 +98,14 @@ Each judgment-call group was grepped across all 205 tracked source, manifest, an
 
 ## Tree contract
 
-All nine Container Apps `view/item/context` entries use a `\b`-anchored regex, and every one names a
+All seven Container Apps `view/item/context` entries use a `\b`-anchored regex, and every one names a
 context value that is declared in source and assembled onto the node by `ContainerAppsViewProvider`:
 
 `openContainerAppConsole`, `openContainerAppLogs`, `revealContainerAppEnvironment`, `restartContainerApp`,
-`startContainerAppLogStream`, `stopContainerAppLogStream` -- plus the generic `openInPortal`,
+`startContainerAppLogStream` -- plus the generic `openInPortal`,
 `deleteResource`, and `browseWebsite` contributed by `resourceContextValue()`.
 
-Two are conditional by design: `revealContainerAppEnvironment` appears only once `environmentId` is known,
-and `stopContainerAppLogStream` only while a stream is open.
+`revealContainerAppEnvironment` is conditional by design and appears only once `environmentId` is known.
 
 `ContainerAppsDataProvider` / `ContainerAppsViewProvider` are registered before the generic providers in
 `registerProducts.ts`.

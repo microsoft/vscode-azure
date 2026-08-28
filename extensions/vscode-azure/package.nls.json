@@ -27,7 +27,6 @@
     "commands.vscode-azure/containerApps/restart": "Restart Container App",
     "commands.vscode-azure/containerApps/revealEnvironment": "Reveal Environment",
     "commands.vscode-azure/containerApps/startStreamingLogs": "Start Streaming Logs...",
-    "commands.vscode-azure/containerApps/stopStreamingLogs": "Stop Streaming Logs...",
     "commands.vscode-azure/containerApps/createNew": "Create Empty Container App in Azure...",
     "commands.vscode-azure/containerApps/deploy": "Deploy Project as Container App...",
     "commands.vscode-azure/azdUp": "Provision & Deploy",

@@ -10,7 +10,6 @@ import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vsco
 import { OpenContainerAppConsole, OpenContainerAppLogs } from '../../../../src/commands/containerApps/portalBlades';
 import { RevealContainerAppEnvironment } from '../../../../src/commands/containerApps/RevealContainerAppEnvironment';
 import { StartStreamingLogs } from '../../../../src/commands/containerApps/StartStreamingLogs';
-import { StopStreamingLogs } from '../../../../src/commands/containerApps/StopStreamingLogs';
 import { ContainerAppResourceType, type ContainerApp } from '../../../../src/tree/resources/containerApps/ContainerApp';
 import { ContainerVirtualType } from '../../../../src/tree/resources/containerApps/ContainerAppsDataProvider';
 import { ContainerAppsViewProvider, shortenImageReference } from '../../../../src/tree/resources/containerApps/ContainerAppsViewProvider';
@@ -46,18 +45,14 @@ function makeEnvironment(): GenericResource {
 function createProvider(
     nodes: readonly ConcreteAzureNode[],
     children: readonly ConcreteAzureNode[] = [],
-    streamingAppIds: readonly string[] = [],
 ) {
     const byKey = new Map(nodes.map(node => [AzureNodeId.from(node).toString(), node]));
     const tree = {
         get: (key: string) => byKey.get(key),
         getChildren: () => Promise.resolve(children),
     };
-    const streams = {
-        isStreaming: (appId: string) => streamingAppIds.some(id => id.toLowerCase() === appId.toLowerCase()),
-    };
     const { executor } = createTestActionExecutor();
-    return new ContainerAppsViewProvider(createMockCodeContext().ctx, executor, tree as never, streams as never);
+    return new ContainerAppsViewProvider(createMockCodeContext().ctx, executor, tree as never);
 }
 
 describe('ContainerAppsViewProvider (unit)', () => {
@@ -95,17 +90,13 @@ describe('ContainerAppsViewProvider (unit)', () => {
         expect(envContext).to.not.include(OpenContainerAppConsole.ContextValue);
     });
 
-    it('offers to stop a stream only while one is open', () => {
+    it('offers to start a stream', () => {
         const app = makeApp();
-        const idle = createProvider([app]);
-        const streaming = createProvider([app], [], [app.id]);
+        const provider = createProvider([app]);
 
-        const idleContext = idle.getTreeItem(AzureNodeId.from(app).toString()).contextValue ?? '';
-        const streamingContext = streaming.getTreeItem(AzureNodeId.from(app).toString()).contextValue ?? '';
+        const context = provider.getTreeItem(AzureNodeId.from(app).toString()).contextValue ?? '';
 
-        expect(idleContext).to.include(StartStreamingLogs.ContextValue);
-        expect(idleContext).to.not.include(StopStreamingLogs.ContextValue);
-        expect(streamingContext).to.include(StopStreamingLogs.ContextValue);
+        expect(context).to.include(StartStreamingLogs.ContextValue);
     });
 
     it('offers to reveal the environment only once one is known', () => {
