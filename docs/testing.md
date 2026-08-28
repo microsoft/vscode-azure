@@ -121,12 +121,11 @@ Key patterns:
 - Use `Mock` from `node:test` to track call counts and arguments — prefer over manual `let callCount = 0` patterns
 - Use `makeVirtualResource()` from `@microsoft/vscode-azure-azutils/testing` instead of hand-rolling `VirtualResource` objects
 - For Azure environments in azutils tests, use the `AzurePublicCloud` preset (or `AzureUSGovernment` / `AzureChinaCloud`) from `@microsoft/vscode-azure-azutils` instead of hand-rolled environment objects. Test credentials come from `makeCredential()` in `mockAzure.ts`.
-- Local task/debug provider tests should use the task, debug-session, and document
-  emitters from `createMockVsCode()`. Assert generated task definitions and shell
-  argument arrays directly.
-- Mock `IProcessExecutor` for CLI tests and inject HTTP responses; tests must never
-  contact npm. Replace `IProcessTerminator` when testing lifecycle decisions so no
-  real process receives a signal.
+- Local task provider tests should use the task and document emitters from
+  `createMockVsCode()`. Assert generated task definitions and shell argument
+  arrays directly.
+- Mock `IProcessExecutor` for CLI tests and inject HTTP responses; tests must
+  never contact npm.
 
 ### Driving Wizard UI in Tests
 

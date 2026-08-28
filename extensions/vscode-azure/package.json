@@ -16,11 +16,6 @@
     "license": "MIT",
     "author": "Microsoft Corporation",
     "main": "main.js",
-    "activationEvents": [
-        "onDebugDynamicConfigurations:swa",
-        "onDebugInitialConfigurations",
-        "onDebugResolve:pwa-chrome"
-    ],
     "capabilities": {
         "virtualWorkspaces": {
             "supported": "limited",
@@ -28,12 +23,6 @@
         }
     },
     "contributes": {
-        "debuggers": [
-            {
-                "type": "swa",
-                "label": "%debuggers.vscode-azure/staticWebApps/swa%"
-            }
-        ],
         "commands": [
             {
                 "command": "vscode-azure/resources/refresh",

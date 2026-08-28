@@ -9,9 +9,6 @@ import type * as vscode from 'vscode';
 /** File name used by the Azure Static Web Apps CLI for project configurations. */
 export const SwaCliConfigFileName = 'swa-cli.config.json';
 
-/** Default local Static Web Apps emulator address. */
-export const SwaEmulatorAddress = 'http://localhost:4280';
-
 /** Default local Azure Functions host address expected by the SWA CLI. */
 export const FunctionsEmulatorAddress = 'http://localhost:7071';
 

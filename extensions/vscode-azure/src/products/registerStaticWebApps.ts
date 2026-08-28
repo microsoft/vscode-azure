@@ -14,14 +14,10 @@ import { ShowFunctionsDocumentation, ShowStaticWebAppsDocumentation } from '../c
 import { OpenUrl } from '../commands/OpenUrl';
 import { StaticWebAppCommandResolver } from '../commands/staticWebApps/StaticWebAppCommandResolver';
 import { ViewStaticWebAppProperties } from '../commands/staticWebApps/ViewStaticWebAppProperties';
-import { PwaChromeDebugType, SwaDebugConfigurationProvider, SwaDebugType } from '../debug/staticWebApps/SwaDebugConfigurationProvider';
 import type { ProductRegistrar } from '../registration/ProductRegistrar';
-import { pushDisposable } from '../services';
 import { StaticWebAppSettingsAdapter } from '../settings/adapters/StaticWebAppSettingsAdapter';
 import { GitRemoteService, IGitRemoteService } from '../staticWebApps/GitRemoteService';
 import { staticWebAppDatabaseDetector } from '../staticWebApps/DatabaseConfigDetector';
-import { SwaTaskLifecycle } from '../tasks/staticWebApps/SwaTaskLifecycle';
-import { IProcessTerminator, ProcessTerminator } from '../utils/ProcessTerminator';
 import { IWorkspaceDetector } from '../utils/workspaceIndex/WorkspaceDetector';
 import { SwaTaskProvider } from '../tasks/staticWebApps/SwaTaskProvider';
 import { IStaticWebAppDataProvider, StaticWebAppDataProvider } from '../tree/resources/staticWebApps/StaticWebAppDataProvider';
@@ -41,9 +37,6 @@ export function registerStaticWebApps(registrar: ProductRegistrar): void {
         container.bind(IWorkspaceDetector).toConstantValue(staticWebAppDatabaseDetector);
         container.bind(IWorkspaceDetector).toConstantValue(staticWebAppProjectDetector);
         container.bind(SwaTaskProvider).toSelf().inSingletonScope();
-        container.bind(SwaDebugConfigurationProvider).toSelf().inSingletonScope();
-        container.bind(IProcessTerminator).to(ProcessTerminator).inSingletonScope();
-        container.bind(SwaTaskLifecycle).toSelf().inSingletonScope().onActivation(pushDisposable);
     });
 
     registrar.registerCommand('vscode-azure/staticWebApps/createNew', CreateStaticWebApp);
@@ -61,26 +54,9 @@ export function registerStaticWebApps(registrar: ProductRegistrar): void {
         const code = container.get(IVsCode);
         const extensionContext = container.get(IExtensionContext);
         const taskProvider = container.get(SwaTaskProvider);
-        const debugProvider = container.get(SwaDebugConfigurationProvider);
 
         extensionContext.subscriptions.push(
             code.tasks.registerTaskProvider('shell', taskProvider),
-            code.debug.registerDebugConfigurationProvider(PwaChromeDebugType, debugProvider),
-            code.debug.registerDebugConfigurationProvider(
-                SwaDebugType,
-                debugProvider,
-                code.DebugConfigurationProviderTriggerKind.Dynamic,
-            ),
-            code.debug.registerDebugConfigurationProvider(
-                SwaDebugType,
-                debugProvider,
-                code.DebugConfigurationProviderTriggerKind.Initial,
-            ),
         );
-    });
-
-    // Resolve the lifecycle eagerly so its task event subscriptions are active.
-    registrar.registerActivation(container => {
-        container.get(SwaTaskLifecycle);
     });
 }

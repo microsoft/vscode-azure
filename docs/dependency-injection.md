@@ -168,12 +168,7 @@ So `ClearActivities` can inject `IArmDeploymentDataProvider` directly and get th
 
 Static Web Apps local tooling follows the same ownership model as tree providers:
 
-- Task and debug providers are singleton bindings so commands and VS Code
-  registrations share state.
-- `SwaTaskLifecycle` is activated through `pushDisposable`; its event subscriptions
-  are disposed with the extension.
-- `registerStaticWebApps()` declares activations on the `ProductRegistrar` that push
-  every VS Code task and debug registration into `IExtensionContext.subscriptions`.
-
-Raw process signaling is isolated behind `IProcessTerminator`; tests replace that
-service and never signal a real process.
+- The task provider is a singleton binding so commands and the VS Code
+  registration share state.
+- `registerStaticWebApps()` declares an activation on the `ProductRegistrar` that
+  pushes the VS Code task registration into `IExtensionContext.subscriptions`.

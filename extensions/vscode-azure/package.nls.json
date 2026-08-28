@@ -53,6 +53,5 @@
     "settings.vscode-azure.selectedSubscriptions.patternError": "Each entry must be in the form 'tenantId/subscriptionId', where both are GUIDs (for example '00000000-0000-0000-0000-000000000000/11111111-1111-1111-1111-111111111111').",
     "submenus.vscode-azure/staticWebApps/workspaceActions": "Azure Static Web Apps",
     "problemMatchers.vscode-azure/staticWebApps/swaWatch": "Azure Static Web Apps CLI (watch mode)",
-    "debuggers.vscode-azure/staticWebApps/swa": "Azure Static Web Apps",
     "capabilities.virtualWorkspaces.description": "Some features are not supported in virtual workspaces."
 }
