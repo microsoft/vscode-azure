@@ -24,6 +24,9 @@ export const AzdUpCommandId = 'vscode-azure/azdUp';
 /** Command id for the azd "Delete Deployment" (azd down) command. */
 export const AzdDownCommandId = 'vscode-azure/azdDown';
 
+/** Command id for the azd "Configure CI/CD" (azd pipeline config) command. */
+export const ConfigureCicdCommandId = 'vscode-azure/configureCicd';
+
 /** Top-level configuration section name used with `workspace.getConfiguration()`. */
 export const ConfigurationSection = 'vscode-azure';
 

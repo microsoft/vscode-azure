@@ -92,7 +92,7 @@ root is named.
 | SWA-062 | Advanced create flow | Drop | absent | No advanced command, mode, or SKU prompt. |
 | SWA-063 | Repository bootstrap | Defer | delegated | `azd pipeline config` creates and pushes a repository when none exists. |
 | SWA-064 | ARM creation/native workflow | Adapt | landed | `extensions/vscode-azure/resources/templates/staticWebApp/main.bicep`; shared azd provision/deploy steps. |
-| SWA-065 | Post-create Actions polling | Adapt | landed with changed UX | Shared endpoint display; `ConfigureStaticWebAppCicd.ts` delegates CI/CD to `azd pipeline config`. |
+| SWA-065 | Post-create Actions polling | Adapt | landed with changed UX | Shared endpoint display; `ConfigureCicd.ts` delegates CI/CD to `azd pipeline config`. |
 | SWA-066 | Build presets | Adapt | delegated | The Static Web Apps CLI owns the framework table; `DetectStaticWebAppConfigStep.ts` consumes it instead of mirroring 13 presets. |
 | SWA-067 | Framework/API detection | Adapt | delegated | `SwaCliService.detect()` runs `swa init --yes` against a scratch config path, leaving the project untouched. |
 

@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { IStaticWebAppClientProvider, StaticWebAppClient } from '@microsoft/vscode-azure-azutils';
-import { ConfigureStaticWebAppCicd } from '../commands/staticWebApps/ConfigureStaticWebAppCicd';
 import { CreateStaticWebApp } from '../commands/staticWebApps/CreateStaticWebApp';
 import { CreateSwaConfigFile } from '../commands/staticWebApps/CreateSwaConfigFile';
 import { DeleteStaticWebAppEnvironment } from '../commands/staticWebApps/DeleteStaticWebAppEnvironment';
@@ -32,7 +31,6 @@ export function registerStaticWebApps(registrar: ProductRegistrar): void {
 
     registrar.registerCommand('vscode-azure/staticWebApps/createNew', CreateStaticWebApp);
     registrar.registerCommand('vscode-azure/staticWebApps/deleteEnvironment', DeleteStaticWebAppEnvironment);
-    registrar.registerCommand('vscode-azure/staticWebApps/configureCicd', ConfigureStaticWebAppCicd);
     registrar.registerCommand('vscode-azure/staticWebApps/createSwaConfigFile', CreateSwaConfigFile);
     registrar.registerCommand('vscode-azure/staticWebApps/showDocumentation', OpenUrl, ShowStaticWebAppsDocumentation.Url);
     registrar.registerCommand('vscode-azure/staticWebApps/showFunctionsDocumentation', OpenUrl, ShowFunctionsDocumentation.Url);

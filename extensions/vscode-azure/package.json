@@ -140,13 +140,6 @@
                 "title": "%commands.vscode-azure/staticWebApps/deleteEnvironment%"
             },
             {
-                "command": "vscode-azure/staticWebApps/configureCicd",
-                "category": "%commands.category.azureStaticWebApps%",
-                "enablement": "!virtualWorkspace",
-                "icon": "$(settings-gear)",
-                "title": "%commands.vscode-azure/staticWebApps/configureCicd%"
-            },
-            {
                 "command": "vscode-azure/staticWebApps/createSwaConfigFile",
                 "category": "%commands.category.azureStaticWebApps%",
                 "enablement": "!isWeb",
@@ -176,6 +169,13 @@
                 "category": "%commands.category.azure%",
                 "icon": "$(trash)",
                 "title": "%commands.vscode-azure/azdDown%"
+            },
+            {
+                "command": "vscode-azure/configureCicd",
+                "category": "%commands.category.azure%",
+                "enablement": "!virtualWorkspace",
+                "icon": "$(settings-gear)",
+                "title": "%commands.vscode-azure/configureCicd%"
             },
             {
                 "command": "vscode-azure/signIn",
@@ -386,6 +386,11 @@
                 },
                 {
                     "command": "vscode-azure/azdDown",
+                    "when": "resourceFilename =~ /^azure\\.ya?ml$/i",
+                    "group": "navigation"
+                },
+                {
+                    "command": "vscode-azure/configureCicd",
                     "when": "resourceFilename =~ /^azure\\.ya?ml$/i",
                     "group": "navigation"
                 }

@@ -12,7 +12,7 @@ import { SelectIacFolderStep } from '../../azd/wizard/SelectIacFolderStep';
 import type { ManagedCommand } from '../ManagedCommand';
 
 /**
- * Configures a CI/CD pipeline for a Static Web Apps project by running
+ * Configures a CI/CD pipeline for an azd project by running
  * `azd pipeline config`.
  *
  * Accessible from the command palette (searches the workspace for `azure.yaml`
@@ -20,7 +20,7 @@ import type { ManagedCommand } from '../ManagedCommand';
  * the explorer.
  */
 @injectable()
-export class ConfigureStaticWebAppCicd implements ManagedCommand {
+export class ConfigureCicd implements ManagedCommand {
     public constructor(
         @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IOutputChannel) private readonly output: IOutputChannel,

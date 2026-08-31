@@ -117,9 +117,11 @@ pointing at `swa-cli.config.json` as the way to state a real build output.
 
 ## Configuring CI/CD
 
-`ConfigureStaticWebAppCicd` is a two-step wizard: the shared
+`ConfigureCicd` is a two-step wizard: the shared
 `SelectIacFolderStep` resolves the folder containing `azure.yaml`, then
-`AzdPipelineConfigStep` runs `azd pipeline config` there.
+`AzdPipelineConfigStep` runs `azd pipeline config` there. Nothing about it is
+specific to Static Web Apps -- it is the shared command for any azd project,
+and lives beside the other azd commands in `src/commands/deploy/`.
 
 Everything after that belongs to azd. It prompts for the provider, creates and
 pushes a repository when the project has no remote yet, authenticates against

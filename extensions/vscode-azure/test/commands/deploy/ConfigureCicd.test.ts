@@ -6,12 +6,12 @@
 import { createMockDataItemTree, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockCodeContext, MockOutputChannel, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import type * as vscode from 'vscode';
-import { ConfigureStaticWebAppCicd } from '../../../src/commands/staticWebApps/ConfigureStaticWebAppCicd';
+import { ConfigureCicd } from '../../../src/commands/deploy/ConfigureCicd';
 import { createMockAzdService } from '../../azd/MockAzdService';
 import { createMockArmProvider, createMockCodeProvider } from '../../tree/activity/MockActivityProviders';
 import { createWizardCommandContainer } from '../createWizardCommandContainer';
 
-describe('ConfigureStaticWebAppCicd (unit)', () => {
+describe('ConfigureCicd (unit)', () => {
     const sub = makeSubscription({ subscriptionId: 'sub-1', displayName: 'Test Sub' });
 
     function createCommand() {
@@ -30,7 +30,7 @@ describe('ConfigureStaticWebAppCicd (unit)', () => {
             armProvider: createMockArmProvider(),
             codeProvider: createMockCodeProvider(),
         });
-        return { cmd: container.get(ConfigureStaticWebAppCicd), azd, mock };
+        return { cmd: container.get(ConfigureCicd), azd, mock };
     }
 
     it('should run pipeline config in the workspace folder', async () => {
