@@ -255,14 +255,12 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
 
         if (skip && nodes.length === 1 && isAccount(nodes[0])) {
             this.executor.output.debug('[view] skipping account level');
-            await this.cache.loadAll(nodes[0]);
             nodes = await this.cache.getChildren(nodes[0]);
             this.rootKind = 'tenant';
         }
 
         if (skip && nodes.length === 1 && isTenant(nodes[0])) {
             this.executor.output.debug('[view] skipping tenant level');
-            await this.cache.loadAll(nodes[0]);
             nodes = await this.cache.getChildren(nodes[0]);
             this.rootKind = 'subscription';
 
