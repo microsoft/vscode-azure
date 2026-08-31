@@ -9,13 +9,6 @@ import type * as vscode from 'vscode';
 /** File name used by the Azure Static Web Apps CLI for project configurations. */
 export const SwaCliConfigFileName = 'swa-cli.config.json';
 
-/**
- * File name of the Static Web Apps runtime configuration -- routes, auth, and
- * response overrides. Present in a deployed project whether or not the CLI is
- * used locally.
- */
-export const StaticWebAppConfigFileName = 'staticwebapp.config.json';
-
 /** Complete option surface accepted by a named Static Web Apps CLI configuration. */
 export interface SWACLIOptions {
     readonly context?: string;

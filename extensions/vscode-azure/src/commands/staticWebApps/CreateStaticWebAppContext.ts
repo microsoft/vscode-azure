@@ -7,7 +7,7 @@ import { CaselessSet, type ICaselessSetReader, type PickContext } from '@microso
 import type { AzdWizardContext } from '../../azd/wizard/AzdWizardContext';
 
 /** Languages emitted into an azd Static Web Apps service definition. */
-export type StaticWebAppAzdLanguage = 'dotnet' | 'js' | 'ts';
+export type StaticWebAppAzdLanguage = 'dotnet' | 'js';
 
 /** Regions supported by the Static Web Apps creation API. */
 export const staticWebAppLocationNames: ICaselessSetReader = new CaselessSet([

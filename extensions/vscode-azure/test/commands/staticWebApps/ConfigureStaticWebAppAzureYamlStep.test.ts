@@ -23,7 +23,7 @@ describe('ConfigureStaticWebAppAzureYamlStep (unit)', () => {
             azdServiceName: 'web',
             appLocation: '/app',
             outputLocation: 'dist',
-            detectedLanguage: 'ts',
+            detectedLanguage: 'js',
         } as CreateStaticWebAppContext;
 
         expect(await step.shouldExecute(context)).to.be.true;
@@ -35,7 +35,7 @@ describe('ConfigureStaticWebAppAzureYamlStep (unit)', () => {
             host: 'staticwebapp',
             project: 'app',
             dist: 'dist',
-            language: 'ts',
+            language: 'js',
         });
     });
 

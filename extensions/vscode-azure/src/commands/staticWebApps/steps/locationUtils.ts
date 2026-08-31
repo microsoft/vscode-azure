@@ -5,8 +5,8 @@
 
 import type { IActionContext } from '@microsoft/vscode-azure-utils';
 
-/** Telemetry taxonomy retained from the source location prompts. */
-export type StaticWebAppLocationClassification = 'empty' | 'default' | 'nonDefault';
+/** How a resolved location compares to the Static Web Apps default. */
+type StaticWebAppLocationClassification = 'empty' | 'default' | 'nonDefault';
 
 /**
  * Records how a resolved location compares to the Static Web Apps default,
