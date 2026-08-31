@@ -44,14 +44,11 @@ export class BrowseWebsite implements ManagedCommand {
      */
     public async execute(...args: unknown[]): Promise<void> {
         const [key] = args;
-        const selectResource = () => this.code.l10n.t('Select an Azure resource with a website.');
-        const resource = this.selector.resolve({
-            key: typeof key === 'string' ? key : undefined,
-            messages: {
-                missingKey: selectResource,
-                missingNode: selectResource,
-            },
-        });
+        const selectResource = this.code.l10n.t('Select an Azure resource with a website.');
+        const messages = { missingKey: selectResource, missingNode: selectResource, invalidNode: selectResource };
+        const resource = typeof key === 'string'
+            ? this.selector.resolve({ key, messages })
+            : await this.selector.selectResource({ title: selectResource, messages });
 
         // Enrichment attaches the URL in the background, so a node can be acted
         // on before it lands. Awaiting the in-flight enrichment (a no-op when

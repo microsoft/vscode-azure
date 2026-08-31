@@ -4,21 +4,24 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureNodeId } from '@microsoft/vscode-azure-azutils';
-import { makeGenericResource, makeVirtualResource } from '@microsoft/vscode-azure-azutils/testing';
-import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
+import { createMockViewItemTree, makeGenericResource, makeVirtualResource } from '@microsoft/vscode-azure-azutils/testing';
+import { createMockCodeContext, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { OpenUrl } from '../../../src/commands/OpenUrl';
 import { BrowseWebsite } from '../../../src/commands/tree/BrowseWebsite';
+import type { IAzureViewViewItemTree } from '../../../src/services';
 import { setWebsiteUrl } from '../../../src/tree/resources/websiteUrl';
 import { createTestResourceSelector } from '../../tree/resources/testResourceSelector';
 
 describe('BrowseWebsite (unit)', () => {
     function createCommand(hostname?: string) {
-        const mockResult = createMockVsCode();
+        const codeContext = createMockCodeContext();
         const resource = makeGenericResource();
         setWebsiteUrl(resource, hostname);
-        const { selector } = createTestResourceSelector({ nodes: [resource] });
-        const command = new BrowseWebsite(mockResult.vscode, selector, new OpenUrl(mockResult.vscode));
-        return { command, openExternal: mockResult.env.openExternal, key: AzureNodeId.from(resource).toString() };
+        const key = AzureNodeId.from(resource).toString();
+        const viewTree = createMockViewItemTree({ '': [key] }) as unknown as IAzureViewViewItemTree;
+        const { selector } = createTestResourceSelector({ nodes: [resource], codeContext, viewTree });
+        const command = new BrowseWebsite(codeContext.ctx.code, selector, new OpenUrl(codeContext.ctx.code));
+        return { command, mockResult: codeContext.mock, openExternal: codeContext.mock.env.openExternal, key, resource };
     }
 
     it('should open the website url attached by enrichment', async () => {
@@ -29,6 +32,15 @@ describe('BrowseWebsite (unit)', () => {
         expect(openExternal.mock.callCount()).to.equal(1);
         // The stored value has no trailing slash; Uri.toString() normalizes one in.
         expect(String(openExternal.mock.calls[0].arguments[0])).to.equal('https://contoso.azurewebsites.net/');
+    });
+
+    it('should prompt for a resource when invoked from the command palette', async () => {
+        const { command, mockResult, openExternal, resource } = createCommand('contoso.azurewebsites.net');
+        respondToPrompts(mockResult, [{ pick: resource.name }]);
+
+        await command.execute();
+
+        expect(openExternal.mock.callCount()).to.equal(1);
     });
 
     it('should report when the selected resource has no website', async () => {
@@ -42,15 +54,15 @@ describe('BrowseWebsite (unit)', () => {
         // A Static Web Apps environment is a virtual node with a hostname of its own, so
         // requiring an ARM resource here would force each such product to ship a browse
         // command of its own. Carrying a URL is the capability, not being an ARM resource.
-        const mockResult = createMockVsCode();
+        const codeContext = createMockCodeContext();
         const environment = makeVirtualResource({ virtualType: 'environment', virtualPath: 'environments/pr-42' });
         setWebsiteUrl(environment, 'preview.azurestaticapps.net');
-        const { selector } = createTestResourceSelector({ nodes: [environment] });
-        const command = new BrowseWebsite(mockResult.vscode, selector, new OpenUrl(mockResult.vscode));
+        const { selector } = createTestResourceSelector({ nodes: [environment], codeContext });
+        const command = new BrowseWebsite(codeContext.ctx.code, selector, new OpenUrl(codeContext.ctx.code));
 
         await command.execute(AzureNodeId.from(environment).toString());
 
-        expect(String(mockResult.env.openExternal.mock.calls[0].arguments[0])).to.equal(
+        expect(String(codeContext.mock.env.openExternal.mock.calls[0].arguments[0])).to.equal(
             'https://preview.azurestaticapps.net/',
         );
     });

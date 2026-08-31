@@ -20,11 +20,11 @@ const settings = makeVirtualResource({ virtualType: 'settings', virtualPath: 'se
 const settingsId = AzureNodeId.from(settings).toString();
 
 describe('ResourceSelector (unit)', () => {
-    describe('select', () => {
+    describe('selectResource', () => {
         it('should resolve a resource from the cache when a key is provided', async () => {
             const { selector } = createTestResourceSelector({ nodes: [site1] });
 
-            const result = await selector.select<GenericResource>('Microsoft.Web/sites', site1Id);
+            const result = await selector.selectResource({ logicalType: 'Microsoft.Web/sites', key: site1Id });
 
             expect(result.name).to.equal('site1');
             expect(result.logicalType).to.equal('Microsoft.Web/sites');
@@ -33,7 +33,7 @@ describe('ResourceSelector (unit)', () => {
         it('should not prompt the user when a key is provided', async () => {
             const { selector, codeContext } = createTestResourceSelector({ nodes: [site1] });
 
-            await selector.select<GenericResource>('Microsoft.Web/sites', site1Id);
+            await selector.selectResource({ logicalType: 'Microsoft.Web/sites', key: site1Id });
 
             expect(codeContext.mock.quickPicks).to.have.length(0);
         });
@@ -41,7 +41,7 @@ describe('ResourceSelector (unit)', () => {
         it('should throw when a key is provided but the resource is not in the cache', async () => {
             const { selector } = createTestResourceSelector();
 
-            await expect(selector.select<GenericResource>('Microsoft.Web/sites', 'missing-key'))
+            await expect(selector.selectResource({ logicalType: 'Microsoft.Web/sites', key: 'missing-key' }))
                 .to.be.rejectedWith(/Resource not found/);
         });
 
@@ -50,7 +50,7 @@ describe('ResourceSelector (unit)', () => {
             // resource, and the caller fails somewhere further away instead.
             const { selector } = createTestResourceSelector({ nodes: [subscription] });
 
-            await expect(selector.select<GenericResource>('Microsoft.Web/sites', subId))
+            await expect(selector.selectResource({ logicalType: 'Microsoft.Web/sites', key: subId }))
                 .to.be.rejectedWith(/Resource not found/);
         });
 
@@ -59,14 +59,14 @@ describe('ResourceSelector (unit)', () => {
             // naming a web app cannot satisfy a request for a registry.
             const { selector } = createTestResourceSelector({ nodes: [site1] });
 
-            await expect(selector.select<GenericResource>('Microsoft.ContainerRegistry/registries', site1Id))
+            await expect(selector.selectResource({ logicalType: 'Microsoft.ContainerRegistry/registries', key: site1Id }))
                 .to.be.rejectedWith(/Resource not found/);
         });
 
         it('should match the logical type case-insensitively', async () => {
             const { selector } = createTestResourceSelector({ nodes: [site1] });
 
-            const result = await selector.select<GenericResource>('microsoft.web/SITES', site1Id);
+            const result = await selector.selectResource({ logicalType: 'microsoft.web/SITES', key: site1Id });
 
             expect(result.name).to.equal('site1');
         });
@@ -83,7 +83,7 @@ describe('ResourceSelector (unit)', () => {
                 { pick: 'site1' },
             ]);
 
-            const result = await selector.select<GenericResource>('Microsoft.Web/sites');
+            const result = await selector.selectResource({ logicalType: 'Microsoft.Web/sites' });
 
             expect(result.name).to.equal('site1');
             expect(result.logicalType).to.equal('Microsoft.Web/sites');
@@ -110,9 +110,9 @@ describe('ResourceSelector (unit)', () => {
         it('should throw its own message for each way resolution can fail', () => {
             const { selector } = createTestResourceSelector({ nodes: [site1, subscription] });
             const messages = {
-                missingKey: () => 'no key',
-                missingNode: () => 'no node',
-                invalidNode: () => 'wrong node',
+                missingKey: 'no key',
+                missingNode: 'no node',
+                invalidNode: 'wrong node',
             };
 
             expect(() => selector.resolve({ key: undefined, canHandle: isSubscription, messages })).to.throw('no key');
@@ -132,6 +132,59 @@ describe('ResourceSelector (unit)', () => {
             const { selector } = createTestResourceSelector({ nodes: [settings] });
 
             expect(selector.resolve({ key: settingsId })).to.equal(settings);
+        });
+    });
+
+    describe('selectVirtual', () => {
+        it('should prompt for a matching virtual resource when no key is provided', async () => {
+            const siteWithoutSettings = makeGenericResource({
+                name: 'site-without-settings',
+                id: '/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.Web/sites/site-without-settings',
+                subscription,
+            });
+            const siteWithoutSettingsId = AzureNodeId.from(siteWithoutSettings).toString();
+            const viewTree = createMockViewItemTree({
+                '': [site1Id, siteWithoutSettingsId],
+                [site1Id]: [settingsId],
+            }) as unknown as IAzureViewViewItemTree;
+            const { selector, cache, codeContext } = createTestResourceSelector({ nodes: [site1, siteWithoutSettings, settings], viewTree });
+
+            respondToPrompts(codeContext.mock, [
+                { pick: 'site1 $(chevron-right)' },
+                { pick: 'settings' },
+            ]);
+
+            const result = await selector.selectVirtual({
+                key: undefined,
+                canHandle: (node): node is typeof settings => node === settings,
+            });
+
+            expect(result).to.equal(settings);
+            expect(codeContext.mock.quickPicks[0].items.map(item => item.label))
+                .to.deep.equal(['site1 $(chevron-right)']);
+            expect((cache.loadAll as unknown as ReturnType<typeof mock.fn>).mock.calls[0].arguments[0])
+                .to.equal(site1);
+        });
+
+        it('should resolve a virtual resource from the cache without prompting', async () => {
+            const { selector, codeContext } = createTestResourceSelector({ nodes: [settings] });
+
+            const result = await selector.selectVirtual({
+                key: settingsId,
+                canHandle: (node): node is typeof settings => node === settings,
+            });
+
+            expect(result).to.equal(settings);
+            expect(codeContext.mock.quickPicks).to.be.empty;
+        });
+
+        it('should reject a non-virtual node even when the caller guard accepts it', async () => {
+            const { selector } = createTestResourceSelector({ nodes: [site1] });
+
+            await expect(selector.selectVirtual({
+                key: site1Id,
+                canHandle: (_node): _node is typeof settings => true,
+            })).to.be.rejectedWith(/does not support this command/);
         });
     });
 

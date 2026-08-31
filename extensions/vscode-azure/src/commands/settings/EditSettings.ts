@@ -26,17 +26,9 @@ export class EditSettings implements ManagedCommand {
         @inject(IResourceSelector) private readonly selector: IResourceSelector,
     ) { }
 
-    /**
-     * @inheritdoc
-     *
-     * Does nothing when the selection is not a settings node: the command is
-     * also reachable from the palette, where there is no selection to open.
-     */
+    /** @inheritdoc */
     public async execute(key?: string): Promise<void> {
-        const node = this.selector.tryResolve({ key, canHandle: isSettingsNode });
-        if (!node) {
-            return;
-        }
+        const node = await this.selector.selectVirtual({ key, canHandle: isSettingsNode });
 
         // `preview: false` so the tab is not reused: the URI identifies the resource, and two views
         // of one resource's settings could disagree after a save.
