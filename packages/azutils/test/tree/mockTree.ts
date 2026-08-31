@@ -44,6 +44,7 @@ export function createMockDataItemTree(nodes: ConcreteAzureNode[]): DataItemTree
         whenEnriched(node: ConcreteAzureNode): Promise<ConcreteAzureNode> {
             return Promise.resolve(node);
         },
+        loadAll: mock.fn(() => Promise.resolve()),
         invalidate: mock.fn(),
         remove: mock.fn(),
     } as unknown as DataItemTree<ConcreteAzureNode>;

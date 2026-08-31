@@ -147,7 +147,7 @@ describe('ResourceSelector (unit)', () => {
                 '': [site1Id, siteWithoutSettingsId],
                 [site1Id]: [settingsId],
             }) as unknown as IAzureViewViewItemTree;
-            const { selector, codeContext } = createTestResourceSelector({ nodes: [site1, siteWithoutSettings, settings], viewTree });
+            const { selector, cache, codeContext } = createTestResourceSelector({ nodes: [site1, siteWithoutSettings, settings], viewTree });
 
             respondToPrompts(codeContext.mock, [
                 { pick: 'site1 $(chevron-right)' },
@@ -162,6 +162,8 @@ describe('ResourceSelector (unit)', () => {
             expect(result).to.equal(settings);
             expect(codeContext.mock.quickPicks[0].items.map(item => item.label))
                 .to.deep.equal(['site1 $(chevron-right)']);
+            expect((cache.loadAll as unknown as ReturnType<typeof mock.fn>).mock.calls[0].arguments[0])
+                .to.equal(site1);
         });
 
         it('should resolve a virtual resource from the cache without prompting', async () => {

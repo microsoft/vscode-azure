@@ -103,6 +103,7 @@
             },
             {
                 "command": "vscode-azure/settings/edit",
+                "category": "%commands.category.azure%",
                 "icon": "$(edit)",
                 "title": "%commands.vscode-azure/settings/edit%"
             },
@@ -197,10 +198,6 @@
                 },
                 {
                     "command": "vscode-azure/activity/clearAll",
-                    "when": "false"
-                },
-                {
-                    "command": "vscode-azure/settings/edit",
                     "when": "false"
                 }
             ],

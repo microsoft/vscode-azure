@@ -12,9 +12,15 @@ import {
     type ITreeItem,
     type PickClassification,
     type PickContext,
-    type ViewItemTree,
+    type ProviderResult,
 } from '@microsoft/vscode-azure-utils';
 import type { ConcreteAzureNode, ConcreteAzureNodeTree } from '../../models/AzureNode';
+
+/** Tree surface required by {@linkcode nodeExperience}. */
+export interface NodeExperienceTree {
+    getChildren(item?: string): ProviderResult<string[]>;
+    getTreeItem(item: string): ITreeItem | Promise<ITreeItem>;
+}
 
 /**
  * Configures recursive selection of a typed node from the Azure resource tree.
@@ -23,7 +29,7 @@ import type { ConcreteAzureNode, ConcreteAzureNodeTree } from '../../models/Azur
  * validates the selected data-layer node before it is returned.
  */
 export interface NodeExperienceOptions<TNode extends ConcreteAzureNode> extends ICodeContext {
-    readonly tree: ViewItemTree<string, ConcreteAzureNode>;
+    readonly tree: NodeExperienceTree;
     readonly dataItemTree: ConcreteAzureNodeTree;
     readonly output: IOutputChannel;
     readonly canPickMany?: boolean;

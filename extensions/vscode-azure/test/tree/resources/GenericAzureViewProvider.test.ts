@@ -22,6 +22,7 @@ describe('GenericAzureViewProvider (unit)', () => {
         nodes?: ConcreteAzureNode[],
         childrenMap?: Map<ConcreteAzureNode, ConcreteAzureNode[]>,
         onGetChildren?: (node: ConcreteAzureNode) => void,
+        onLoadAll?: (node: ConcreteAzureNode) => void,
     ) {
         const { executor } = createTestActionExecutor();
         const allNodes = nodes ?? [];
@@ -41,7 +42,10 @@ describe('GenericAzureViewProvider (unit)', () => {
                 onGetChildren?.(node);
                 return Promise.resolve(children.get(node) ?? []);
             },
-            loadAll: () => Promise.resolve(),
+            loadAll: (node: ConcreteAzureNode) => {
+                onLoadAll?.(node);
+                return Promise.resolve();
+            },
         };
         return new GenericAzureViewProvider(mockCodeContext.ctx, executor, mockCache as never);
     }
@@ -68,6 +72,7 @@ describe('GenericAzureViewProvider (unit)', () => {
         it('should skip single account and single tenant to show subscriptions directly', async () => {
             const account = makeAccount();
             const tenant = makeTenant();
+            const loaded: ConcreteAzureNode[] = [];
             const sub1 = makeSubscription({ subscriptionId: 'sub-1', displayName: 'Sub 1', tenantId: tenant.tenantId, accountId: tenant.accountId, environment: tenant.environment });
             const sub2 = makeSubscription({ subscriptionId: 'sub-2', displayName: 'Sub 2', tenantId: tenant.tenantId, accountId: tenant.accountId, environment: tenant.environment });
             const childrenMap = new Map<ConcreteAzureNode, ConcreteAzureNode[]>([
@@ -77,9 +82,12 @@ describe('GenericAzureViewProvider (unit)', () => {
             const provider = createProvider(
                 [account, tenant, sub1, sub2],
                 childrenMap,
+                undefined,
+                node => loaded.push(node),
             );
 
             const roots = await provider.getChildren();
+            expect(loaded).to.deep.equal([account, tenant]);
             expect(roots).to.have.length(2);
             for (const key of roots) {
                 expect(AzureNodeId.parse(key).isSubscriptionNodeId()).to.be.true;

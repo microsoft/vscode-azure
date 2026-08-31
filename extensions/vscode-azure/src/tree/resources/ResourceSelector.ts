@@ -166,7 +166,17 @@ export class ResourceSelector {
             { ...options, canHandle },
             () => nodeExperience({
                 ...this.ctx,
-                tree: this.viewTree,
+                tree: {
+                    getChildren: async key => {
+                        const parent = key ? this.cache.get(key) : undefined;
+                        if (parent) {
+                            await this.cache.loadAll(parent);
+                        }
+
+                        return this.viewTree.getChildren(key);
+                    },
+                    getTreeItem: key => this.viewTree.getTreeItem(key),
+                },
                 dataItemTree: this.cache,
                 output: this.output,
                 title: this.ctx.code.l10n.t('Select Resource'),
