@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { classifyForResource, getNodeType, isGenericResource, isVirtualResource, nodeExperience, type ConcreteAzureNode, type GenericResource, type NodeExperienceTree, type VirtualResource } from '@microsoft/vscode-azure-azutils';
+import { getNodeType, isGenericResource, isVirtualResource, nodeExperience, resourceExperience, type ConcreteAzureNode, type GenericResource, type NodeExperienceTree, type VirtualResource } from '@microsoft/vscode-azure-azutils';
 import { IActionExecutor, ICodeContext, IOutputChannel } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
 import { inject, injectable } from 'inversify';
@@ -156,25 +156,24 @@ export class ResourceSelector {
     public selectResource<TResource extends GenericResource>(options: NarrowingSelectResourceOptions<TResource>): Promise<TResource>;
     public selectResource(options: SelectResourceOptions): Promise<GenericResource>;
     public async selectResource(options: SelectResourceOptions): Promise<GenericResource> {
+        const canHandleResource = (resource: GenericResource): boolean =>
+            (!options.logicalType || resource.logicalType.toLowerCase() === options.logicalType.toLowerCase())
+            && (!options.canHandle || options.canHandle(resource));
         const canHandle = (node: ConcreteAzureNode): node is GenericResource =>
-            isGenericResource(node)
-            && (!options.logicalType || node.logicalType.toLowerCase() === options.logicalType.toLowerCase())
-            && (!options.canHandle || options.canHandle(node));
+            isGenericResource(node) && canHandleResource(node);
         const notFound = this.ctx.code.l10n.t('Resource not found in the resources view. Try refreshing the resources view and running the command again.');
         return this.selectOrPrompt({
             key: options.key,
             canHandle,
             messages: { missingNode: notFound, invalidNode: notFound, ...options.messages },
-        }, () => nodeExperience({
+        }, () => resourceExperience({
             ...this.ctx,
             tree: this.createPickerTree(),
             dataItemTree: this.cache,
             output: this.output,
-            title: options.title ?? this.ctx.code.l10n.t('Select Resource'),
-            stepName: 'resource',
-            canHandle,
-            classify: (key, _treeItem, node) =>
-                classifyForResource(key, node, options.logicalType, resource => !options.canHandle || options.canHandle(resource)),
+            title: options.title,
+            logicalType: options.logicalType,
+            canHandle: canHandleResource,
         }));
     }
 
