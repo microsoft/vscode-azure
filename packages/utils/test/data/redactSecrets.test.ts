@@ -123,19 +123,19 @@ describe('redactSecrets (unit)', () => {
 
 describe('redactSecrets values (unit)', () => {
     it('redacts a credential recognised by its own shape, naming what it was taken for', () => {
-        const jwt = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.dBjftJeZ4CVPmB92K27uhbUJU1p1r_wW1gFWFOEjXk';
+        const jwt = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.dBjftJeZ4CVPmB92K27uhbUJU1p1r_wW1gFWFOEjXk'; // [SuppressMessage("Microsoft.Security", "CS001:SecretInline", Justification="Fake credential for testing.")]
 
         expect(redactSecrets({ scriptContent: jwt })).to.deep.equal({ scriptContent: '<redacted: JWT>' });
     });
 
     it('redacts a private key block wherever it arrives', () => {
-        const payload = { data: '-----BEGIN RSA PRIVATE KEY-----\nMIIEow==\n-----END RSA PRIVATE KEY-----' };
+        const payload = { data: '-----BEGIN RSA PRIVATE KEY-----\nMIIEow==\n-----END RSA PRIVATE KEY-----' }; // [SuppressMessage("Microsoft.Security", "CS001:SecretInline", Justification="Fake credential for testing.")]
 
         expect(redactSecrets(payload)).to.deep.equal({ data: '<redacted: private key>' });
     });
 
     it('withholds a signature from a URL while keeping the URL readable', () => {
-        const payload = { packageUri: 'https://acct.blob.core.windows.net/c/app.zip?sv=2021-08-06&sig=abc123def456&se=2030-01-01' };
+        const payload = { packageUri: 'https://acct.blob.core.windows.net/c/app.zip?sv=2021-08-06&sig=abc123def456&se=2030-01-01' }; // [SuppressMessage("Microsoft.Security", "CS001:SecretInline", Justification="Fake credential for testing.")]
 
         expect(redactSecrets(payload)).to.deep.equal({
             packageUri: `https://acct.blob.core.windows.net/c/app.zip?sv=${RedactedMarker}&sig=${RedactedMarker}&se=${RedactedMarker}`,
@@ -156,7 +156,7 @@ describe('redactSecrets values (unit)', () => {
 
     it('withholds only the credential-bearing segments of a connection string', () => {
         const payload = {
-            endpoint: 'Endpoint=sb://ns.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=abc123def456ghi=',
+            endpoint: 'Endpoint=sb://ns.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=abc123def456ghi=', // [SuppressMessage("Microsoft.Security", "CS001:SecretInline", Justification="Fake credential for testing.")]
         };
 
         expect(redactSecrets(payload)).to.deep.equal({
@@ -172,11 +172,11 @@ describe('redactSecrets values (unit)', () => {
 
     it('withholds a recognised secret everywhere it appears, including percent-encoded', () => {
         const payload = {
-            accessKey: 'abc123def456ghi789',
+            accessKey: 'abc123def456ghi789', // [SuppressMessage("Microsoft.Security", "CS001:SecretInline", Justification="Fake credential for testing.")]
             // The same key, reached by a name nothing would flag on its own.
-            mirror: 'abc123def456ghi789',
-            embedded: 'https://host/path?token=abc123def456ghi789&api-version=2021-04-01',
-            encoded: 'value=abc123def456ghi789%2Fmore',
+            mirror: 'abc123def456ghi789', // [SuppressMessage("Microsoft.Security", "CS001:SecretInline", Justification="Fake credential for testing.")]
+            embedded: 'https://host/path?token=abc123def456ghi789&api-version=2021-04-01', // [SuppressMessage("Microsoft.Security", "CS001:SecretInline", Justification="Fake credential for testing.")]
+            encoded: 'value=abc123def456ghi789%2Fmore', // [SuppressMessage("Microsoft.Security", "CS001:SecretInline", Justification="Fake credential for testing.")]
         };
 
         expect(redactSecrets(payload)).to.deep.equal({

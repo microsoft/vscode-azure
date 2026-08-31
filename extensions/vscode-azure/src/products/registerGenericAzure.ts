@@ -103,8 +103,7 @@ export function registerGenericAzure(registrar: ProductRegistrar): void {
         });
 
         container.bind(IResourceSelector).to(ResourceSelector).inSingletonScope();
-        container.bind(PropertiesContentProvider).toSelf().inSingletonScope().onActivation(pushDisposable);
-        container.bind(IPropertiesContentProvider).toService(PropertiesContentProvider);
+        container.bind(IPropertiesContentProvider).to(PropertiesContentProvider).inSingletonScope();
 
         // Bound last of all the products, so every product adapter gets first refusal and this only
         // runs for nodes nobody claimed.
@@ -113,7 +112,7 @@ export function registerGenericAzure(registrar: ProductRegistrar): void {
 
     registrar.registerActivation(container => {
         const code = container.get(IVsCode);
-        const provider = container.get(PropertiesContentProvider);
+        const provider = container.get(IPropertiesContentProvider);
 
         pushDisposable(container, code.workspace.registerTextDocumentContentProvider(PropertiesScheme, provider));
     });

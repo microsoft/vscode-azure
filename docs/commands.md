@@ -93,8 +93,8 @@ export interface PropertiesAdapter<TNode extends ConcreteAzureNode = ConcreteAzu
 Adapters are `@multiInject`ed and dispatched first-match-wins, so a product
 binds its adapter in its own `register*.ts` and gets priority over
 `GenericArmPropertiesAdapter`, which is bound from `registerGenericAzure.ts` —
-registered last — and reads any ARM resource or resource group through
-`ResourceClient.resources.getById`.
+registered last — and serializes any resolved ARM resource or resource group
+after dropping metadata attached by this repo.
 
 Most products need no adapter at all. Write one only when the properties worth
 showing are not what an ARM GET returns, for example a virtual child node backed

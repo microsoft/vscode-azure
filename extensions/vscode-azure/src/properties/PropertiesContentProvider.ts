@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Disposable, IVsCode } from '@microsoft/vscode-azure-utils';
+import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type { ServiceIdentifier } from 'inversify';
 import type * as vscode from 'vscode';
@@ -15,7 +15,7 @@ export const PropertiesScheme = 'vscode-azure-resource-properties';
 export const IPropertiesContentProvider: ServiceIdentifier<IPropertiesContentProvider> = Symbol.for('IPropertiesContentProvider');
 
 /** Opens resource properties as readonly JSON documents. */
-export interface IPropertiesContentProvider {
+export interface IPropertiesContentProvider extends vscode.TextDocumentContentProvider {
     /**
      * Open a readonly JSON document containing {@linkcode content}.
      *
@@ -35,7 +35,7 @@ export interface IPropertiesContentProvider {
  * constructing it -- in a test, say -- does not claim a global scheme. See `registerGenericAzure`.
  */
 @injectable()
-export class PropertiesContentProvider implements vscode.TextDocumentContentProvider, IPropertiesContentProvider, Disposable {
+export class PropertiesContentProvider implements IPropertiesContentProvider {
     private readonly contents = new Map<string, string>();
     private nextId = 1;
 
@@ -56,8 +56,4 @@ export class PropertiesContentProvider implements vscode.TextDocumentContentProv
         return this.contents.get(uri.toString()) ?? '';
     }
 
-    /** Drops every captured snapshot. */
-    public dispose(): void {
-        this.contents.clear();
-    }
 }
