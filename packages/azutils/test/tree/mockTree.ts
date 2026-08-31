@@ -12,14 +12,18 @@ import { AzureNodeId } from '../../src/models/AzureNodeId';
  * Creates a mock view-item tree backed by a static lookup table.
  * Keys are `AzureNodeId` strings; values are arrays of child keys.
  */
-export function createMockViewItemTree(tree: Record<string, string[]>) {
+export function createMockViewItemTree(tree: Partial<Record<string, string[]>>) {
     return {
         getChildren(key?: string): Promise<string[]> {
             return Promise.resolve(tree[key ?? ''] ?? []);
         },
         getTreeItem(key: string) {
             const label = key.split('/').pop()?.split('#')[0] ?? key;
-            return { label, id: key };
+            return {
+                label,
+                id: key,
+                collapsibleState: tree[key]?.length ? 1 : 0,
+            };
         },
     };
 }

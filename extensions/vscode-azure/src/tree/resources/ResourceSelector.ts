@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { getNodeType, isGenericResource, resourceExperience, type ConcreteAzureNode, type GenericResource } from '@microsoft/vscode-azure-azutils';
-import { getLastPick, IActionExecutor, ICodeContext, IOutputChannel, RecursivePickStep, Wizard, type PickContext } from '@microsoft/vscode-azure-utils';
+import { getNodeType, isGenericResource, isVirtualResource, nodeExperience, resourceExperience, type ConcreteAzureNode, type GenericResource, type VirtualResource } from '@microsoft/vscode-azure-azutils';
+import { IActionExecutor, ICodeContext, IOutputChannel } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
 import { inject, injectable } from 'inversify';
 import { IAzureViewDataTree, IAzureViewViewItemTree } from '../../services';
@@ -51,6 +51,11 @@ export interface ResolveOptions {
  */
 export interface NarrowingResolveOptions<TNode extends ConcreteAzureNode> extends ResolveOptions {
     readonly canHandle: (node: ConcreteAzureNode) => node is TNode;
+}
+
+/** Options for selecting a virtual resource from a key or through the resource tree. */
+export interface SelectVirtualOptions<TNode extends VirtualResource> extends Omit<NarrowingResolveOptions<TNode>, 'canHandle'> {
+    readonly canHandle: (node: VirtualResource) => node is TNode;
 }
 
 /** Outcome of a key lookup: either the node, or why there isn't one. */
@@ -119,32 +124,6 @@ export class ResourceSelector {
     }
 
     /**
-     * Resolves a matching node from a tree-item key, or prompts the user to
-     * navigate to one when invoked without a key.
-     */
-    public async selectNode<TNode extends ConcreteAzureNode>(options: NarrowingResolveOptions<TNode>): Promise<TNode> {
-        if (options.key) {
-            return this.resolve(options);
-        }
-
-        const result = await new Wizard<PickContext<string>>(
-            this.output,
-            {},
-            [new RecursivePickStep({
-                ...this.ctx,
-                tree: this.viewTree,
-                title: this.ctx.code.l10n.t('Select Resource'),
-                classify: key => {
-                    const node = this.cache.get(key);
-                    return node && options.canHandle(node) ? 'terminal' : 'intermediate';
-                },
-            })],
-        ).run();
-
-        return this.resolve({ ...options, key: getLastPick(result)?.item });
-    }
-
-    /**
      * Resolves a resource of type {@linkcode T}.
      *
      * @param logicalType - The logical resource type to filter on
@@ -160,26 +139,50 @@ export class ResourceSelector {
      *   invocation), or if the user cancels the picker when `key` is not
      *   provided.
      */
-    public async select<T extends GenericResource>(logicalType: string, key?: string): Promise<T> {
-        if (key) {
-            const notFound = this.ctx.code.l10n.t('Resource not found in the resources view. Try refreshing the resources view and running the command again.');
-            return this.resolve({
-                key,
-                canHandle: (node): node is GenericResource => isGenericResource(node) && node.logicalType.toLowerCase() === logicalType.toLowerCase(),
-                messages: { missingNode: notFound, invalidNode: notFound },
-            }) as T;
-        }
-
-        const resource = await resourceExperience<T>({
+    public async selectResource<T extends GenericResource>(logicalType: string, key?: string): Promise<T> {
+        const notFound = this.ctx.code.l10n.t('Resource not found in the resources view. Try refreshing the resources view and running the command again.');
+        return this.selectOrPrompt({
+            key,
+            canHandle: (node): node is GenericResource => isGenericResource(node) && node.logicalType.toLowerCase() === logicalType.toLowerCase(),
+            messages: { missingNode: notFound, invalidNode: notFound },
+        }, () => resourceExperience<T>({
             ...this.ctx,
             tree: this.viewTree,
             dataItemTree: this.cache,
             logicalType,
             output: this.output,
-        });
+        })) as Promise<T>;
+    }
 
-        this.executor.setTelProp('nodeType', getNodeType(resource));
-        return resource;
+    /**
+     * Resolves a virtual resource from a tree-item key, or prompts the user to
+     * navigate through containers in the resource tree to a matching node.
+     */
+    public async selectVirtual<TNode extends VirtualResource>(options: SelectVirtualOptions<TNode>): Promise<TNode> {
+        const canHandle = (node: ConcreteAzureNode): node is TNode =>
+            isVirtualResource(node) && options.canHandle(node);
+
+        return this.selectOrPrompt(
+            { ...options, canHandle },
+            () => nodeExperience({
+                ...this.ctx,
+                tree: this.viewTree,
+                dataItemTree: this.cache,
+                output: this.output,
+                title: this.ctx.code.l10n.t('Select Resource'),
+                canHandle,
+                classify: (_key, treeItem, node) => {
+                    if (node && canHandle(node)) {
+                        return 'terminal';
+                    }
+
+                    return treeItem.collapsibleState === this.ctx.code.TreeItemCollapsibleState.Collapsed
+                        || treeItem.collapsibleState === this.ctx.code.TreeItemCollapsibleState.Expanded
+                        ? 'intermediate'
+                        : false;
+                },
+            }),
+        );
     }
 
     /**
@@ -188,12 +191,26 @@ export class ResourceSelector {
      * that require extra API calls (e.g. ACR `loginServer`, `sku`).
      *
      * @param resource - A resource previously returned by
-     *   {@linkcode select}, {@linkcode resolve}, or {@linkcode tryResolve}.
+     *   {@linkcode selectResource}, {@linkcode resolve}, or {@linkcode tryResolve}.
      * @returns The same resource object, now with enriched properties
      *   populated.
      */
     public async whenEnriched<T extends GenericResource>(resource: GenericResource): Promise<T> {
         return this.cache.whenEnriched<T>(resource);
+    }
+
+    /** Resolves a supplied key or runs the picker for a command-palette invocation. */
+    private async selectOrPrompt<TNode extends ConcreteAzureNode>(
+        options: NarrowingResolveOptions<TNode>,
+        prompt: () => Promise<TNode>,
+    ): Promise<TNode> {
+        if (options.key) {
+            return this.resolve(options);
+        }
+
+        const node = await prompt();
+        this.executor.setTelProp('nodeType', getNodeType(node));
+        return node;
     }
 
     /** Look the key up in the data cache and check the caller can act on what it finds. */

@@ -7,7 +7,7 @@ import {
     getLastPick, RecursivePickStep,
     type ExclusivePickManyOrCreate, type GenericPickOptions, type PickClassification, type PickContext
 } from '@microsoft/vscode-azure-utils';
-import { isGenericResource, type ConcreteAzureNodeTree } from '../models/AzureNode';
+import { isGenericResource, type ConcreteAzureNode, type ConcreteAzureNodeTree } from '../models/AzureNode';
 import { AzureNodeId } from '../models/AzureNodeId';
 import type { GenericResource } from '../models/GenericResource';
 
@@ -39,7 +39,7 @@ export class ChooseResourceStep<TResource extends GenericResource, TContext exte
                 title: options.code.l10n.t('Select Resource'),
                 stepName: 'resource',
                 ...options,
-                classify: (item: string) => classifyForResource(AzureNodeId.parse(item), item, options),
+                classify: (item: string) => classifyForResource(item, options.dataItemTree.get(item), options.logicalType),
             },
             ChooseResourceStep
         );
@@ -80,16 +80,17 @@ export class ChooseResourceStep<TResource extends GenericResource, TContext exte
     }
 }
 
-function classifyForResource(nodeId: AzureNodeId, item: string, options: Omit<ChooseResourceOptions, 'classify'>): PickClassification {
+/** Classifies one resource-tree key for a picker targeting the requested logical type. */
+export function classifyForResource(item: string, node: ConcreteAzureNode | undefined, logicalType: string): PickClassification {
+    const nodeId = AzureNodeId.parse(item);
     if (nodeId.isGenericResourceNodeId()) {
-        const node = options.dataItemTree.get(item);
-        if (node && isGenericResource(node) && node.logicalType.toLowerCase() === options.logicalType.toLowerCase()) {
+        if (node && isGenericResource(node) && node.logicalType.toLowerCase() === logicalType.toLowerCase()) {
             return 'terminal';
         }
         return false;
     }
 
-    if (nodeId.isVirtualGroupNodeId() && isMatchingResourceTypeGroup(nodeId, options.logicalType)) {
+    if (nodeId.isVirtualGroupNodeId() && isMatchingResourceTypeGroup(nodeId, logicalType)) {
         return 'skip';
     }
 

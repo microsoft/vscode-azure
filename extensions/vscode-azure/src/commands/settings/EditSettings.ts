@@ -28,7 +28,7 @@ export class EditSettings implements ManagedCommand {
 
     /** @inheritdoc */
     public async execute(key?: string): Promise<void> {
-        const node = await this.selector.selectNode({ key, canHandle: isSettingsNode });
+        const node = await this.selector.selectVirtual({ key, canHandle: isSettingsNode });
 
         // `preview: false` so the tab is not reused: the URI identifies the resource, and two views
         // of one resource's settings could disagree after a save.

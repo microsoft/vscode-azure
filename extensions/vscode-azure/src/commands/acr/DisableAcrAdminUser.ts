@@ -35,7 +35,7 @@ export class DisableAcrAdminUser implements ManagedCommand {
 
     /** @inheritdoc */
     public async execute(key?: string): Promise<void> {
-        const resource = await this.selector.select(AcrResourceType, key);
+        const resource = await this.selector.selectResource(AcrResourceType, key);
 
         if (!isAcrRegistry(resource)) {
             return;

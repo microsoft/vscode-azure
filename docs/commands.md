@@ -195,19 +195,19 @@ Each `messages` entry is a localized string. Omitted entries fall back to a gene
 
 Commands keep their own `execute` signature, so `prefixArgs` and non-`key` first arguments stay expressible -- `BrowseWebsite` resolves out of `...args: unknown[]`.
 
-Use `selectNode` when the command should resolve a supplied key but prompt the user to navigate the tree when invoked from the command palette:
+Use `selectVirtual` for commands targeting a virtual resource. It resolves a supplied key directly, or prompts the user to navigate through collapsible resource-tree nodes when invoked from the command palette:
 
 ```typescript
-const node = await this.selector.selectNode({ key, canHandle: isSettingsNode });
+const node = await this.selector.selectVirtual({ key, canHandle: isSettingsNode });
 ```
 
 ### Prompting instead
 
-When a command should prompt rather than fail, `select` resolves from the key when there is one and runs the resource picker when there is not:
+When a command should prompt rather than fail, `selectResource` resolves from the key when there is one and runs the resource picker when there is not:
 
 ```typescript
 public async execute(key?: string): Promise<void> {
-    const resource = await this.selector.select(AcrResourceType, key);
+    const resource = await this.selector.selectResource(AcrResourceType, key);
     if (!isAcrRegistry(resource)) {
         return;
     }
@@ -220,7 +220,7 @@ public async execute(key?: string): Promise<void> {
 
 Wrap that wait in `withDelayedProgress` when enrichment may not have landed yet, so a slow ARM call shows progress instead of appearing to hang.
 
-For more complex selection flows (e.g. multi-step wizards), use the `Choose*Step` classes in `packages/azutils/src/wizard/` or the convenience wrappers `subscriptionExperience`, `resourceGroupExperience`, and `resourceExperience` directly.
+Resource and virtual-resource selection share the recursive `nodeExperience` picker. For more complex selection flows (e.g. multi-step wizards), use the `Choose*Step` classes in `packages/azutils/src/wizard/` or the convenience wrappers `subscriptionExperience`, `resourceGroupExperience`, and `resourceExperience` directly.
 
 ## Activity Commands
 
