@@ -39,6 +39,7 @@
             },
             {
                 "command": "vscode-azure/resources/delete",
+                "category": "%commands.category.azure%",
                 "icon": "$(trash)",
                 "title": "%commands.vscode-azure/resources/delete%"
             },
@@ -49,6 +50,7 @@
             },
             {
                 "command": "vscode-azure/resources/browseWebsite",
+                "category": "%commands.category.azure%",
                 "icon": "$(globe)",
                 "title": "%commands.vscode-azure/resources/browseWebsite%"
             },
@@ -108,6 +110,7 @@
             },
             {
                 "command": "vscode-azure/settings/edit",
+                "category": "%commands.category.azure%",
                 "icon": "$(edit)",
                 "title": "%commands.vscode-azure/settings/edit%"
             },
@@ -173,15 +176,7 @@
                     "when": "false"
                 },
                 {
-                    "command": "vscode-azure/resources/delete",
-                    "when": "false"
-                },
-                {
                     "command": "vscode-azure/resourceGroups/delete",
-                    "when": "false"
-                },
-                {
-                    "command": "vscode-azure/resources/browseWebsite",
                     "when": "false"
                 },
                 {
@@ -206,10 +201,6 @@
                 },
                 {
                     "command": "vscode-azure/activity/clearAll",
-                    "when": "false"
-                },
-                {
-                    "command": "vscode-azure/settings/edit",
                     "when": "false"
                 }
             ],

@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { getNodeType, isGenericResource, resourceExperience, type ConcreteAzureNode, type GenericResource } from '@microsoft/vscode-azure-azutils';
+import { getNodeType, isGenericResource, isVirtualResource, nodeExperience, resourceExperience, type ConcreteAzureNode, type GenericResource, type NodeExperienceTree, type VirtualResource } from '@microsoft/vscode-azure-azutils';
 import { IActionExecutor, ICodeContext, IOutputChannel } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
 import { inject, injectable } from 'inversify';
@@ -14,26 +14,17 @@ export const IResourceSelector: ServiceIdentifier<IResourceSelector> = Symbol.fo
 export type IResourceSelector = ResourceSelector;
 
 /**
- * Why a tree key could not be turned into a node the caller can act on.
- *
- * - `missingKey` -- the command was invoked without a key at all (e.g. from
- *   the command palette rather than from a tree item).
- * - `missingNode` -- the key is not in the data cache, so the tree item that
- *   produced it is stale.
- * - `invalidNode` -- the key resolved to a node the caller's
- *   {@linkcode ResolveOptions.canHandle canHandle} guard rejected.
- */
-export type ResolveFailure = 'missingKey' | 'missingNode' | 'invalidNode';
-
-/**
  * Per-failure message overrides, so each command keeps its own wording rather
  * than sharing one generic message.
- *
- * Each entry is a callback rather than a string so `l10n.t()` runs only for the
- * failure that actually occurred, and only when one occurs at all. Omitted
- * entries fall back to a generic localized message.
  */
-export type ResolveMessages = { readonly [reason in ResolveFailure]?: () => string };
+export interface ResolveMessages {
+    /** Used when the command was invoked without a tree-item key. */
+    readonly missingKey?: string;
+    /** Used when the key is no longer present in the data cache. */
+    readonly missingNode?: string;
+    /** Used when the key resolves to a node that the command cannot act on. */
+    readonly invalidNode?: string;
+}
 
 /** Options for {@linkcode ResourceSelector.resolve} and {@linkcode ResourceSelector.tryResolve}. */
 export interface ResolveOptions {
@@ -62,8 +53,26 @@ export interface NarrowingResolveOptions<TNode extends ConcreteAzureNode> extend
     readonly canHandle: (node: ConcreteAzureNode) => node is TNode;
 }
 
+/** Options for selecting a virtual resource from a key or through the resource tree. */
+export interface SelectVirtualOptions<TNode extends VirtualResource> extends Omit<NarrowingResolveOptions<TNode>, 'canHandle'> {
+    readonly canHandle: (node: VirtualResource) => node is TNode;
+}
+
+/** Options for selecting a resource from a key or through the resource tree. */
+export interface SelectResourceOptions {
+    /** Tree-item key supplied by the invocation, or omitted to open the picker. */
+    readonly key?: string;
+    /** Message overrides used when direct key resolution fails. */
+    readonly messages?: ResolveMessages;
+    /** Restricts selection to this logical resource type, compared case-insensitively. */
+    readonly logicalType?: string;
+    /** Picker title used when no key was supplied. */
+    readonly title?: string;
+}
+
 /** Outcome of a key lookup: either the node, or why there isn't one. */
 type ResolveResult = { readonly node: ConcreteAzureNode } | { readonly failure: ResolveFailure };
+type ResolveFailure = keyof ResolveMessages;
 
 /**
  * Resolves an Azure resource either from the data cache (when a tree-item
@@ -127,41 +136,65 @@ export class ResourceSelector {
     }
 
     /**
-     * Resolves a resource of type {@linkcode T}.
+     * Resolves a {@linkcode GenericResource} from a tree-item key, or prompts
+     * the user to pick one from the resource tree.
      *
-     * @param logicalType - The logical resource type to filter on
-     *   (e.g. {@linkcode AcrResourceType}). Both paths honor it: the picker
-     *   offers only resources of this type, and a `key` naming a resource of
-     *   any other type is rejected. Compared case-insensitively.
-     * @param key - Optional tree-item key. When provided, the resource
-     *   is looked up directly from the data cache. When omitted, the
-     *   user is prompted to pick a resource via a quick-pick wizard.
+     * Both paths honor {@linkcode SelectResourceOptions.logicalType logicalType},
+     * so a key naming a resource of another type is rejected rather than
+     * silently accepted.
+     *
      * @returns The resolved resource.
-     * @throws If `key` is provided but does not identify a resource of
-     *   `logicalType` in the data cache (e.g. stale tree item or invalid
-     *   invocation), or if the user cancels the picker when `key` is not
-     *   provided.
+     * @throws If the supplied key does not identify an accepted resource, or if
+     *   the user cancels the picker.
      */
-    public async select<T extends GenericResource>(logicalType: string, key?: string): Promise<T> {
-        if (key) {
-            const notFound = () => this.ctx.code.l10n.t('Resource not found in the resources view. Try refreshing the resources view and running the command again.');
-            return this.resolve({
-                key,
-                canHandle: (node): node is GenericResource => isGenericResource(node) && node.logicalType.toLowerCase() === logicalType.toLowerCase(),
-                messages: { missingNode: notFound, invalidNode: notFound },
-            }) as T;
-        }
-
-        const resource = await resourceExperience<T>({
+    public async selectResource(options: SelectResourceOptions): Promise<GenericResource> {
+        const canHandle = (node: ConcreteAzureNode): node is GenericResource =>
+            isGenericResource(node)
+            && (!options.logicalType || node.logicalType.toLowerCase() === options.logicalType.toLowerCase());
+        const notFound = this.ctx.code.l10n.t('Resource not found in the resources view. Try refreshing the resources view and running the command again.');
+        return this.selectOrPrompt({
+            key: options.key,
+            canHandle,
+            messages: { missingNode: notFound, invalidNode: notFound, ...options.messages },
+        }, () => resourceExperience({
             ...this.ctx,
-            tree: this.viewTree,
+            tree: this.createPickerTree(),
             dataItemTree: this.cache,
-            logicalType,
             output: this.output,
-        });
+            title: options.title,
+            logicalType: options.logicalType,
+        }));
+    }
 
-        this.recordNodeType(resource);
-        return resource;
+    /**
+     * Resolves a virtual resource from a tree-item key, or prompts the user to
+     * navigate through containers in the resource tree to a matching node.
+     */
+    public async selectVirtual<TNode extends VirtualResource>(options: SelectVirtualOptions<TNode>): Promise<TNode> {
+        const canHandle = (node: ConcreteAzureNode): node is TNode =>
+            isVirtualResource(node) && options.canHandle(node);
+
+        return this.selectOrPrompt(
+            { ...options, canHandle },
+            () => nodeExperience({
+                ...this.ctx,
+                tree: this.createPickerTree(),
+                dataItemTree: this.cache,
+                output: this.output,
+                title: this.ctx.code.l10n.t('Select Resource'),
+                canHandle,
+                classify: (_key, treeItem, node) => {
+                    if (node && canHandle(node)) {
+                        return 'terminal';
+                    }
+
+                    return treeItem.collapsibleState === this.ctx.code.TreeItemCollapsibleState.Collapsed
+                        || treeItem.collapsibleState === this.ctx.code.TreeItemCollapsibleState.Expanded
+                        ? 'intermediate'
+                        : false;
+                },
+            }),
+        );
     }
 
     /**
@@ -170,12 +203,41 @@ export class ResourceSelector {
      * that require extra API calls (e.g. ACR `loginServer`, `sku`).
      *
      * @param resource - A resource previously returned by
-     *   {@linkcode select}, {@linkcode resolve}, or {@linkcode tryResolve}.
+     *   {@linkcode selectResource}, {@linkcode resolve}, or {@linkcode tryResolve}.
      * @returns The same resource object, now with enriched properties
      *   populated.
      */
     public async whenEnriched<T extends GenericResource>(resource: GenericResource): Promise<T> {
         return this.cache.whenEnriched<T>(resource);
+    }
+
+    /** Creates a picker tree that exhausts pagination before presenting a branch. */
+    private createPickerTree(): NodeExperienceTree {
+        return {
+            getChildren: async key => {
+                const parent = key ? this.cache.get(key) : undefined;
+                if (parent) {
+                    await this.cache.loadAll(parent);
+                }
+
+                return this.viewTree.getChildren(key);
+            },
+            getTreeItem: key => this.viewTree.getTreeItem(key),
+        };
+    }
+
+    /** Resolves a supplied key or runs the picker for a command-palette invocation. */
+    private async selectOrPrompt<TNode extends ConcreteAzureNode>(
+        options: NarrowingResolveOptions<TNode>,
+        prompt: () => Promise<TNode>,
+    ): Promise<TNode> {
+        if (options.key) {
+            return this.resolve(options);
+        }
+
+        const node = await prompt();
+        this.executor.setTelProp('nodeType', getNodeType(node));
+        return node;
     }
 
     /** Look the key up in the data cache and check the caller can act on what it finds. */
@@ -193,7 +255,7 @@ export class ResourceSelector {
             return { failure: 'invalidNode' };
         }
 
-        this.recordNodeType(node);
+        this.executor.setTelProp('nodeType', getNodeType(node));
         return { node };
     }
 
@@ -201,7 +263,7 @@ export class ResourceSelector {
     private describe(failure: ResolveFailure, messages: ResolveMessages | undefined): string {
         const message = messages?.[failure];
         if (message) {
-            return message();
+            return message;
         }
 
         switch (failure) {
@@ -214,14 +276,4 @@ export class ResourceSelector {
         }
     }
 
-    /**
-     * Attribute the action currently running to the node it acted on.
-     *
-     * Written through {@linkcode IActionExecutor}, which reads the context of
-     * the in-flight action, so this stays correct even though the selector is a
-     * singleton shared by every command execution.
-     */
-    private recordNodeType(node: ConcreteAzureNode): void {
-        this.executor.setTelProp('nodeType', getNodeType(node));
-    }
 }

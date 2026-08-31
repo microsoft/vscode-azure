@@ -213,7 +213,7 @@ The `\b` word boundary prevents unintended partial matches (e.g. `openInPortal` 
 
 A context value does not have to be unconditional. When whether a command applies is a property of the *data* rather than of the node type, the view provider decides per node, and the command is contributed only when it is genuinely available.
 
-Prefer expressing this in the view provider that owns the node rather than inventing a separate permission model: a product that permits only a subset of the shared settings commands registers its own view provider ahead of `SettingsViewProvider` and attaches only the context values it wants. This is preferable to contributing the command and failing at execution time — the user never sees an action that cannot work.
+Prefer expressing this in the view provider that owns the node rather than inventing a separate permission model: a product that permits only a subset of the shared settings commands registers its own view provider ahead of `SettingsViewProvider` and attaches only the context values it wants. This is preferable to contributing the command and failing at execution time -- the user never sees an action that cannot work.
 
 Note that a context value only controls *menu visibility*. The command palette ignores it, so anything that must never happen has to be enforced where the work is actually done (for settings, that is `SettingsAdapter.write`). See [Settings](settings.md).
 
@@ -233,8 +233,8 @@ const resource = this.selector.resolve({
     key,
     canHandle: isDeletable,
     messages: {
-        missingKey: () => this.ctx.code.l10n.t('Select an Azure resource to delete.'),
-        invalidNode: () => this.ctx.code.l10n.t('The selected item cannot be deleted.'),
+        missingKey: this.ctx.code.l10n.t('Select an Azure resource to delete.'),
+        invalidNode: this.ctx.code.l10n.t('The selected item cannot be deleted.'),
     },
 });
 
@@ -245,19 +245,25 @@ if (!node) {
 }
 ```
 
-`canHandle` is a type guard, so the return type is whatever it narrows to — a command cannot ask for a node type without supplying the check that proves it. Omit it to accept any cached node, which then resolves as `ConcreteAzureNode`; `ViewProperties` does, because it acts on a subscription or resource group as readily as a resource and leaves the question of what it can serve to its adapters.
+`canHandle` may be a predicate or a type guard. A type guard narrows the return type to whatever it proves; a plain predicate validates the node at runtime but leaves the return type as `ConcreteAzureNode`. Omit it to accept any cached node. `ViewProperties` does, because it acts on a subscription or resource group as readily as a resource and leaves the question of what it can serve to its adapters.
 
-Each `messages` entry is a callback rather than a string so `l10n.t()` runs only for the failure that actually occurred. Omitted entries fall back to a generic localized message.
+Each `messages` entry is a localized string. Omitted entries fall back to a generic localized message.
 
-Commands keep their own `execute` signature, so `prefixArgs` and non-`key` first arguments stay expressible — `BrowseWebsite` resolves out of `...args: unknown[]`.
+Commands keep their own `execute` signature, so `prefixArgs` and non-`key` first arguments stay expressible -- `BrowseWebsite` resolves out of `...args: unknown[]`.
+
+Use `selectVirtual` for commands targeting a virtual resource. It resolves a supplied key directly, or prompts the user to navigate through collapsible resource-tree nodes when invoked from the command palette:
+
+```typescript
+const node = await this.selector.selectVirtual({ key, canHandle: isSettingsNode });
+```
 
 ### Prompting instead
 
-When a command should prompt rather than fail, `select` resolves from the key when there is one and runs the resource picker when there is not:
+When a command should prompt rather than fail, `selectResource` resolves from the key when there is one and runs the resource picker when there is not:
 
 ```typescript
 public async execute(key?: string): Promise<void> {
-    const resource = await this.selector.select(AcrResourceType, key);
+    const resource = await this.selector.selectResource({ logicalType: AcrResourceType, key });
     if (!isAcrRegistry(resource)) {
         return;
     }
@@ -270,7 +276,7 @@ public async execute(key?: string): Promise<void> {
 
 Wrap that wait in `withDelayedProgress` when enrichment may not have landed yet, so a slow ARM call shows progress instead of appearing to hang.
 
-For more complex selection flows (e.g. multi-step wizards), use the `Choose*Step` classes in `packages/azutils/src/wizard/` or the convenience wrappers `subscriptionExperience`, `resourceGroupExperience`, and `resourceExperience` directly.
+Resource and virtual-resource selection share the recursive `nodeExperience` picker. For more complex selection flows (e.g. multi-step wizards), use the `Choose*Step` classes in `packages/azutils/src/wizard/` or the convenience wrappers `subscriptionExperience`, `resourceGroupExperience`, and `resourceExperience` directly.
 
 ## Activity Commands
 
