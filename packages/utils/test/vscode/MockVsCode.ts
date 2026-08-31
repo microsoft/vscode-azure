@@ -331,13 +331,9 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
     const shownDocuments: vscode.TextDocument[] = [];
 
     const showTextDocument = mock.fn(
-        (document: vscode.TextDocument, _options?: vscode.TextDocumentShowOptions) => {
+        (document: vscode.TextDocument) => {
             shownDocuments.push(document);
-            return Promise.resolve({
-                document,
-                revealRange: mock.fn(),
-                selection: undefined,
-            } as unknown as vscode.TextEditor);
+            return Promise.resolve({ document } as unknown as vscode.TextEditor);
         },
     );
 
@@ -359,7 +355,6 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
 
     const textDocuments: vscode.TextDocument[] = [];
     const textDocumentContentProviders = new Map<string, vscode.TextDocumentContentProvider>();
-    let untitledDocumentCount = 0;
 
     const registerFileSystemProvider = mock.fn(
         (_scheme: string, _provider: vscode.FileSystemProvider) => ({ dispose: () => undefined }),
@@ -393,26 +388,14 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         return Buffer.from(fs.files.get(uri.path) ?? new Uint8Array()).toString();
     };
 
-    const nextUntitledUri = (): vscode.Uri => {
-        untitledDocumentCount += 1;
-        return MockUri.from({ scheme: 'untitled', path: `/Untitled-${untitledDocumentCount}` });
-    };
-
     const openTextDocument = mock.fn(
-        async (target: vscode.Uri | { language?: string; content?: string }): Promise<vscode.TextDocument> => {
-            // `workspace.openTextDocument` is overloaded: a URI opens the file at that path, while an
-            // options bag creates an untitled document from in-memory content. Discriminating on
-            // `scheme` follows the real overloads, so an empty options bag still opens an untitled
-            // document rather than being mistaken for a URI.
-            const isUri = 'scheme' in target;
-            const content = isUri ? await readUriText(target) : target.content ?? '';
+        async (uri: vscode.Uri): Promise<vscode.TextDocument> => {
+            const content = await readUriText(uri);
             const document = {
-                uri: isUri ? target : nextUntitledUri(),
-                isUntitled: !isUri,
-                languageId: isUri ? languageFromPath(target.path) : target.language ?? 'plaintext',
+                uri,
+                isUntitled: false,
+                languageId: languageFromPath(uri.path),
                 getText: () => content,
-                lineAt: (line: number) => ({ text: content.split(/\r?\n/)[line] ?? '' }),
-                validateRange: (range: vscode.Range) => range,
             } as unknown as vscode.TextDocument;
             textDocuments.push(document);
             return Promise.resolve(document);
