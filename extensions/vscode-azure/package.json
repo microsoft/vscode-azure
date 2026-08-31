@@ -440,6 +440,7 @@
         "inversify": "catalog:",
         "jsonc-parser": "^3.3.1",
         "semver": "catalog:",
+        "yaml": "^2.9.0",
         "zod": "catalog:"
     }
 }
