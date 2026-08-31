@@ -60,7 +60,7 @@ export interface IAzdService {
      * Applies a batch of comment-preserving updates to the azd project file in
      * {@linkcode cwd}.
      *
-     * The updater is invoked synchronously, and the file is written at most once.
+     * The updater is invoked once and awaited, and the file is written at most once.
      *
      * @deprecated This is a temporary workaround for missing first-class
      * `azure.yaml` editing in azd. Use with caution. It will be removed when azd
@@ -68,7 +68,7 @@ export interface IAzdService {
      * https://github.com/microsoft/vscode-azure/issues/114 and
      * https://github.com/Azure/azure-dev/issues/9718.
      */
-    updateAzureYaml(cwd: vscode.Uri, updater: (editor: AzureYamlEditor) => void): Promise<void>;
+    updateAzureYaml(cwd: vscode.Uri, updater: (editor: AzureYamlEditor) => void | Promise<void>): Promise<void>;
 
     /** Runs `azd init --minimal --no-prompt` in the given directory. */
     init(cwd: vscode.Uri): Promise<void>;
@@ -249,7 +249,7 @@ export class AzdService implements IAzdService {
     }
 
     /** @inheritdoc */
-    public async updateAzureYaml(cwd: vscode.Uri, updater: (editor: AzureYamlEditor) => void): Promise<void> {
+    public async updateAzureYaml(cwd: vscode.Uri, updater: (editor: AzureYamlEditor) => void | Promise<void>): Promise<void> {
         const files = await this.findAzureYaml(cwd);
         if (files.length === 0) {
             throw new Error(this.code.l10n.t('No azure.yaml or azure.yml file was found in "{0}".', cwd.fsPath));
@@ -266,7 +266,7 @@ export class AzdService implements IAzdService {
         }
 
         const updates: { readonly path: readonly string[]; readonly value: AzureYamlValue }[] = [];
-        updater({
+        await updater({
             set: (path, value) => {
                 if (path.length === 0 || path.some(segment => segment.length === 0)) {
                     throw new Error(this.code.l10n.t('azure.yaml update paths must contain at least one non-empty key.'));

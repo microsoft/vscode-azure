@@ -181,6 +181,25 @@ describe('AzdService (unit)', () => {
             expect(getFileText(fs, azureYaml)).to.equal('name: my-app\n');
         });
 
+        it('should await asynchronous updates before writing', async () => {
+            const { service, fs } = createService();
+            const azureYaml = MockUri.file('/project/azure.yaml');
+            fs.addFile(azureYaml, 'name: my-app\n');
+
+            await service.updateAzureYaml(MockUri.file('/project'), async editor => {
+                await Promise.resolve();
+                editor.set(['services', 'api', 'host'], 'function');
+            });
+
+            expect(getFileText(fs, azureYaml)).to.equal(
+                'name: my-app\n'
+                + 'services:\n'
+                + '  api:\n'
+                + '    host: function\n',
+            );
+            expect(fs.writeFile.mock.callCount()).to.equal(1);
+        });
+
         it('should reject when the project file does not exist', async () => {
             const { service, fs } = createService();
 
