@@ -3,23 +3,25 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createMockCodeContext, MockUri } from '@microsoft/vscode-azure-utils/testing';
-import { parse } from 'yaml';
+/* eslint-disable @typescript-eslint/no-deprecated -- Exercises the step's use of
+   IAzdService.updateAzureYaml, which is deprecated but is the sanctioned azure.yaml
+   editing path until azd grows first-class support (Azure/azure-dev#9718). */
+
+import { MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { ConfigureStaticWebAppAzureYamlStep } from '../../../src/commands/staticWebApps/steps/ConfigureStaticWebAppAzureYamlStep';
 import type { CreateStaticWebAppContext } from '../../../src/commands/staticWebApps/CreateStaticWebAppContext';
 import { createMockAzdService } from '../../azd/MockAzdService';
 
 describe('ConfigureStaticWebAppAzureYamlStep (unit)', () => {
-    it('should merge supported Static Web Apps metadata into azure.yaml', async () => {
-        const { ctx, mock } = createMockCodeContext();
+    it('should ask azd to set only the service entry, leaving the rest of azure.yaml alone', async () => {
         const yamlUri = MockUri.file('/workspace/azure.yaml');
-        mock.fs.addFile(yamlUri, 'name: test\nmetadata:\n  owner: existing\n');
+        const iacFolder = MockUri.file('/workspace');
         const azd = createMockAzdService();
         azd.findAzureYaml.mock.mockImplementation(() => Promise.resolve([yamlUri]));
-        const step = new ConfigureStaticWebAppAzureYamlStep(ctx, azd);
+        const step = new ConfigureStaticWebAppAzureYamlStep(azd);
         const context = {
             job: 'deploy',
-            iacFolder: MockUri.file('/workspace'),
+            iacFolder,
             azdServiceName: 'web',
             appLocation: '/app',
             outputLocation: 'dist',
@@ -29,23 +31,44 @@ describe('ConfigureStaticWebAppAzureYamlStep (unit)', () => {
         expect(await step.shouldExecute(context)).to.be.true;
         await step.execute(context);
 
-        const document = parse(Buffer.from(mock.fs.files.get(yamlUri.path) ?? []).toString());
-        expect(document.metadata.owner).to.equal('existing');
-        expect(document.services.web).to.deep.equal({
-            host: 'staticwebapp',
-            project: 'app',
-            dist: 'dist',
-            language: 'js',
-        });
+        expect(azd.updateAzureYaml.mock.callCount()).to.equal(1);
+        const [cwd, updater] = azd.updateAzureYaml.mock.calls[0].arguments;
+        expect(cwd).to.equal(iacFolder);
+
+        const edits: { path: readonly string[]; value: unknown }[] = [];
+        await updater({ set: (path, value) => void edits.push({ path, value }) });
+
+        expect(edits).to.deep.equal([{
+            path: ['services', 'web'],
+            // A leading slash in appLocation is stripped: azd project paths are
+            // relative to azure.yaml, so '/app' means the 'app' folder beside it.
+            value: { host: 'staticwebapp', project: 'app', dist: 'dist', language: 'js' },
+        }]);
+    });
+
+    it('should omit the language when none was detected', async () => {
+        const azd = createMockAzdService();
+        azd.findAzureYaml.mock.mockImplementation(() => Promise.resolve([MockUri.file('/workspace/azure.yaml')]));
+        const step = new ConfigureStaticWebAppAzureYamlStep(azd);
+
+        await step.execute({
+            job: 'deploy',
+            iacFolder: MockUri.file('/workspace'),
+            azdServiceName: 'web',
+            appLocation: 'app',
+            outputLocation: 'dist',
+        } as CreateStaticWebAppContext);
+
+        const edits: { path: readonly string[]; value: unknown }[] = [];
+        await azd.updateAzureYaml.mock.calls[0].arguments[1]({ set: (path, value) => void edits.push({ path, value }) });
+
+        expect(edits[0].value).to.not.have.property('language');
     });
 
     it('should not add an unsupported root output service', async () => {
-        const { ctx, mock } = createMockCodeContext();
-        const yamlUri = MockUri.file('/workspace/azure.yaml');
-        mock.fs.addFile(yamlUri, 'name: test\n');
         const azd = createMockAzdService();
-        azd.findAzureYaml.mock.mockImplementation(() => Promise.resolve([yamlUri]));
-        const step = new ConfigureStaticWebAppAzureYamlStep(ctx, azd);
+        azd.findAzureYaml.mock.mockImplementation(() => Promise.resolve([MockUri.file('/workspace/azure.yaml')]));
+        const step = new ConfigureStaticWebAppAzureYamlStep(azd);
 
         expect(await step.shouldExecute({
             resourceDisplayName: 'Static Web App',
@@ -58,12 +81,9 @@ describe('ConfigureStaticWebAppAzureYamlStep (unit)', () => {
     });
 
     it('should not touch azure.yaml for a createNew job', async () => {
-        const { ctx, mock } = createMockCodeContext();
-        const yamlUri = MockUri.file('/workspace/azure.yaml');
-        mock.fs.addFile(yamlUri, 'name: test\n');
         const azd = createMockAzdService();
-        azd.findAzureYaml.mock.mockImplementation(() => Promise.resolve([yamlUri]));
-        const step = new ConfigureStaticWebAppAzureYamlStep(ctx, azd);
+        azd.findAzureYaml.mock.mockImplementation(() => Promise.resolve([MockUri.file('/workspace/azure.yaml')]));
+        const step = new ConfigureStaticWebAppAzureYamlStep(azd);
 
         expect(await step.shouldExecute({
             resourceDisplayName: 'Static Web App',

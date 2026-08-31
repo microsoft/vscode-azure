@@ -39,7 +39,7 @@ describe('ConfigureStaticWebAppCicd (unit)', () => {
         await cmd.execute();
 
         expect(azd.pipelineConfig.mock.callCount()).to.equal(1);
-        expect((azd.pipelineConfig.mock.calls[0].arguments[0] as vscode.Uri).path).to.equal('/workspace');
+        expect((azd.pipelineConfig.mock.calls[0].arguments[0]).path).to.equal('/workspace');
     });
 
     it('should let azd prompt for the provider rather than choosing one', async () => {
@@ -55,7 +55,7 @@ describe('ConfigureStaticWebAppCicd (unit)', () => {
 
         await cmd.execute(MockUri.file('/some/project/azure.yaml'));
 
-        expect((azd.pipelineConfig.mock.calls[0].arguments[0] as vscode.Uri).path).to.equal('/some/project');
+        expect((azd.pipelineConfig.mock.calls[0].arguments[0]).path).to.equal('/some/project');
     });
 
     it('should never deploy or provision, since the pipeline does that on the next push', async () => {

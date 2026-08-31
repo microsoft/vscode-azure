@@ -38,7 +38,8 @@ describe('HydrateAzdInfoStep (unit)', () => {
             azd.envList.mock.mockImplementation(() => Promise.reject(new Error('azd not found')));
         }
         if (opts.envValues) {
-            azd.envGetValues.mock.mockImplementation(() => Promise.resolve(opts.envValues));
+            const envValues = opts.envValues;
+            azd.envGetValues.mock.mockImplementation(() => Promise.resolve(envValues));
         }
 
         const step = new HydrateAzdInfoStep<AzdWizardContext>(code, azd);

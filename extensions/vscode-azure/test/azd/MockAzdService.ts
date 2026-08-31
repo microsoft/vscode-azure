@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import type { Mock } from 'node:test';
 import { mock } from 'node:test';
 import type { AzdEnvironment, IAzdService } from '../../src/azd/AzdService';
 
@@ -10,9 +11,14 @@ import type { AzdEnvironment, IAzdService } from '../../src/azd/AzdService';
  * A mock {@linkcode IAzdService} with all methods backed by `mock.fn()`.
  * The intersection with `IAzdService` means it can be passed directly
  * to production code without casts.
+ *
+ * Each member keeps its real signature, so `.mock.calls[i].arguments` is
+ * typed rather than `unknown[]`.
  */
 export type MockAzdService = IAzdService & {
-    [K in keyof IAzdService]: ReturnType<typeof mock.fn>;
+    [K in keyof IAzdService]: IAzdService[K] extends (...args: never[]) => unknown
+    ? Mock<IAzdService[K]>
+    : never;
 };
 
 /**

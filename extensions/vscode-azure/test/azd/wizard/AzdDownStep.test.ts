@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { MockUri } from '@microsoft/vscode-azure-utils/testing';
-import type * as vscode from 'vscode';
 import { AzdDownStep } from '../../../src/azd/wizard/AzdDownStep';
 import type { AzdWizardContext } from '../../../src/azd/wizard/AzdWizardContext';
 import { createMockAzdService } from '../MockAzdService';
@@ -31,7 +30,7 @@ describe('AzdDownStep (unit)', () => {
             await step.execute({ iacFolder: folder });
 
             expect(azd.down.mock.callCount()).to.equal(1);
-            expect((azd.down.mock.calls[0].arguments[0] as vscode.Uri).path).to.equal('/project');
+            expect((azd.down.mock.calls[0].arguments[0]).path).to.equal('/project');
         });
     });
 });

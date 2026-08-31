@@ -3,9 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ExecuteStep, ICodeContext } from '@microsoft/vscode-azure-utils';
+import { ExecuteStep } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import { parseDocument } from 'yaml';
 import { IAzdService } from '../../../azd/AzdService';
 import { canAzdDeployStaticWebApp } from '../../../staticWebApps/SwaCliConfig';
 import type { CreateStaticWebAppContext } from '../CreateStaticWebAppContext';
@@ -27,7 +26,6 @@ import type { CreateStaticWebAppContext } from '../CreateStaticWebAppContext';
 @injectable()
 export class ConfigureStaticWebAppAzureYamlStep extends ExecuteStep<CreateStaticWebAppContext> {
     public constructor(
-        @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IAzdService) private readonly azd: IAzdService,
     ) {
         super();
@@ -49,12 +47,6 @@ export class ConfigureStaticWebAppAzureYamlStep extends ExecuteStep<CreateStatic
         if (!iacFolder || appLocation === undefined || outputLocation === undefined || !azdServiceName) {
             return;
         }
-        const yamlUri = (await this.azd.findAzureYaml(iacFolder))[0];
-        const source = new TextDecoder().decode(await this.ctx.code.workspace.fs.readFile(yamlUri));
-        const document = parseDocument(source);
-        if (document.errors.length > 0) {
-            throw new Error(this.ctx.code.l10n.t('Unable to update azure.yaml because it is not valid YAML.'));
-        }
 
         const service: Record<string, string> = {
             host: 'staticwebapp',
@@ -64,8 +56,11 @@ export class ConfigureStaticWebAppAzureYamlStep extends ExecuteStep<CreateStatic
         if (context.detectedLanguage) {
             service.language = context.detectedLanguage;
         }
-        document.setIn(['services', azdServiceName], service);
-        await this.ctx.code.workspace.fs.writeFile(yamlUri, new TextEncoder().encode(document.toString()));
+
+        // Writing this entry means editing azure.yaml, and this is the sanctioned way to do
+        // that until azd grows first-class support (Azure/azure-dev#9718).
+        // eslint-disable-next-line @typescript-eslint/no-deprecated
+        await this.azd.updateAzureYaml(iacFolder, editor => { editor.set(['services', azdServiceName], service); });
     }
 }
 
