@@ -77,6 +77,7 @@ describe('redactSecrets (unit)', () => {
                 siteConfig: {
                     appSettings: [
                         { name: 'AzureWebJobsStorage', connectionString: 'secret-value' },
+                        { name: 'adminPassword', value: 'fake-password' }, // [SuppressMessage("Microsoft.Security", "CS001:SecretInline", Justification="Fake credential for testing.")]
                         { name: 'Public', keyVaultUri: 'https://vault.vault.azure.net/' },
                     ],
                 },
@@ -88,6 +89,7 @@ describe('redactSecrets (unit)', () => {
                 siteConfig: {
                     appSettings: [
                         { name: 'AzureWebJobsStorage', connectionString: RedactedMarker },
+                        { name: 'adminPassword', value: RedactedMarker },
                         { name: 'Public', keyVaultUri: 'https://vault.vault.azure.net/' },
                     ],
                 },

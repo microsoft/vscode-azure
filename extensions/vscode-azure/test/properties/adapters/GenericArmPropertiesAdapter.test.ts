@@ -36,4 +36,19 @@ describe('GenericArmPropertiesAdapter (unit)', () => {
         // document the user may hand to someone else.
         expect(await adapter.read(resource)).to.deep.equal(armPayload);
     });
+
+    it('removes grouping metadata from a resolved resource group', async () => {
+        const resourceGroup = makeResourceGroup({
+            properties: { provisioningState: 'Succeeded' },
+        });
+        const adapter = new GenericArmPropertiesAdapter();
+
+        expect(await adapter.read(resourceGroup)).to.deep.equal({
+            id: resourceGroup.id,
+            name: resourceGroup.name,
+            type: resourceGroup.type,
+            location: resourceGroup.location,
+            properties: resourceGroup.properties,
+        });
+    });
 });

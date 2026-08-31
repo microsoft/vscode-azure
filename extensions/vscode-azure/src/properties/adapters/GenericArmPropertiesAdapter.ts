@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { ConcreteAzureNode, GenericResource } from '@microsoft/vscode-azure-azutils';
+import type { ConcreteAzureNode, GenericResource, ResourceGroup } from '@microsoft/vscode-azure-azutils';
 import { isGenericResource, isResourceGroup } from '@microsoft/vscode-azure-azutils';
 import { injectable } from 'inversify';
 import type { PropertiesAdapter } from '../PropertiesAdapter';
@@ -15,7 +15,12 @@ import type { PropertiesAdapter } from '../PropertiesAdapter';
  * account's identity -- which {@linkcode GenericResource.subscription} carries -- never lands in a
  * file the user may share.
  */
-const attachedMetadata = new Set<string>(['subscription', 'logicalType'] satisfies (keyof GenericResource)[]);
+const attachedMetadata = new Set<string>([
+    'subscription',
+    'logicalType',
+    'groupingStrategy',
+    'groupingValue',
+] satisfies (keyof ResourceGroup)[]);
 
 /**
  * Shows the ARM properties already carried by a resolved resource node.

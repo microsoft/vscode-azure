@@ -11,6 +11,9 @@ import type * as vscode from 'vscode';
 /** URI scheme for readonly resource-property documents. */
 export const PropertiesScheme = 'vscode-azure-resource-properties';
 
+/** Number of recent snapshots kept available for editor history to reopen. */
+const maxSnapshots = 20;
+
 /** Service identifier for the resource-property document provider. */
 export const IPropertiesContentProvider: ServiceIdentifier<IPropertiesContentProvider> = Symbol.for('IPropertiesContentProvider');
 
@@ -47,13 +50,27 @@ export class PropertiesContentProvider implements IPropertiesContentProvider {
             scheme: PropertiesScheme,
             path: `/properties-${this.nextId++}.json`,
         });
+
+        if (this.contents.size >= maxSnapshots) {
+            const oldest = this.contents.keys().next();
+            if (!oldest.done) {
+                this.contents.delete(oldest.value);
+            }
+        }
+
         this.contents.set(uri.toString(), content);
         return await this.code.workspace.openTextDocument(uri);
     }
 
     /** @inheritdoc */
     public provideTextDocumentContent(uri: vscode.Uri): string {
-        return this.contents.get(uri.toString()) ?? '';
-    }
+        const key = uri.toString();
+        const content = this.contents.get(key);
+        if (content !== undefined) {
+            this.contents.delete(key);
+            this.contents.set(key, content);
+        }
 
+        return content ?? '';
+    }
 }
