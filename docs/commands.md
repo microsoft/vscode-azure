@@ -101,11 +101,31 @@ showing are not what an ARM GET returns, for example a virtual child node backed
 by a data-plane API.
 
 Redaction is **declared, not implemented**: an adapter sets `redact` and the
-command applies it. `redact: true` withholds the property names
-`isSecretPropertyName` recognizes; `{ alsoRedact: [...] }` adds names specific to
-that payload. Omit it to open the payload unchanged. Redacted values are
+command applies it through `applyRedaction` from `@microsoft/vscode-azure-utils`.
+It is on by default, so an adapter written without a thought for secrets is safe;
+`redact: false` is the deliberate opt-out and `{ alsoRedact: [...] }` adds names
+specific to that payload. VS Code's telemetry API works the same way — everything
+is cleaned, and `TelemetryTrustedValue` opts a value out.
+
+Three things are withheld. A property whose **name** says it holds a credential
+(`isSecretPropertyName`, which reads the last word of a compound so `keyVaultUri`
+survives while `primaryKey` does not); a **value** that is recognisably a
+credential on its own, screened with the regexes VS Code uses in
+`src/vs/platform/telemetry/common/telemetryUtils.ts`; and the credential-bearing
+**segments** of a signed URL or a `key=value;` connection string, so the endpoint
+stays readable and only the signature goes. That last one uses an allow list of
+query parameters, matching the `Sanitizer` that `@azure/core-rest-pipeline`
+scrubs request URLs with.
+
+Anything withheld on one of those grounds is then withheld everywhere else it
+appears in the payload, so a key that also sits embedded in some URI does not
+survive because only one of its two homes was recognised. Redacted values are
 replaced with a visible marker rather than dropped, so the reader can tell a
-withheld property from an absent one.
+withheld property from an absent one; a value recognised by its shape says what
+it was taken for (`<redacted: JWT>`).
+
+This is a best-effort screen over a payload of unknown shape, not an
+authorization boundary.
 
 The opened JSON document is a readonly snapshot of the current state. Editable
 resource configuration belongs in the settings framework instead.

@@ -4,11 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { getNodeType } from '@microsoft/vscode-azure-azutils';
-import { IActionContext, ICodeContext } from '@microsoft/vscode-azure-utils';
+import { applyRedaction, IActionContext, ICodeContext } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, multiInject } from 'inversify';
 import { IPropertiesContentProvider } from '../../properties/PropertiesContentProvider';
 import { IPropertiesAdapter, type PropertiesAdapter } from '../../properties/PropertiesAdapter';
-import { applyRedaction } from '../../properties/redactSecrets';
 import { IResourceSelector } from '../../tree/resources/ResourceSelector';
 import type { ManagedCommand } from '../ManagedCommand';
 

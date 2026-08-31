@@ -5,14 +5,13 @@
 
 import { AzureNodeId, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
 import { createMockDataItemTree, makeGenericResource, makeSubscription, makeVirtualResource } from '@microsoft/vscode-azure-azutils/testing';
-import { createActionContext, IActionContext, ICodeContext, IVsCode } from '@microsoft/vscode-azure-utils';
+import { createActionContext, IActionContext, ICodeContext, IVsCode, RedactedMarker } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, MockOutputChannel, type MockVsCodeResult } from '@microsoft/vscode-azure-utils/testing';
 import { Container } from 'inversify';
 import { mock, type Mock } from 'node:test';
 import { ViewProperties } from '../../../src/commands/tree/ViewProperties';
 import { IPropertiesContentProvider, PropertiesContentProvider, PropertiesScheme } from '../../../src/properties/PropertiesContentProvider';
 import { IPropertiesAdapter, type PropertiesAdapter } from '../../../src/properties/PropertiesAdapter';
-import { RedactedMarker } from '../../../src/properties/redactSecrets';
 import type { IAzureViewViewItemTree } from '../../../src/services';
 import { IResourceSelector, ResourceSelector } from '../../../src/tree/resources/ResourceSelector';
 
@@ -68,7 +67,20 @@ describe('ViewProperties (unit)', () => {
             .to.deep.equal({ name: 'app1', appId: RedactedMarker, apiKey: RedactedMarker });
     });
 
-    it('opens the payload unchanged when the matching adapter declares no redaction', async () => {
+    it('opens the payload unchanged when the matching adapter declines redaction', async () => {
+        const resource = makeGenericResource();
+        const setup = createCommand([resource], [stubAdapter({
+            redact: false,
+            read: () => Promise.resolve({ name: 'app1', apiKey: 'shhh' }),
+        })]);
+
+        await setup.command.execute(AzureNodeId.from(resource).toString());
+
+        expect(JSON.parse(setup.mockResult.textDocuments[0].getText()))
+            .to.deep.equal({ name: 'app1', apiKey: 'shhh' });
+    });
+
+    it('redacts by default, so an adapter that declares no policy still cannot leak', async () => {
         const resource = makeGenericResource();
         const setup = createCommand([resource], [stubAdapter({
             read: () => Promise.resolve({ name: 'app1', apiKey: 'shhh' }),
@@ -77,7 +89,7 @@ describe('ViewProperties (unit)', () => {
         await setup.command.execute(AzureNodeId.from(resource).toString());
 
         expect(JSON.parse(setup.mockResult.textDocuments[0].getText()))
-            .to.deep.equal({ name: 'app1', apiKey: 'shhh' });
+            .to.deep.equal({ name: 'app1', apiKey: RedactedMarker });
     });
 
     it('throws for a missing key and for a node that is no longer cached', async () => {

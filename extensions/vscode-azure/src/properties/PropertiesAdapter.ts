@@ -4,8 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
+import type { RedactionPolicy } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
-import type { RedactionPolicy } from './redactSecrets';
 
 /**
  * Collection identifier every product binds its properties adapters to.
@@ -27,8 +27,8 @@ export const IPropertiesAdapter: ServiceIdentifier<PropertiesAdapter> = Symbol.f
  * @remarks
  * Redaction is **declared**, not performed. An adapter states what its source may leak through
  * {@linkcode PropertiesAdapter.redact redact} and the command applies it; an adapter that redacted
- * by hand could get it subtly wrong, and one that forgot would be indistinguishable from one that
- * deliberately opted out.
+ * by hand could get it subtly wrong. It is on by default, so an adapter written without a thought
+ * for secrets is safe -- opting out is the part you have to mean.
  */
 export interface PropertiesAdapter<TNode extends ConcreteAzureNode = ConcreteAzureNode> {
     /**
@@ -51,9 +51,9 @@ export interface PropertiesAdapter<TNode extends ConcreteAzureNode = ConcreteAzu
     /**
      * What this adapter's source may return that must not be shown.
      *
-     * Omit it to open the payload unchanged. Set it when the source can return credentials -- an
-     * Application Insights GET, for instance, includes its instrumentation key and connection
-     * string -- or as defense in depth for a source whose shape is not fully known.
+     * Omit it to get the default screen over property names and values. Set `{ alsoRedact }` to add
+     * names specific to this payload, or `false` to open the payload unchanged -- which is a claim
+     * that the source cannot return a credential, not a statement that none was noticed.
      */
     readonly redact?: RedactionPolicy;
 }
