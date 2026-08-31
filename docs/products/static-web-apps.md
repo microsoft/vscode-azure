@@ -138,6 +138,15 @@ Homebrew, where available, or the
 [`@azure/static-web-apps-cli`](https://www.npmjs.com/package/@azure/static-web-apps-cli)
 npm package. No CLI check or outdated-version warning runs at activation.
 
+`SwaCliService` invokes that executable, mirroring `AzdService`: it resolves the
+path the tool service last acquired and falls back to the bare command name, and
+it turns a missing or too-old CLI into a warning toast offering the install
+command. `init()` runs `swa init --yes` to let the CLI detect a project's
+framework, then reads `swa-cli.config.json` back rather than trusting the exit
+code -- the CLI reports a detection or write failure on its output alone and
+still exits zero. Because `--yes` accepts the overwrite prompt, the call
+replaces the configuration entry it targets.
+
 ## Current limitations
 
 - Static Web Apps browser/Functions debugging, generated emulator tasks, Data

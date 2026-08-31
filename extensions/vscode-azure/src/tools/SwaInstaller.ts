@@ -6,6 +6,7 @@
 import { command, IOutputChannel, IProcessExecutor, IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
+import { MinSwaVersion, SwaCommand } from '../staticWebApps/SwaCliService';
 import type { ToolId } from './ToolService';
 import type { ToolInstallOptions, ToolInstaller } from './ToolInstaller';
 import {
@@ -16,14 +17,8 @@ import {
     type ToolInstallMethod,
 } from './toolInstallerHelpers';
 
-/** The `swa` executable name. */
-export const SwaCommand = 'swa';
-
 /** npm package backing both install methods below. */
 const SwaNpmPackage = '@azure/static-web-apps-cli';
-
-/** v2 is the current major; every package below installs it. */
-const MinSwaVersion = '2.0.0';
 
 /**
  * Installs the Azure Static Web Apps CLI.

@@ -32,6 +32,8 @@ export interface SWACLIOptions {
     readonly swaConfigFilenameLegacy?: 'routes.json';
     readonly app?: string;
     readonly apiLocation?: string;
+    readonly apiLanguage?: string;
+    readonly apiVersion?: string;
     readonly build?: boolean;
     readonly verbose?: string;
     readonly run?: string;
@@ -43,12 +45,15 @@ export interface SWACLIOptions {
     readonly appBuildCommand?: string;
     readonly apiBuildCommand?: string;
     readonly appLocation?: string;
+    readonly appDevserverUrl?: string;
+    readonly apiDevserverUrl?: string;
     readonly outputLocation?: string;
     readonly files?: readonly string[];
 }
 
 /** Root shape of `swa-cli.config.json`. */
 export interface StaticWebAppsCliConfigFile {
+    readonly $schema?: string;
     readonly configurations?: Readonly<Record<string, SWACLIOptions>>;
 }
 

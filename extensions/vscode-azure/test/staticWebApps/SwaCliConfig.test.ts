@@ -24,6 +24,8 @@ describe('SwaCliConfig (unit)', () => {
             swaConfigFilenameLegacy: 'routes.json',
             app: 'app',
             apiLocation: 'api',
+            apiLanguage: 'node',
+            apiVersion: '18',
             build: false,
             verbose: 'silly',
             run: 'npm start',
@@ -35,6 +37,8 @@ describe('SwaCliConfig (unit)', () => {
             appBuildCommand: 'npm run build',
             apiBuildCommand: 'npm run api',
             appLocation: 'src',
+            appDevserverUrl: 'http://localhost:4200',
+            apiDevserverUrl: 'http://localhost:7071',
             outputLocation: 'dist',
             files: ['one.txt'],
         };
