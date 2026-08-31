@@ -23,6 +23,7 @@ export type MockAzdService = IAzdService & {
 export function createMockAzdService(envListResult: AzdEnvironment[] = []): MockAzdService {
     return {
         findAzureYaml: mock.fn(() => Promise.resolve([])),
+        updateAzureYaml: mock.fn(() => Promise.resolve()),
         init: mock.fn(() => Promise.resolve()),
         envNew: mock.fn(() => Promise.resolve()),
         envList: mock.fn(() => Promise.resolve(envListResult)),

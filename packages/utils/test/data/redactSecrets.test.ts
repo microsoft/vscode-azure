@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { applyRedaction, isSecretPropertyName, RedactedMarker, redactSecrets } from '../../src/properties/redactSecrets';
+import { applyRedaction, isSecretPropertyName, RedactedMarker, redactSecrets } from '../../src/data/redactSecrets';
 
 /**
  * Names a substring matcher over `key`/`secret`/`token` gets wrong, drawn from real ARM payloads.
@@ -95,7 +95,7 @@ describe('redactSecrets (unit)', () => {
         });
     });
 
-    it('leaves values of other kinds untouched, since only a name marks a secret', () => {
+    it('leaves values of other kinds untouched, since a bare value carries no name to judge it by', () => {
         expect(redactSecrets({ count: 3, enabled: false, missing: null, absent: undefined, name: 'app1' }))
             .to.deep.equal({ count: 3, enabled: false, missing: null, absent: undefined, name: 'app1' });
         expect(redactSecrets('a string')).to.equal('a string');
@@ -113,22 +113,97 @@ describe('redactSecrets (unit)', () => {
         expect(() => JSON.stringify(redacted)).to.not.throw();
     });
 
-    it('walks a repeated but acyclic reference only once', () => {
+    it('walks a reference that appears twice on different branches', () => {
         const shared = { apiKey: 'shhh' };
 
-        // The second occurrence is dropped rather than redacted a second time. Distinguishing it
-        // from a true cycle would need a path-scoped walk, and the cost of getting that wrong -- a
-        // payload that cannot be serialized -- is worse than a dropped duplicate.
         expect(redactSecrets({ first: shared, second: shared }))
-            .to.deep.equal({ first: { apiKey: RedactedMarker }, second: undefined });
+            .to.deep.equal({ first: { apiKey: RedactedMarker }, second: { apiKey: RedactedMarker } });
+    });
+});
+
+describe('redactSecrets values (unit)', () => {
+    it('redacts a credential recognised by its own shape, naming what it was taken for', () => {
+        const jwt = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.dBjftJeZ4CVPmB92K27uhbUJU1p1r_wW1gFWFOEjXk';
+
+        expect(redactSecrets({ scriptContent: jwt })).to.deep.equal({ scriptContent: '<redacted: JWT>' });
+    });
+
+    it('redacts a private key block wherever it arrives', () => {
+        const payload = { data: '-----BEGIN RSA PRIVATE KEY-----\nMIIEow==\n-----END RSA PRIVATE KEY-----' };
+
+        expect(redactSecrets(payload)).to.deep.equal({ data: '<redacted: private key>' });
+    });
+
+    it('withholds a signature from a URL while keeping the URL readable', () => {
+        const payload = { packageUri: 'https://acct.blob.core.windows.net/c/app.zip?sv=2021-08-06&sig=abc123def456&se=2030-01-01' };
+
+        expect(redactSecrets(payload)).to.deep.equal({
+            packageUri: `https://acct.blob.core.windows.net/c/app.zip?sv=${RedactedMarker}&sig=${RedactedMarker}&se=${RedactedMarker}`,
+        });
+    });
+
+    it('keeps a URL that carries only allowed parameters', () => {
+        const url = 'https://management.azure.com/subscriptions/sub1?api-version=2021-04-01';
+
+        expect(redactSecrets({ nextLink: url })).to.deep.equal({ nextLink: url });
+    });
+
+    it('keeps a URL with no query string', () => {
+        const url = 'https://my-key-vault.vault.azure.net/';
+
+        expect(redactSecrets({ keyVaultUri: url })).to.deep.equal({ keyVaultUri: url });
+    });
+
+    it('withholds only the credential-bearing segments of a connection string', () => {
+        const payload = {
+            endpoint: 'Endpoint=sb://ns.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=abc123def456ghi=',
+        };
+
+        expect(redactSecrets(payload)).to.deep.equal({
+            endpoint: `Endpoint=sb://ns.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=${RedactedMarker}`,
+        });
+    });
+
+    it('leaves prose that merely contains a semicolon alone', () => {
+        const payload = { description: 'first; second; third' };
+
+        expect(redactSecrets(payload)).to.deep.equal(payload);
+    });
+
+    it('withholds a recognised secret everywhere it appears, including percent-encoded', () => {
+        const payload = {
+            accessKey: 'abc123def456ghi789',
+            // The same key, reached by a name nothing would flag on its own.
+            mirror: 'abc123def456ghi789',
+            embedded: 'https://host/path?token=abc123def456ghi789&api-version=2021-04-01',
+            encoded: 'value=abc123def456ghi789%2Fmore',
+        };
+
+        expect(redactSecrets(payload)).to.deep.equal({
+            accessKey: RedactedMarker,
+            mirror: RedactedMarker,
+            embedded: `https://host/path?token=${RedactedMarker}&api-version=2021-04-01`,
+            encoded: `value=${RedactedMarker}%2Fmore`,
+        });
+    });
+
+    it('does not hunt for a withheld value too short to mean anything', () => {
+        const payload = { pwd: 'abc', note: 'abc is a common prefix' };
+
+        expect(redactSecrets(payload)).to.deep.equal({ pwd: RedactedMarker, note: 'abc is a common prefix' });
     });
 });
 
 describe('applyRedaction (unit)', () => {
-    it('opens the payload unchanged when no policy is declared', () => {
+    it('redacts when no policy is declared, so an adapter is safe before its author thought about it', () => {
+        expect(applyRedaction(undefined, { apiKey: 'shhh', name: 'app1' }))
+            .to.deep.equal({ apiKey: RedactedMarker, name: 'app1' });
+    });
+
+    it('opens the payload unchanged only when redaction is declined outright', () => {
         const payload = { apiKey: 'shhh' };
 
-        expect(applyRedaction(undefined, payload)).to.equal(payload);
+        expect(applyRedaction(false, payload)).to.equal(payload);
     });
 
     it('redacts recognised names when the policy is declared', () => {

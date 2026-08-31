@@ -5,7 +5,7 @@
 
 import { AzureNodeId, IResourceClientProvider, type ConcreteAzureNode, type GenericResource } from '@microsoft/vscode-azure-azutils';
 import { createMockDataItemTree, makeGenericResource, makeResourceGroup, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
-import { CancellationError, createActionContext, IActionContext, ICodeContext } from '@microsoft/vscode-azure-utils';
+import { CancellationError, ICodeContext } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, respondToPrompts, waitFor, type MockCodeContextResult, type MockVsCodeResult } from '@microsoft/vscode-azure-utils/testing';
 import { Container } from 'inversify';
 import { mock, type Mock } from 'node:test';
@@ -13,6 +13,8 @@ import { DeleteAzureResource } from '../../../src/commands/tree/DeleteAzureResou
 import { IAzureViewDataTree } from '../../../src/services';
 import type { Activity } from '../../../src/tree/activity/Activity';
 import { GenericActivityDataProvider, IGenericActivityDataProvider } from '../../../src/tree/activity/GenericActivityDataProvider';
+import { IResourceSelector } from '../../../src/tree/resources/ResourceSelector';
+import { createTestResourceSelector } from '../../tree/resources/testResourceSelector';
 
 describe('DeleteAzureResource (unit)', () => {
     afterEach(() => {
@@ -250,10 +252,11 @@ function createCommand(resource: GenericResource, options: CommandOptions = {}):
     const deleteById = options.deleteById ?? mock.fn((_resourceId: string, _resourceType: string) => Promise.resolve());
     const deleteResourceGroup = mock.fn((_name: string) => Promise.resolve());
     const activityProvider = new GenericActivityDataProvider();
+    const { selector } = createTestResourceSelector({ cache: dataTree, codeContext });
     const container = new Container();
     container.bind(ICodeContext).toConstantValue(ctx);
-    container.bind(IActionContext).toConstantValue(createActionContext('deleteAzureResource'));
     container.bind(IAzureViewDataTree).toConstantValue(dataTree);
+    container.bind(IResourceSelector).toConstantValue(selector);
     container.bind(IGenericActivityDataProvider).toConstantValue(activityProvider);
     container.bind(IResourceClientProvider).toConstantValue(() => ({
         resources: { deleteById },

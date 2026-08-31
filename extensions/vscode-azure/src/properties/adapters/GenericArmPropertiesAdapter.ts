@@ -34,19 +34,14 @@ const attachedMetadata = new Set<string>(['subscription', 'logicalType'] satisfi
  *
  * Nodes without an ARM id -- virtual sub-resources such as ACR repositories or settings documents --
  * are not claimed. Serving those is what a product adapter is for.
+ *
+ * It takes the default redaction rather than opting out. ARM's GET generally keeps credentials
+ * behind separate `listKeys`/`listSecrets` calls, so for most resource types this changes nothing --
+ * but this adapter serves every provider there is, including the ones that do return a credential
+ * inline, such as an Application Insights component and its instrumentation key.
  */
 @injectable()
 export class GenericArmPropertiesAdapter implements PropertiesAdapter<GenericResource> {
-    /**
-     * @inheritdoc
-     *
-     * ARM's GET generally does not return credentials -- Azure keeps those behind separate
-     * `listKeys`/`listSecrets` calls -- so for most resource types this changes nothing. It is on
-     * because this adapter serves every provider there is, including the ones that do: an
-     * Application Insights component returns its instrumentation key and connection string inline.
-     */
-    public readonly redact = true;
-
     public constructor(
         @inject(IResourceClientProvider) private readonly createClient: IResourceClientProvider,
     ) { }

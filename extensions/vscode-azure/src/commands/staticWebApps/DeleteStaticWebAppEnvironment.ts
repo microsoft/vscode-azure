@@ -9,7 +9,7 @@ import { inject, injectable } from 'inversify';
 import { IAzureViewDataTree } from '../../services';
 import { IGenericActivityDataProvider } from '../../tree/activity/GenericActivityDataProvider';
 import { IResourceSelector } from '../../tree/resources/ResourceSelector';
-import { getStaticWebAppEnvironmentLabel, isStaticWebAppEnvironment, type StaticWebAppEnvironment } from '../../tree/resources/staticWebApps/StaticWebApp';
+import { getStaticWebAppEnvironmentLabel, isStaticWebAppEnvironment } from '../../tree/resources/staticWebApps/StaticWebApp';
 import type { ManagedCommand } from '../ManagedCommand';
 
 /**
@@ -40,7 +40,7 @@ export class DeleteStaticWebAppEnvironment implements ManagedCommand {
 
     /** @inheritdoc */
     public async execute(key?: string): Promise<void> {
-        const environment: StaticWebAppEnvironment = this.selector.resolve(key, isStaticWebAppEnvironment);
+        const environment = this.selector.resolve({ key, canHandle: isStaticWebAppEnvironment });
         this.context.telemetry.properties.isProduction = String(environment.isProduction);
         if (environment.isProduction) {
             this.context.errorHandling.suppress = 'reportIssue';

@@ -29,16 +29,17 @@ export interface IPropertiesContentProvider {
  * In-memory readonly document provider for resource properties.
  *
  * Each URI identifies one snapshot captured when the command ran.
+ *
+ * @remarks
+ * Registering this with the editor for {@linkcode PropertiesScheme} is the caller's job, so that
+ * constructing it -- in a test, say -- does not claim a global scheme. See `registerGenericAzure`.
  */
 @injectable()
 export class PropertiesContentProvider implements vscode.TextDocumentContentProvider, IPropertiesContentProvider, Disposable {
     private readonly contents = new Map<string, string>();
-    private readonly registration: Disposable;
     private nextId = 1;
 
-    public constructor(@inject(IVsCode) private readonly code: IVsCode) {
-        this.registration = this.code.workspace.registerTextDocumentContentProvider(PropertiesScheme, this);
-    }
+    public constructor(@inject(IVsCode) private readonly code: IVsCode) { }
 
     /** @inheritdoc */
     public async openTextDocument(content: string): Promise<vscode.TextDocument> {
@@ -55,9 +56,8 @@ export class PropertiesContentProvider implements vscode.TextDocumentContentProv
         return this.contents.get(uri.toString()) ?? '';
     }
 
-    /** @inheritdoc */
+    /** Drops every captured snapshot. */
     public dispose(): void {
-        this.registration.dispose();
         this.contents.clear();
     }
 }

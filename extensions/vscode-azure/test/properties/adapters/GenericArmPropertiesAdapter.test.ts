@@ -54,12 +54,6 @@ describe('GenericArmPropertiesAdapter (unit)', () => {
         // document the user may hand to someone else.
         expect(await adapter.read(resource)).to.deep.equal(armPayload);
     });
-
-    it('declares redaction, since some providers return credentials from a plain GET', () => {
-        const { adapter } = createAdapter();
-
-        expect(adapter.redact).to.equal(true);
-    });
 });
 
 interface AdapterOptions {

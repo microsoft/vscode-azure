@@ -4,19 +4,20 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureNodeId } from '@microsoft/vscode-azure-azutils';
-import { createMockDataItemTree, makeGenericResource, makeVirtualResource } from '@microsoft/vscode-azure-azutils/testing';
+import { makeGenericResource, makeVirtualResource } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
 import { OpenUrl } from '../../../src/commands/OpenUrl';
 import { BrowseWebsite } from '../../../src/commands/tree/BrowseWebsite';
 import { setWebsiteUrl } from '../../../src/tree/resources/websiteUrl';
+import { createTestResourceSelector } from '../../tree/resources/testResourceSelector';
 
 describe('BrowseWebsite (unit)', () => {
     function createCommand(hostname?: string) {
         const mockResult = createMockVsCode();
         const resource = makeGenericResource();
         setWebsiteUrl(resource, hostname);
-        const dataTree = createMockDataItemTree([resource]);
-        const command = new BrowseWebsite(mockResult.vscode, dataTree, new OpenUrl(mockResult.vscode));
+        const { selector } = createTestResourceSelector({ nodes: [resource] });
+        const command = new BrowseWebsite(mockResult.vscode, selector, new OpenUrl(mockResult.vscode));
         return { command, openExternal: mockResult.env.openExternal, key: AzureNodeId.from(resource).toString() };
     }
 
@@ -44,8 +45,8 @@ describe('BrowseWebsite (unit)', () => {
         const mockResult = createMockVsCode();
         const environment = makeVirtualResource({ virtualType: 'environment', virtualPath: 'environments/pr-42' });
         setWebsiteUrl(environment, 'preview.azurestaticapps.net');
-        const dataTree = createMockDataItemTree([environment]);
-        const command = new BrowseWebsite(mockResult.vscode, dataTree, new OpenUrl(mockResult.vscode));
+        const { selector } = createTestResourceSelector({ nodes: [environment] });
+        const command = new BrowseWebsite(mockResult.vscode, selector, new OpenUrl(mockResult.vscode));
 
         await command.execute(AzureNodeId.from(environment).toString());
 
