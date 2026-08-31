@@ -6,7 +6,6 @@
 import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
 import { rejects } from 'node:assert';
 import { mock } from 'node:test';
-import * as vscode from 'vscode';
 import { OpenUrl } from '../../src/commands/OpenUrl';
 
 describe('OpenUrl (unit)', () => {
@@ -15,7 +14,7 @@ describe('OpenUrl (unit)', () => {
     });
 
     it('opens a fixed URL', async () => {
-        const mockResult = createMockVsCode({ Uri: vscode.Uri });
+        const mockResult = createMockVsCode();
         const command = new OpenUrl(mockResult.vscode);
 
         await command.execute('https://example.com/docs');
@@ -25,7 +24,7 @@ describe('OpenUrl (unit)', () => {
     });
 
     it('opens a URL derived from the command arguments', async () => {
-        const mockResult = createMockVsCode({ Uri: vscode.Uri });
+        const mockResult = createMockVsCode();
         const command = new OpenUrl(mockResult.vscode);
         const resolver = mock.fn((...args: unknown[]) => `https://example.com/${String(args[0])}`);
 
@@ -37,7 +36,7 @@ describe('OpenUrl (unit)', () => {
     });
 
     it('reports when a URL is unavailable', async () => {
-        const mockResult = createMockVsCode({ Uri: vscode.Uri });
+        const mockResult = createMockVsCode();
         const command = new OpenUrl(mockResult.vscode);
 
         await rejects(
@@ -61,7 +60,7 @@ describe('OpenUrl (unit)', () => {
         ];
 
         for (const url of blocked) {
-            const mockResult = createMockVsCode({ Uri: vscode.Uri });
+            const mockResult = createMockVsCode();
             const command = new OpenUrl(mockResult.vscode);
 
             await rejects(command.execute(url), /Only http and https links can be opened/, `expected ${url} to be blocked`);
@@ -71,7 +70,7 @@ describe('OpenUrl (unit)', () => {
 
     it('opens http and https regardless of scheme casing', async () => {
         for (const url of ['http://contoso.example.com/', 'https://contoso.example.com/', 'HTTPS://contoso.example.com/']) {
-            const mockResult = createMockVsCode({ Uri: vscode.Uri });
+            const mockResult = createMockVsCode();
             const command = new OpenUrl(mockResult.vscode);
 
             await command.execute(url);

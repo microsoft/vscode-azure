@@ -6,7 +6,7 @@
 import { AzureListingCache, PublicAuthProviderId, SubscriptionClient, type AzureSubscription, type AzureTenant, type ConcreteAzureNode, type CredentialFactoryOptions, type IAzureListingFetcher, type ICredentialFactory } from '@microsoft/vscode-azure-azutils';
 import { createMockAzureListingFetcher, createMockSubscriptionClient, makeAccount, makeCredential, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant, type MockSubscriptionClientOptions } from '@microsoft/vscode-azure-azutils/testing';
 import { collectPages, Everything, Roots, type DataProviderChangeEvent } from '@microsoft/vscode-azure-utils';
-import { createMockCodeContext, createTestActionExecutor, ManualDebounceScheduler, withSettings } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, createTestActionExecutor, ManualDebounceScheduler, rejectingAsyncIterable, withSettings } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import { ConfigurationSection, SelectedSubscriptionsConfigurationKey, SignedInTenantsConfigurationKey } from '../../../src/constants';
 import { AzureAccountDataProvider } from '../../../src/tree/resources/AzureAccountDataProvider';
@@ -49,9 +49,7 @@ describe('AzureAccountDataProvider (unit)', () => {
 
     /** Serve a client whose `tenants.list` rejects, as conditional access does. */
     function mockSubscriptionClientFailingTenantList(error: Error) {
-        const throwing: AsyncIterable<never> = {
-            [Symbol.asyncIterator]: () => ({ next: () => Promise.reject(error) }),
-        };
+        const throwing = rejectingAsyncIterable<never>(error);
         return mock.method(SubscriptionClient, 'create', () => ({
             tenants: { list: () => throwing },
             subscriptions: { list: () => createMockSubscriptionClient().subscriptions.list(), listLocations: () => Promise.resolve([]) },

@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { CancellationError, throwIfCancelled } from '../../src/vscode/CancellationError';
+import { CancellationError, isCancellationToken, throwIfCancelled } from '../../src/vscode/CancellationError';
 
 describe('CancellationError (unit)', () => {
     describe('throwIfCancelled', () => {
@@ -84,6 +84,37 @@ describe('CancellationError (unit)', () => {
             expect(CancellationError.test(null)).to.be.false;
             expect(CancellationError.test(undefined)).to.be.false;
             expect(CancellationError.test('string')).to.be.false;
+        });
+    });
+
+    describe('isCancellationToken', () => {
+        it('should return true for a token', () => {
+            expect(isCancellationToken({
+                isCancellationRequested: false,
+                onCancellationRequested: () => ({ dispose: () => undefined }),
+            })).to.be.true;
+        });
+
+        it('should return false for non-objects', () => {
+            expect(isCancellationToken(null)).to.be.false;
+            expect(isCancellationToken(undefined)).to.be.false;
+            expect(isCancellationToken('token')).to.be.false;
+        });
+
+        it('should return false for an object missing either member', () => {
+            expect(isCancellationToken({ isCancellationRequested: false })).to.be.false;
+            expect(isCancellationToken({ onCancellationRequested: () => undefined })).to.be.false;
+        });
+
+        it('should return false for a function carrying the token members', () => {
+            // `typeof` a function is 'function', not 'object', so a callable
+            // wearing these properties would pass a members-only check.
+            const impostor = Object.assign(() => undefined, {
+                isCancellationRequested: false,
+                onCancellationRequested: () => undefined,
+            });
+
+            expect(isCancellationToken(impostor)).to.be.false;
         });
     });
 });

@@ -22,6 +22,7 @@ const { extensionConfig, telemetryConfig } = autoSelectEsbuildConfig();
 extensionConfig.alias = {
     ...extensionConfig.alias,
     '@microsoft/vscode-azure-utils': '../../packages/utils/src/index.ts',
+    '@microsoft/vscode-azure-utils/testing': '../../packages/utils/test/testing.ts',
     '@microsoft/vscode-azure-azutils': '../../packages/azutils/src/index.ts',
     '@microsoft/vscode-azure-azutils/testing': '../../packages/azutils/test/testing.ts',
 };

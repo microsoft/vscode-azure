@@ -26,6 +26,12 @@ export { isProcessError, ProcessError } from '@azure/core-process';
 export type SpawnFn = (command: string, args?: readonly string[], options?: SpawnOptions) => ChildProcess;
 
 /**
+ * Signature matching {@linkcode resolveExecutable} from `@azure/core-process`.
+ * Exposed so tests can inject a resolver without replacing the module.
+ */
+export type ResolveExecutableFn = typeof resolveExecutable;
+
+/**
  * Shared options for all process execution modes.
  */
 export interface ProcessExecutorOptions {
@@ -172,6 +178,8 @@ export interface IProcessExecutor {
     /** Runs a background process and captures raw stdout and stderr. */
     spawn(options: BackgroundProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<ProcessResult>;
 
+    /** Resolves a command to its absolute executable path, or returns `undefined` when it is not found. */
+    resolveExecutable(command: string): string | undefined;
     /** Tests whether a command is available on the system `PATH`. */
     isOnPath(command: string): boolean;
 }
@@ -183,11 +191,15 @@ export interface IProcessExecutor {
  * @param spawnFn - Optional override for `@azure/core-process`'s
  *   {@linkcode spawn}, primarily for injecting a mock in unit tests. Defaults to
  *   the real implementation.
+ * @param resolveExecutableFn - Optional override for
+ *   `@azure/core-process`'s {@linkcode resolveExecutable}, primarily for
+ *   injecting a mock in unit tests. Defaults to the real implementation.
  */
 export class ProcessExecutor implements IProcessExecutor {
     public constructor(
         private readonly code: IVsCode,
         private readonly spawnFn: SpawnFn = spawn,
+        private readonly resolveExecutableFn: ResolveExecutableFn = resolveExecutable,
     ) { }
 
     public async spawn(options: ForegroundProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<void>;
@@ -206,10 +218,18 @@ export class ProcessExecutor implements IProcessExecutor {
     }
 
     /** @inheritdoc */
-    public isOnPath(command: string): boolean {
+    public resolveExecutable(command: string): string | undefined {
         // Batch files are allowed so `.cmd` shims (the Azure CLI's `az.cmd`,
-        // the Functions Core Tools' `func.cmd`) are reported as installed.
-        return resolveExecutable(command, { allowWindowsBatchFiles: true }) !== undefined;
+        // the Functions Core Tools' `func.cmd`) can be resolved.
+        const resolved = this.resolveExecutableFn(command, { allowWindowsBatchFiles: true });
+        // Normalize any falsy result to `undefined`, so callers have a single
+        // value to test for "not found".
+        return resolved || undefined;
+    }
+
+    /** @inheritdoc */
+    public isOnPath(command: string): boolean {
+        return !!this.resolveExecutable(command);
     }
 
     private async spawnForeground(options: ForegroundProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<void> {

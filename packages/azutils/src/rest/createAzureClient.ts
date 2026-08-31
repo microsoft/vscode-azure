@@ -3,8 +3,9 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { Client as RestClient, ClientOptions as RestClientOptions } from '@azure-rest/core-client';
+import { getClient, type Client as RestClient, type ClientOptions as RestClientOptions } from '@azure-rest/core-client';
 import type { TokenCredential } from '@azure/core-auth';
+import { bearerTokenAuthenticationPolicy, type ChallengeCallbacks } from '@azure/core-rest-pipeline';
 import type { IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
 import type { AzureSubscriptionTarget } from '../auth/AzureSubscription';
 import type { EnvironmentLike } from '../auth/Environment';
@@ -12,6 +13,7 @@ import { AcceptLanguagePolicy } from './pipeline/AcceptLanguagePolicy';
 import { CorrelationIdPolicy } from './pipeline/CorrelationIdPolicy';
 import { DedupeRequestPolicy, type DedupeRequestIdentity } from './pipeline/DedupeRequestPolicy';
 
+export type { ChallengeCallbacks } from '@azure/core-rest-pipeline';
 export type { DedupeRequestIdentity } from './pipeline/DedupeRequestPolicy';
 
 /**
@@ -85,6 +87,89 @@ export function createArmRestSubscriptionClient<TClient extends RestClient, TOpt
     const requestIdentity = getDedupeIdentity(subscription, options);
     executor.output.debug(`[rest] create rest subscription client ${getClient.name} subscription=${subscriptionId}`);
     return getClient(credential, subscriptionId, applyDefaults(ctx, executor, requestIdentity, { ...options, endpoint } as TOptions));
+}
+
+/**
+ * Identifies a data-plane service endpoint and how requests to it are
+ * authenticated.
+ *
+ * Data-plane services differ from ARM in that each has its own host and its own
+ * token audience, and some will not accept an Entra ID token directly at all.
+ */
+export interface DataPlaneClientConfig {
+    /** Short service name, used only to label debug output, e.g. `acr`. */
+    readonly name: string;
+    /** Absolute base URL of the service, e.g. `https://contoso.azurecr.io`. */
+    readonly endpoint: string;
+    /**
+     * Credential for the `Authorization` header.
+     *
+     * Omit for an endpoint that authenticates from the request body instead,
+     * such as a token-exchange endpoint -- attaching a bearer token there would
+     * recurse into the very challenge the exchange exists to satisfy.
+     */
+    readonly credential?: TokenCredential;
+    /** Token scopes, e.g. `['https://api.loganalytics.io/.default']`. Unused when {@linkcode credential} is omitted. */
+    readonly scopes?: readonly string[];
+    /**
+     * Handles a `401` whose `WWW-Authenticate` demands more than a re-issued
+     * Entra ID token. A service that trades that token for a service-scoped one
+     * supplies the exchange here; the callback receives the challenge, so the
+     * scope comes from the service rather than being guessed up front.
+     */
+    readonly challengeCallbacks?: ChallengeCallbacks;
+    /**
+     * Optional stable account and tenant identity. When omitted, deduplication
+     * is limited to clients sharing the credential.
+     */
+    readonly dedupeIdentity?: DedupeRequestIdentity;
+}
+
+/**
+ * REST-style (`@azure-rest/core-client`) factory for a data-plane service.
+ *
+ * Applies the same pipeline as the ARM factories (see
+ * {@linkcode createArmRestClient}), so a data-plane request carries the same
+ * correlation id, `Accept-Language`, deduplication, and user-agent prefix as a
+ * management request does.
+ *
+ * @param config - The endpoint and its authentication.
+ * @param options - Optional client options merged over the factory defaults.
+ */
+export function createDataPlaneRestClient(
+    ctx: ICodeContext,
+    executor: IActionExecutor,
+    config: DataPlaneClientConfig,
+    options?: RestClientOptions,
+): RestClient {
+    const { name, endpoint, credential, scopes, challengeCallbacks, dedupeIdentity } = config;
+    const requestIdentity = getDedupeIdentity(dedupeIdentity ?? credential ?? {}, options);
+    const defaults = applyDefaults(ctx, executor, requestIdentity, { ...options, endpoint });
+    executor.output.debug(`[rest] create data-plane rest client ${name} endpoint=${endpoint}`);
+
+    if (!credential) {
+        return getClient(endpoint, defaults);
+    }
+
+    if (!challengeCallbacks) {
+        return getClient(endpoint, credential, {
+            ...defaults,
+            credentials: { ...defaults.credentials, scopes: scopes ? [...scopes] : undefined },
+        });
+    }
+
+    // `getClient` derives its bearer policy from `credentials.scopes` alone and
+    // exposes no hook for the challenge, so the policy is added afterwards to a
+    // client built without a credential. Going through the standard policy
+    // rather than a bespoke one keeps Entra ID token caching and conditional
+    // access step-up on the underlying credential.
+    const client = getClient(endpoint, defaults);
+    client.pipeline.addPolicy(bearerTokenAuthenticationPolicy({
+        credential,
+        scopes: scopes ? [...scopes] : [],
+        challengeCallbacks,
+    }));
+    return client;
 }
 
 function applyDefaults<TOptions extends RestClientOptions>(

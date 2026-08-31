@@ -6,8 +6,7 @@
 import { AzureNodeId, type ConcreteAzureNode, type IAcrClientProvider, type IResourceClientProvider } from '@microsoft/vscode-azure-azutils';
 import { createMockAccountDataProvider, makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
 import { DataItemTree, type ITreeItem, ViewItemTree, type ViewItemTreeOptions } from '@microsoft/vscode-azure-utils';
-import { createMockCodeContext, createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
-import * as vscode from 'vscode';
+import { createMockCodeContext, createMockVsCode, createTestActionExecutor, MockTreeItemCollapsibleState } from '@microsoft/vscode-azure-utils/testing';
 import { AcrDataProvider } from '../../../../src/tree/resources/acr/AcrDataProvider';
 import { AcrResourceType } from '../../../../src/tree/resources/acr/AcrRegistry';
 import { AcrViewProvider } from '../../../../src/tree/resources/acr/AcrViewProvider';
@@ -165,7 +164,7 @@ describe('ACR Tree Integration (integration)', () => {
             results.push({ key: child, item, depth });
 
             // Recurse into collapsible items
-            if (item.collapsibleState !== undefined && item.collapsibleState !== vscode.TreeItemCollapsibleState.None) {
+            if (item.collapsibleState) {
                 const nested = await collectTree(viewTree, child, depth + 1, maxDepth);
                 results.push(...nested);
             }
@@ -305,7 +304,7 @@ describe('ACR Tree Integration (integration)', () => {
             expect(item.contextValue).to.equal('acrItem');
             expect((item.iconPath as { id: string }).id).to.equal('symbol-misc');
             // Non-collapsible = state 0 (None) or undefined
-            expect(item.collapsibleState ?? vscode.TreeItemCollapsibleState.None).to.equal(vscode.TreeItemCollapsibleState.None);
+            expect(item.collapsibleState ?? MockTreeItemCollapsibleState.None).to.equal(MockTreeItemCollapsibleState.None);
         });
     });
 

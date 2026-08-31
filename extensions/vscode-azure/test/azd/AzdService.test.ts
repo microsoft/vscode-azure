@@ -4,10 +4,11 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ProcessError, type IProcessExecutor, type ProcessExecutorOptions, argToString, argsToStrings } from '@microsoft/vscode-azure-utils';
-import { MockUri, createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
+import { MockFileSystem, MockUri, createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import type { IAzdAuthServer } from '../../src/azd/AzdAuthServer';
-import { AzdCommand, AzdService, MinAzdUpdateVersion, MinAzdVersion } from '../../src/azd/AzdService';
+import { AzdCommand, AzdService, MinAzdVersion } from '../../src/azd/AzdService';
+import type { IToolService } from '../../src/tools/ToolService';
 
 /**
  * A stand-in for {@linkcode IProcessExecutor.spawn} in tests. Intentionally
@@ -31,14 +32,23 @@ type SpawnOpts = Omit<ProcessExecutorOptions, 'cwd'> & {
     readonly source?: string;
 };
 
-function createService(spawnFn?: SpawnMethod, isOnPathFn?: (cmd: string) => boolean) {
+function getFileText(fs: MockFileSystem, uri: { readonly path: string }): string {
+    const content = fs.files.get(uri.path);
+    expect(content, `Expected ${uri.path} to exist`).not.to.be.undefined;
+    return new TextDecoder().decode(content);
+}
+
+function createService(spawnFn?: SpawnMethod, acquiredPath?: string) {
     const mockResult = createMockVsCode();
     const spawnMock = spawnFn ?? mock.fn(() => Promise.resolve({ stdout: '', stderr: '' }));
-    const isOnPathMock = isOnPathFn ?? mock.fn(() => false);
-    const processExecutor = { spawn: spawnMock, isOnPath: isOnPathMock } as unknown as IProcessExecutor;
+    const processExecutor = { spawn: spawnMock } as unknown as IProcessExecutor;
     const authServer: IAzdAuthServer = { getEnv: mock.fn(() => Promise.resolve({})) };
+    const toolService: IToolService = {
+        acquire: mock.fn(),
+        getResolvedPath: mock.fn(() => acquiredPath),
+    };
     const { executor } = createTestActionExecutor();
-    const service = new AzdService(mockResult.vscode, processExecutor, executor, authServer);
+    const service = new AzdService(mockResult.vscode, processExecutor, executor, authServer, toolService);
     return { service, spawnMock: spawnMock as unknown as ReturnType<typeof mock.fn>, fs: mockResult.fs, executor };
 }
 
@@ -83,6 +93,150 @@ describe('AzdService (unit)', () => {
         });
     });
 
+    /* eslint-disable @typescript-eslint/no-deprecated -- This block verifies the deprecated compatibility API. */
+    describe('updateAzureYaml', () => {
+        it('should add a service and apply nested updates in one write', async () => {
+            const { service, fs } = createService();
+            const azureYaml = MockUri.file('/project/azure.yaml');
+            fs.addFile(azureYaml, 'name: my-app\n');
+
+            await service.updateAzureYaml(MockUri.file('/project'), editor => {
+                editor.set(['services', 'api'], {
+                    host: 'containerapp',
+                    project: '.',
+                    language: 'docker',
+                });
+                editor.set(['services', 'api', 'docker', 'remoteBuild'], true);
+            });
+
+            expect(getFileText(fs, azureYaml)).to.equal(
+                'name: my-app\n'
+                + 'services:\n'
+                + '  api:\n'
+                + '    host: containerapp\n'
+                + '    project: .\n'
+                + '    language: docker\n'
+                + '    docker:\n'
+                + '      remoteBuild: true\n',
+            );
+            expect(fs.writeFile.mock.callCount()).to.equal(1);
+        });
+
+        it('should replace a nested field while preserving comments, order, and unrelated fields', async () => {
+            const { service, fs } = createService();
+            const azureYaml = MockUri.file('/project/azure.yaml');
+            fs.addFile(azureYaml,
+                '# yaml-language-server: $schema=https://example.test/azure.yaml.json\n'
+                + 'name: my-app\n'
+                + 'services:\n'
+                + '  api:\n'
+                + '    # Keep this explanation\n'
+                + '    host: function\n'
+                + '    project: ./src\n'
+                + 'metadata:\n'
+                + '  template: sample@1.0.0\n',
+            );
+
+            await service.updateAzureYaml(MockUri.file('/project'), editor => {
+                editor.set(['services', 'api', 'host'], 'containerapp');
+            });
+
+            expect(getFileText(fs, azureYaml)).to.equal(
+                '# yaml-language-server: $schema=https://example.test/azure.yaml.json\n'
+                + 'name: my-app\n'
+                + 'services:\n'
+                + '  api:\n'
+                + '    # Keep this explanation\n'
+                + '    host: containerapp\n'
+                + '    project: ./src\n'
+                + 'metadata:\n'
+                + '  template: sample@1.0.0\n',
+            );
+        });
+
+        it('should update azure.yml when it is the project file', async () => {
+            const { service, fs } = createService();
+            const azureYml = MockUri.file('/project/azure.yml');
+            fs.addFile(azureYml, 'name: my-app\n');
+
+            await service.updateAzureYaml(MockUri.file('/project'), editor => {
+                editor.set(['infra', 'path'], './deployment');
+            });
+
+            expect(getFileText(fs, azureYml)).to.equal(
+                'name: my-app\n'
+                + 'infra:\n'
+                + '  path: ./deployment\n',
+            );
+        });
+
+        it('should not write when no updates are requested', async () => {
+            const { service, fs } = createService();
+            const azureYaml = MockUri.file('/project/azure.yaml');
+            fs.addFile(azureYaml, 'name: my-app\n');
+
+            await service.updateAzureYaml(MockUri.file('/project'), () => undefined);
+
+            expect(fs.writeFile.mock.callCount()).to.equal(0);
+            expect(getFileText(fs, azureYaml)).to.equal('name: my-app\n');
+        });
+
+        it('should await asynchronous updates before writing', async () => {
+            const { service, fs } = createService();
+            const azureYaml = MockUri.file('/project/azure.yaml');
+            fs.addFile(azureYaml, 'name: my-app\n');
+
+            await service.updateAzureYaml(MockUri.file('/project'), async editor => {
+                await Promise.resolve();
+                editor.set(['services', 'api', 'host'], 'function');
+            });
+
+            expect(getFileText(fs, azureYaml)).to.equal(
+                'name: my-app\n'
+                + 'services:\n'
+                + '  api:\n'
+                + '    host: function\n',
+            );
+            expect(fs.writeFile.mock.callCount()).to.equal(1);
+        });
+
+        it('should reject when the project file does not exist', async () => {
+            const { service, fs } = createService();
+
+            await expect(service.updateAzureYaml(MockUri.file('/project'), () => undefined))
+                .to.be.rejectedWith('No azure.yaml or azure.yml file was found');
+
+            expect(fs.writeFile.mock.callCount()).to.equal(0);
+        });
+
+        it('should reject malformed YAML without writing it', async () => {
+            const { service, fs } = createService();
+            const azureYaml = MockUri.file('/project/azure.yaml');
+            fs.addFile(azureYaml, 'name: [invalid\n');
+
+            await expect(service.updateAzureYaml(MockUri.file('/project'), editor => {
+                editor.set(['name'], 'my-app');
+            })).to.be.rejectedWith('contains invalid YAML');
+
+            expect(fs.writeFile.mock.callCount()).to.equal(0);
+            expect(getFileText(fs, azureYaml)).to.equal('name: [invalid\n');
+        });
+
+        it('should reject empty path keys without writing the file', async () => {
+            const { service, fs } = createService();
+            const azureYaml = MockUri.file('/project/azure.yaml');
+            fs.addFile(azureYaml, 'name: my-app\n');
+
+            await expect(service.updateAzureYaml(MockUri.file('/project'), editor => {
+                editor.set(['services', ''], { host: 'function' });
+            })).to.be.rejectedWith('paths must contain at least one non-empty key');
+
+            expect(fs.writeFile.mock.callCount()).to.equal(0);
+            expect(getFileText(fs, azureYaml)).to.equal('name: my-app\n');
+        });
+    });
+    /* eslint-enable @typescript-eslint/no-deprecated */
+
     describe('init', () => {
         it('should spawn azd init with --minimal and --no-prompt', async () => {
             const { service, spawnMock } = createService();
@@ -97,6 +251,15 @@ describe('AzdService (unit)', () => {
             expect(argsToStrings(opts.command.slice(1))).to.include('--minimal');
             expect(argsToStrings(opts.command.slice(1))).to.include('--no-prompt');
             expect(opts.cwd.path).to.equal('/project');
+        });
+
+        it('should use the absolute path returned by tool acquisition', async () => {
+            const { service, spawnMock } = createService(undefined, '/tools/azd');
+
+            await service.init(MockUri.file('/project'));
+
+            const opts = spawnMock.mock.calls[0].arguments[0] as SpawnOpts;
+            expect(argToString(opts.command[0])).to.equal('/tools/azd');
         });
     });
 
@@ -403,8 +566,12 @@ describe('AzdService (unit)', () => {
                 isOnPath: mock.fn(() => false),
             } as unknown as IProcessExecutor;
             const authServer: IAzdAuthServer = { getEnv: mock.fn(() => Promise.resolve({ AZD_AUTH: 'token' })) }; // eslint-disable-line @typescript-eslint/naming-convention
+            const toolService: IToolService = {
+                acquire: mock.fn(),
+                getResolvedPath: mock.fn(() => undefined),
+            };
             const { executor } = createTestActionExecutor();
-            const service = new AzdService(mockResult.vscode, processExecutor, executor, authServer);
+            const service = new AzdService(mockResult.vscode, processExecutor, executor, authServer, toolService);
 
             await service.down(MockUri.file('/project'));
 
@@ -487,169 +654,5 @@ describe('AzdService (unit)', () => {
             expect(result).to.be.undefined;
         });
 
-        it('should cache the version and not spawn again on subsequent calls', async () => {
-            const spawnFn = makeVersionSpawn('1.9.5');
-            const { service, spawnMock } = createService(spawnFn);
-
-            await service.checkVersion('1.9.0');
-            await service.checkVersion('1.8.0');
-
-            expect(spawnMock.mock.callCount()).to.equal(1);
-        });
-
-        it('should clear the cache after install is called', async () => {
-            let callCount = 0;
-            const spawnFn = mock.fn(() => {
-                callCount++;
-                if (callCount === 1) {
-                    // First call: checkVersion
-                    return Promise.resolve({ json: { azd: { version: '1.8.0', commit: 'abc' } } });
-                }
-                // Second call: install (foreground)
-                // Third call: checkVersion again
-                if (callCount === 3) {
-                    return Promise.resolve({ json: { azd: { version: '1.9.5', commit: 'def' } } });
-                }
-                return Promise.resolve();
-            });
-            const { service } = createService(spawnFn);
-
-            const before = await service.checkVersion('1.9.0');
-            expect(before).to.be.false;
-
-            await service.install();
-
-            const after = await service.checkVersion('1.9.0');
-            expect(after).to.be.true;
-        });
-    });
-
-    describe('install', () => {
-        it('should spawn a foreground task with platform install when azd is not installed', async () => {
-            // checkVersion will fail (ENOENT), so install falls back to platform command
-            const spawnFn = mock.fn(() => Promise.resolve());
-            const { service, spawnMock } = createService(spawnFn);
-
-            await service.install();
-
-            // 1st call = checkVersion (azd version), 2nd call = foreground install
-            expect(spawnMock.mock.callCount()).to.equal(2);
-            const opts = spawnMock.mock.calls[1].arguments[0] as SpawnOpts;
-            expect(opts.execution).to.equal('foreground');
-            expect(opts.source).to.equal('azd');
-        });
-
-        it('should use azd update when version supports it', async () => {
-            const spawnFn = mock.fn((opts: SpawnOpts) => {
-                if (argToString(opts.command[0]) === AzdCommand && argsToStrings(opts.command.slice(1)).includes('version')) {
-                    return Promise.resolve({ json: { azd: { version: MinAzdUpdateVersion } } });
-                }
-                return Promise.resolve();
-            });
-            const { service, spawnMock } = createService(spawnFn);
-
-            await service.install();
-
-            expect(spawnMock.mock.callCount()).to.equal(2);
-            const opts = spawnMock.mock.calls[1].arguments[0] as SpawnOpts;
-            expect(opts.execution).to.equal('foreground');
-            expect(argToString(opts.command[0])).to.equal('azd');
-            expect(argsToStrings(opts.command.slice(1))).to.deep.equal(['update']);
-        });
-
-        describe('platform fallback commands', () => {
-            // All platform tests use a version too old for `azd update`
-            // so the fallback logic is exercised.
-            function makeOldVersionSpawn(): SpawnMethod {
-                return mock.fn((opts: SpawnOpts) => {
-                    if (argToString(opts.command[0]) === AzdCommand && argsToStrings(opts.command.slice(1)).includes('version')) {
-                        return Promise.resolve({ json: { azd: { version: '1.0.0' } } });
-                    }
-                    return Promise.resolve();
-                });
-            }
-
-            const originalPlatform = process.platform;
-            function setPlatform(value: string): void {
-                Object.defineProperty(process, 'platform', { value, configurable: true });
-            }
-
-            afterEach(() => {
-                Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
-            });
-
-            it('should use winget on Windows when winget is available', async () => {
-                setPlatform('win32');
-                const isOnPathFn = mock.fn((cmd: string) => cmd === 'winget');
-                const { service, spawnMock } = createService(makeOldVersionSpawn(), isOnPathFn);
-
-                await service.install();
-
-                const opts = spawnMock.mock.calls[1].arguments[0] as SpawnOpts;
-                expect(argToString(opts.command[0])).to.equal('winget');
-                expect(argsToStrings(opts.command.slice(1))).to.deep.equal(['install', 'microsoft.azd']);
-            });
-
-            it('should use choco on Windows when winget is unavailable', async () => {
-                setPlatform('win32');
-                const isOnPathFn = mock.fn((cmd: string) => cmd === 'choco');
-                const { service, spawnMock } = createService(makeOldVersionSpawn(), isOnPathFn);
-
-                await service.install();
-
-                const opts = spawnMock.mock.calls[1].arguments[0] as SpawnOpts;
-                expect(argToString(opts.command[0])).to.equal('choco');
-                expect(argsToStrings(opts.command.slice(1))).to.deep.equal(['upgrade', 'azd']);
-            });
-
-            it('should use powershell script on Windows when no package manager is available', async () => {
-                setPlatform('win32');
-                const isOnPathFn = mock.fn(() => false);
-                const { service, spawnMock } = createService(makeOldVersionSpawn(), isOnPathFn);
-
-                await service.install();
-
-                const opts = spawnMock.mock.calls[1].arguments[0] as SpawnOpts;
-                expect(argToString(opts.command[0])).to.equal('powershell');
-                expect(argsToStrings(opts.command.slice(1))).to.include('-ExecutionPolicy');
-                expect(argsToStrings(opts.command.slice(1))).to.include('AllSigned');
-            });
-
-            it('should use brew on macOS when brew is available', async () => {
-                setPlatform('darwin');
-                const isOnPathFn = mock.fn((cmd: string) => cmd === 'brew');
-                const { service, spawnMock } = createService(makeOldVersionSpawn(), isOnPathFn);
-
-                await service.install();
-
-                const opts = spawnMock.mock.calls[1].arguments[0] as SpawnOpts;
-                expect(argToString(opts.command[0])).to.equal('brew');
-                expect(argsToStrings(opts.command.slice(1))).to.deep.equal(['install', 'azure/azd/azd']);
-            });
-
-            it('should use bash curl script on macOS when brew is unavailable', async () => {
-                setPlatform('darwin');
-                const isOnPathFn = mock.fn(() => false);
-                const { service, spawnMock } = createService(makeOldVersionSpawn(), isOnPathFn);
-
-                await service.install();
-
-                const opts = spawnMock.mock.calls[1].arguments[0] as SpawnOpts;
-                expect(argToString(opts.command[0])).to.equal('bash');
-                expect(argsToStrings(opts.command.slice(1)).join(' ')).to.include('install-azd.sh');
-            });
-
-            it('should use bash curl script on Linux', async () => {
-                setPlatform('linux');
-                const isOnPathFn = mock.fn(() => false);
-                const { service, spawnMock } = createService(makeOldVersionSpawn(), isOnPathFn);
-
-                await service.install();
-
-                const opts = spawnMock.mock.calls[1].arguments[0] as SpawnOpts;
-                expect(argToString(opts.command[0])).to.equal('bash');
-                expect(argsToStrings(opts.command.slice(1)).join(' ')).to.include('install-azd.sh');
-            });
-        });
     });
 });

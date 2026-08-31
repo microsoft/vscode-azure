@@ -6,7 +6,7 @@
 import { AzureNodeId, IResourceClientProvider, type ConcreteAzureNode, type GenericResource } from '@microsoft/vscode-azure-azutils';
 import { createMockDataItemTree, makeGenericResource, makeResourceGroup, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
 import { CancellationError, ICodeContext } from '@microsoft/vscode-azure-utils';
-import { createMockCodeContext, respondToPrompts, type MockCodeContextResult, type MockVsCodeResult } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, respondToPrompts, waitFor, type MockCodeContextResult, type MockVsCodeResult } from '@microsoft/vscode-azure-utils/testing';
 import { Container } from 'inversify';
 import { mock, type Mock } from 'node:test';
 import { DeleteAzureResource } from '../../../src/commands/tree/DeleteAzureResource';
@@ -236,15 +236,6 @@ interface CommandSetup {
     readonly deleteResourceGroup: Mock<(name: string) => Promise<void>>;
     readonly activityProvider: GenericActivityDataProvider;
     readonly remove: Mock<(target: unknown) => void>;
-}
-
-/** Yield to the event loop until {@linkcode condition} holds. */
-async function waitFor(condition: () => boolean): Promise<void> {
-    for (let attempt = 0; attempt < 1000 && !condition(); attempt++) {
-        await new Promise(resolve => setTimeout(resolve, 1));
-    }
-
-    expect(condition(), 'Timed out waiting for the expected state').to.be.true;
 }
 
 /** Activities recorded by the command, in insertion order. */

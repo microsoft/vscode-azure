@@ -6,7 +6,6 @@
 import { AzureNodeId } from '@microsoft/vscode-azure-azutils';
 import { makeGenericResource } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
-import * as vscode from 'vscode';
 import { OpenUrl } from '../../../src/commands/OpenUrl';
 import { BrowseWebsite } from '../../../src/commands/tree/BrowseWebsite';
 import { setWebsiteUrl } from '../../../src/tree/resources/websiteUrl';
@@ -14,7 +13,7 @@ import { createTestResourceSelector } from '../../tree/resources/testResourceSel
 
 describe('BrowseWebsite (unit)', () => {
     function createCommand(hostname?: string) {
-        const mockResult = createMockVsCode({ Uri: vscode.Uri });
+        const mockResult = createMockVsCode();
         const resource = makeGenericResource();
         setWebsiteUrl(resource, hostname);
         const { selector } = createTestResourceSelector({ nodes: [resource] });
