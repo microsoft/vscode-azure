@@ -16,7 +16,7 @@ import { MockQuickPick } from './input/MockQuickPick';
 import { MockFileChangeType, MockFilePermission, MockFileSystem, MockFileSystemError, MockFileType } from './MockFileSystem';
 import { MockOutputChannel } from './MockOutputChannel';
 import { MockUri } from './MockUri';
-import { MockConfigurationTarget, MockMarkdownString, MockProgressLocation, MockRelativePattern, MockShellExecution, MockTask, MockTaskScope, MockThemeColor, MockThemeIcon, MockTreeItemCollapsibleState } from './MockValueTypes';
+import { MockConfigurationTarget, MockMarkdownString, MockProgressLocation, MockQuickPickItemKind, MockRelativePattern, MockShellExecution, MockTask, MockTaskScope, MockThemeColor, MockThemeIcon, MockTreeItemCollapsibleState } from './MockValueTypes';
 import { MockTreeItem } from './tree/MockTreeItem';
 
 /**
@@ -171,7 +171,6 @@ export interface MockVsCodeResult {
 
     /** Documents passed to `window.showTextDocument`, in order. */
     readonly shownDocuments: vscode.TextDocument[];
-
 }
 
 /**
@@ -350,8 +349,8 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         showWarningMessage,
         showErrorMessage,
         showOpenDialog,
-        showTextDocument,
         showWorkspaceFolderPick,
+        showTextDocument,
         withProgress,
     };
     const configChangeEmitter = new EventEmitter<{ affectsConfiguration(section: string): boolean }>();
@@ -485,7 +484,7 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         workspace,
         l10n: { t },
         QuickInputButtons,
-        QuickPickItemKind: { Separator: -1, Default: 0 },
+        QuickPickItemKind: MockQuickPickItemKind,
         TreeItem: MockTreeItem,
         TreeItemCollapsibleState: MockTreeItemCollapsibleState,
         ConfigurationTarget: MockConfigurationTarget,
