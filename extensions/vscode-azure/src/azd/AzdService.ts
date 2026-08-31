@@ -68,7 +68,7 @@ export interface IAzdService {
      * https://github.com/microsoft/vscode-azure/issues/114 and
      * https://github.com/Azure/azure-dev/issues/9718.
      */
-    updateAzureYaml(cwd: vscode.Uri, updater: (editor: AzureYamlEditor) => undefined): Promise<void>;
+    updateAzureYaml(cwd: vscode.Uri, updater: (editor: AzureYamlEditor) => void): Promise<void>;
 
     /** Runs `azd init --minimal --no-prompt` in the given directory. */
     init(cwd: vscode.Uri): Promise<void>;
@@ -249,7 +249,7 @@ export class AzdService implements IAzdService {
     }
 
     /** @inheritdoc */
-    public async updateAzureYaml(cwd: vscode.Uri, updater: (editor: AzureYamlEditor) => undefined): Promise<void> {
+    public async updateAzureYaml(cwd: vscode.Uri, updater: (editor: AzureYamlEditor) => void): Promise<void> {
         const files = await this.findAzureYaml(cwd);
         if (files.length === 0) {
             throw new Error(this.code.l10n.t('No azure.yaml or azure.yml file was found in "{0}".', cwd.fsPath));
