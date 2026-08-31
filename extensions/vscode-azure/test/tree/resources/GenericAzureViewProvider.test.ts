@@ -74,7 +74,10 @@ describe('GenericAzureViewProvider (unit)', () => {
                 [account, [tenant]],
                 [tenant, [sub1, sub2]],
             ]);
-            const provider = createProvider([account, tenant, sub1, sub2], childrenMap);
+            const provider = createProvider(
+                [account, tenant, sub1, sub2],
+                childrenMap,
+            );
 
             const roots = await provider.getChildren();
             expect(roots).to.have.length(2);
