@@ -7,8 +7,8 @@ import { ExecuteStep, ICodeContext } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { parseDocument } from 'yaml';
 import { IAzdService } from '../../../azd/AzdService';
+import { canAzdDeployStaticWebApp } from '../../../staticWebApps/SwaCliConfig';
 import type { CreateStaticWebAppContext } from '../CreateStaticWebAppContext';
-import { canAzdDeployStaticWebApp } from './locationUtils';
 
 /**
  * Adds an azd-supported Static Web Apps service without replacing user YAML.

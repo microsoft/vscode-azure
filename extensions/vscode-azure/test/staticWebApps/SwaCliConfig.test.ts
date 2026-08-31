@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
-import { SwaCliConfigFileName, tryGetStaticWebAppsCliConfig } from '../../src/staticWebApps/SwaCliConfig';
+import { canAzdDeployStaticWebApp, SwaCliConfigFileName, tryGetStaticWebAppsCliConfig } from '../../src/staticWebApps/SwaCliConfig';
 
 describe('SwaCliConfig (unit)', () => {
     it('should return undefined when the SWA CLI config is absent', async () => {
@@ -35,4 +35,16 @@ describe('SwaCliConfig (unit)', () => {
         expect((error as Error).message).to.contain('parse');
     });
 
+    it('should deploy a build output that is distinct from the app root', () => {
+        expect(canAzdDeployStaticWebApp('build')).to.be.true;
+        expect(canAzdDeployStaticWebApp('./dist')).to.be.true;
+        expect(canAzdDeployStaticWebApp('')).to.be.false;
+        expect(canAzdDeployStaticWebApp('/')).to.be.false;
+        expect(canAzdDeployStaticWebApp('.')).to.be.false;
+    });
+
+    it('should refuse a server build the CLI cannot distinguish from a static export', () => {
+        expect(canAzdDeployStaticWebApp('.next')).to.be.false;
+        expect(canAzdDeployStaticWebApp('.\\.next')).to.be.false;
+    });
 });

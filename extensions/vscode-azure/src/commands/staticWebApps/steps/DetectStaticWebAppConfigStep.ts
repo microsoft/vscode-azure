@@ -6,9 +6,8 @@
 import { IActionContext, ICodeContext, PromptStep } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { ISwaCliService } from '../../../staticWebApps/SwaCliService';
-import { tryGetStaticWebAppCliOptions, type SWACLIOptions } from '../../../staticWebApps/SwaCliConfig';
+import { tryGetStaticWebAppCliOptions, canAzdDeployStaticWebApp, type SWACLIOptions } from '../../../staticWebApps/SwaCliConfig';
 import type { CreateStaticWebAppContext, StaticWebAppAzdLanguage } from '../CreateStaticWebAppContext';
-import { addLocationTelemetry, canAzdDeployStaticWebApp } from './locationUtils';
 
 /** Defaults the Static Web Apps build applies when a path is not stated. */
 const DefaultAppLocation = '/';
@@ -85,6 +84,34 @@ export class DetectStaticWebAppConfigStep extends PromptStep<CreateStaticWebAppC
 
 function normalize(value: string | undefined): string | undefined {
     return value?.trim().replace(/\\/g, '/');
+}
+
+/** How a resolved location compares to the Static Web Apps default. */
+type StaticWebAppLocationClassification = 'empty' | 'default' | 'nonDefault';
+
+/**
+ * Records how a resolved location compares to the Static Web Apps default,
+ * without recording the path itself.
+ */
+function addLocationTelemetry(
+    context: IActionContext,
+    key: 'appLocation' | 'apiLocation' | 'outputLocation',
+    value: string | undefined,
+    defaultValue: string,
+): void {
+    if (value === undefined) {
+        return;
+    }
+
+    let classification: StaticWebAppLocationClassification;
+    if (value.length === 0) {
+        classification = 'empty';
+    } else if (value === defaultValue) {
+        classification = 'default';
+    } else {
+        classification = 'nonDefault';
+    }
+    context.telemetry.properties[key] = classification;
 }
 
 /**

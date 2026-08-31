@@ -119,6 +119,16 @@ describe('DetectStaticWebAppConfigStep (unit)', () => {
             expect(result.deploy).to.equal(false);
         });
 
+        it('should classify locations without recording the paths themselves', async () => {
+            const { step, actionContext } = createStep({ appLocation: '/', apiLocation: '', outputLocation: 'other' });
+
+            await step.prompt(createContext());
+
+            expect(actionContext.telemetry.properties.appLocation).to.equal('default');
+            expect(actionContext.telemetry.properties.apiLocation).to.equal('empty');
+            expect(actionContext.telemetry.properties.outputLocation).to.equal('nonDefault');
+        });
+
         it('should record dotnet when the detected build uses the dotnet CLI', async () => {
             const { step } = createStep({ outputLocation: 'bin/wwwroot', appBuildCommand: 'dotnet publish -c Release -o bin' });
 

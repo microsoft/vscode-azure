@@ -51,6 +51,26 @@ export interface StaticWebAppsCliConfigFile {
 }
 
 /**
+ * Build directories that hold a framework's server output rather than files
+ * that can be served as-is.
+ *
+ * The Static Web Apps CLI reports one output location per framework, so a
+ * server-rendered project and its static-export variant both resolve to the
+ * server build. Uploading that as static content produces a broken site, so it
+ * is treated the same as having no deployable output.
+ */
+const serverBuildLocations: readonly string[] = ['.next'];
+
+/** Whether current azd can deploy the selected output as a distinct artifact directory. */
+export function canAzdDeployStaticWebApp(outputLocation: string): boolean {
+    const normalized = outputLocation.trim().replace(/\\/g, '/').replace(/^\.\//, '');
+    return normalized.length > 0
+        && normalized !== '/'
+        && normalized !== '.'
+        && !serverBuildLocations.includes(normalized.toLowerCase());
+}
+
+/**
  * Reads the canonical Static Web Apps CLI configuration from a workspace root.
  *
  * Missing files return `undefined`. Invalid JSON is surfaced with the file name
