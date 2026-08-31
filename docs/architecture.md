@@ -50,7 +50,7 @@ Azure-specific models and helpers that build on `utils`:
 The VS Code extension that wires everything together:
 
 - **Activation**: Core container setup plus declarative product, command, and tree registration
-- **Commands**: `SignIn`, `SelectSubscriptions`, `RefreshResourcesView`, `GroupBy`, `OpenUrl` (backing open-in-portal), `BrowseWebsite`, `DeleteAzureResource`, `LoadMore`, `RefreshWorkspaceView`, `RevealInExplorer`, `DisableAcrAdminUser`, `EditSettings`, `ClearActivities`, `AzdUp`, `AzdDown`, `InstallAzd`
+- **Commands**: `SignIn`, `SelectSubscriptions`, `RefreshResourcesView`, `GroupBy`, `OpenUrl` (backing open-in-portal), `BrowseWebsite`, `DeleteAzureResource`, `LoadMore`, `RefreshWorkspaceView`, `RevealInExplorer`, `DisableAcrAdminUser`, `EditSettings`, `ClearActivities`, `AzdUp`, `AzdDown`, `AcquireTool`
 - **Resource creation wizards**: `CreateFunctionApp` — azd-backed wizard for creating and deploying Azure resources. See [Resource Creation](resource-creation.md).
 - **Tree providers**:
   - Resources: `AzureAccountDataProvider` (a thin, always-filtered adapter over the azutils listing layer for accounts/tenants/subscriptions), `AzureResourceDataProvider`/`GenericAzureViewProvider` (resource groups + fallback resources), `AcrDataProvider`/`ViewProvider`, `WebAppDataProvider`/`ViewProvider` (Web App resources and their settings), `SettingsDataProvider`/`ViewProvider` (shared settings virtual-node glue -- see [Settings](settings.md))
@@ -58,6 +58,7 @@ The VS Code extension that wires everything together:
   - Activity: `ArmDeploymentDataProvider`/`ViewProvider`, `CodeDeploymentDataProvider`, `GenericActivityDataProvider`, `ActivityViewProvider`
 - **Services**: Extension-scoped DI identifiers (`ICredentialFactory`, `IAzureListingFetcher`, `IAzureListingCache`, `ISubscriptionResolver`, `IAzureAccountDataProvider`, `IResourceClientProvider`, `IDeploymentClientProvider`, `IAcrClientProvider`, `IAzureViewDataTree`, `IWorkspaceViewDataTree`, `IActivityViewDataTree`, etc.)
 - **Workspace scanning**: `IWorkspaceIndexService` walks the workspace once, lets registered `WorkspaceDetector`s attach namespaced tags to files and directories, and keeps the resulting index fresh with a single shared watcher. Workspace tree providers query it by tag (`withTag`) rather than searching the workspace themselves. It lives here rather than in `utils` because its consumers are Azure product concerns.
+- **Tool acquisition**: `IToolService` resolves Azure developer tools (`azd`, `func`, `swa`), installing them through per-tool `ToolInstaller`s when needed, and exposes that to other extensions as a command. See [Tool Acquisition](tool-acquisition.md).
 
 ## Activation Flow
 

@@ -32,6 +32,11 @@ import { registerCommands } from './commands/registerCommands';
 import { registerProducts } from './products/registerProducts';
 import { ProductRegistrar } from './registration/ProductRegistrar';
 import { pushDisposable } from './services';
+import { AzdInstaller } from './tools/AzdInstaller';
+import { FuncInstaller } from './tools/FuncInstaller';
+import { SwaInstaller } from './tools/SwaInstaller';
+import { IToolInstaller } from './tools/ToolInstaller';
+import { IToolService, ToolService } from './tools/ToolService';
 import { registerTrees } from './tree/registerTrees';
 import { IWorkspaceIndexService, WorkspaceIndexService } from './utils/workspaceIndex/WorkspaceIndexService';
 
@@ -147,6 +152,11 @@ function setUpContainer(extensionContext: IExtensionContext, products: ProductRe
     container.bind(IProcessExecutor).toDynamicValue(context => {
         return new ProcessExecutor(context.get(IVsCode));
     }).inSingletonScope().onActivation(pushDisposable);
+
+    container.bind(IToolInstaller).to(AzdInstaller).inSingletonScope();
+    container.bind(IToolInstaller).to(FuncInstaller).inSingletonScope();
+    container.bind(IToolInstaller).to(SwaInstaller).inSingletonScope();
+    container.bind(IToolService).to(ToolService).inSingletonScope();
 
     container.bind(IWorkspaceIndexService).to(WorkspaceIndexService).inSingletonScope().onActivation(pushDisposable);
 

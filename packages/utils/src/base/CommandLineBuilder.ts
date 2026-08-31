@@ -80,8 +80,8 @@ export interface NamedArgOptions {
  *
  * @example
  * ```ts
- * command('azd').arg('provision').namedArg('--location', 'westus').flagArg('--force');
- * // -> ['azd', 'provision', '--location', 'westus', '--force']
+ * command('azd').arg('provision').namedArg('--location', 'westus').flagArg('--force', force);
+ * // -> ['azd', 'provision', '--location', 'westus', '--force']  (when `force`)
  * ```
  */
 export class CommandLineBuilder extends Array<CommandLineArg> {
@@ -137,6 +137,10 @@ export class CommandLineBuilder extends Array<CommandLineArg> {
 
     /**
      * Conditionally appends a boolean flag such as `--force`.
+     *
+     * Prefer {@linkcode CommandLineBuilder.arg arg} for a flag that is always
+     * present: passing no {@linkcode include} makes this equivalent, while
+     * implying a condition the reader will look for and not find.
      *
      * @param name - The flag token.
      * @param include - When falsy, the flag is omitted. Defaults to `true`.

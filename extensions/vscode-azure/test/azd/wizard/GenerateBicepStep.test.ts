@@ -26,14 +26,14 @@ describe('GenerateBicepStep (unit)', () => {
     describe('shouldExecute', () => {
         it('should return false when iacFolder is not set', async () => {
             const { ctx } = createCtxWithFs();
-            const step = new GenerateBicepStep<TestBicepContext>(ctx, 'functionApp.bicep', ['functionWorkerRuntime']);
+            const step = new GenerateBicepStep<TestBicepContext>(ctx, 'functionApp', ['functionWorkerRuntime']);
 
             expect(await step.shouldExecute({})).to.be.false;
         });
 
         it('should return true when infra files do not exist', async () => {
             const { ctx } = createCtxWithFs();
-            const step = new GenerateBicepStep<TestBicepContext>(ctx, 'functionApp.bicep', ['functionWorkerRuntime']);
+            const step = new GenerateBicepStep<TestBicepContext>(ctx, 'functionApp', ['functionWorkerRuntime']);
 
             const context = { iacFolder: MockUri.file('/project') } as TestBicepContext;
             expect(await step.shouldExecute(context)).to.be.true;
@@ -41,7 +41,7 @@ describe('GenerateBicepStep (unit)', () => {
 
         it('should return false when main.bicep already exists', async () => {
             const { ctx } = createCtxWithFs([MockUri.file('/project/infra/main.bicep')]);
-            const step = new GenerateBicepStep<TestBicepContext>(ctx, 'functionApp.bicep', ['functionWorkerRuntime']);
+            const step = new GenerateBicepStep<TestBicepContext>(ctx, 'functionApp', ['functionWorkerRuntime']);
 
             const context = { iacFolder: MockUri.file('/project') } as TestBicepContext;
             expect(await step.shouldExecute(context)).to.be.false;
@@ -49,7 +49,16 @@ describe('GenerateBicepStep (unit)', () => {
 
         it('should return false when main.parameters.json already exists', async () => {
             const { ctx } = createCtxWithFs([MockUri.file('/project/infra/main.parameters.json')]);
-            const step = new GenerateBicepStep<TestBicepContext>(ctx, 'functionApp.bicep', ['functionWorkerRuntime']);
+            const step = new GenerateBicepStep<TestBicepContext>(ctx, 'functionApp', ['functionWorkerRuntime']);
+
+            const context = { iacFolder: MockUri.file('/project') } as TestBicepContext;
+            expect(await step.shouldExecute(context)).to.be.false;
+        });
+
+        it('should return false when the infra directory already exists', async () => {
+            const { ctx, fs } = createCtxWithFs();
+            fs.addDirectory(MockUri.file('/project/infra'));
+            const step = new GenerateBicepStep<TestBicepContext>(ctx, 'functionApp', ['functionWorkerRuntime']);
 
             const context = { iacFolder: MockUri.file('/project') } as TestBicepContext;
             expect(await step.shouldExecute(context)).to.be.false;
@@ -59,7 +68,7 @@ describe('GenerateBicepStep (unit)', () => {
     describe('execute', () => {
         it('should create infra directory and write files', async () => {
             const { ctx, fs } = createCtxWithFs();
-            const step = new GenerateBicepStep<TestBicepContext>(ctx, 'functionApp.bicep', ['functionWorkerRuntime', 'runtimeVersion', 'appServicePlanSkuName']);
+            const step = new GenerateBicepStep<TestBicepContext>(ctx, 'functionApp', ['functionWorkerRuntime', 'runtimeVersion', 'appServicePlanSkuName']);
 
             const context = {
                 iacFolder: MockUri.file('/project'),
@@ -69,10 +78,6 @@ describe('GenerateBicepStep (unit)', () => {
             } as TestBicepContext;
 
             await step.execute(context);
-
-            expect(fs.createDirectory.mock.callCount()).to.equal(1);
-            const dirUri = fs.createDirectory.mock.calls[0].arguments[0];
-            expect(dirUri.path).to.equal('/project/infra');
 
             expect(fs.writeFile.mock.callCount()).to.equal(1);
             expect(fs.copy.mock.callCount()).to.equal(1);
@@ -86,11 +91,14 @@ describe('GenerateBicepStep (unit)', () => {
             expect(params.parameters.functionWorkerRuntime.value).to.equal('node');
             expect(params.parameters.runtimeVersion.value).to.equal('20');
             expect(params.parameters.appServicePlanSkuName.value).to.equal('FC1');
+
+            const paramsUri = fs.writeFile.mock.calls[0].arguments[0];
+            expect(paramsUri.path).to.equal('/project/infra/main.parameters.json');
         });
 
         it('should omit undefined parameter keys', async () => {
             const { ctx, fs } = createCtxWithFs();
-            const step = new GenerateBicepStep<TestBicepContext>(ctx, 'functionApp.bicep', ['functionWorkerRuntime', 'runtimeVersion', 'appServicePlanSkuName']);
+            const step = new GenerateBicepStep<TestBicepContext>(ctx, 'functionApp', ['functionWorkerRuntime', 'runtimeVersion', 'appServicePlanSkuName']);
 
             const context = {
                 iacFolder: MockUri.file('/project'),
@@ -105,9 +113,9 @@ describe('GenerateBicepStep (unit)', () => {
             expect(params.parameters).to.not.have.property('appServicePlanSkuName');
         });
 
-        it('should copy template from extension resources', async () => {
+        it('should copy the whole template directory into infra', async () => {
             const { ctx, fs } = createCtxWithFs();
-            const step = new GenerateBicepStep<TestBicepContext>(ctx, 'functionApp.bicep', []);
+            const step = new GenerateBicepStep<TestBicepContext>(ctx, 'functionApp', []);
 
             const context = {
                 iacFolder: MockUri.file('/project'),
@@ -115,11 +123,25 @@ describe('GenerateBicepStep (unit)', () => {
 
             await step.execute(context);
 
+            // Copying the directory rather than a single file is what lets a
+            // template ship a `modules/` subtree whose relative paths survive.
             const sourceUri = fs.copy.mock.calls[0].arguments[0];
-            expect(sourceUri.path).to.include('resources/templates/functionApp.bicep');
+            expect(sourceUri.path).to.include('resources/templates/functionApp');
+            expect(sourceUri.path).to.not.include('main.bicep');
 
             const destUri = fs.copy.mock.calls[0].arguments[1];
-            expect(destUri.path).to.equal('/project/infra/main.bicep');
+            expect(destUri.path).to.equal('/project/infra');
+        });
+
+        it('should reject generation when the infra directory already exists', async () => {
+            const { ctx, fs } = createCtxWithFs();
+            fs.addDirectory(MockUri.file('/project/infra'));
+            const step = new GenerateBicepStep<TestBicepContext>(ctx, 'functionApp', []);
+            const context = { iacFolder: MockUri.file('/project') } as TestBicepContext;
+
+            await expect(step.execute(context)).to.be.rejectedWith('Cannot generate infrastructure because the infra folder already exists.');
+            expect(fs.copy.mock.callCount()).to.equal(0);
+            expect(fs.writeFile.mock.callCount()).to.equal(0);
         });
     });
 });

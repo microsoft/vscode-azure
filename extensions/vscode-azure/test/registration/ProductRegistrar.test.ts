@@ -21,18 +21,8 @@ import { Container, injectable, type ServiceIdentifier } from 'inversify';
 import { mock } from 'node:test';
 import { registerCommands } from '../../src/commands/registerCommands';
 import type { ManagedCommand } from '../../src/commands/ManagedCommand';
-import { registerProducts } from '../../src/products/registerProducts';
 import { ProductRegistrar } from '../../src/registration/ProductRegistrar';
 import { bindAzureClientProvider, bindProviders } from '../../src/services';
-import { AcrDataProvider } from '../../src/tree/resources/acr/AcrDataProvider';
-import { AcrViewProvider } from '../../src/tree/resources/acr/AcrViewProvider';
-import { AzureAccountDataProvider, IAzureAccountDataProvider } from '../../src/tree/resources/AzureAccountDataProvider';
-import { AzureResourceDataProvider } from '../../src/tree/resources/AzureResourceDataProvider';
-import { GenericAzureViewProvider } from '../../src/tree/resources/GenericAzureViewProvider';
-import { SettingsDataProvider } from '../../src/tree/resources/settings/SettingsDataProvider';
-import { SettingsViewProvider } from '../../src/tree/resources/settings/SettingsViewProvider';
-import { WebAppDataProvider } from '../../src/tree/resources/webApp/WebAppDataProvider';
-import { WebAppViewProvider } from '../../src/tree/resources/webApp/WebAppViewProvider';
 
 @injectable()
 class TestCommand implements ManagedCommand {
@@ -49,24 +39,24 @@ describe('ProductRegistrar (unit)', () => {
         mock.restoreAll();
     });
 
-    it('collects product resource providers in dispatch order', () => {
+    it('returns resource providers in registration order', () => {
         const registrar = new ProductRegistrar();
+        const alpha = { name: 'alpha' } as never;
+        const beta = { name: 'beta' } as never;
+        const gamma = { name: 'gamma' } as never;
+        const primaryId: ServiceIdentifier = Symbol('IGammaProvider');
 
-        registerProducts(registrar);
+        registrar.registerResourceDataProvider(alpha);
+        registrar.registerResourceDataProvider([primaryId, gamma] as never);
+        registrar.registerResourceDataProvider(beta);
+        registrar.registerResourceViewProvider(beta);
+        registrar.registerResourceViewProvider(alpha);
 
-        const dataProviders = registrar.getResourceDataProviders();
-        const viewProviders = registrar.getResourceViewProviders();
-        expect(dataProviders[0]).to.equal(SettingsDataProvider);
-        expect(dataProviders[1]).to.equal(AcrDataProvider);
-        expect(dataProviders[2]).to.equal(WebAppDataProvider);
-        expect(dataProviders[3]).to.deep.equal([IAzureAccountDataProvider, AzureAccountDataProvider]);
-        expect(dataProviders[4]).to.equal(AzureResourceDataProvider);
-        expect(viewProviders).to.deep.equal([
-            SettingsViewProvider,
-            AcrViewProvider,
-            WebAppViewProvider,
-            GenericAzureViewProvider,
-        ]);
+        // Dispatch picks the first provider that can handle a resource, so the
+        // registrar must hand back exactly what it was given, in order -- both
+        // bare classes and aliased `[primaryId, Class]` tuples.
+        expect(registrar.getResourceDataProviders()).to.deep.equal([alpha, [primaryId, gamma], beta]);
+        expect(registrar.getResourceViewProviders()).to.deep.equal([beta, alpha]);
     });
 
     it('binds primary provider identifiers as singleton collection aliases', () => {
@@ -178,5 +168,42 @@ describe('ProductRegistrar (unit)', () => {
         const provider = container.get<(subscription: AzureSubscription) => ClientResult>(providerId);
 
         expect(provider(makeSubscription()).source).to.equal('first');
+    });
+
+    it('passes the contexts, a scoped credential, and the caller argument to a client provider', () => {
+        interface ClientResult {
+            readonly loginServer: string;
+            readonly cloud: string;
+        }
+
+        const registrar = new ProductRegistrar();
+        const container = new Container();
+        const providerId: ServiceIdentifier<(subscription: AzureSubscription, loginServer: string) => ClientResult> =
+            Symbol('ITestDataPlaneClientProvider');
+        const codeContext = {} as ICodeContext;
+        const executor = {} as IActionExecutor;
+        const credential: TokenCredential = { getToken: mock.fn(() => Promise.resolve(null)) };
+        const credentialFactory = mock.fn((_input?: CredentialFactoryInput) => credential);
+        container.bind(ICodeContext).toConstantValue(codeContext);
+        container.bind(IActionExecutor).toConstantValue(executor);
+        container.bind(ICredentialFactory).toConstantValue(credentialFactory);
+
+        // A data-plane client is addressed by an endpoint rather than by ARM, so
+        // its identifier declares the extra argument that names one.
+        registrar.registerAzureClientProvider(providerId, (actualContext, actualExecutor, actualCredential, subscription, loginServer) => {
+            expect(actualContext).to.equal(codeContext);
+            expect(actualExecutor).to.equal(executor);
+            expect(actualCredential).to.equal(credential);
+            return { loginServer, cloud: subscription.environment.name };
+        });
+        registrar.applyBindings(container);
+
+        const subscription = makeSubscription();
+        const provider = container.get<(subscription: AzureSubscription, loginServer: string) => ClientResult>(providerId);
+        const result = provider(subscription, 'contoso.azurecr.io');
+
+        expect(result.loginServer).to.equal('contoso.azurecr.io');
+        expect(result.cloud).to.equal(subscription.environment.name);
+        expect(credentialFactory.mock.calls[0].arguments[0]).to.equal(subscription);
     });
 });

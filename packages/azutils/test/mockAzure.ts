@@ -5,6 +5,7 @@
 
 import type { AccessToken, TokenCredential } from '@azure/core-auth';
 import { CaselessSet, EventEmitter, type ChildResult, type DataProvider, type Event, type Page } from '@microsoft/vscode-azure-utils';
+import { rejectingAsyncIterable } from '@microsoft/vscode-azure-utils/testing';
 import { mock, type Mock } from 'node:test';
 import type * as vscode from 'vscode';
 import { isAzureSubscriptionTarget, type AzureAccount, type AzureSubscription, type AzureTenant } from '../src/auth/AzureSubscription';
@@ -360,14 +361,10 @@ export function createMockAzureListingFetcher(options?: MockAzureListingFetcherO
         }
     }
 
-    function rejecting<T>(error: Error): AsyncIterable<Page<T>> {
-        return { [Symbol.asyncIterator]: () => ({ next: () => Promise.reject(error) }) };
-    }
-
     return {
         fetchAccounts: mock.fn(() => Promise.resolve([...accounts])),
         fetchTenants: mock.fn((account: AzureAccount) => unlistable.has(account.id)
-            ? rejecting<AzureTenant>(new Error(`Mock: cannot list tenants for account ${account.id}`))
+            ? rejectingAsyncIterable<Page<AzureTenant>>(new Error(`Mock: cannot list tenants for account ${account.id}`))
             : paged('tenants', tenants.filter(tenant => tenant.accountId.toLowerCase() === account.id.toLowerCase()))),
         fetchSubscriptions: mock.fn((tenant: AzureTenant) => {
             const error = signedOut.has(tenant.tenantId)
@@ -376,7 +373,7 @@ export function createMockAzureListingFetcher(options?: MockAzureListingFetcherO
                     ? new Error(`Mock: cannot list subscriptions for tenant ${tenant.tenantId}`)
                     : undefined;
             if (error) {
-                return rejecting<AzureSubscription>(error);
+                return rejectingAsyncIterable<Page<AzureSubscription>>(error);
             }
             return paged('subscriptions', subscriptions.filter(sub =>
                 sub.accountId.toLowerCase() === tenant.accountId.toLowerCase()

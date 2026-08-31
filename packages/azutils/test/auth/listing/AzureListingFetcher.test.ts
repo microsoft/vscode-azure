@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { collectAsync, type Page } from '@microsoft/vscode-azure-utils';
-import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, createTestActionExecutor, rejectingAsyncIterable } from '@microsoft/vscode-azure-utils/testing';
 import * as assert from 'node:assert';
 import { mock } from 'node:test';
 import type { AzureSubscription, AzureTenant } from '../../../src/auth/AzureSubscription';
@@ -35,9 +35,7 @@ describe('AzureListingFetcher (unit)', () => {
 
     /** Serve a client whose `tenants.list` rejects, as conditional access does. */
     function mockFailingTenantList(error: Error) {
-        const throwing: AsyncIterable<never> = {
-            [Symbol.asyncIterator]: () => ({ next: () => Promise.reject(error) }),
-        };
+        const throwing = rejectingAsyncIterable<never>(error);
         return mock.method(SubscriptionClient, 'create', () => ({
             tenants: { list: () => throwing },
             subscriptions: { list: () => createMockSubscriptionClient().subscriptions.list(), listLocations: () => Promise.resolve([]) },

@@ -108,29 +108,35 @@ export function pushDisposable<T>(context: Pick<ResolutionContext, 'get'>, injec
 export type ProviderEntry<T> = Newable<T> | readonly [ServiceIdentifier<T>, Newable<T>];
 
 /**
- * Signature shared by subscription-scoped Azure REST client `create` methods.
+ * Signature shared by Azure REST client `create` methods.
  *
  * Generic in the subscription shape because clients need different amounts of
  * it: issuing requests needs only an {@linkcode AzureSubscriptionTarget}, while
  * a client that stamps the subscription onto what it returns (so the tree can
  * build node ids from it) needs a listed {@linkcode AzureSubscription}. Each
  * provider declares which, and gets exactly that.
+ *
+ * `TArgs` is any further per-call arguments the provider's identifier declares.
+ * It is empty for a management-plane client, which ARM addresses by
+ * subscription alone, and carries whatever names the endpoint for a data-plane
+ * client -- a registry login server, for instance.
  */
-export type AzureClientCreate<TResult, TSubscription extends AzureSubscriptionTarget> = (
+export type AzureClientCreate<TResult, TSubscription extends AzureSubscriptionTarget, TArgs extends unknown[] = []> = (
     context: ICodeContext,
     executor: IActionExecutor,
     credential: TokenCredential,
     subscription: TSubscription,
+    ...args: TArgs
 ) => TResult;
 
 /**
  * Bind a subscription-scoped Azure client provider unless another product
  * already registered the same shared provider.
  */
-export function bindAzureClientProvider<TResult, TSubscription extends AzureSubscriptionTarget>(
+export function bindAzureClientProvider<TResult, TSubscription extends AzureSubscriptionTarget, TArgs extends unknown[] = []>(
     container: Container,
-    providerId: ServiceIdentifier<(subscription: TSubscription) => TResult>,
-    create: AzureClientCreate<TResult, TSubscription>,
+    providerId: ServiceIdentifier<(subscription: TSubscription, ...args: TArgs) => TResult>,
+    create: AzureClientCreate<TResult, TSubscription, TArgs>,
 ): void {
     if (container.isBound(providerId)) {
         return;
@@ -140,11 +146,12 @@ export function bindAzureClientProvider<TResult, TSubscription extends AzureSubs
         const codeContext = context.get(ICodeContext);
         const executor = context.get(IActionExecutor);
         const credentialFactory = context.get(ICredentialFactory);
-        return (subscription: TSubscription) => create(
+        return (subscription: TSubscription, ...args: TArgs) => create(
             codeContext,
             executor,
             credentialFactory(subscription),
             subscription,
+            ...args,
         );
     });
 }
