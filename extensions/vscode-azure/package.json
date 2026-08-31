@@ -49,6 +49,7 @@
             },
             {
                 "command": "vscode-azure/resources/browseWebsite",
+                "category": "%commands.category.azure%",
                 "icon": "$(globe)",
                 "title": "%commands.vscode-azure/resources/browseWebsite%"
             },
@@ -174,10 +175,6 @@
                 },
                 {
                     "command": "vscode-azure/resourceGroups/delete",
-                    "when": "false"
-                },
-                {
-                    "command": "vscode-azure/resources/browseWebsite",
                     "when": "false"
                 },
                 {
