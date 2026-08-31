@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ProcessError, type IProcessExecutor, type ProcessExecutorOptions, argToString, argsToStrings } from '@microsoft/vscode-azure-utils';
-import { MockUri, createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
+import { MockFileSystem, MockUri, createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import type { IAzdAuthServer } from '../../src/azd/AzdAuthServer';
 import { AzdCommand, AzdService, MinAzdVersion } from '../../src/azd/AzdService';
@@ -31,6 +31,12 @@ type SpawnOpts = Omit<ProcessExecutorOptions, 'cwd'> & {
     readonly parseJson?: boolean;
     readonly source?: string;
 };
+
+function getFileText(fs: MockFileSystem, uri: { readonly path: string }): string {
+    const content = fs.files.get(uri.path);
+    expect(content, `Expected ${uri.path} to exist`).not.to.be.undefined;
+    return new TextDecoder().decode(content);
+}
 
 function createService(spawnFn?: SpawnMethod, acquiredPath?: string) {
     const mockResult = createMockVsCode();
@@ -86,6 +92,150 @@ describe('AzdService (unit)', () => {
             expect(result).to.deep.equal([]);
         });
     });
+
+    /* eslint-disable @typescript-eslint/no-deprecated -- This block verifies the deprecated compatibility API. */
+    describe('updateAzureYaml', () => {
+        it('should add a service and apply nested updates in one write', async () => {
+            const { service, fs } = createService();
+            const azureYaml = MockUri.file('/project/azure.yaml');
+            fs.addFile(azureYaml, 'name: my-app\n');
+
+            await service.updateAzureYaml(MockUri.file('/project'), editor => {
+                editor.set(['services', 'api'], {
+                    host: 'containerapp',
+                    project: '.',
+                    language: 'docker',
+                });
+                editor.set(['services', 'api', 'docker', 'remoteBuild'], true);
+            });
+
+            expect(getFileText(fs, azureYaml)).to.equal(
+                'name: my-app\n'
+                + 'services:\n'
+                + '  api:\n'
+                + '    host: containerapp\n'
+                + '    project: .\n'
+                + '    language: docker\n'
+                + '    docker:\n'
+                + '      remoteBuild: true\n',
+            );
+            expect(fs.writeFile.mock.callCount()).to.equal(1);
+        });
+
+        it('should replace a nested field while preserving comments, order, and unrelated fields', async () => {
+            const { service, fs } = createService();
+            const azureYaml = MockUri.file('/project/azure.yaml');
+            fs.addFile(azureYaml,
+                '# yaml-language-server: $schema=https://example.test/azure.yaml.json\n'
+                + 'name: my-app\n'
+                + 'services:\n'
+                + '  api:\n'
+                + '    # Keep this explanation\n'
+                + '    host: function\n'
+                + '    project: ./src\n'
+                + 'metadata:\n'
+                + '  template: sample@1.0.0\n',
+            );
+
+            await service.updateAzureYaml(MockUri.file('/project'), editor => {
+                editor.set(['services', 'api', 'host'], 'containerapp');
+            });
+
+            expect(getFileText(fs, azureYaml)).to.equal(
+                '# yaml-language-server: $schema=https://example.test/azure.yaml.json\n'
+                + 'name: my-app\n'
+                + 'services:\n'
+                + '  api:\n'
+                + '    # Keep this explanation\n'
+                + '    host: containerapp\n'
+                + '    project: ./src\n'
+                + 'metadata:\n'
+                + '  template: sample@1.0.0\n',
+            );
+        });
+
+        it('should update azure.yml when it is the project file', async () => {
+            const { service, fs } = createService();
+            const azureYml = MockUri.file('/project/azure.yml');
+            fs.addFile(azureYml, 'name: my-app\n');
+
+            await service.updateAzureYaml(MockUri.file('/project'), editor => {
+                editor.set(['infra', 'path'], './deployment');
+            });
+
+            expect(getFileText(fs, azureYml)).to.equal(
+                'name: my-app\n'
+                + 'infra:\n'
+                + '  path: ./deployment\n',
+            );
+        });
+
+        it('should not write when no updates are requested', async () => {
+            const { service, fs } = createService();
+            const azureYaml = MockUri.file('/project/azure.yaml');
+            fs.addFile(azureYaml, 'name: my-app\n');
+
+            await service.updateAzureYaml(MockUri.file('/project'), () => undefined);
+
+            expect(fs.writeFile.mock.callCount()).to.equal(0);
+            expect(getFileText(fs, azureYaml)).to.equal('name: my-app\n');
+        });
+
+        it('should await asynchronous updates before writing', async () => {
+            const { service, fs } = createService();
+            const azureYaml = MockUri.file('/project/azure.yaml');
+            fs.addFile(azureYaml, 'name: my-app\n');
+
+            await service.updateAzureYaml(MockUri.file('/project'), async editor => {
+                await Promise.resolve();
+                editor.set(['services', 'api', 'host'], 'function');
+            });
+
+            expect(getFileText(fs, azureYaml)).to.equal(
+                'name: my-app\n'
+                + 'services:\n'
+                + '  api:\n'
+                + '    host: function\n',
+            );
+            expect(fs.writeFile.mock.callCount()).to.equal(1);
+        });
+
+        it('should reject when the project file does not exist', async () => {
+            const { service, fs } = createService();
+
+            await expect(service.updateAzureYaml(MockUri.file('/project'), () => undefined))
+                .to.be.rejectedWith('No azure.yaml or azure.yml file was found');
+
+            expect(fs.writeFile.mock.callCount()).to.equal(0);
+        });
+
+        it('should reject malformed YAML without writing it', async () => {
+            const { service, fs } = createService();
+            const azureYaml = MockUri.file('/project/azure.yaml');
+            fs.addFile(azureYaml, 'name: [invalid\n');
+
+            await expect(service.updateAzureYaml(MockUri.file('/project'), editor => {
+                editor.set(['name'], 'my-app');
+            })).to.be.rejectedWith('contains invalid YAML');
+
+            expect(fs.writeFile.mock.callCount()).to.equal(0);
+            expect(getFileText(fs, azureYaml)).to.equal('name: [invalid\n');
+        });
+
+        it('should reject empty path keys without writing the file', async () => {
+            const { service, fs } = createService();
+            const azureYaml = MockUri.file('/project/azure.yaml');
+            fs.addFile(azureYaml, 'name: my-app\n');
+
+            await expect(service.updateAzureYaml(MockUri.file('/project'), editor => {
+                editor.set(['services', ''], { host: 'function' });
+            })).to.be.rejectedWith('paths must contain at least one non-empty key');
+
+            expect(fs.writeFile.mock.callCount()).to.equal(0);
+            expect(getFileText(fs, azureYaml)).to.equal('name: my-app\n');
+        });
+    });
+    /* eslint-enable @typescript-eslint/no-deprecated */
 
     describe('init', () => {
         it('should spawn azd init with --minimal and --no-prompt', async () => {

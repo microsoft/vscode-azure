@@ -5,8 +5,8 @@
 
 import { ICodeContext } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import { IAzureViewDataTree } from '../../services';
 import { SettingsUri } from '../../settings/SettingsUri';
+import { IResourceSelector } from '../../tree/resources/ResourceSelector';
 import { isSettingsNode } from '../../tree/resources/settings/SettingsNode';
 import type { ManagedCommand } from '../ManagedCommand';
 
@@ -23,17 +23,18 @@ export class EditSettings implements ManagedCommand {
 
     public constructor(
         @inject(ICodeContext) private readonly ctx: ICodeContext,
-        @inject(IAzureViewDataTree) private readonly tree: IAzureViewDataTree,
+        @inject(IResourceSelector) private readonly selector: IResourceSelector,
     ) { }
 
-    /** @inheritdoc */
+    /**
+     * @inheritdoc
+     *
+     * Does nothing when the selection is not a settings node: the command is
+     * also reachable from the palette, where there is no selection to open.
+     */
     public async execute(key?: string): Promise<void> {
-        if (!key) {
-            return;
-        }
-
-        const node = this.tree.get(key);
-        if (!isSettingsNode(node)) {
+        const node = this.selector.tryResolve({ key, canHandle: isSettingsNode });
+        if (!node) {
             return;
         }
 

@@ -3,8 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { getNodeType } from '@microsoft/vscode-azure-azutils';
-import { applyRedaction, IActionContext, ICodeContext } from '@microsoft/vscode-azure-utils';
+import { applyRedaction, ICodeContext } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, multiInject } from 'inversify';
 import { IPropertiesContentProvider } from '../../properties/PropertiesContentProvider';
 import { IPropertiesAdapter, type PropertiesAdapter } from '../../properties/PropertiesAdapter';
@@ -32,7 +31,6 @@ export class ViewProperties implements ManagedCommand {
 
     public constructor(
         @inject(ICodeContext) private readonly ctx: ICodeContext,
-        @inject(IActionContext) private readonly context: IActionContext,
         @inject(IResourceSelector) private readonly selector: IResourceSelector,
         @inject(IPropertiesContentProvider) private readonly contentProvider: IPropertiesContentProvider,
         @multiInject(IPropertiesAdapter) private readonly adapters: readonly PropertiesAdapter[],
@@ -44,8 +42,7 @@ export class ViewProperties implements ManagedCommand {
      * @throws if the adapter's read fails.
      */
     public async execute(key?: string): Promise<void> {
-        const node = this.selector.fromKey(key);
-        this.context.telemetry.properties.nodeType = getNodeType(node);
+        const node = this.selector.resolve({ key });
 
         const adapter = this.adapters.find(candidate => candidate.canHandle(node));
         if (!adapter) {

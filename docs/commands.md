@@ -218,9 +218,41 @@ Note that a context value only controls *menu visibility*. The command palette i
 
 ## Commands with Resource Selection
 
-Commands that operate on tree items accept an optional `key` parameter. When invoked from a tree item context menu, the key is provided. When invoked from the command palette, the command prompts the user to select a resource.
+Commands that operate on tree items accept an optional `key` parameter. When invoked from a tree item context menu, the key is provided. When invoked from the command palette, the command either prompts the user to select a resource or reports that a selection is required.
 
-The `ResourceSelector` service encapsulates this pattern. It resolves a resource from the data cache when a key is provided, or prompts the user via `resourceExperience` when no key is given. A command therefore handles both entry points in one line:
+The `ResourceSelector` service encapsulates all of this. It replaces the repeated pattern of injecting `ICodeContext`, `IOutputChannel`, `IAzureViewDataTree`, and `IAzureViewViewItemTree` into every command that resolves a node, and it records the resolved node's type in the running action's telemetry so no command has to remember to.
+
+### Resolving a key
+
+`resolve` throws when the key is absent, stale, or points at a node the command cannot act on; `tryResolve` returns `undefined` in exactly the same cases. That pair covers both policies without a flag:
+
+```typescript
+// Reports the problem to the user
+const resource = this.selector.resolve({
+    key,
+    canHandle: isDeletable,
+    messages: {
+        missingKey: () => this.ctx.code.l10n.t('Select an Azure resource to delete.'),
+        invalidNode: () => this.ctx.code.l10n.t('The selected item cannot be deleted.'),
+    },
+});
+
+// Quietly does nothing
+const node = this.selector.tryResolve({ key, canHandle: isSettingsNode });
+if (!node) {
+    return;
+}
+```
+
+`canHandle` is a type guard, so the return type is whatever it narrows to — a command cannot ask for a node type without supplying the check that proves it. Omit it to accept any cached node, which then resolves as `ConcreteAzureNode`; `ViewProperties` does, because it acts on a subscription or resource group as readily as a resource and leaves the question of what it can serve to its adapters.
+
+Each `messages` entry is a callback rather than a string so `l10n.t()` runs only for the failure that actually occurred. Omitted entries fall back to a generic localized message.
+
+Commands keep their own `execute` signature, so `prefixArgs` and non-`key` first arguments stay expressible — `BrowseWebsite` resolves out of `...args: unknown[]`.
+
+### Prompting instead
+
+When a command should prompt rather than fail, `select` resolves from the key when there is one and runs the resource picker when there is not:
 
 ```typescript
 public async execute(key?: string): Promise<void> {
@@ -236,8 +268,6 @@ public async execute(key?: string): Promise<void> {
 ```
 
 Wrap that wait in `withDelayedProgress` when enrichment may not have landed yet, so a slow ARM call shows progress instead of appearing to hang.
-
-A command that is only reachable from a tree item and acts on any node — a subscription or resource group as readily as a resource — has no logical type for a picker to filter on. Those use `selector.fromKey(key)`, which resolves the node the key names and throws when the key is absent or the tree no longer holds it. `ViewProperties` is the example.
 
 For more complex selection flows (e.g. multi-step wizards), use the `Choose*Step` classes in `packages/azutils/src/wizard/` or the convenience wrappers `subscriptionExperience`, `resourceGroupExperience`, and `resourceExperience` directly.
 
@@ -255,3 +285,5 @@ Every command execution is automatically wrapped with telemetry. The `IActionCon
 - `errorHandling.rethrow` — whether to rethrow errors after recording them
 
 See [Telemetry](telemetry.md) for details.
+
+Services shared across command executions cannot inject `IActionContext`, because a singleton would capture whichever execution constructed it first. They inject `IActionExecutor` and call `setTelProp` instead, which writes to the action in flight. `ResourceSelector` records `nodeType` this way for every command that resolves through it.
