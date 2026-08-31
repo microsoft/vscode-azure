@@ -4,28 +4,30 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createActionContext } from '@microsoft/vscode-azure-utils';
-import { addLocationTelemetry, canAzdDeployStaticWebApp, isYamlSafeLocation } from '../../../src/commands/staticWebApps/steps/locationUtils';
+import { addLocationTelemetry, canAzdDeployStaticWebApp } from '../../../src/commands/staticWebApps/steps/locationUtils';
 
 describe('Static Web Apps location utilities (unit)', () => {
-    it('should preserve the location telemetry taxonomy without recording paths', () => {
+    it('should classify locations without recording the paths themselves', () => {
         const context = createActionContext('test');
-        addLocationTelemetry(context, 'appLocation', 'src', '/', 'src');
-        addLocationTelemetry(context, 'apiLocation', '', 'api', undefined);
-        addLocationTelemetry(context, 'outputLocation', 'other', 'build', 'configured');
+        addLocationTelemetry(context, 'appLocation', '/', '/');
+        addLocationTelemetry(context, 'apiLocation', '', 'api');
+        addLocationTelemetry(context, 'outputLocation', 'other', 'build');
 
-        expect(context.telemetry.properties.appLocation).to.equal('setting');
-        expect(context.telemetry.properties.appLocationHasSetting).to.equal('true');
-        expect(context.telemetry.properties.appLocationMatchesSetting).to.equal('false');
+        expect(context.telemetry.properties.appLocation).to.equal('default');
         expect(context.telemetry.properties.apiLocation).to.equal('empty');
         expect(context.telemetry.properties.outputLocation).to.equal('nonDefault');
     });
 
-    it('should validate YAML scalars and direct azd output support', () => {
-        expect(isYamlSafeLocation('src/app', 'app_location')).to.be.true;
-        expect(isYamlSafeLocation('src\napp', 'app_location')).to.be.false;
-        expect(isYamlSafeLocation('src"app', 'app_location')).to.be.false;
+    it('should deploy a build output that is distinct from the app root', () => {
         expect(canAzdDeployStaticWebApp('build')).to.be.true;
+        expect(canAzdDeployStaticWebApp('./dist')).to.be.true;
         expect(canAzdDeployStaticWebApp('')).to.be.false;
         expect(canAzdDeployStaticWebApp('/')).to.be.false;
+        expect(canAzdDeployStaticWebApp('.')).to.be.false;
+    });
+
+    it('should refuse a server build the CLI cannot distinguish from a static export', () => {
+        expect(canAzdDeployStaticWebApp('.next')).to.be.false;
+        expect(canAzdDeployStaticWebApp('.\\.next')).to.be.false;
     });
 });

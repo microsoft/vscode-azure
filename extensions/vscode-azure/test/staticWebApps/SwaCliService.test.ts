@@ -6,6 +6,7 @@
 import { ProcessError, argToString, argsToStrings, type IProcessExecutor, type ProcessExecutorOptions } from '@microsoft/vscode-azure-utils';
 import { MockUri, createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
+import type { ITempDirManager } from '../../src/azd/TempDirManager';
 import { SwaCliConfigFileName, type SWACLIOptions } from '../../src/staticWebApps/SwaCliConfig';
 import { MinSwaVersion, SwaCliService, SwaCommand } from '../../src/staticWebApps/SwaCliService';
 import type { IToolService } from '../../src/tools/ToolService';
@@ -26,6 +27,9 @@ type SpawnOpts = Omit<ProcessExecutorOptions, 'cwd'> & {
     readonly execution?: string;
 };
 
+const ScratchDir = '/scratch';
+const ProjectDir = '/project';
+
 function createService(spawnFn?: SpawnMethod, acquiredPath?: string) {
     const mockResult = createMockVsCode();
     const spawnMock = spawnFn ?? mock.fn(() => Promise.resolve({ stdout: '', stderr: '' }));
@@ -34,30 +38,34 @@ function createService(spawnFn?: SpawnMethod, acquiredPath?: string) {
         acquire: mock.fn(),
         getResolvedPath: mock.fn(() => acquiredPath),
     };
+    const tempDirs: ITempDirManager = {
+        createTempDir: mock.fn(() => Promise.resolve(mockResult.vscode.Uri.file(ScratchDir))),
+    };
     const { executor } = createTestActionExecutor();
-    const service = new SwaCliService(mockResult.vscode, processExecutor, executor, toolService);
+    const service = new SwaCliService(mockResult.vscode, processExecutor, executor, toolService, tempDirs);
     return { service, spawnMock: spawnMock as unknown as ReturnType<typeof mock.fn>, code: mockResult.vscode, fs: mockResult.fs, executor };
 }
 
-/** Seeds the config file that a real `swa init` would have written. */
-function seedConfig(
+/** Seeds the configuration a real `swa init` would have written to `--config`. */
+function seedDetected(
     fs: ReturnType<typeof createMockVsCode>['fs'],
     code: ReturnType<typeof createMockVsCode>['vscode'],
-    configurations: Record<string, SWACLIOptions>,
+    detected: SWACLIOptions,
+    configName = 'detected',
 ): void {
     fs.addFile(
-        code.Uri.joinPath(code.Uri.file('/project'), SwaCliConfigFileName),
-        JSON.stringify({ configurations }),
+        code.Uri.joinPath(code.Uri.file(ScratchDir), SwaCliConfigFileName),
+        JSON.stringify({ configurations: { [configName]: detected } }),
     );
 }
 
 describe('SwaCliService (unit)', () => {
-    describe('init', () => {
-        it('should spawn swa init with --yes and an explicit --config path', async () => {
+    describe('detect', () => {
+        it('should scan the project but write its configuration outside it', async () => {
             const { service, spawnMock, code, fs } = createService();
-            seedConfig(fs, code, { project: { appLocation: 'src', outputLocation: 'dist' } });
+            seedDetected(fs, code, { appLocation: 'src', outputLocation: 'dist' });
 
-            await service.init(MockUri.file('/project'));
+            await service.detect(MockUri.file(ProjectDir));
 
             expect(spawnMock.mock.callCount()).to.equal(1);
             const opts = spawnMock.mock.calls[0].arguments[0] as SpawnOpts;
@@ -67,8 +75,23 @@ describe('SwaCliService (unit)', () => {
             const args = argsToStrings(opts.command.slice(1));
             expect(args).to.include('init');
             expect(args).to.include('--yes');
-            expect(args).to.include('--config');
-            expect(opts.cwd.path).to.equal('/project');
+
+            // The scan follows cwd while the write follows --config, so the
+            // project is only ever read.
+            expect(opts.cwd.path).to.equal(ProjectDir);
+            const configPath = args[args.indexOf('--config') + 1];
+            expect(configPath).to.not.include(ProjectDir);
+            expect(configPath).to.include(SwaCliConfigFileName);
+        });
+
+        it('should leave no configuration in the project folder', async () => {
+            const { service, code, fs } = createService();
+            seedDetected(fs, code, { appLocation: 'src' });
+
+            await service.detect(MockUri.file(ProjectDir));
+
+            const inProject = code.Uri.joinPath(code.Uri.file(ProjectDir), SwaCliConfigFileName);
+            await expect(code.workspace.fs.readFile(inProject)).to.be.rejected;
         });
 
         it('should return the detected configuration', async () => {
@@ -79,36 +102,36 @@ describe('SwaCliService (unit)', () => {
                 outputLocation: 'dist/my-app',
                 appBuildCommand: 'npm run build',
             };
-            seedConfig(fs, code, { project: detected });
+            seedDetected(fs, code, detected);
 
-            expect(await service.init(MockUri.file('/project'))).to.deep.equal(detected);
+            expect(await service.detect(MockUri.file(ProjectDir))).to.deep.equal(detected);
         });
 
-        it('should pass a config name positionally and read that entry back', async () => {
+        it('should read back the entry it named rather than the first one', async () => {
             const { service, spawnMock, code, fs } = createService();
-            seedConfig(fs, code, {
-                first: { appLocation: 'other' },
-                chosen: { appLocation: 'src' },
-            });
+            fs.addFile(
+                code.Uri.joinPath(code.Uri.file(ScratchDir), SwaCliConfigFileName),
+                JSON.stringify({ configurations: { other: { appLocation: 'wrong' }, detected: { appLocation: 'src' } } }),
+            );
 
-            const result = await service.init(MockUri.file('/project'), 'chosen');
+            const result = await service.detect(MockUri.file(ProjectDir));
 
-            expect(argsToStrings((spawnMock.mock.calls[0].arguments[0] as SpawnOpts).command.slice(1))).to.include('chosen');
+            expect(argsToStrings((spawnMock.mock.calls[0].arguments[0] as SpawnOpts).command.slice(1))).to.include('detected');
             expect(result).to.deep.equal({ appLocation: 'src' });
         });
 
-        it('should throw when the CLI exits zero without writing a configuration', async () => {
+        it('should throw when the CLI exits zero without detecting anything', async () => {
             const { service } = createService();
 
-            await expect(service.init(MockUri.file('/project')))
-                .to.be.rejectedWith(Error, SwaCliConfigFileName);
+            await expect(service.detect(MockUri.file(ProjectDir)))
+                .to.be.rejectedWith(Error, 'could not detect');
         });
 
         it('should use the absolute path returned by tool acquisition', async () => {
             const { service, spawnMock, code, fs } = createService(undefined, '/tools/swa');
-            seedConfig(fs, code, { project: { appLocation: 'src' } });
+            seedDetected(fs, code, { appLocation: 'src' });
 
-            await service.init(MockUri.file('/project'));
+            await service.detect(MockUri.file(ProjectDir));
 
             const opts = spawnMock.mock.calls[0].arguments[0] as SpawnOpts;
             expect(argToString(opts.command[0])).to.equal('/tools/swa');
@@ -148,7 +171,7 @@ describe('SwaCliService (unit)', () => {
             await expect(executor.callWithTelemetryAndErrorHandling('test', async (ctx) => {
                 ctx.errorHandling.rethrow = true;
                 try {
-                    await service.init(MockUri.file('/project'));
+                    await service.detect(MockUri.file(ProjectDir));
                 } finally {
                     suppress = ctx.errorHandling.suppress;
                 }
@@ -160,16 +183,16 @@ describe('SwaCliService (unit)', () => {
         it('should report the minimum version when the CLI is present but too old', async () => {
             let call = 0;
             const spawnFn = mock.fn(() => {
-                // The `init` spawn fails for some other reason; the version
+                // The detection spawn fails for some other reason; the version
                 // probe that follows finds an unusable CLI.
                 call += 1;
                 return call === 1
-                    ? Promise.reject(new Error('init failed'))
+                    ? Promise.reject(new Error('detect failed'))
                     : Promise.resolve({ stdout: '1.1.7', stderr: '' });
             });
             const { service } = createService(spawnFn);
 
-            await expect(service.init(MockUri.file('/project')))
+            await expect(service.detect(MockUri.file(ProjectDir)))
                 .to.be.rejectedWith(Error, MinSwaVersion);
         });
     });

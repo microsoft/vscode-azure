@@ -85,9 +85,21 @@ folder, hydrate azd state, choose subscription/location, choose the project
 name, confirm, generate Bicep/`azure.yaml`, create the azd environment,
 provision, deploy when eligible, and show the endpoint.
 
-Product steps select one of 13 retained build presets and resolve application,
-Functions API, and output locations. Defaults come from framework detection,
-the selected preset, and `swa-cli.config.json`.
+Product steps resolve the application, Functions API, and output locations
+without asking. A layout the user has already declared in `swa-cli.config.json`
+wins, since that file is what a later `swa build` reads. Otherwise
+`DetectStaticWebAppConfigStep` calls `swa init --yes` through `SwaCliService`,
+which keeps the framework table the CLI's to maintain rather than mirroring it
+here. Creation therefore requires `swa`; when it is missing or too old the step
+fails with the same actionable install toast the rest of the product uses.
+
+Detection is read-only even though `swa init` is a scaffolding command. The CLI
+scans its working directory but writes to the path given by `--config`, and
+stores what it found verbatim rather than rebasing it onto the configuration's
+own location. Pointing `--config` at a scratch directory therefore yields the
+detection-only mode the CLI does not otherwise offer, and the project is left
+untouched. A detection run still exits zero when it finds nothing, so the
+result is read back by name instead of trusted from the exit code.
 
 The generated Bicep provisions a Static Web App through the pinned
 `avm/res/web/static-site:0.9.5` module. The plan defaults to Free; changing the
@@ -95,9 +107,13 @@ The generated Bicep provisions a Static Web App through the pinned
 supported SKU. The resource receives the shared azd environment/service tags.
 
 The `host: staticwebapp` azd service records `project` and `dist` for deployable
-static artifacts. Empty, `/`, and `.` output locations can provision the ARM
-resource but do not produce an azd deploy target, so `OutputLocationStep` warns
-while prompting.
+static artifacts. `canAzdDeployStaticWebApp` is the single gate on whether an
+output location produces one. Empty, `/`, and `.` provision the ARM resource
+with nothing to deploy. So does `.next`: the CLI reports one output location per
+framework, so a server-rendered Next.js project and its static export both
+resolve to the server build, which would be a broken site if uploaded as static
+content. In every case the wizard provisions and warns rather than deploying,
+pointing at `swa-cli.config.json` as the way to state a real build output.
 
 ## Configuring CI/CD
 
@@ -127,7 +143,7 @@ Two similarly named files have separate owners:
 | File | Purpose |
 |---|---|
 | `staticwebapp.config.json` | Service routing, fallback, authentication, and related runtime configuration |
-| `swa-cli.config.json` | Local SWA CLI configuration; creation reads location defaults from it |
+| `swa-cli.config.json` | Local SWA CLI configuration; creation reads the app/API/output layout from it when present |
 
 The manifest associates the public schemas for both files.
 

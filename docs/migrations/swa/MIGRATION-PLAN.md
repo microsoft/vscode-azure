@@ -85,10 +85,11 @@ steps. Product steps provide detection and Static Web Apps locations.
 - [x] Generate Static Web Apps infrastructure through the pinned
   `avm/res/web/static-site:0.9.5` module and shared Bicep generation step.
   <- SWA-064
-- [x] Retain all 13 source build presets as prompt defaults. <- SWA-066
-- [x] Rebuild framework, API, language, and Git metadata detection over shared
-  workspace indexing. <- SWA-067
-- [x] Read `swa-cli.config.json` for creation prompt defaults.
+- [x] Delegate the build-preset table to the Static Web Apps CLI's own framework
+  detection instead of maintaining a copy of it here. <- SWA-066
+- [x] Resolve application, API, and output locations from `swa init --yes` run
+  against a scratch config path, so detection stays read-only. <- SWA-067
+- [x] Let a user-authored `swa-cli.config.json` override CLI detection.
   <- SWA-053
 - [x] Replace native workflow polling with endpoint display and a separate
   deployment route. <- SWA-065
@@ -122,9 +123,9 @@ Mapping: azd owns deployment end to end. Product code contributes only a
   push, provider authentication, and generated CI/CD files, rather than
   reproducing those decisions from Git metadata. <- SWA-010, SWA-065
 - [ ] Resolve the review ownership boundary for product parsing/editing of
-  `azure.yaml` and build-preset scaffolding; either move the capabilities
-  upstream/shared or record an explicit accepted boundary.
-  <- SWA-012, SWA-053, SWA-061, SWA-064, SWA-066, SWA-067
+  `azure.yaml`; either move the capability upstream/shared or record an explicit
+  accepted boundary.
+  <- SWA-012, SWA-053, SWA-061, SWA-064
 
 ## Slice 5 -- Shared tool acquisition
 
@@ -175,9 +176,9 @@ Mapping: `SwaInstaller` implements the shared `ToolInstaller` contract;
 
 ## Open follow-ups
 
-- [ ] Resolve the four ownership-boundary review threads on PR #237 before
+- [ ] Resolve the remaining ownership-boundary review threads on PR #237 before
   declaring creation/deployment architecture final.
-  <- SWA-012, SWA-061, SWA-064, SWA-065, SWA-066, SWA-067
+  <- SWA-012, SWA-061, SWA-064, SWA-065
 
 ## Drift record
 

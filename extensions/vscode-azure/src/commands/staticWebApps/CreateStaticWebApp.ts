@@ -21,11 +21,8 @@ import { ShowEndpointUrlStep } from '../../azd/wizard/ShowEndpointUrlStep';
 import { IAzureViewDataTree } from '../../services';
 import type { ManagedCommand } from '../ManagedCommand';
 import { staticWebAppLocationNames, type CreateStaticWebAppContext } from './CreateStaticWebAppContext';
-import { ApiLocationStep } from './steps/ApiLocationStep';
-import { AppLocationStep } from './steps/AppLocationStep';
 import { ConfigureStaticWebAppAzureYamlStep } from './steps/ConfigureStaticWebAppAzureYamlStep';
-import { OutputLocationStep } from './steps/OutputLocationStep';
-import { PickBuildPresetStep } from './steps/PickBuildPresetStep';
+import { DetectStaticWebAppConfigStep } from './steps/DetectStaticWebAppConfigStep';
 
 /**
  * Creates and optionally deploys a Static Web App through azd-generated Bicep.
@@ -55,10 +52,7 @@ export class CreateStaticWebApp implements ManagedCommand {
             get(HydratableChooseSubscriptionStep),
             get(HydratableChooseLocationStep),
             get(ProjectNameStep),
-            get(PickBuildPresetStep),
-            get(AppLocationStep),
-            get(ApiLocationStep),
-            get(OutputLocationStep),
+            get(DetectStaticWebAppConfigStep),
             get(ConfirmProvisionStep),
         ];
 

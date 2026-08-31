@@ -15,13 +15,14 @@ read-only unless this file is edited and reconfirmed with the reviewer.
 | **Rows** | 67 |
 | **Signed off by** | Brandon Waterloo (@bwateratmsft) |
 | **Date** | 2026-08-28 |
+| **Revised** | SWA-066 changed from Migrate to Adapt during PR #237 review, when framework detection moved to the Static Web Apps CLI. Awaiting reconfirmation. |
 
 ## Dispositions
 
 | Disposition | Count | Meaning in this record |
 |---|---:|---|
-| Migrate | 9 | Preserve the source capability using monorepo patterns |
-| Adapt | 13 | Preserve the user goal with intentionally different behavior or UX |
+| Migrate | 8 | Preserve the source capability using monorepo patterns |
+| Adapt | 14 | Preserve the user goal with intentionally different behavior or UX |
 | Reuse | 9 | Satisfy the feature by wiring an existing shared capability |
 | Drop | 30 | Do not carry the source capability forward |
 | Defer | 6 | Retain the goal for later tracked work |
@@ -103,8 +104,8 @@ behavior are Adapt outcomes.
 | SWA-063 | Create repository/add remote/push during create | **Defer** | Repository bootstrap requires a separate ownership and consent decision; no tracking issue is currently linked. |
 | SWA-064 | Direct ARM creation and native workflow generation | **Adapt** | Generated Bicep provisions the resource and azd owns provisioning/deployment. |
 | SWA-065 | Post-create Actions polling and notification | **Adapt** | Endpoint display and a separate deployment-routing command replace native Actions polling. |
-| SWA-066 | Build preset table | **Migrate** | The 13 source presets supply creation defaults. |
-| SWA-067 | Framework and API detection | **Adapt** | Detection is rebuilt over workspace indexing and feeds azd/Bicep prompt defaults. |
+| SWA-066 | Build preset table | **Adapt** | The user goal -- correct locations without asking -- is preserved by consuming the Static Web Apps CLI's own framework table instead of maintaining a copy of it. |
+| SWA-067 | Framework and API detection | **Adapt** | Detection is delegated to `swa init`, run against a scratch config path so it stays read-only, and feeds azd/Bicep parameters. |
 
 ## Cross-cutting directives
 

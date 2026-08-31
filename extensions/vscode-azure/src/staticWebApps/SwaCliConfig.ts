@@ -85,27 +85,25 @@ export async function tryGetStaticWebAppsCliConfig(
 }
 
 /**
- * Reads a project layout path the user has already declared in
- * {@linkcode SwaCliConfigFileName}, for use as prompt prefill.
+ * Reads the Static Web Apps CLI configuration a user has already authored.
  *
  * @remarks
- * This file is the canonical home for the three paths: it names all of them
- * identically, `swa init` writes it, and `azd deploy` reaches them by running
- * `swa build`, which reads it. Preferring it keeps one source of truth instead
- * of a parallel copy the user has to keep in sync.
+ * This file is the canonical home for a project's layout: it names every path
+ * identically, `swa init` writes it, and `azd deploy` reaches those paths by
+ * running `swa build`, which reads it. Preferring it keeps one source of truth
+ * instead of a parallel copy the user has to keep in sync.
  *
- * A configuration file may declare several named configurations. Neither azd nor
- * this extension passes `--config-name`, and in that case the CLI resolves the
- * first one, so the prefill mirrors that rather than inventing its own rule --
- * the value shown is the one a later `swa build` would actually use. A
- * malformed file is treated as absent: prefill is a convenience, and failing a
- * creation wizard over it would be hostile.
+ * A configuration file may declare several named configurations. Neither azd
+ * nor this extension passes `--config-name`, and in that case the CLI resolves
+ * the first one, so this mirrors that rather than inventing its own rule -- the
+ * values returned are the ones a later `swa build` would actually use. A
+ * malformed file is treated as absent, since failing a creation wizard over it
+ * would be hostile.
  */
-export async function getStaticWebAppCliLocation(
+export async function tryGetStaticWebAppCliOptions(
     code: IVsCode,
-    key: 'appLocation' | 'apiLocation' | 'outputLocation',
     workspaceFolder: vscode.Uri | undefined,
-): Promise<string | undefined> {
+): Promise<SWACLIOptions | undefined> {
     if (!workspaceFolder) {
         return undefined;
     }
@@ -117,5 +115,5 @@ export async function getStaticWebAppCliLocation(
         return undefined;
     }
 
-    return Object.values(config?.configurations ?? {})[0]?.[key];
+    return Object.values(config?.configurations ?? {})[0];
 }

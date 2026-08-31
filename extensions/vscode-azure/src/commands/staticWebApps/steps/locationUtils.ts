@@ -3,25 +3,21 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { showSmartInputBox, type IActionContext, type ICodeContext } from '@microsoft/vscode-azure-utils';
-import { parseDocument } from 'yaml';
+import type { IActionContext } from '@microsoft/vscode-azure-utils';
 
 /** Telemetry taxonomy retained from the source location prompts. */
-export type StaticWebAppLocationClassification = 'empty' | 'default' | 'setting' | 'nonDefault';
+export type StaticWebAppLocationClassification = 'empty' | 'default' | 'nonDefault';
 
 /**
- * Adds source-compatible classification and setting-match telemetry without
- * recording the user-entered path itself.
+ * Records how a resolved location compares to the Static Web Apps default,
+ * without recording the path itself.
  */
 export function addLocationTelemetry(
     context: IActionContext,
     key: 'appLocation' | 'apiLocation' | 'outputLocation',
     value: string | undefined,
     defaultValue: string,
-    valueFromSetting?: string,
 ): void {
-    context.telemetry.properties[`${key}HasSetting`] = String(!!valueFromSetting);
-    context.telemetry.properties[`${key}MatchesSetting`] = String(defaultValue === valueFromSetting);
     if (value === undefined) {
         return;
     }
@@ -31,8 +27,6 @@ export function addLocationTelemetry(
         classification = 'empty';
     } else if (value === defaultValue) {
         classification = 'default';
-    } else if (value === valueFromSetting) {
-        classification = 'setting';
     } else {
         classification = 'nonDefault';
     }
@@ -40,44 +34,21 @@ export function addLocationTelemetry(
 }
 
 /**
- * Verifies that a path round-trips when embedded as the quoted scalar used by
- * Static Web Apps workflow YAML.
+ * Build directories that hold a framework's server output rather than files
+ * that can be served as-is.
+ *
+ * The Static Web Apps CLI reports one output location per framework, so a
+ * server-rendered project and its static-export variant both resolve to the
+ * server build. Uploading that as static content produces a broken site, so it
+ * is treated the same as having no deployable output.
  */
-export function isYamlSafeLocation(value: string, key: 'app_location' | 'api_location' | 'output_location'): boolean {
-    for (const character of value) {
-        const code = character.charCodeAt(0);
-        if (code <= 8 || code === 11 || code === 12 || (code >= 14 && code <= 31) || code === 10 || code === 13) {
-            return false;
-        }
-    }
-    const document = parseDocument(`${key}: "${value}"`);
-    return document.errors.length === 0 && document.get(key) === value;
-}
+const serverBuildLocations: readonly string[] = ['.next'];
 
 /** Whether current azd can deploy the selected output as a distinct artifact directory. */
 export function canAzdDeployStaticWebApp(outputLocation: string): boolean {
     const normalized = outputLocation.trim().replace(/\\/g, '/').replace(/^\.\//, '');
-    return normalized.length > 0 && normalized !== '/' && normalized !== '.';
-}
-
-/** Prompts for a Static Web Apps path that survives the workflow YAML it is written into. */
-export async function promptForYamlSafeLocation(
-    ctx: ICodeContext,
-    options: {
-        readonly key: 'app_location' | 'api_location' | 'output_location';
-        readonly value: string;
-        readonly prompt: string;
-        /** Rejects values the key disallows beyond YAML safety. */
-        readonly validate?: (input: string) => string | undefined;
-    },
-): Promise<string> {
-    return (await showSmartInputBox(ctx, {
-        value: options.value,
-        prompt: options.prompt,
-        showBack: true,
-        validateInput: input => options.validate?.(input)
-            ?? (isYamlSafeLocation(input, options.key)
-                ? undefined
-                : ctx.code.l10n.t('Enter a value that is safe to use in YAML.')),
-    })).trim();
+    return normalized.length > 0
+        && normalized !== '/'
+        && normalized !== '.'
+        && !serverBuildLocations.includes(normalized.toLowerCase());
 }

@@ -15,10 +15,8 @@ import { StaticWebAppEnvironmentPropertiesAdapter } from '../properties/adapters
 import type { ProductRegistrar } from '../registration/ProductRegistrar';
 import { StaticWebAppSettingsAdapter } from '../settings/adapters/StaticWebAppSettingsAdapter';
 import { ISwaCliService, SwaCliService } from '../staticWebApps/SwaCliService';
-import { IWorkspaceDetector } from '../utils/workspaceIndex/WorkspaceDetector';
 import { IStaticWebAppDataProvider, StaticWebAppDataProvider } from '../tree/resources/staticWebApps/StaticWebAppDataProvider';
 import { StaticWebAppViewProvider } from '../tree/resources/staticWebApps/StaticWebAppViewProvider';
-import { staticWebAppProjectDetector } from '../commands/staticWebApps/steps/frameworkDetection';
 
 /** Contribute all Azure Static Web Apps services and UI integrations. */
 export function registerStaticWebApps(registrar: ProductRegistrar): void {
@@ -29,7 +27,6 @@ export function registerStaticWebApps(registrar: ProductRegistrar): void {
     registrar.registerBinding(container => {
         container.bind(StaticWebAppSettingsAdapter).toSelf().inSingletonScope();
         container.bind(ISwaCliService).to(SwaCliService).inSingletonScope();
-        container.bind(IWorkspaceDetector).toConstantValue(staticWebAppProjectDetector);
         container.bind(IPropertiesAdapter).to(StaticWebAppEnvironmentPropertiesAdapter).inSingletonScope();
     });
 

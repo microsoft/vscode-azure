@@ -7,6 +7,7 @@ import { IActionExecutor, IProcessExecutor, IVsCode, command, isProcessError, sh
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
 import * as semver from 'semver';
 import type * as vscode from 'vscode';
+import { ITempDirManager } from '../azd/TempDirManager';
 import { IToolService } from '../tools/ToolService';
 import { getVersionFromOutput } from '../tools/toolInstallerHelpers';
 import { SwaCliConfigFileName, tryGetStaticWebAppsCliConfig, type SWACLIOptions } from './SwaCliConfig';
@@ -17,6 +18,14 @@ export const ISwaCliService: ServiceIdentifier<ISwaCliService> = Symbol.for('ISw
 export const SwaCommand = 'swa';
 
 /**
+ * Configuration name written by a detection run.
+ *
+ * Naming the entry explicitly means the result is read back by key rather than
+ * by position, which the CLI would otherwise derive from the folder name.
+ */
+const DetectionConfigName = 'detected';
+
+/**
  * Minimum `swa` version required by this extension.
  *
  * v2 is the current major, and is what every install method below reaches.
@@ -25,29 +34,28 @@ export const MinSwaVersion = '2.0.0';
 
 export interface ISwaCliService {
     /**
-     * Runs `swa init --yes` in {@linkcode cwd}, letting the CLI detect the
-     * project's framework and write the result to {@linkcode SwaCliConfigFileName}.
+     * Detects a project's Static Web Apps layout with `swa init --yes`, without
+     * modifying the project.
      *
      * @remarks
-     * **This writes to the user's workspace.** The CLI overwrites the
-     * configuration entry it targets without asking once `--yes` is passed;
-     * other named configurations in the file are preserved. Callers that must
-     * not clobber an existing entry should check for one first.
+     * The CLI scans its working directory but writes to the path given by
+     * `--config`, and stores the detected values verbatim rather than rebasing
+     * them onto the configuration's own location. Pointing `--config` at a
+     * throwaway directory therefore turns `swa init` into the detection-only
+     * mode it does not otherwise offer, leaving {@linkcode projectFolder}
+     * untouched.
      *
-     * @param cwd - Project folder to detect in. The CLI detects from its own
-     *   working directory, so this also scopes the detection.
-     * @param configName - Configuration entry to write. When omitted the CLI
-     *   names the entry after the folder, and the first entry in the file is
-     *   returned -- which is what `swa build` and `azd` resolve when no name is
-     *   passed, but need not be the entry just written if the file already had
-     *   several. Pass a name when the caller needs certainty.
+     * @param projectFolder - Project to detect. Doubles as the CLI's working
+     *   directory, so it also scopes the scan.
      *
-     * @returns The configuration the CLI wrote.
+     * @returns The layout the CLI detected. Paths are relative to
+     *   {@linkcode projectFolder}, except `outputLocation`, which the CLI
+     *   reports relative to the detected `appLocation`.
      *
-     * @throws When the CLI is missing, too old, exits non-zero, or completes
-     *   without producing a configuration.
+     * @throws When the CLI is missing, too old, exits non-zero, or detects
+     *   nothing.
      */
-    init(cwd: vscode.Uri, configName?: string): Promise<SWACLIOptions>;
+    detect(projectFolder: vscode.Uri): Promise<SWACLIOptions>;
 
     /**
      * Returns whether the resolved `swa` satisfies {@linkcode minVersion},
@@ -69,47 +77,45 @@ export class SwaCliService implements ISwaCliService {
         @inject(IProcessExecutor) private readonly processExecutor: IProcessExecutor,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IToolService) private readonly tools: IToolService,
+        @inject(ITempDirManager) private readonly tempDirs: ITempDirManager,
     ) { }
 
     /** @inheritdoc */
-    public async init(cwd: vscode.Uri, configName?: string): Promise<SWACLIOptions> {
-        const configUri = this.code.Uri.joinPath(cwd, SwaCliConfigFileName);
+    public async detect(projectFolder: vscode.Uri): Promise<SWACLIOptions> {
+        const scratchDir = await this.tempDirs.createTempDir();
+        const configUri = this.code.Uri.joinPath(scratchDir, SwaCliConfigFileName);
 
-        // `--config` is passed explicitly because the CLI otherwise resolves the
-        // file relative to its own working directory, which it may change while
-        // loading an existing configuration.
-        let cli = command(this.getSwaCommand()).arg('init');
-        if (configName) {
-            cli = cli.arg(configName);
-        }
-        cli = cli.arg('--yes').namedArg('--config', configUri.fsPath);
+        // `--config` is the write target while the scan follows the working
+        // directory, so aiming it outside the project keeps detection read-only.
+        const cli = command(this.getSwaCommand())
+            .arg('init')
+            .arg(DetectionConfigName)
+            .arg('--yes')
+            .namedArg('--config', configUri.fsPath);
 
         try {
             await this.processExecutor.spawn({
                 execution: 'background',
                 command: cli,
-                cwd,
+                cwd: projectFolder,
             });
         } catch (e) {
             throw await this.wrapSwaError(e);
         }
 
-        // The CLI reports a detection or write failure only on its own output
-        // and still exits zero, so a successful spawn does not establish that a
+        // The CLI reports a detection failure only on its own output and still
+        // exits zero, so a successful spawn does not establish that a
         // configuration exists. Read it back instead of trusting the exit code.
-        const config = await tryGetStaticWebAppsCliConfig(this.code, cwd);
-        const written = configName
-            ? config?.configurations?.[configName]
-            : Object.values(config?.configurations ?? {})[0];
+        const config = await tryGetStaticWebAppsCliConfig(this.code, scratchDir);
+        const detected = config?.configurations?.[DetectionConfigName];
 
-        if (!written) {
+        if (!detected) {
             throw new Error(this.code.l10n.t(
-                "The Static Web Apps CLI did not write a configuration to '{0}'.",
-                SwaCliConfigFileName,
+                'The Static Web Apps CLI could not detect this project.',
             ));
         }
 
-        return written;
+        return detected;
     }
 
     /** @inheritdoc */

@@ -17,8 +17,8 @@ root is named.
 
 | Disposition | Rows | Current result |
 |---|---:|---|
-| Migrate | 9 | present |
-| Adapt | 13 | present, with ownership gaps noted below |
+| Migrate | 8 | present |
+| Adapt | 14 | present, with ownership gaps noted below |
 | Reuse | 9 | shared capabilities wired |
 | Drop | 30 | confirmed absent from the SWA product surface |
 | Defer | 6 | unchecked in [MIGRATION-PLAN.md](MIGRATION-PLAN.md) |
@@ -57,10 +57,10 @@ root is named.
 | SWA-027 | View properties | Adapt | landed | Shared `ViewProperties` command; `properties/adapters/StaticWebAppEnvironmentPropertiesAdapter.ts` supplies the environment payload. |
 | SWA-028 | Functions documentation | Migrate | landed | `products/registerStaticWebApps.ts`; `commands/staticWebApps/ShowDocumentation.ts`. |
 | SWA-029 | Output timestamps setting | Drop | absent | No corresponding target setting. |
-| SWA-030 | App subpath setting | Drop | absent | No corresponding target setting; creation uses detection, presets, and CLI config. |
-| SWA-031 | API subpath setting | Drop | absent | No corresponding target setting; creation uses detection, presets, and CLI config. |
+| SWA-030 | App subpath setting | Drop | absent | No corresponding target setting; creation resolves locations from the SWA CLI or `swa-cli.config.json`. |
+| SWA-031 | API subpath setting | Drop | absent | No corresponding target setting; creation resolves locations from the SWA CLI or `swa-cli.config.json`. |
 | SWA-032 | Deprecated artifact subpath setting | Drop | absent | Only `outputSubpath` is contributed. |
-| SWA-033 | Output subpath setting | Drop | absent | No corresponding target setting; creation uses detection, presets, and CLI config. |
+| SWA-033 | Output subpath setting | Drop | absent | No corresponding target setting; creation resolves locations from the SWA CLI or `swa-cli.config.json`. |
 | SWA-034 | CLI warning setting | Drop | absent | No target setting or activation warning. |
 | SWA-035 | Azure Resources resolver | Adapt | landed | `products/registerStaticWebApps.ts` registers product data/view providers. |
 | SWA-036 | Site root node | Adapt | landed | `tree/resources/staticWebApps/StaticWebAppViewProvider.ts`. |
@@ -80,7 +80,7 @@ root is named.
 | SWA-050 | Debug provider | Defer | not landed | Issue #339; unchecked plan task. |
 | SWA-051 | Task provider | Defer | not landed | Issue #339; unchecked plan task. |
 | SWA-052 | Debug/task termination lifecycle | Defer | not landed | Issue #339; unchecked plan task. |
-| SWA-053 | SWA CLI config parser | Migrate | landed | `staticWebApps/SwaCliConfig.ts`; creation location steps consume it. |
+| SWA-053 | SWA CLI config parser | Migrate | landed | `staticWebApps/SwaCliConfig.ts`; `DetectStaticWebAppConfigStep.ts` prefers a user-authored config over CLI detection. |
 | SWA-054 | Data API config detector | Defer | not landed | Issue #339; unchecked plan task. |
 | SWA-055 | JSON validation | Migrate | landed | Two SWA schema associations in `extensions/vscode-azure/package.json`. |
 | SWA-056 | `$swa-watch` matcher | Defer | not landed | Issue #339; unchecked plan task. |
@@ -93,8 +93,8 @@ root is named.
 | SWA-063 | Repository bootstrap | Defer | delegated | `azd pipeline config` creates and pushes a repository when none exists. |
 | SWA-064 | ARM creation/native workflow | Adapt | landed | `extensions/vscode-azure/resources/templates/staticWebApp/main.bicep`; shared azd provision/deploy steps. |
 | SWA-065 | Post-create Actions polling | Adapt | landed with changed UX | Shared endpoint display; `ConfigureStaticWebAppCicd.ts` delegates CI/CD to `azd pipeline config`. |
-| SWA-066 | Build presets | Migrate | landed, ownership review open | `commands/staticWebApps/buildPresets.ts` and `PickBuildPresetStep.ts`. |
-| SWA-067 | Framework/API detection | Adapt | landed, ownership review open | `commands/staticWebApps/steps/frameworkDetection.ts`; shared workspace index. |
+| SWA-066 | Build presets | Adapt | delegated | The Static Web Apps CLI owns the framework table; `DetectStaticWebAppConfigStep.ts` consumes it instead of mirroring 13 presets. |
+| SWA-067 | Framework/API detection | Adapt | delegated | `SwaCliService.detect()` runs `swa init --yes` against a scratch config path, leaving the project untouched. |
 
 ## Artifact status
 
@@ -135,10 +135,11 @@ searched for the source-specific command IDs/types:
 
 ## Known gaps and uncertainties
 
-1. **Ownership-boundary review threads remain unresolved on PR #237.**
-   The current branch parses/edits `azure.yaml` and owns a build-preset picker.
-   Review feedback asks whether these belong in azd instead. Rows are reported
-   as landed, not as finally accepted design.
+1. **One ownership-boundary review thread remains unresolved on PR #237.**
+   The current branch parses/edits `azure.yaml`, and review feedback asks whether
+   that belongs in azd instead. Those rows are reported as landed, not as finally
+   accepted design. The related build-preset and framework-detection concern is
+   resolved: both are now delegated to the Static Web Apps CLI.
 2. **Debugging and generated tasks are not present.** Issue
    [#339](https://github.com/microsoft/vscode-azure/issues/339) tracks the five
    related deferred rows after native Functions debugging.

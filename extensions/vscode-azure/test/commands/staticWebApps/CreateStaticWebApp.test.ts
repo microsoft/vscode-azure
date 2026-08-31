@@ -10,14 +10,16 @@ import { createMockCodeContext, MockOutputChannel, MockUri, respondToPrompts } f
 import type * as vscode from 'vscode';
 import { TempDirManager } from '../../../src/azd/TempDirManager';
 import { CreateStaticWebApp } from '../../../src/commands/staticWebApps/CreateStaticWebApp';
+import type { SWACLIOptions } from '../../../src/staticWebApps/SwaCliConfig';
 import { createMockAzdService } from '../../azd/MockAzdService';
+import { createMockSwaCliService } from '../../staticWebApps/MockSwaCliService';
 import { createMockArmProvider, createMockCodeProvider } from '../../tree/activity/MockActivityProviders';
 import { createWizardCommandContainer } from '../createWizardCommandContainer';
 
 describe('CreateStaticWebApp (unit)', () => {
     const subscription = makeSubscription({ subscriptionId: 'sub-1', displayName: 'Test Sub' });
 
-    function createCommand(workspace: boolean, options: { readonly azdVersionOk?: boolean } = {}) {
+    function createCommand(workspace: boolean, options: { readonly azdVersionOk?: boolean, readonly detected?: SWACLIOptions } = {}) {
         const { ctx, mock } = createMockCodeContext();
         if (workspace) {
             mock.workspaceFolders.push({ uri: MockUri.file('/workspace'), name: 'workspace', index: 0 });
@@ -53,6 +55,7 @@ describe('CreateStaticWebApp (unit)', () => {
             ]),
             armProvider: createMockArmProvider(),
             codeProvider: createMockCodeProvider(),
+            swaCli: createMockSwaCliService(options.detected ?? { appLocation: '/', apiLocation: '', outputLocation: 'build' }),
         });
         return { command: container.get(CreateStaticWebApp), mock, azd, actionContext };
     }
@@ -63,14 +66,12 @@ describe('CreateStaticWebApp (unit)', () => {
             { pick: 'sub-1' },
             { pick: 'East US 2' },
             { input: 'my-swa' },
-            { pick: 'React' },
-            'acceptDefault',
             'acceptDefault',
         ]);
 
         await command.execute();
 
-        expect(actionContext.telemetry.properties.buildPreset).to.equal('React');
+        expect(actionContext.telemetry.properties.swaLayoutSource).to.equal('cli');
         expect(azd.provision.mock.callCount()).to.equal(1);
         expect(azd.deploy.mock.callCount()).to.equal(0);
         expect(azd.init.mock.callCount()).to.equal(1);
@@ -84,8 +85,6 @@ describe('CreateStaticWebApp (unit)', () => {
             { pick: 'sub-1' },
             { pick: 'East US 2' },
             { input: 'my-swa' },
-            { pick: 'React' },
-            'acceptDefault',
             'acceptDefault',
         ]);
 
