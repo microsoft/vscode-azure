@@ -145,12 +145,6 @@ export const MockProgressLocation = {
     Notification: 15,
 } satisfies typeof vscode.ProgressLocation;
 
-/** Test stand-in for {@linkcode vscode.QuickPickItemKind}. */
-export const MockQuickPickItemKind = {
-    Separator: -1,
-    Default: 0,
-} satisfies typeof vscode.QuickPickItemKind;
-
 // Compile-time checks: each value type is mutually assignable to its vscode
 // counterpart, so the shapes are faithful in both directions.
 /* eslint-disable @typescript-eslint/no-unused-vars */

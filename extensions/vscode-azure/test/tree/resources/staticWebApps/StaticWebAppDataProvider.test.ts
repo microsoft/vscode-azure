@@ -26,8 +26,7 @@ describe('StaticWebAppDataProvider (unit)', () => {
         readonly functions?: { readonly id?: string; readonly name?: string; readonly functionName?: string }[];
     }) {
         const { executor } = createTestActionExecutor();
-        const getExtension = mock.fn(() => undefined);
-        const code = createMockVsCode({ extensions: { getExtension } as never }).vscode;
+        const code = createMockVsCode().vscode;
         const builds = options?.builds ?? [{
             id: '/builds/default',
             name: 'default',

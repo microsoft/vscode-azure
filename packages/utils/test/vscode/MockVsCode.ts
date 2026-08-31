@@ -16,7 +16,7 @@ import { MockQuickPick } from './input/MockQuickPick';
 import { MockFileChangeType, MockFilePermission, MockFileSystem, MockFileSystemError, MockFileType } from './MockFileSystem';
 import { MockOutputChannel } from './MockOutputChannel';
 import { MockUri } from './MockUri';
-import { MockConfigurationTarget, MockMarkdownString, MockProgressLocation, MockQuickPickItemKind, MockRelativePattern, MockShellExecution, MockTask, MockTaskScope, MockThemeColor, MockThemeIcon, MockTreeItemCollapsibleState } from './MockValueTypes';
+import { MockConfigurationTarget, MockMarkdownString, MockProgressLocation, MockRelativePattern, MockShellExecution, MockTask, MockTaskScope, MockThemeColor, MockThemeIcon, MockTreeItemCollapsibleState } from './MockValueTypes';
 import { MockTreeItem } from './tree/MockTreeItem';
 
 /**
@@ -469,22 +469,16 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         executeTask,
         onDidEndTaskProcess: taskProcessEndEmitter.event,
     };
-    const extensions = {
-        all: [],
-        getExtension: mock.fn(() => undefined),
-    };
 
     const mockVsCode = {
         authentication,
         commands,
         env,
-        extensions,
         tasks,
         window,
         workspace,
         l10n: { t },
         QuickInputButtons,
-        QuickPickItemKind: MockQuickPickItemKind,
         TreeItem: MockTreeItem,
         TreeItemCollapsibleState: MockTreeItemCollapsibleState,
         ConfigurationTarget: MockConfigurationTarget,
