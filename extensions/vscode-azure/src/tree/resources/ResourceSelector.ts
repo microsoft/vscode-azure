@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { getNodeType, isGenericResource, isVirtualResource, nodeExperience, resourceExperience, type ConcreteAzureNode, type GenericResource, type VirtualResource } from '@microsoft/vscode-azure-azutils';
+import { classifyForResource, getNodeType, isGenericResource, isVirtualResource, nodeExperience, type ConcreteAzureNode, type GenericResource, type NodeExperienceTree, type VirtualResource } from '@microsoft/vscode-azure-azutils';
 import { IActionExecutor, ICodeContext, IOutputChannel } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
 import { inject, injectable } from 'inversify';
@@ -56,6 +56,25 @@ export interface NarrowingResolveOptions<TNode extends ConcreteAzureNode> extend
 /** Options for selecting a virtual resource from a key or through the resource tree. */
 export interface SelectVirtualOptions<TNode extends VirtualResource> extends Omit<NarrowingResolveOptions<TNode>, 'canHandle'> {
     readonly canHandle: (node: VirtualResource) => node is TNode;
+}
+
+/** Options for selecting a resource from a key or through the resource tree. */
+export interface SelectResourceOptions {
+    /** Tree-item key supplied by the invocation, or omitted to open the picker. */
+    readonly key?: string;
+    /** Message overrides used when direct key resolution fails. */
+    readonly messages?: ResolveMessages;
+    /** Restricts selection to this logical resource type, compared case-insensitively. */
+    readonly logicalType?: string;
+    /** Further restricts which resources are selectable. */
+    readonly canHandle?: (resource: GenericResource) => boolean;
+    /** Picker title used when no key was supplied. */
+    readonly title?: string;
+}
+
+/** Resource selection options whose predicate also narrows the return type. */
+export interface NarrowingSelectResourceOptions<TResource extends GenericResource> extends SelectResourceOptions {
+    readonly canHandle: (resource: GenericResource) => resource is TResource;
 }
 
 /** Outcome of a key lookup: either the node, or why there isn't one. */
@@ -124,34 +143,39 @@ export class ResourceSelector {
     }
 
     /**
-     * Resolves a resource of type {@linkcode T}.
+     * Resolves an accepted {@linkcode GenericResource}.
      *
-     * @param logicalType - The logical resource type to filter on
-     *   (e.g. {@linkcode AcrResourceType}). Both paths honor it: the picker
-     *   offers only resources of this type, and a `key` naming a resource of
-     *   any other type is rejected. Compared case-insensitively.
-     * @param key - Optional tree-item key. When provided, the resource
-     *   is looked up directly from the data cache. When omitted, the
-     *   user is prompted to pick a resource via a quick-pick wizard.
+     * Both direct key resolution and the picker honor
+     * {@linkcode SelectResourceOptions.logicalType logicalType} and
+     * {@linkcode SelectResourceOptions.canHandle canHandle}.
+     *
      * @returns The resolved resource.
-     * @throws If `key` is provided but does not identify a resource of
-     *   `logicalType` in the data cache (e.g. stale tree item or invalid
-     *   invocation), or if the user cancels the picker when `key` is not
-     *   provided.
+     * @throws If the supplied key does not identify an accepted resource, or if
+     *   the user cancels the picker.
      */
-    public async selectResource<T extends GenericResource>(logicalType: string, key?: string): Promise<T> {
+    public selectResource<TResource extends GenericResource>(options: NarrowingSelectResourceOptions<TResource>): Promise<TResource>;
+    public selectResource(options: SelectResourceOptions): Promise<GenericResource>;
+    public async selectResource(options: SelectResourceOptions): Promise<GenericResource> {
+        const canHandle = (node: ConcreteAzureNode): node is GenericResource =>
+            isGenericResource(node)
+            && (!options.logicalType || node.logicalType.toLowerCase() === options.logicalType.toLowerCase())
+            && (!options.canHandle || options.canHandle(node));
         const notFound = this.ctx.code.l10n.t('Resource not found in the resources view. Try refreshing the resources view and running the command again.');
         return this.selectOrPrompt({
-            key,
-            canHandle: (node): node is GenericResource => isGenericResource(node) && node.logicalType.toLowerCase() === logicalType.toLowerCase(),
-            messages: { missingNode: notFound, invalidNode: notFound },
-        }, () => resourceExperience<T>({
+            key: options.key,
+            canHandle,
+            messages: { missingNode: notFound, invalidNode: notFound, ...options.messages },
+        }, () => nodeExperience({
             ...this.ctx,
-            tree: this.viewTree,
+            tree: this.createPickerTree(),
             dataItemTree: this.cache,
-            logicalType,
             output: this.output,
-        })) as Promise<T>;
+            title: options.title ?? this.ctx.code.l10n.t('Select Resource'),
+            stepName: 'resource',
+            canHandle,
+            classify: (key, _treeItem, node) =>
+                classifyForResource(key, node, options.logicalType, resource => !options.canHandle || options.canHandle(resource)),
+        }));
     }
 
     /**
@@ -166,17 +190,7 @@ export class ResourceSelector {
             { ...options, canHandle },
             () => nodeExperience({
                 ...this.ctx,
-                tree: {
-                    getChildren: async key => {
-                        const parent = key ? this.cache.get(key) : undefined;
-                        if (parent) {
-                            await this.cache.loadAll(parent);
-                        }
-
-                        return this.viewTree.getChildren(key);
-                    },
-                    getTreeItem: key => this.viewTree.getTreeItem(key),
-                },
+                tree: this.createPickerTree(),
                 dataItemTree: this.cache,
                 output: this.output,
                 title: this.ctx.code.l10n.t('Select Resource'),
@@ -207,6 +221,21 @@ export class ResourceSelector {
      */
     public async whenEnriched<T extends GenericResource>(resource: GenericResource): Promise<T> {
         return this.cache.whenEnriched<T>(resource);
+    }
+
+    /** Creates a picker tree that exhausts pagination before presenting a branch. */
+    private createPickerTree(): NodeExperienceTree {
+        return {
+            getChildren: async key => {
+                const parent = key ? this.cache.get(key) : undefined;
+                if (parent) {
+                    await this.cache.loadAll(parent);
+                }
+
+                return this.viewTree.getChildren(key);
+            },
+            getTreeItem: key => this.viewTree.getTreeItem(key),
+        };
     }
 
     /** Resolves a supplied key or runs the picker for a command-palette invocation. */

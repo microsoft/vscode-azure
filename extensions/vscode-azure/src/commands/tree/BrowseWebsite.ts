@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { isGenericResource } from '@microsoft/vscode-azure-azutils';
 import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IResourceSelector } from '../../tree/resources/ResourceSelector';
@@ -43,9 +42,9 @@ export class BrowseWebsite implements ManagedCommand {
     public async execute(...args: unknown[]): Promise<void> {
         const [key] = args;
         const selectResource = this.code.l10n.t('Select an Azure resource with a website.');
-        const resource = this.selector.resolve({
+        const resource = await this.selector.selectResource({
             key: typeof key === 'string' ? key : undefined,
-            canHandle: isGenericResource,
+            title: selectResource,
             messages: {
                 missingKey: selectResource,
                 missingNode: selectResource,

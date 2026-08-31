@@ -207,7 +207,7 @@ When a command should prompt rather than fail, `selectResource` resolves from th
 
 ```typescript
 public async execute(key?: string): Promise<void> {
-    const resource = await this.selector.selectResource(AcrResourceType, key);
+    const resource = await this.selector.selectResource({ logicalType: AcrResourceType, key });
     if (!isAcrRegistry(resource)) {
         return;
     }

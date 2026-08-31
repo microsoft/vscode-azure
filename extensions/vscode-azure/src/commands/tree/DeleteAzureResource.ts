@@ -50,19 +50,19 @@ export class DeleteAzureResource implements ManagedCommand {
 
     /**
      * @inheritdoc
-     * @throws if the key is missing, stale, or does not identify a deletable node.
+     * @throws if a supplied key is stale or does not identify a deletable node.
      * @throws {@linkcode CancellationError} if the user backs out at any prompt.
      */
     public async execute(key?: string): Promise<void> {
-        const resource = this.selector.resolve({
-            key,
-            canHandle: isDeletable,
-            messages: {
-                missingKey: this.ctx.code.l10n.t('Select an Azure resource to delete.'),
-                missingNode: this.ctx.code.l10n.t('The selected Azure resource is no longer available. Refresh the view and try again.'),
-                invalidNode: this.ctx.code.l10n.t('The selected item cannot be deleted.'),
-            },
-        });
+        const selectResource = this.ctx.code.l10n.t('Select an Azure resource to delete.');
+        const messages = {
+            missingKey: selectResource,
+            missingNode: this.ctx.code.l10n.t('The selected Azure resource is no longer available. Refresh the view and try again.'),
+            invalidNode: this.ctx.code.l10n.t('The selected item cannot be deleted.'),
+        };
+        const resource = key
+            ? this.selector.resolve({ key, canHandle: isDeletable, messages })
+            : await this.selector.selectResource({ title: selectResource, messages });
 
         await this.confirm(resource);
 

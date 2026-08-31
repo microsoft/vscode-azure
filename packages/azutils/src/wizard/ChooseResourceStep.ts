@@ -80,17 +80,25 @@ export class ChooseResourceStep<TResource extends GenericResource, TContext exte
     }
 }
 
-/** Classifies one resource-tree key for a picker targeting the requested logical type. */
-export function classifyForResource(item: string, node: ConcreteAzureNode | undefined, logicalType: string): PickClassification {
+/** Classifies one resource-tree key for a resource picker. */
+export function classifyForResource(
+    item: string,
+    node: ConcreteAzureNode | undefined,
+    logicalType?: string,
+    canHandle: (resource: GenericResource) => boolean = () => true,
+): PickClassification {
     const nodeId = AzureNodeId.parse(item);
     if (nodeId.isGenericResourceNodeId()) {
-        if (node && isGenericResource(node) && node.logicalType.toLowerCase() === logicalType.toLowerCase()) {
+        if (node
+            && isGenericResource(node)
+            && (!logicalType || node.logicalType.toLowerCase() === logicalType.toLowerCase())
+            && canHandle(node)) {
             return 'terminal';
         }
         return false;
     }
 
-    if (nodeId.isVirtualGroupNodeId() && isMatchingResourceTypeGroup(nodeId, logicalType)) {
+    if (logicalType && nodeId.isVirtualGroupNodeId() && isMatchingResourceTypeGroup(nodeId, logicalType)) {
         return 'skip';
     }
 
