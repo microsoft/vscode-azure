@@ -58,9 +58,9 @@ export class DeleteAzureResource implements ManagedCommand {
             key,
             canHandle: isDeletable,
             messages: {
-                missingKey: () => this.ctx.code.l10n.t('Select an Azure resource to delete.'),
-                missingNode: () => this.ctx.code.l10n.t('The selected Azure resource is no longer available. Refresh the view and try again.'),
-                invalidNode: () => this.ctx.code.l10n.t('The selected item cannot be deleted.'),
+                missingKey: this.ctx.code.l10n.t('Select an Azure resource to delete.'),
+                missingNode: this.ctx.code.l10n.t('The selected Azure resource is no longer available. Refresh the view and try again.'),
+                invalidNode: this.ctx.code.l10n.t('The selected item cannot be deleted.'),
             },
         });
 

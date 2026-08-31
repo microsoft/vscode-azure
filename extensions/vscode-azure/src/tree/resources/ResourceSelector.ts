@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { getNodeType, isGenericResource, resourceExperience, type ConcreteAzureNode, type GenericResource } from '@microsoft/vscode-azure-azutils';
-import { IActionExecutor, ICodeContext, IOutputChannel } from '@microsoft/vscode-azure-utils';
+import { getLastPick, IActionExecutor, ICodeContext, IOutputChannel, RecursivePickStep, Wizard, type PickContext } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
 import { inject, injectable } from 'inversify';
 import { IAzureViewDataTree, IAzureViewViewItemTree } from '../../services';
@@ -14,26 +14,17 @@ export const IResourceSelector: ServiceIdentifier<IResourceSelector> = Symbol.fo
 export type IResourceSelector = ResourceSelector;
 
 /**
- * Why a tree key could not be turned into a node the caller can act on.
- *
- * - `missingKey` -- the command was invoked without a key at all (e.g. from
- *   the command palette rather than from a tree item).
- * - `missingNode` -- the key is not in the data cache, so the tree item that
- *   produced it is stale.
- * - `invalidNode` -- the key resolved to a node the caller's
- *   {@linkcode ResolveOptions.canHandle canHandle} guard rejected.
- */
-export type ResolveFailure = 'missingKey' | 'missingNode' | 'invalidNode';
-
-/**
  * Per-failure message overrides, so each command keeps its own wording rather
  * than sharing one generic message.
- *
- * Each entry is a callback rather than a string so `l10n.t()` runs only for the
- * failure that actually occurred, and only when one occurs at all. Omitted
- * entries fall back to a generic localized message.
  */
-export type ResolveMessages = { readonly [reason in ResolveFailure]?: () => string };
+export interface ResolveMessages {
+    /** Used when the command was invoked without a tree-item key. */
+    readonly missingKey?: string;
+    /** Used when the key is no longer present in the data cache. */
+    readonly missingNode?: string;
+    /** Used when the key resolves to a node that the command cannot act on. */
+    readonly invalidNode?: string;
+}
 
 /** Options for {@linkcode ResourceSelector.resolve} and {@linkcode ResourceSelector.tryResolve}. */
 export interface ResolveOptions {
@@ -64,6 +55,7 @@ export interface NarrowingResolveOptions<TNode extends ConcreteAzureNode> extend
 
 /** Outcome of a key lookup: either the node, or why there isn't one. */
 type ResolveResult = { readonly node: ConcreteAzureNode } | { readonly failure: ResolveFailure };
+type ResolveFailure = keyof ResolveMessages;
 
 /**
  * Resolves an Azure resource either from the data cache (when a tree-item
@@ -127,6 +119,32 @@ export class ResourceSelector {
     }
 
     /**
+     * Resolves a matching node from a tree-item key, or prompts the user to
+     * navigate to one when invoked without a key.
+     */
+    public async selectNode<TNode extends ConcreteAzureNode>(options: NarrowingResolveOptions<TNode>): Promise<TNode> {
+        if (options.key) {
+            return this.resolve(options);
+        }
+
+        const result = await new Wizard<PickContext<string>>(
+            this.output,
+            {},
+            [new RecursivePickStep({
+                ...this.ctx,
+                tree: this.viewTree,
+                title: this.ctx.code.l10n.t('Select Resource'),
+                classify: key => {
+                    const node = this.cache.get(key);
+                    return node && options.canHandle(node) ? 'terminal' : 'intermediate';
+                },
+            })],
+        ).run();
+
+        return this.resolve({ ...options, key: getLastPick(result)?.item });
+    }
+
+    /**
      * Resolves a resource of type {@linkcode T}.
      *
      * @param logicalType - The logical resource type to filter on
@@ -144,7 +162,7 @@ export class ResourceSelector {
      */
     public async select<T extends GenericResource>(logicalType: string, key?: string): Promise<T> {
         if (key) {
-            const notFound = () => this.ctx.code.l10n.t('Resource not found in the resources view. Try refreshing the resources view and running the command again.');
+            const notFound = this.ctx.code.l10n.t('Resource not found in the resources view. Try refreshing the resources view and running the command again.');
             return this.resolve({
                 key,
                 canHandle: (node): node is GenericResource => isGenericResource(node) && node.logicalType.toLowerCase() === logicalType.toLowerCase(),
@@ -160,7 +178,7 @@ export class ResourceSelector {
             output: this.output,
         });
 
-        this.recordNodeType(resource);
+        this.executor.setTelProp('nodeType', getNodeType(resource));
         return resource;
     }
 
@@ -193,7 +211,7 @@ export class ResourceSelector {
             return { failure: 'invalidNode' };
         }
 
-        this.recordNodeType(node);
+        this.executor.setTelProp('nodeType', getNodeType(node));
         return { node };
     }
 
@@ -201,7 +219,7 @@ export class ResourceSelector {
     private describe(failure: ResolveFailure, messages: ResolveMessages | undefined): string {
         const message = messages?.[failure];
         if (message) {
-            return message();
+            return message;
         }
 
         switch (failure) {
@@ -214,14 +232,4 @@ export class ResourceSelector {
         }
     }
 
-    /**
-     * Attribute the action currently running to the node it acted on.
-     *
-     * Written through {@linkcode IActionExecutor}, which reads the context of
-     * the in-flight action, so this stays correct even though the selector is a
-     * singleton shared by every command execution.
-     */
-    private recordNodeType(node: ConcreteAzureNode): void {
-        this.executor.setTelProp('nodeType', getNodeType(node));
-    }
 }

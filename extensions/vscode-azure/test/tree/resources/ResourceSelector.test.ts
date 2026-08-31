@@ -110,9 +110,9 @@ describe('ResourceSelector (unit)', () => {
         it('should throw its own message for each way resolution can fail', () => {
             const { selector } = createTestResourceSelector({ nodes: [site1, subscription] });
             const messages = {
-                missingKey: () => 'no key',
-                missingNode: () => 'no node',
-                invalidNode: () => 'wrong node',
+                missingKey: 'no key',
+                missingNode: 'no node',
+                invalidNode: 'wrong node',
             };
 
             expect(() => selector.resolve({ key: undefined, canHandle: isSubscription, messages })).to.throw('no key');
@@ -132,6 +132,28 @@ describe('ResourceSelector (unit)', () => {
             const { selector } = createTestResourceSelector({ nodes: [settings] });
 
             expect(selector.resolve({ key: settingsId })).to.equal(settings);
+        });
+    });
+
+    describe('selectNode', () => {
+        it('should prompt for a matching node when no key is provided', async () => {
+            const viewTree = createMockViewItemTree({
+                '': [site1Id],
+                [site1Id]: [settingsId],
+            }) as unknown as IAzureViewViewItemTree;
+            const { selector, codeContext } = createTestResourceSelector({ nodes: [site1, settings], viewTree });
+
+            respondToPrompts(codeContext.mock, [
+                { pick: 'site1 $(chevron-right)' },
+                { pick: 'settings' },
+            ]);
+
+            const result = await selector.selectNode({
+                key: undefined,
+                canHandle: (node): node is typeof settings => node === settings,
+            });
+
+            expect(result).to.equal(settings);
         });
     });
 

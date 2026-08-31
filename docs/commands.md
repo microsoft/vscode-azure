@@ -157,7 +157,7 @@ The `\b` word boundary prevents unintended partial matches (e.g. `openInPortal` 
 
 A context value does not have to be unconditional. When whether a command applies is a property of the *data* rather than of the node type, the view provider decides per node, and the command is contributed only when it is genuinely available.
 
-Prefer expressing this in the view provider that owns the node rather than inventing a separate permission model: a product that permits only a subset of the shared settings commands registers its own view provider ahead of `SettingsViewProvider` and attaches only the context values it wants. This is preferable to contributing the command and failing at execution time — the user never sees an action that cannot work.
+Prefer expressing this in the view provider that owns the node rather than inventing a separate permission model: a product that permits only a subset of the shared settings commands registers its own view provider ahead of `SettingsViewProvider` and attaches only the context values it wants. This is preferable to contributing the command and failing at execution time -- the user never sees an action that cannot work.
 
 Note that a context value only controls *menu visibility*. The command palette ignores it, so anything that must never happen has to be enforced where the work is actually done (for settings, that is `SettingsAdapter.write`). See [Settings](settings.md).
 
@@ -177,8 +177,8 @@ const resource = this.selector.resolve({
     key,
     canHandle: isDeletable,
     messages: {
-        missingKey: () => this.ctx.code.l10n.t('Select an Azure resource to delete.'),
-        invalidNode: () => this.ctx.code.l10n.t('The selected item cannot be deleted.'),
+        missingKey: this.ctx.code.l10n.t('Select an Azure resource to delete.'),
+        invalidNode: this.ctx.code.l10n.t('The selected item cannot be deleted.'),
     },
 });
 
@@ -189,11 +189,17 @@ if (!node) {
 }
 ```
 
-`canHandle` is a type guard, so the return type is whatever it narrows to — a command cannot ask for a node type without supplying the check that proves it. Omit it to accept any cached node, which then resolves as `ConcreteAzureNode`.
+`canHandle` may be a predicate or a type guard. A type guard narrows the return type to whatever it proves; a plain predicate validates the node at runtime but leaves the return type as `ConcreteAzureNode`. Omit it to accept any cached node.
 
-Each `messages` entry is a callback rather than a string so `l10n.t()` runs only for the failure that actually occurred. Omitted entries fall back to a generic localized message.
+Each `messages` entry is a localized string. Omitted entries fall back to a generic localized message.
 
-Commands keep their own `execute` signature, so `prefixArgs` and non-`key` first arguments stay expressible — `BrowseWebsite` resolves out of `...args: unknown[]`.
+Commands keep their own `execute` signature, so `prefixArgs` and non-`key` first arguments stay expressible -- `BrowseWebsite` resolves out of `...args: unknown[]`.
+
+Use `selectNode` when the command should resolve a supplied key but prompt the user to navigate the tree when invoked from the command palette:
+
+```typescript
+const node = await this.selector.selectNode({ key, canHandle: isSettingsNode });
+```
 
 ### Prompting instead
 

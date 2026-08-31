@@ -42,7 +42,7 @@ export class BrowseWebsite implements ManagedCommand {
      */
     public async execute(...args: unknown[]): Promise<void> {
         const [key] = args;
-        const selectResource = () => this.code.l10n.t('Select an Azure resource with a website.');
+        const selectResource = this.code.l10n.t('Select an Azure resource with a website.');
         const resource = this.selector.resolve({
             key: typeof key === 'string' ? key : undefined,
             canHandle: isGenericResource,
