@@ -22,23 +22,24 @@ interface ResourceExperienceOptions extends ICodeContext {
  * Recursively prompts for a resource, optionally restricted to a single logical
  * type.
  *
- * @typeParam T - The expected concrete resource type (must extend
- *   {@linkcode GenericResource}).
+ * @returns The picked resource(s). Callers wanting a narrower type should
+ *   narrow the result themselves with the matching type guard, since the
+ *   logical type is an optional filter and cannot prove a concrete type here.
  */
-export async function resourceExperience<T extends GenericResource>(
+export async function resourceExperience(
     options: ResourceExperienceOptions & { canPickMany: true },
-): Promise<T[]>;
-export async function resourceExperience<T extends GenericResource>(
+): Promise<GenericResource[]>;
+export async function resourceExperience(
     options: ResourceExperienceOptions & { canPickMany?: false },
-): Promise<T>;
-export async function resourceExperience<T extends GenericResource>(
+): Promise<GenericResource>;
+export async function resourceExperience(
     options: ResourceExperienceOptions & { canPickMany?: boolean },
-): Promise<T | T[]> {
+): Promise<GenericResource | GenericResource[]> {
     const experienceOptions = {
         ...options,
         title: options.title ?? options.code.l10n.t('Select Resource'),
         stepName: 'resource',
-        canHandle: (node: ConcreteAzureNode): node is T =>
+        canHandle: (node: ConcreteAzureNode): node is GenericResource =>
             isGenericResource(node)
             && (!options.logicalType || node.logicalType.toLowerCase() === options.logicalType.toLowerCase()),
         classify: (key: string, _treeItem: ITreeItem, node: ConcreteAzureNode | undefined) =>
