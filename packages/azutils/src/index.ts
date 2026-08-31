@@ -31,5 +31,4 @@ export * from './tree/pick/subscriptionExperience';
 export * from './utils/azureResourceId';
 export * from './wizard/ChooseLocationStep';
 export * from './wizard/ChooseResourceGroupStep';
-export * from './wizard/ChooseResourceStep';
 export * from './wizard/ChooseSubscriptionStep';

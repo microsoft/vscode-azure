@@ -15,9 +15,26 @@ const subId = AzureNodeId.from(subscription).toString();
 const site1 = makeGenericResource({ name: 'site1', subscription });
 const site1Id = AzureNodeId.from(site1).toString();
 
+const site2 = makeGenericResource({
+    name: 'site2',
+    location: 'westus',
+    id: '/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.Web/sites/site2',
+    subscription,
+});
+const site2Id = AzureNodeId.from(site2).toString();
+
+const storageAccount = makeGenericResource({
+    id: '/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.Storage/storageAccounts/sa1',
+    name: 'sa1',
+    type: 'Microsoft.Storage/storageAccounts',
+    logicalType: 'Microsoft.Storage/storageAccounts',
+    subscription,
+});
+const storageAccountId = AzureNodeId.from(storageAccount).toString();
+
 describe('resourceExperience (unit)', () => {
     const output = new MockOutputChannel('test');
-    it('should return the picked resource typed as the generic parameter', async () => {
+    it('should pick a resource matching the target logical type', async () => {
         const { ctx, mock } = createMockCodeContext();
         const tree = createMockViewItemTree({
             '': [subId],
@@ -42,10 +59,131 @@ describe('resourceExperience (unit)', () => {
         expect(result.logicalType).to.equal('Microsoft.Web/sites');
     });
 
+    it('should hide resources that do not match the target logical type', async () => {
+        const { ctx, mock } = createMockCodeContext();
+        const tree = createMockViewItemTree({
+            '': [site1Id, storageAccountId],
+        });
+        const dataItemTree = createMockDataItemTree([site1, storageAccount]);
+
+        const tracker = respondToPrompts(mock, [
+            { pick: 'site1' },
+        ]);
+
+        const result = await resourceExperience({
+            ...ctx,
+            tree,
+            dataItemTree,
+            logicalType: 'Microsoft.Web/sites',
+            output,
+        });
+
+        expect(result.name).to.equal('site1');
+        expect(mock.quickPicks[0].items.map(item => item.label)).to.deep.equal(['site1']);
+        tracker.assertAllConsumed();
+    });
+
+    it('should offer resources of every type when no logical type is given', async () => {
+        const { ctx, mock } = createMockCodeContext();
+        const tree = createMockViewItemTree({
+            '': [site1Id, storageAccountId],
+        });
+        const dataItemTree = createMockDataItemTree([site1, storageAccount]);
+
+        respondToPrompts(mock, [
+            { pick: 'sa1' },
+        ]);
+
+        const result = await resourceExperience({ ...ctx, tree, dataItemTree, output });
+
+        expect(result.name).to.equal('sa1');
+        expect(mock.quickPicks[0].items.map(item => item.label)).to.deep.equal(['site1', 'sa1']);
+    });
+
+    it('should drill through a resource group to pick a resource', async () => {
+        const { ctx, mock } = createMockCodeContext();
+        const rgId = 'azr://test-account@portal.azure.com/tenants/test-tenant/subscriptions/test-sub/resourceGroups/rg1';
+
+        const tree = createMockViewItemTree({
+            '': [subId],
+            [subId]: [rgId],
+            [rgId]: [site1Id, site2Id],
+        });
+        const dataItemTree = createMockDataItemTree([subscription, site1, site2]);
+
+        const tracker = respondToPrompts(mock, [
+            { pick: 'test-sub $(chevron-right)' },
+            { pick: 'rg1 $(chevron-right)' },
+            { pick: 'site2' },
+        ]);
+
+        const result = await resourceExperience({
+            ...ctx,
+            tree,
+            dataItemTree,
+            logicalType: 'Microsoft.Web/sites',
+            output,
+        });
+
+        expect(result.name).to.equal('site2');
+        tracker.assertAllConsumed();
+    });
+
+    it('should drill through a non-matching virtual group as intermediate', async () => {
+        const { ctx, mock } = createMockCodeContext();
+        const locationGroupId = 'azr://test-account@portal.azure.com/tenants/test-tenant/subscriptions/test-sub/~location/eastus';
+
+        const tree = createMockViewItemTree({
+            '': [locationGroupId],
+            [locationGroupId]: [site1Id],
+        });
+        const dataItemTree = createMockDataItemTree([site1]);
+
+        const tracker = respondToPrompts(mock, [
+            { pick: 'eastus $(chevron-right)' },
+            { pick: 'site1' },
+        ]);
+
+        const result = await resourceExperience({
+            ...ctx,
+            tree,
+            dataItemTree,
+            logicalType: 'Microsoft.Web/sites',
+            output,
+        });
+
+        expect(result.name).to.equal('site1');
+        tracker.assertAllConsumed();
+    });
+
+    it('should auto-skip a virtual group matching the target resource type', async () => {
+        const { ctx, mock } = createMockCodeContext();
+        const virtualGroupId = 'azr://test-account@portal.azure.com/tenants/test-tenant/subscriptions/test-sub/~resourceType/Microsoft.Web%2Fsites';
+
+        const tree = createMockViewItemTree({
+            '': [virtualGroupId],
+            [virtualGroupId]: [site1Id, site2Id],
+        });
+        const dataItemTree = createMockDataItemTree([site1, site2]);
+
+        const tracker = respondToPrompts(mock, [
+            { pick: 'site2' },
+        ]);
+
+        const result = await resourceExperience({
+            ...ctx,
+            tree,
+            dataItemTree,
+            logicalType: 'Microsoft.Web/sites',
+            output,
+        });
+
+        expect(result.name).to.equal('site2');
+        tracker.assertAllConsumed();
+    });
+
     it('should return multiple resources when canPickMany is true', async () => {
         const { ctx, mock } = createMockCodeContext();
-        const site2 = makeGenericResource({ name: 'site2', subscription, id: '/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.Web/sites/site2' });
-        const site2Id = AzureNodeId.from(site2).toString();
 
         const tree = createMockViewItemTree({
             '': [site1Id, site2Id],
@@ -67,5 +205,31 @@ describe('resourceExperience (unit)', () => {
 
         expect(result).to.have.length(2);
         expect(result.map(r => r.name)).to.deep.equal(['site1', 'site2']);
+    });
+
+    it('should omit non-matching resources from a multi-pick', async () => {
+        const { ctx, mock } = createMockCodeContext();
+
+        const tree = createMockViewItemTree({
+            '': [site1Id, storageAccountId],
+        });
+        const dataItemTree = createMockDataItemTree([site1, storageAccount]);
+
+        const tracker = respondToPrompts(mock, [
+            { pickMany: ['site1'] },
+        ]);
+
+        const result = await resourceExperience({
+            ...ctx,
+            tree,
+            dataItemTree,
+            logicalType: 'Microsoft.Web/sites',
+            canPickMany: true,
+            output,
+        });
+
+        expect(result.map(r => r.name)).to.deep.equal(['site1']);
+        expect(mock.quickPicks[0].items.map(item => item.label)).to.deep.equal(['site1']);
+        tracker.assertAllConsumed();
     });
 });

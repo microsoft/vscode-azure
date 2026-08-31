@@ -3,11 +3,11 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type ICodeContext, type IOutputChannel, type ITreeItem } from '@microsoft/vscode-azure-utils';
+import { type ICodeContext, type IOutputChannel, type ITreeItem, type PickClassification } from '@microsoft/vscode-azure-utils';
 import type { ConcreteAzureNode, ConcreteAzureNodeTree } from '../../models/AzureNode';
 import { isGenericResource } from '../../models/AzureNode';
+import { AzureNodeId } from '../../models/AzureNodeId';
 import type { GenericResource } from '../../models/GenericResource';
-import { classifyForResource } from '../../wizard/ChooseResourceStep';
 import { nodeExperience, type NodeExperienceTree } from './nodeExperience';
 
 interface ResourceExperienceOptions extends ICodeContext {
@@ -49,4 +49,48 @@ export async function resourceExperience(
     return options.canPickMany
         ? nodeExperience({ ...experienceOptions, canPickMany: true })
         : nodeExperience({ ...experienceOptions, canPickMany: false });
+}
+
+/**
+ * Classifies one resource-tree key for a resource picker.
+ *
+ * Resources matching {@linkcode logicalType} are selectable; the containers
+ * above them are navigable. When a `logicalType` is given, the virtual group
+ * for that same type is skipped, since drilling into it would offer only the
+ * one choice the user already made.
+ */
+function classifyForResource(
+    item: string,
+    node: ConcreteAzureNode | undefined,
+    logicalType?: string,
+): PickClassification {
+    const nodeId = AzureNodeId.parse(item);
+    if (nodeId.isGenericResourceNodeId()) {
+        if (node
+            && isGenericResource(node)
+            && (!logicalType || node.logicalType.toLowerCase() === logicalType.toLowerCase())) {
+            return 'terminal';
+        }
+        return false;
+    }
+
+    if (logicalType && nodeId.isVirtualGroupNodeId() && isMatchingResourceTypeGroup(nodeId, logicalType)) {
+        return 'skip';
+    }
+
+    if (nodeId.isAccountNodeId()
+        || nodeId.isTenantNodeId()
+        || nodeId.isSubscriptionNodeId()
+        || nodeId.isResourceGroupNodeId()
+        || nodeId.isVirtualGroupNodeId()) {
+        return 'intermediate';
+    }
+
+    return false;
+}
+
+function isMatchingResourceTypeGroup(nodeId: AzureNodeId, logicalType: string): boolean {
+    const grouping = nodeId.getGrouping();
+    return grouping?.groupingStrategy === 'resourceType'
+        && grouping.groupingValue.toLowerCase() === logicalType.toLowerCase();
 }
