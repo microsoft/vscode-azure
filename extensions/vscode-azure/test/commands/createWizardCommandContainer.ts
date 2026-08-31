@@ -12,7 +12,6 @@ import { createGenerateBicepStepFactory, IGenerateBicepStepFactory } from '../..
 import { IAzureViewDataTree, IAzureViewViewItemTree, ISubscriptionResolver } from '../../src/services';
 import { IArmDeploymentDataProvider } from '../../src/tree/activity/ArmDeploymentDataProvider';
 import { ICodeDeploymentDataProvider } from '../../src/tree/activity/CodeDeploymentDataProvider';
-import { IGitRemoteService } from '../../src/staticWebApps/GitRemoteService';
 import { IWorkspaceIndexService } from '../../src/utils/workspaceIndex/WorkspaceIndexService';
 import { createTestIndexService } from '../utils/workspaceIndex/createTestIndexService';
 
@@ -28,8 +27,6 @@ export interface WizardCommandMocks {
     readonly subscriptionClientProvider?: ISubscriptionClientProvider;
     readonly armProvider?: IArmDeploymentDataProvider;
     readonly codeProvider?: ICodeDeploymentDataProvider;
-    /** Defaults to a mock reporting "no remote" for every folder. */
-    readonly gitRemote?: IGitRemoteService;
     readonly workspaceIndexService?: IWorkspaceIndexService;
     /** Defaults to a resolver that finds nothing, which is the behavior of a subscription no account can reach. */
     readonly subscriptionResolver?: (subscriptionId: string) => Promise<AzureSubscription | undefined>;
@@ -74,8 +71,6 @@ export function createWizardCommandContainer(mocks: WizardCommandMocks): Contain
     if (mocks.codeProvider !== undefined) {
         container.bind(ICodeDeploymentDataProvider).toConstantValue(mocks.codeProvider);
     }
-    container.bind(IGitRemoteService).toConstantValue(mocks.gitRemote ?? ({ getRemoteInfo: () => Promise.resolve(undefined) } as unknown as IGitRemoteService));
-
     container.bind(Container).toConstantValue(container);
     return container;
 }

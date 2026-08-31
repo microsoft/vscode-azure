@@ -42,7 +42,7 @@ than silently disappearing.
 | Command | Acts on | Notes |
 |---|---|---|
 | Create Static Web App... | palette / workspace | azd+Bicep creation; Free plan by default |
-| Deploy Static Web App... | palette / post-create route | Uses azd for direct deployment or CI/CD setup |
+| Configure CI/CD | palette / `azure.yaml` context menu | Runs `azd pipeline config` |
 | Create Configuration File | workspace | Creates `staticwebapp.config.json` |
 | Delete Environment... | preview environment | Deletes the selected build |
 | Documentation | palette | Opens Static Web Apps documentation |
@@ -96,30 +96,29 @@ supported SKU. The resource receives the shared azd environment/service tags.
 
 The `host: staticwebapp` azd service records `project` and `dist` for deployable
 static artifacts. Empty, `/`, and `.` output locations can provision the ARM
-resource but do not produce an azd deploy target. Server-rendered Next.js also
-stops with explicit guidance rather than reporting a deployment.
+resource but do not produce an azd deploy target, so `OutputLocationStep` warns
+while prompting.
 
-## Deployment routing
+## Configuring CI/CD
 
-The current implementation inspects existing Git metadata but never creates a
-repository, adds a remote, or pushes a branch.
+`ConfigureStaticWebAppCicd` is a two-step wizard: the shared
+`SelectIacFolderStep` resolves the folder containing `azure.yaml`, then
+`AzdPipelineConfigStep` runs `azd pipeline config` there.
 
-- No supported remote: run direct `azd deploy` for a valid static artifact.
-- Supported GitHub/Azure DevOps remote without an upstream branch: explain the
-  prerequisite and offer direct deployment.
-- Supported pushed remote with a sufficient azd version: run interactive
-  `azd pipeline config`.
-- Invalid/missing `host: staticwebapp` service or unsupported artifact: stop
-  with reason-specific guidance.
+Everything after that belongs to azd. It prompts for the provider, creates and
+pushes a repository when the project has no remote yet, authenticates against
+the provider, and writes the workflow file. The extension deliberately does not
+inspect Git metadata beforehand, because every such check could only remove a
+capability azd already has.
 
-Before configuring one provider, the command checks for the other provider's
-canonical azd workflow file and asks for confirmation. It does not delete or
-overwrite pipeline files itself.
+The one precondition enforced locally is `MinAzdPipelineVersion`, since
+federated Azure DevOps authentication fails below it and azd asks which provider
+to use only once it is already running. When no azd version can be read at all,
+the command proceeds so azd's own "not found" install prompt is what the user
+sees.
 
-This routing is under active ownership review on PR #237. Review feedback asks
-whether parsing/editing `azure.yaml`, build-preset scaffolding, and the routing
-decision should move further into azd. The implementation above is current
-branch behavior, not a settled exception to that boundary.
+A successful run means the pipeline is configured, not that code was deployed;
+that happens on the next push.
 
 ## Configuration and local tooling
 

@@ -110,22 +110,21 @@ The current implementation edits `azure.yaml` after the shared generation step.
 That is an unresolved ownership concern on PR #237 rather than an accepted
 exception to the migration skill's ownership rule.
 
-## Slice 4 -- Deployment routing
+## Slice 4 -- CI/CD configuration
 
-Mapping: azd remains the deployment executor. Product code currently decides
-between direct `azd deploy` and interactive `azd pipeline config`, based on
-artifact shape and read-only Git remote metadata.
+Mapping: azd owns deployment end to end. Product code contributes only a
+"Configure CI/CD" command that resolves the `azure.yaml` folder via the shared
+`SelectIacFolderStep` and hands over to `azd pipeline config`.
 
-- [x] Route supported static artifacts through azd without invoking the SWA CLI
-  directly. <- SWA-012, SWA-061, SWA-064, SWA-065
-- [x] Keep Git inspection read-only and require a pushed branch before CI/CD
-  setup. <- SWA-010
-- [x] Avoid overwriting another provider's canonical pipeline file and let
-  interactive `azd pipeline config` own generated CI/CD files. <- SWA-065
+- [x] Route deployment through azd without invoking the SWA CLI directly.
+  <- SWA-012, SWA-061, SWA-064, SWA-065
+- [x] Let `azd pipeline config` own provider selection, repository creation and
+  push, provider authentication, and generated CI/CD files, rather than
+  reproducing those decisions from Git metadata. <- SWA-010, SWA-065
 - [ ] Resolve the review ownership boundary for product parsing/editing of
-  `azure.yaml`, build-preset scaffolding, and product deployment routing; either
-  move the capabilities upstream/shared or record an explicit accepted
-  boundary. <- SWA-012, SWA-053, SWA-061, SWA-064, SWA-065, SWA-066, SWA-067
+  `azure.yaml` and build-preset scaffolding; either move the capabilities
+  upstream/shared or record an explicit accepted boundary.
+  <- SWA-012, SWA-053, SWA-061, SWA-064, SWA-066, SWA-067
 
 ## Slice 5 -- Shared tool acquisition
 

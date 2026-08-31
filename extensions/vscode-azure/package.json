@@ -140,11 +140,11 @@
                 "title": "%commands.vscode-azure/staticWebApps/deleteEnvironment%"
             },
             {
-                "command": "vscode-azure/staticWebApps/deploy",
+                "command": "vscode-azure/staticWebApps/configureCicd",
                 "category": "%commands.category.azureStaticWebApps%",
                 "enablement": "!virtualWorkspace",
-                "icon": "$(cloud-upload)",
-                "title": "%commands.vscode-azure/staticWebApps/deploy%"
+                "icon": "$(settings-gear)",
+                "title": "%commands.vscode-azure/staticWebApps/configureCicd%"
             },
             {
                 "command": "vscode-azure/staticWebApps/createSwaConfigFile",

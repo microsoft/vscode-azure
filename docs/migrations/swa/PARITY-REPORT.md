@@ -37,7 +37,7 @@ root is named.
 | SWA-007 | Rename setting | Reuse | wired | Same shared settings document. |
 | SWA-008 | Upload settings | Drop | absent | No SWA settings import/export command. |
 | SWA-009 | Browse | Reuse | wired | `tree/resources/staticWebApps/StaticWebAppDataProvider.ts` calls `setWebsiteUrl`; view provider adds `BrowseWebsite.ContextValue`. |
-| SWA-010 | Clone repository | Drop | absent | `staticWebApps/GitRemoteService.ts` is read-only; no clone command. |
+| SWA-010 | Clone repository | Drop | absent | No clone command; the extension never touches Git directly. |
 | SWA-011 | Create HTTP Function | Drop | absent | No Functions-extension command invocation; documentation link only. |
 | SWA-012 | Create Static Web App | Adapt | landed | `commands/staticWebApps/CreateStaticWebApp.ts` uses `Wizard`, Bicep, and azd. |
 | SWA-013 | Advanced create command | Drop | absent | Only `vscode-azure/staticWebApps/createNew` is contributed. |
@@ -90,9 +90,9 @@ root is named.
 | SWA-060 | Exported Remote Repositories/reveal API | Drop | absent | Product registration exports no compatibility API. |
 | SWA-061 | Basic create flow | Adapt | landed | `CreateStaticWebApp.ts` uses the single Free-plan azd flow. |
 | SWA-062 | Advanced create flow | Drop | absent | No advanced command, mode, or SKU prompt. |
-| SWA-063 | Repository bootstrap | Defer | not landed | Read-only `GitRemoteService`; unchecked plan task, no linked issue. |
+| SWA-063 | Repository bootstrap | Defer | delegated | `azd pipeline config` creates and pushes a repository when none exists. |
 | SWA-064 | ARM creation/native workflow | Adapt | landed | `extensions/vscode-azure/resources/templates/staticWebApp/main.bicep`; shared azd provision/deploy steps. |
-| SWA-065 | Post-create Actions polling | Adapt | landed with changed UX | `CreateStaticWebApp.ts`, `DeployStaticWebApp.ts`, and shared endpoint display. |
+| SWA-065 | Post-create Actions polling | Adapt | landed with changed UX | Shared endpoint display; `ConfigureStaticWebAppCicd.ts` delegates CI/CD to `azd pipeline config`. |
 | SWA-066 | Build presets | Migrate | landed, ownership review open | `commands/staticWebApps/buildPresets.ts` and `PickBuildPresetStep.ts`. |
 | SWA-067 | Framework/API detection | Adapt | landed, ownership review open | `commands/staticWebApps/steps/frameworkDetection.ts`; shared workspace index. |
 
@@ -135,13 +135,14 @@ searched for the source-specific command IDs/types:
 
 ## Known gaps and uncertainties
 
-1. **Four ownership-boundary review threads remain unresolved on PR #237.**
-   The current branch parses/edits `azure.yaml`, owns a build-preset picker, and
-   wraps azd deployment routing. Review feedback asks whether these belong in
-   azd instead. Rows are reported as landed, not as finally accepted design.
+1. **Ownership-boundary review threads remain unresolved on PR #237.**
+   The current branch parses/edits `azure.yaml` and owns a build-preset picker.
+   Review feedback asks whether these belong in azd instead. Rows are reported
+   as landed, not as finally accepted design.
 2. **Debugging and generated tasks are not present.** Issue
    [#339](https://github.com/microsoft/vscode-azure/issues/339) tracks the five
    related deferred rows after native Functions debugging.
-3. **Repository bootstrap has no linked issue.** It is a genuine deferred
-   decision, not a landed capability.
+3. **Repository bootstrap is delegated to azd.** `azd pipeline config` offers to
+   create and push a repository when the project has no remote, so the extension
+   contributes no bootstrap code of its own.
 4. **No live-Azure verification is claimed by this documentation audit.**

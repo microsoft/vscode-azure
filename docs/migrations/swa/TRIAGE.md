@@ -111,8 +111,8 @@ behavior are Adapt outcomes.
 1. Creation and deployment use azd+Bicep. No repository token is passed to ARM.
 2. The tree uses data and view providers. Shared browse, portal, delete, paging,
    selection, settings, and tool services are reused.
-3. Git inspection is read-only. The extension does not create repositories,
-   add remotes, or push branches.
+3. The extension does not inspect or modify Git state. Repository creation,
+   remotes, and pushes are `azd pipeline config`'s to offer.
 4. No target feature invokes or depends on the standalone Static Web Apps or
    Azure Functions extensions.
 5. Debugging, generated emulator tasks, Data API location discovery, lifecycle
@@ -121,9 +121,8 @@ behavior are Adapt outcomes.
 ## Open ownership decisions
 
 The implementation contains review threads that remain unresolved on PR #237:
-editing/parsing `azure.yaml`, product-owned build preset/scaffolding behavior,
-and whether deployment routing around `azd pipeline config` exceeds the
-extension's ownership boundary. These concerns do not change the dispositions
-above, but they prevent the corresponding Adapt/Migrate rows from being
-described as final architecture without qualification. They are carried into
-the plan and parity report as known gaps.
+editing/parsing `azure.yaml` and product-owned build preset/scaffolding
+behavior. These concerns do not change the dispositions above, but they prevent
+the corresponding Adapt/Migrate rows from being described as final architecture
+without qualification. They are carried into the plan and parity report as known
+gaps.

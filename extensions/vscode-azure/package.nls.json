@@ -26,7 +26,7 @@
     "commands.vscode-azure/functions/deploy": "Deploy Project as Function App...",
     "commands.vscode-azure/staticWebApps/createNew": "Create Static Web App...",
     "commands.vscode-azure/staticWebApps/deleteEnvironment": "Delete Environment...",
-    "commands.vscode-azure/staticWebApps/deploy": "Deploy Static Web App",
+    "commands.vscode-azure/staticWebApps/configureCicd": "Configure CI/CD",
     "commands.vscode-azure/staticWebApps/createSwaConfigFile": "Create Configuration File",
     "commands.vscode-azure/staticWebApps/showDocumentation": "Documentation",
     "commands.vscode-azure/staticWebApps/showFunctionsDocumentation": "Azure Functions Documentation",

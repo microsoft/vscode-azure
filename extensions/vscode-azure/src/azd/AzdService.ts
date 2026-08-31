@@ -93,20 +93,22 @@ export interface IAzdService {
     deploy(cwd: vscode.Uri): Promise<void>;
 
     /**
-     * Runs `azd pipeline config --provider <provider>` as a visible VS Code
-     * task, interactively configuring CI/CD (GitHub Actions or Azure
-     * Pipelines) for the project in {@linkcode cwd}.
+     * Runs `azd pipeline config` as a visible VS Code task, interactively
+     * configuring CI/CD (GitHub Actions or Azure Pipelines) for the project in
+     * {@linkcode cwd}.
      *
      * Never passes `--no-prompt` -- `azd` may need to interactively
-     * authenticate against the provider and/or the Git remote. Output is
+     * authenticate against the provider and/or the Git remote, and it offers to
+     * create and push a repository when the project has none. Output is
      * never captured, so no secrets/PATs can leak into telemetry, logs, or
      * the output channel.
      *
-     * @param provider - `'github'` or `'azdo'` (Azure DevOps).
+     * @param provider - `'github'` or `'azdo'` (Azure DevOps). Omit to let
+     *   `azd` prompt for one.
      * @param environmentName - Optional azd environment to target; passed as
      *   `--environment` when provided.
      */
-    pipelineConfig(cwd: vscode.Uri, provider: 'github' | 'azdo', environmentName?: string): Promise<void>;
+    pipelineConfig(cwd: vscode.Uri, provider?: 'github' | 'azdo', environmentName?: string): Promise<void>;
 
     /**
      * Runs `azd down --force --purge` as a visible VS Code task, deleting
@@ -369,7 +371,7 @@ export class AzdService implements IAzdService {
     }
 
     /** @inheritdoc */
-    public async pipelineConfig(cwd: vscode.Uri, provider: 'github' | 'azdo', environmentName?: string): Promise<void> {
+    public async pipelineConfig(cwd: vscode.Uri, provider?: 'github' | 'azdo', environmentName?: string): Promise<void> {
         const authEnv = await this.authServer.getEnv();
 
         try {

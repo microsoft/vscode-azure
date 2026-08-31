@@ -4,18 +4,16 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { IStaticWebAppClientProvider, StaticWebAppClient } from '@microsoft/vscode-azure-azutils';
-import { DeployStaticWebAppCommandId } from '../constants';
+import { ConfigureStaticWebAppCicd } from '../commands/staticWebApps/ConfigureStaticWebAppCicd';
 import { CreateStaticWebApp } from '../commands/staticWebApps/CreateStaticWebApp';
 import { CreateSwaConfigFile } from '../commands/staticWebApps/CreateSwaConfigFile';
 import { DeleteStaticWebAppEnvironment } from '../commands/staticWebApps/DeleteStaticWebAppEnvironment';
-import { DeployStaticWebApp } from '../commands/staticWebApps/DeployStaticWebApp';
 import { ShowFunctionsDocumentation, ShowStaticWebAppsDocumentation } from '../commands/staticWebApps/ShowDocumentation';
 import { OpenUrl } from '../commands/OpenUrl';
 import { IPropertiesAdapter } from '../properties/PropertiesAdapter';
 import { StaticWebAppEnvironmentPropertiesAdapter } from '../properties/adapters/StaticWebAppEnvironmentPropertiesAdapter';
 import type { ProductRegistrar } from '../registration/ProductRegistrar';
 import { StaticWebAppSettingsAdapter } from '../settings/adapters/StaticWebAppSettingsAdapter';
-import { GitRemoteService, IGitRemoteService } from '../staticWebApps/GitRemoteService';
 import { ISwaCliService, SwaCliService } from '../staticWebApps/SwaCliService';
 import { IWorkspaceDetector } from '../utils/workspaceIndex/WorkspaceDetector';
 import { IStaticWebAppDataProvider, StaticWebAppDataProvider } from '../tree/resources/staticWebApps/StaticWebAppDataProvider';
@@ -30,7 +28,6 @@ export function registerStaticWebApps(registrar: ProductRegistrar): void {
 
     registrar.registerBinding(container => {
         container.bind(StaticWebAppSettingsAdapter).toSelf().inSingletonScope();
-        container.bind(IGitRemoteService).to(GitRemoteService).inSingletonScope();
         container.bind(ISwaCliService).to(SwaCliService).inSingletonScope();
         container.bind(IWorkspaceDetector).toConstantValue(staticWebAppProjectDetector);
         container.bind(IPropertiesAdapter).to(StaticWebAppEnvironmentPropertiesAdapter).inSingletonScope();
@@ -38,7 +35,7 @@ export function registerStaticWebApps(registrar: ProductRegistrar): void {
 
     registrar.registerCommand('vscode-azure/staticWebApps/createNew', CreateStaticWebApp);
     registrar.registerCommand('vscode-azure/staticWebApps/deleteEnvironment', DeleteStaticWebAppEnvironment);
-    registrar.registerCommand(DeployStaticWebAppCommandId, DeployStaticWebApp);
+    registrar.registerCommand('vscode-azure/staticWebApps/configureCicd', ConfigureStaticWebAppCicd);
     registrar.registerCommand('vscode-azure/staticWebApps/createSwaConfigFile', CreateSwaConfigFile);
     registrar.registerCommand('vscode-azure/staticWebApps/showDocumentation', OpenUrl, ShowStaticWebAppsDocumentation.Url);
     registrar.registerCommand('vscode-azure/staticWebApps/showFunctionsDocumentation', OpenUrl, ShowFunctionsDocumentation.Url);
