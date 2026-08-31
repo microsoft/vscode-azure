@@ -28,18 +28,6 @@ interface PackageJson {
     readonly scripts?: unknown;
 }
 
-interface GitExtension {
-    getAPI(version: 1): {
-        readonly repositories: readonly {
-            readonly rootUri: vscode.Uri;
-            readonly state: {
-                readonly HEAD?: { readonly name?: string };
-                readonly remotes: readonly { readonly fetchUrl?: string; readonly pushUrl?: string }[];
-            };
-        }[];
-    };
-}
-
 /** Tags files that contribute to Static Web Apps framework and API detection. */
 export const staticWebAppProjectDetector: WorkspaceDetector = {
     id: 'staticWebAppsProject',
@@ -66,8 +54,6 @@ export interface StaticWebAppProjectDetection {
     readonly outputLocation?: string;
     readonly angularProjectName?: string;
     readonly language?: StaticWebAppAzdLanguage;
-    readonly repositoryUrl?: string;
-    readonly branch?: string;
 }
 
 /**
@@ -165,7 +151,6 @@ export async function detectStaticWebAppProject(
         }
     }
 
-    const git = await detectGitMetadata(code, workspaceRoot);
     return {
         frameworks,
         primaryPresetId,
@@ -174,10 +159,8 @@ export async function detectStaticWebAppProject(
         outputLocation,
         angularProjectName,
         language,
-        ...git,
     };
 }
-
 /**
  * Returns Static Web Apps project files beneath `root`.
  *
@@ -402,31 +385,6 @@ function detectApiLocations(files: readonly ScannedFile[]): string[] {
     }
     return [...shallow, ...hostJsons.filter(file => segments(file.relativePath).length > 2)]
         .map(file => dirname(file.relativePath));
-}
-
-async function detectGitMetadata(
-    code: IVsCode,
-    workspaceRoot: vscode.Uri,
-): Promise<Pick<StaticWebAppProjectDetection, 'repositoryUrl' | 'branch'>> {
-    const extension = code.extensions.getExtension<GitExtension>('vscode.git');
-    if (!extension) {
-        return {};
-    }
-    const git = extension.isActive ? extension.exports : await extension.activate();
-    const rootPath = workspaceRoot.path.replace(/\/$/, '');
-    const repositories = git.getAPI(1).repositories
-        .filter(candidate => rootPath === candidate.rootUri.path.replace(/\/$/, '')
-            || rootPath.startsWith(`${candidate.rootUri.path.replace(/\/$/, '')}/`))
-        .sort((left, right) => right.rootUri.path.length - left.rootUri.path.length);
-    if (repositories.length === 0) {
-        return {};
-    }
-    const repository = repositories[0];
-    const remote = repository.state.remotes.find(candidate => candidate.fetchUrl || candidate.pushUrl);
-    return {
-        repositoryUrl: remote?.fetchUrl ?? remote?.pushUrl,
-        branch: repository.state.HEAD?.name,
-    };
 }
 
 function hasDependency(packageJson: PackageJson, name: string): boolean {
