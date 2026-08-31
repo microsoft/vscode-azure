@@ -258,9 +258,14 @@ function redact(
             return value.map(item => redact(item, active, alsoRedact, found));
         }
 
+        const entries: [string, unknown][] = Object.entries(value);
+        const namedValue = entries.find(([key]) => key === 'name')?.[1];
+        const namedValueIsSecret = typeof namedValue === 'string'
+            && (alsoRedact?.has(namedValue) || isSecretPropertyName(namedValue));
+
         return Object.fromEntries(
-            Object.entries(value).map(([key, child]) => {
-                if (alsoRedact?.has(key) || isSecretPropertyName(key)) {
+            entries.map(([key, child]) => {
+                if (alsoRedact?.has(key) || isSecretPropertyName(key) || (key === 'value' && namedValueIsSecret)) {
                     return [key, withhold(child, found)];
                 }
 

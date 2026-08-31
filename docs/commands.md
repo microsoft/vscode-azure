@@ -93,8 +93,8 @@ export interface PropertiesAdapter<TNode extends ConcreteAzureNode = ConcreteAzu
 Adapters are `@multiInject`ed and dispatched first-match-wins, so a product
 binds its adapter in its own `register*.ts` and gets priority over
 `GenericArmPropertiesAdapter`, which is bound from `registerGenericAzure.ts` —
-registered last — and reads any ARM resource or resource group through
-`ResourceClient.resources.getById`.
+registered last — and serializes any resolved ARM resource or resource group
+after dropping metadata attached by this repo.
 
 Most products need no adapter at all. Write one only when the properties worth
 showing are not what an ARM GET returns, for example a virtual child node backed
@@ -109,8 +109,9 @@ is cleaned, and `TelemetryTrustedValue` opts a value out.
 
 Three things are withheld. A property whose **name** says it holds a credential
 (`isSecretPropertyName`, which reads the last word of a compound so `keyVaultUri`
-survives while `primaryKey` does not); a **value** that is recognisably a
-credential on its own, screened with the regexes VS Code uses in
+survives while `primaryKey` does not), including a `{ name, value }` entry whose
+`name` names a credential; a **value** that is recognisably a credential on its
+own, screened with the regexes VS Code uses in
 `src/vs/platform/telemetry/common/telemetryUtils.ts`; and the credential-bearing
 **segments** of a signed URL or a `key=value;` connection string, so the endpoint
 stays readable and only the signature goes. That last one uses an allow list of

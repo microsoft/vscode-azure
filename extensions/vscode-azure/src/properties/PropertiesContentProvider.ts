@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Disposable, IVsCode } from '@microsoft/vscode-azure-utils';
+import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type { ServiceIdentifier } from 'inversify';
 import type * as vscode from 'vscode';
@@ -11,11 +11,14 @@ import type * as vscode from 'vscode';
 /** URI scheme for readonly resource-property documents. */
 export const PropertiesScheme = 'vscode-azure-resource-properties';
 
+/** Number of recent snapshots kept available for editor history to reopen. */
+const maxSnapshots = 20;
+
 /** Service identifier for the resource-property document provider. */
 export const IPropertiesContentProvider: ServiceIdentifier<IPropertiesContentProvider> = Symbol.for('IPropertiesContentProvider');
 
 /** Opens resource properties as readonly JSON documents. */
-export interface IPropertiesContentProvider {
+export interface IPropertiesContentProvider extends vscode.TextDocumentContentProvider {
     /**
      * Open a readonly JSON document containing {@linkcode content}.
      *
@@ -35,7 +38,7 @@ export interface IPropertiesContentProvider {
  * constructing it -- in a test, say -- does not claim a global scheme. See `registerGenericAzure`.
  */
 @injectable()
-export class PropertiesContentProvider implements vscode.TextDocumentContentProvider, IPropertiesContentProvider, Disposable {
+export class PropertiesContentProvider implements IPropertiesContentProvider {
     private readonly contents = new Map<string, string>();
     private nextId = 1;
 
@@ -47,17 +50,27 @@ export class PropertiesContentProvider implements vscode.TextDocumentContentProv
             scheme: PropertiesScheme,
             path: `/properties-${this.nextId++}.json`,
         });
+
+        if (this.contents.size >= maxSnapshots) {
+            const oldest = this.contents.keys().next();
+            if (!oldest.done) {
+                this.contents.delete(oldest.value);
+            }
+        }
+
         this.contents.set(uri.toString(), content);
         return await this.code.workspace.openTextDocument(uri);
     }
 
     /** @inheritdoc */
     public provideTextDocumentContent(uri: vscode.Uri): string {
-        return this.contents.get(uri.toString()) ?? '';
-    }
+        const key = uri.toString();
+        const content = this.contents.get(key);
+        if (content !== undefined) {
+            this.contents.delete(key);
+            this.contents.set(key, content);
+        }
 
-    /** Drops every captured snapshot. */
-    public dispose(): void {
-        this.contents.clear();
+        return content ?? '';
     }
 }

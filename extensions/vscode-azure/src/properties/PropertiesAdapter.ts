@@ -40,7 +40,7 @@ export interface PropertiesAdapter<TNode extends ConcreteAzureNode = ConcreteAzu
     canHandle(node: ConcreteAzureNode): node is TNode;
 
     /**
-     * Fetch the node's current properties, as the object to be serialized.
+     * Return the node's properties as the object to be serialized.
      *
      * Return the payload verbatim. Trimming it to what looks interesting hides exactly the field
      * the user opened this to find, and withholding secrets is

@@ -6,7 +6,7 @@
 import { createResourceManagement, type ResourceManagementClientOptionalParams, type ResourceManagementContext } from '@azure/arm-resources/api';
 import { get as sdkGetProvider } from '@azure/arm-resources/api/providers';
 import { $delete as sdkDeleteResourceGroup, list as sdkListResourceGroups, type ResourceGroupsDeleteOptionalParams, type ResourceGroupsListOptionalParams } from '@azure/arm-resources/api/resourceGroups';
-import { deleteById as sdkDeleteById, getById as sdkGetById, listByResourceGroup as sdkListByResourceGroup, type ResourcesDeleteByIdOptionalParams, type ResourcesGetByIdOptionalParams, type ResourcesListByResourceGroupOptionalParams } from '@azure/arm-resources/api/resources';
+import { deleteById as sdkDeleteById, listByResourceGroup as sdkListByResourceGroup, type ResourcesDeleteByIdOptionalParams, type ResourcesListByResourceGroupOptionalParams } from '@azure/arm-resources/api/resources';
 import type { TokenCredential } from '@azure/core-auth';
 import { CaselessMap } from '@microsoft/vscode-azure-utils';
 import type { IActionExecutor, ICodeContext, Page, SyncFactory } from '@microsoft/vscode-azure-utils';
@@ -18,7 +18,7 @@ import { createArmRestSubscriptionClient } from '../createAzureClient';
 import { toPages } from '../toPages';
 
 export type { ResourceGroupsDeleteOptionalParams, ResourceGroupsListOptionalParams };
-export type { ResourcesDeleteByIdOptionalParams, ResourcesGetByIdOptionalParams, ResourcesListByResourceGroupOptionalParams };
+export type { ResourcesDeleteByIdOptionalParams, ResourcesListByResourceGroupOptionalParams };
 
 /** ARM and logical resource type for Azure Static Web Apps (`Microsoft.Web/staticSites`). */
 export const StaticWebAppResourceType = 'Microsoft.Web/staticSites';
@@ -72,14 +72,6 @@ export interface IResourceClient {
     };
     readonly resources: {
         listByResourceGroup(resourceGroupName: string, options?: ResourcesListByResourceGroupOptionalParams): AsyncIterable<Page<GenericResource>>;
-        /**
-         * Read a single resource by its ARM id.
-         *
-         * `resourceType` is used only to resolve the api-version through
-         * {@linkcode IResourceClient.providers providers}; the id alone
-         * addresses the resource.
-         */
-        getById(resourceId: string, resourceType: string, options?: ResourcesGetByIdOptionalParams): Promise<GenericResource>;
         deleteById(resourceId: string, resourceType: string, options?: ResourcesDeleteByIdOptionalParams): Promise<void>;
     };
     readonly providers: {
@@ -133,7 +125,6 @@ export class ResourceClient implements IResourceClient {
     public get resources(): IResourceClient['resources'] {
         return {
             listByResourceGroup: (resourceGroupName, options) => this.listResources(resourceGroupName, options),
-            getById: (resourceId, resourceType, options) => this.getResourceById(resourceId, resourceType, options),
             deleteById: (resourceId, resourceType, options) => this.deleteResourceById(resourceId, resourceType, options),
         };
     }
@@ -164,12 +155,6 @@ export class ResourceClient implements IResourceClient {
 
     private async deleteResourceGroup(resourceGroupName: string, options?: ResourceGroupsDeleteOptionalParams): Promise<void> {
         await sdkDeleteResourceGroup(this.inner, resourceGroupName, options).pollUntilDone();
-    }
-
-    private async getResourceById(resourceId: string, resourceType: string, options?: ResourcesGetByIdOptionalParams): Promise<GenericResource> {
-        const apiVersion = await this.resolveApiVersion(resourceType);
-        const resource = await sdkGetById(this.inner, resourceId, apiVersion, options);
-        return attachMetadata(resource, this.subscription);
     }
 
     private async deleteResourceById(resourceId: string, resourceType: string, options?: ResourcesDeleteByIdOptionalParams): Promise<void> {

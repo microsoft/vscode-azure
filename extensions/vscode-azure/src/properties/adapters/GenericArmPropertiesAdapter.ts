@@ -3,9 +3,9 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { ConcreteAzureNode, GenericResource } from '@microsoft/vscode-azure-azutils';
-import { IResourceClientProvider, isGenericResource, isResourceGroup } from '@microsoft/vscode-azure-azutils';
-import { inject, injectable } from 'inversify';
+import type { ConcreteAzureNode, GenericResource, ResourceGroup } from '@microsoft/vscode-azure-azutils';
+import { isGenericResource, isResourceGroup } from '@microsoft/vscode-azure-azutils';
+import { injectable } from 'inversify';
 import type { PropertiesAdapter } from '../PropertiesAdapter';
 
 /**
@@ -15,15 +15,18 @@ import type { PropertiesAdapter } from '../PropertiesAdapter';
  * account's identity -- which {@linkcode GenericResource.subscription} carries -- never lands in a
  * file the user may share.
  */
-const attachedMetadata = new Set<string>(['subscription', 'logicalType'] satisfies (keyof GenericResource)[]);
+const attachedMetadata = new Set<string>([
+    'subscription',
+    'logicalType',
+    'groupingStrategy',
+    'groupingValue',
+] satisfies (keyof ResourceGroup)[]);
 
 /**
- * Reads any ARM resource's properties through the generic by-id ARM GET.
+ * Shows the ARM properties already carried by a resolved resource node.
  *
- * This needs no per-product code because ARM addresses every resource the same way and the
- * api-version, the usual blocker, is resolved from the provider metadata by `ResourceClient`. It is
- * bound from the last-registered product, so a product adapter that claims the same node always
- * wins dispatch and this is what everything else falls back to.
+ * It is bound from the last-registered product, so a product adapter that claims the same node
+ * always wins dispatch and this is what everything else falls back to.
  *
  * Resource groups are served too, even though {@linkcode isGenericResource} excludes them. That
  * exclusion exists for call sites where a group needs *different* behavior -- deleting one goes
@@ -42,26 +45,15 @@ const attachedMetadata = new Set<string>(['subscription', 'logicalType'] satisfi
  */
 @injectable()
 export class GenericArmPropertiesAdapter implements PropertiesAdapter<GenericResource> {
-    public constructor(
-        @inject(IResourceClientProvider) private readonly createClient: IResourceClientProvider,
-    ) { }
-
     /** @inheritdoc */
     public canHandle(node: ConcreteAzureNode): node is GenericResource {
         return isGenericResource(node) || isResourceGroup(node);
     }
 
-    /**
-     * @inheritdoc
-     * @throws if ARM rejects the read, including when no api-version can be resolved for the
-     *   resource's type.
-     */
-    public async read(node: GenericResource): Promise<unknown> {
-        const client = this.createClient(node.subscription);
-        const resource = await client.resources.getById(node.id, node.type);
-
-        return Object.fromEntries(
-            Object.entries(resource).filter(([key]) => !attachedMetadata.has(key)),
-        );
+    /** @inheritdoc */
+    public read(node: GenericResource): Promise<unknown> {
+        return Promise.resolve(Object.fromEntries(
+            Object.entries(node).filter(([key]) => !attachedMetadata.has(key)),
+        ));
     }
 }
