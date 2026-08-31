@@ -28,7 +28,7 @@ import { BrowseWebsite } from '../commands/tree/BrowseWebsite';
 import { OpenInPortal } from '../commands/tree/OpenInPortal';
 import { RefreshResourcesView } from '../commands/tree/RefreshResourcesView';
 import { ViewProperties } from '../commands/tree/ViewProperties';
-import { IPropertiesContentProvider, PropertiesContentProvider } from '../properties/PropertiesContentProvider';
+import { IPropertiesContentProvider, PropertiesContentProvider, PropertiesScheme } from '../properties/PropertiesContentProvider';
 import { GenericArmPropertiesAdapter } from '../properties/adapters/GenericArmPropertiesAdapter';
 import { IPropertiesAdapter } from '../properties/PropertiesAdapter';
 import type { ProductRegistrar } from '../registration/ProductRegistrar';
@@ -103,11 +103,19 @@ export function registerGenericAzure(registrar: ProductRegistrar): void {
         });
 
         container.bind(IResourceSelector).to(ResourceSelector).inSingletonScope();
-        container.bind(IPropertiesContentProvider).to(PropertiesContentProvider).inSingletonScope().onActivation(pushDisposable);
+        container.bind(PropertiesContentProvider).toSelf().inSingletonScope().onActivation(pushDisposable);
+        container.bind(IPropertiesContentProvider).toService(PropertiesContentProvider);
 
         // Bound last of all the products, so every product adapter gets first refusal and this only
         // runs for nodes nobody claimed.
         container.bind(IPropertiesAdapter).to(GenericArmPropertiesAdapter).inSingletonScope();
+    });
+
+    registrar.registerActivation(container => {
+        const code = container.get(IVsCode);
+        const provider = container.get(PropertiesContentProvider);
+
+        pushDisposable(container, code.workspace.registerTextDocumentContentProvider(PropertiesScheme, provider));
     });
 
     registrar.registerAzureClientProvider(IResourceClientProvider, (context, executor, credential, subscription) => {

@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type GenericResource, resourceExperience } from '@microsoft/vscode-azure-azutils';
+import { type ConcreteAzureNode, type GenericResource, resourceExperience } from '@microsoft/vscode-azure-azutils';
 import { ICodeContext, IOutputChannel } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
 import { inject, injectable } from 'inversify';
@@ -46,11 +46,7 @@ export class ResourceSelector {
      */
     public async select<T extends GenericResource>(logicalType: string, key?: string): Promise<T> {
         if (key) {
-            const resource = this.cache.get(key);
-            if (!resource) {
-                throw new Error(this.ctx.code.l10n.t('Resource not found in the resources view. Try refreshing the resources view and running the command again.'));
-            }
-            return resource as T;
+            return this.fromKey(key) as T;
         }
 
         return resourceExperience<T>({
@@ -60,6 +56,33 @@ export class ResourceSelector {
             logicalType,
             output: this.output,
         });
+    }
+
+    /**
+     * Resolves the node a tree-item key identifies, without narrowing to a
+     * resource or falling back to a picker.
+     *
+     * For commands that are only reachable from a tree item and act on any
+     * node -- a subscription or resource group as readily as a resource --
+     * where a picker has no type to filter on and no key means the command
+     * was invoked with nothing selected.
+     *
+     * @param key - Tree-item key, as passed to the command.
+     * @returns The node currently cached under `key`.
+     * @throws If `key` is absent, or names a node the cache no longer holds
+     *   (e.g. a stale tree item).
+     */
+    public fromKey(key: string | undefined): ConcreteAzureNode {
+        if (!key) {
+            throw new Error(this.ctx.code.l10n.t('Select an Azure resource in the resources view and run the command again.'));
+        }
+
+        const node = this.cache.get(key);
+        if (!node) {
+            throw new Error(this.ctx.code.l10n.t('Resource not found in the resources view. Try refreshing the resources view and running the command again.'));
+        }
+
+        return node;
     }
 
     /**

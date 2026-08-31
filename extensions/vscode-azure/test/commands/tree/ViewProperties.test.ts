@@ -6,14 +6,15 @@
 import { AzureNodeId, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
 import { createMockDataItemTree, makeGenericResource, makeSubscription, makeVirtualResource } from '@microsoft/vscode-azure-azutils/testing';
 import { createActionContext, IActionContext, ICodeContext, IVsCode } from '@microsoft/vscode-azure-utils';
-import { createMockCodeContext, type MockVsCodeResult } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, MockOutputChannel, type MockVsCodeResult } from '@microsoft/vscode-azure-utils/testing';
 import { Container } from 'inversify';
 import { mock, type Mock } from 'node:test';
 import { ViewProperties } from '../../../src/commands/tree/ViewProperties';
 import { IPropertiesContentProvider, PropertiesContentProvider, PropertiesScheme } from '../../../src/properties/PropertiesContentProvider';
 import { IPropertiesAdapter, type PropertiesAdapter } from '../../../src/properties/PropertiesAdapter';
 import { RedactedMarker } from '../../../src/properties/redactSecrets';
-import { IAzureViewDataTree } from '../../../src/services';
+import type { IAzureViewViewItemTree } from '../../../src/services';
+import { IResourceSelector, ResourceSelector } from '../../../src/tree/resources/ResourceSelector';
 
 describe('ViewProperties (unit)', () => {
     it('opens the payload from the matching adapter as a JSON preview', async () => {
@@ -84,7 +85,7 @@ describe('ViewProperties (unit)', () => {
 
         await expect(setup.command.execute()).to.be.rejectedWith(/Select an Azure resource/);
         await expect(setup.command.execute('azr://missing@portal.azure.com/tenants/t1/subscriptions/sub1'))
-            .to.be.rejectedWith(/no longer available/);
+            .to.be.rejectedWith(/Resource not found/);
         expect(setup.mockResult.textDocuments).to.be.empty;
     });
 
@@ -126,13 +127,24 @@ interface CommandSetup {
 function createCommand(nodes: readonly ConcreteAzureNode[], adapters: readonly PropertiesAdapter[]): CommandSetup {
     const { ctx, mock: mockResult } = createMockCodeContext();
     const context = createActionContext('viewProperties');
+    const dataTree = createMockDataItemTree([...nodes]);
+
+    // The editor registration lives in product wiring rather than the provider's constructor, so
+    // the test has to do it too for the document content to resolve.
+    const contentProvider = new PropertiesContentProvider(ctx.code);
+    ctx.code.workspace.registerTextDocumentContentProvider(PropertiesScheme, contentProvider);
 
     const container = new Container();
     container.bind(IVsCode).toConstantValue(ctx.code);
     container.bind(ICodeContext).toConstantValue(ctx);
     container.bind(IActionContext).toConstantValue(context);
-    container.bind(IAzureViewDataTree).toConstantValue(createMockDataItemTree([...nodes]));
-    container.bind(IPropertiesContentProvider).to(PropertiesContentProvider).inSingletonScope();
+    container.bind(IResourceSelector).toConstantValue(new ResourceSelector(
+        ctx,
+        new MockOutputChannel('test'),
+        dataTree,
+        undefined as unknown as IAzureViewViewItemTree,
+    ));
+    container.bind(IPropertiesContentProvider).toConstantValue(contentProvider);
     for (const adapter of adapters) {
         container.bind(IPropertiesAdapter).toConstantValue(adapter);
     }

@@ -77,10 +77,10 @@ service-specific API rather than an ARM resource ID.
 
 ### Viewing resource properties
 
-`ViewProperties` opens a node's live properties as a JSON document. It owns the
-node lookup, telemetry, error messages, redaction, and document presentation;
-what differs per resource type is only *where the properties come from*, which
-is supplied by a `PropertiesAdapter`:
+`ViewProperties` opens a node's live properties as a JSON document. It resolves
+the selected node through `ResourceSelector` and owns telemetry, redaction, and
+document presentation; what differs per resource type is only *where the
+properties come from*, which is supplied by a `PropertiesAdapter`:
 
 ```typescript
 export interface PropertiesAdapter<TNode extends ConcreteAzureNode = ConcreteAzureNode> {
@@ -216,6 +216,8 @@ public async execute(key?: string): Promise<void> {
 ```
 
 Wrap that wait in `withDelayedProgress` when enrichment may not have landed yet, so a slow ARM call shows progress instead of appearing to hang.
+
+A command that is only reachable from a tree item and acts on any node — a subscription or resource group as readily as a resource — has no logical type for a picker to filter on. Those use `selector.fromKey(key)`, which resolves the node the key names and throws when the key is absent or the tree no longer holds it. `ViewProperties` is the example.
 
 For more complex selection flows (e.g. multi-step wizards), use the `Choose*Step` classes in `packages/azutils/src/wizard/` or the convenience wrappers `subscriptionExperience`, `resourceGroupExperience`, and `resourceExperience` directly.
 

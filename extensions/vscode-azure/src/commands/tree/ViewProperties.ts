@@ -3,22 +3,22 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { getNodeType, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
+import { getNodeType } from '@microsoft/vscode-azure-azutils';
 import { IActionContext, ICodeContext } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, multiInject } from 'inversify';
 import { IPropertiesContentProvider } from '../../properties/PropertiesContentProvider';
 import { IPropertiesAdapter, type PropertiesAdapter } from '../../properties/PropertiesAdapter';
 import { applyRedaction } from '../../properties/redactSecrets';
-import { IAzureViewDataTree } from '../../services';
+import { IResourceSelector } from '../../tree/resources/ResourceSelector';
 import type { ManagedCommand } from '../ManagedCommand';
 
 /**
  * Opens the live properties of the selected tree node as a JSON document.
  *
  * What a node's properties *are* is the only product-specific part, and it lives in a
- * {@linkcode PropertiesAdapter}. This command owns everything else: resolving the selection,
- * choosing the adapter, honoring the adapter's redaction declaration, and presenting the result.
- * Adding a product therefore means binding one adapter, not writing another command.
+ * {@linkcode PropertiesAdapter}. This command owns everything else: choosing the adapter, honoring
+ * the adapter's redaction declaration, and presenting the result. Adding a product therefore means
+ * binding one adapter, not writing another command.
  *
  * Dispatch is first-match-wins over the bound adapters in product registration order, so a product
  * that claims a node takes precedence over the generic ARM adapter registered last.
@@ -34,7 +34,7 @@ export class ViewProperties implements ManagedCommand {
     public constructor(
         @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IActionContext) private readonly context: IActionContext,
-        @inject(IAzureViewDataTree) private readonly dataTree: IAzureViewDataTree,
+        @inject(IResourceSelector) private readonly selector: IResourceSelector,
         @inject(IPropertiesContentProvider) private readonly contentProvider: IPropertiesContentProvider,
         @multiInject(IPropertiesAdapter) private readonly adapters: readonly PropertiesAdapter[],
     ) { }
@@ -45,7 +45,7 @@ export class ViewProperties implements ManagedCommand {
      * @throws if the adapter's read fails.
      */
     public async execute(key?: string): Promise<void> {
-        const node = this.resolve(key);
+        const node = this.selector.fromKey(key);
         this.context.telemetry.properties.nodeType = getNodeType(node);
 
         const adapter = this.adapters.find(candidate => candidate.canHandle(node));
@@ -59,19 +59,5 @@ export class ViewProperties implements ManagedCommand {
         // JSON readonly.
         const document = await this.contentProvider.openTextDocument(JSON.stringify(properties, undefined, 4));
         await this.ctx.code.window.showTextDocument(document, { preview: true });
-    }
-
-    /** Look up the selected node, which any adapter may then claim. */
-    private resolve(key: string | undefined): ConcreteAzureNode {
-        if (!key) {
-            throw new Error(this.ctx.code.l10n.t('Select an Azure resource to view its properties.'));
-        }
-
-        const node = this.dataTree.get(key);
-        if (!node) {
-            throw new Error(this.ctx.code.l10n.t('The selected Azure resource is no longer available. Refresh the view and try again.'));
-        }
-
-        return node;
     }
 }
