@@ -46,5 +46,6 @@ describe('SwaCliConfig (unit)', () => {
     it('should refuse a server build the CLI cannot distinguish from a static export', () => {
         expect(canAzdDeployStaticWebApp('.next')).to.be.false;
         expect(canAzdDeployStaticWebApp('.\\.next')).to.be.false;
+        expect(canAzdDeployStaticWebApp('.NEXT')).to.be.false;
     });
 });

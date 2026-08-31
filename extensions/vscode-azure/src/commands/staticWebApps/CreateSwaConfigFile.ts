@@ -8,20 +8,29 @@ import { inject, injectable } from 'inversify';
 import type { ManagedCommand } from '../ManagedCommand';
 
 /** Name of the Azure Static Web Apps runtime configuration file. */
-export const staticWebAppConfigFileName = 'staticwebapp.config.json';
+const staticWebAppConfigFileName = 'staticwebapp.config.json';
 
-/** Source-compatible example written by {@linkcode CreateSwaConfigFile}. */
-export const staticWebAppExampleConfig = `{
-    "routes": [
+/**
+ * Starting point written by {@linkcode CreateSwaConfigFile}: a single route
+ * rewrite plus the SPA navigation fallback, the two rules most projects reach
+ * for first.
+ *
+ * `$schema` makes the file self-describing, so any editor resolves completions
+ * and validation for it rather than only those that match on the file name --
+ * this extension's own `jsonValidation` contribution among them.
+ */
+const staticWebAppExampleConfig = {
+    $schema: 'https://json.schemastore.org/staticwebapp.config.json',
+    routes: [
         {
-            "route": "/example",
-            "rewrite": "/example.html"
-        }
+            route: '/example',
+            rewrite: '/example.html',
+        },
     ],
-    "navigationFallback": {
-        "rewrite": "/index.html"
-    }
-}`;
+    navigationFallback: {
+        rewrite: '/index.html',
+    },
+};
 
 /** Creates and opens an example `staticwebapp.config.json` in a workspace folder. */
 @injectable()
@@ -51,7 +60,8 @@ export class CreateSwaConfigFile implements ManagedCommand {
             }
         }
 
-        await this.code.workspace.fs.writeFile(configUri, new TextEncoder().encode(staticWebAppExampleConfig));
+        const contents = `${JSON.stringify(staticWebAppExampleConfig, undefined, 4)}\n`;
+        await this.code.workspace.fs.writeFile(configUri, new TextEncoder().encode(contents));
         const document = await this.code.workspace.openTextDocument(configUri);
         await this.code.window.showTextDocument(document);
     }

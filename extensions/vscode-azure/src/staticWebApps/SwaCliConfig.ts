@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { readText, stringifyError, type IVsCode } from '@microsoft/vscode-azure-utils';
+import { CaselessSet, readText, stringifyError, type ICaselessSetReader, type IVsCode } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
 
 /** File name used by the Azure Static Web Apps CLI for project configurations. */
@@ -59,7 +59,7 @@ export interface StaticWebAppsCliConfigFile {
  * server build. Uploading that as static content produces a broken site, so it
  * is treated the same as having no deployable output.
  */
-const serverBuildLocations: readonly string[] = ['.next'];
+const serverBuildLocations: ICaselessSetReader = new CaselessSet(['.next']);
 
 /** Whether current azd can deploy the selected output as a distinct artifact directory. */
 export function canAzdDeployStaticWebApp(outputLocation: string): boolean {
@@ -67,7 +67,7 @@ export function canAzdDeployStaticWebApp(outputLocation: string): boolean {
     return normalized.length > 0
         && normalized !== '/'
         && normalized !== '.'
-        && !serverBuildLocations.includes(normalized.toLowerCase());
+        && !serverBuildLocations.has(normalized);
 }
 
 /**
