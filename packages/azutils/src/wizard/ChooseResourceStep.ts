@@ -85,14 +85,12 @@ export function classifyForResource(
     item: string,
     node: ConcreteAzureNode | undefined,
     logicalType?: string,
-    canHandle: (resource: GenericResource) => boolean = () => true,
 ): PickClassification {
     const nodeId = AzureNodeId.parse(item);
     if (nodeId.isGenericResourceNodeId()) {
         if (node
             && isGenericResource(node)
-            && (!logicalType || node.logicalType.toLowerCase() === logicalType.toLowerCase())
-            && canHandle(node)) {
+            && (!logicalType || node.logicalType.toLowerCase() === logicalType.toLowerCase())) {
             return 'terminal';
         }
         return false;

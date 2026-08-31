@@ -68,28 +68,4 @@ describe('resourceExperience (unit)', () => {
         expect(result).to.have.length(2);
         expect(result.map(r => r.name)).to.deep.equal(['site1', 'site2']);
     });
-
-    it('should support predicate-only resource filtering', async () => {
-        const { ctx, mock } = createMockCodeContext();
-        const site2 = makeGenericResource({ name: 'site2', subscription, id: '/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.Web/sites/site2' });
-        const site2Id = AzureNodeId.from(site2).toString();
-        const tree = createMockViewItemTree({
-            '': [site1Id, site2Id],
-        });
-        const dataItemTree = createMockDataItemTree([site1, site2]);
-
-        respondToPrompts(mock, [
-            { pick: 'site2' },
-        ]);
-
-        const result = await resourceExperience({
-            ...ctx,
-            tree,
-            dataItemTree,
-            canHandle: resource => resource.name === 'site2',
-            output,
-        });
-
-        expect(result).to.equal(site2);
-    });
 });

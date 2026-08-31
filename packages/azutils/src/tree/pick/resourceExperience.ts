@@ -14,14 +14,13 @@ interface ResourceExperienceOptions extends ICodeContext {
     readonly tree: NodeExperienceTree;
     readonly dataItemTree: ConcreteAzureNodeTree;
     readonly logicalType?: string;
-    readonly canHandle?: (resource: GenericResource) => boolean;
     readonly output: IOutputChannel;
     readonly title?: string;
 }
 
 /**
- * Recursively prompts for a resource accepted by the optional logical-type and
- * predicate filters.
+ * Recursively prompts for a resource, optionally restricted to a single logical
+ * type.
  *
  * @typeParam T - The expected concrete resource type (must extend
  *   {@linkcode GenericResource}).
@@ -35,17 +34,15 @@ export async function resourceExperience<T extends GenericResource>(
 export async function resourceExperience<T extends GenericResource>(
     options: ResourceExperienceOptions & { canPickMany?: boolean },
 ): Promise<T | T[]> {
-    const canHandle = (node: ConcreteAzureNode): node is T =>
-        isGenericResource(node)
-        && (!options.logicalType || node.logicalType.toLowerCase() === options.logicalType.toLowerCase())
-        && (!options.canHandle || options.canHandle(node));
     const experienceOptions = {
         ...options,
         title: options.title ?? options.code.l10n.t('Select Resource'),
         stepName: 'resource',
-        canHandle,
+        canHandle: (node: ConcreteAzureNode): node is T =>
+            isGenericResource(node)
+            && (!options.logicalType || node.logicalType.toLowerCase() === options.logicalType.toLowerCase()),
         classify: (key: string, _treeItem: ITreeItem, node: ConcreteAzureNode | undefined) =>
-            classifyForResource(key, node, options.logicalType, resource => !options.canHandle || options.canHandle(resource)),
+            classifyForResource(key, node, options.logicalType),
     };
 
     return options.canPickMany

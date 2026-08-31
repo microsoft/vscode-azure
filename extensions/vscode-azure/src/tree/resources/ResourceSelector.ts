@@ -66,15 +66,8 @@ export interface SelectResourceOptions {
     readonly messages?: ResolveMessages;
     /** Restricts selection to this logical resource type, compared case-insensitively. */
     readonly logicalType?: string;
-    /** Further restricts which resources are selectable. */
-    readonly canHandle?: (resource: GenericResource) => boolean;
     /** Picker title used when no key was supplied. */
     readonly title?: string;
-}
-
-/** Resource selection options whose predicate also narrows the return type. */
-export interface NarrowingSelectResourceOptions<TResource extends GenericResource> extends SelectResourceOptions {
-    readonly canHandle: (resource: GenericResource) => resource is TResource;
 }
 
 /** Outcome of a key lookup: either the node, or why there isn't one. */
@@ -143,24 +136,21 @@ export class ResourceSelector {
     }
 
     /**
-     * Resolves an accepted {@linkcode GenericResource}.
+     * Resolves a {@linkcode GenericResource} from a tree-item key, or prompts
+     * the user to pick one from the resource tree.
      *
-     * Both direct key resolution and the picker honor
-     * {@linkcode SelectResourceOptions.logicalType logicalType} and
-     * {@linkcode SelectResourceOptions.canHandle canHandle}.
+     * Both paths honor {@linkcode SelectResourceOptions.logicalType logicalType},
+     * so a key naming a resource of another type is rejected rather than
+     * silently accepted.
      *
      * @returns The resolved resource.
      * @throws If the supplied key does not identify an accepted resource, or if
      *   the user cancels the picker.
      */
-    public selectResource<TResource extends GenericResource>(options: NarrowingSelectResourceOptions<TResource>): Promise<TResource>;
-    public selectResource(options: SelectResourceOptions): Promise<GenericResource>;
     public async selectResource(options: SelectResourceOptions): Promise<GenericResource> {
-        const canHandleResource = (resource: GenericResource): boolean =>
-            (!options.logicalType || resource.logicalType.toLowerCase() === options.logicalType.toLowerCase())
-            && (!options.canHandle || options.canHandle(resource));
         const canHandle = (node: ConcreteAzureNode): node is GenericResource =>
-            isGenericResource(node) && canHandleResource(node);
+            isGenericResource(node)
+            && (!options.logicalType || node.logicalType.toLowerCase() === options.logicalType.toLowerCase());
         const notFound = this.ctx.code.l10n.t('Resource not found in the resources view. Try refreshing the resources view and running the command again.');
         return this.selectOrPrompt({
             key: options.key,
@@ -173,7 +163,6 @@ export class ResourceSelector {
             output: this.output,
             title: options.title,
             logicalType: options.logicalType,
-            canHandle: canHandleResource,
         }));
     }
 
