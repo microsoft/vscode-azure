@@ -193,27 +193,7 @@
                 "title": "%commands.vscode-azure/selectSubscriptions%"
             }
         ],
-        "submenus": [
-            {
-                "id": "vscode-azure/staticWebApps/workspaceActions",
-                "label": "%submenus.vscode-azure/staticWebApps/workspaceActions%",
-                "icon": {
-                    "light": "dist/azureIcons/microsoft.web/staticsites.svg",
-                    "dark": "dist/azureIcons/microsoft.web/staticsites.svg"
-                }
-            }
-        ],
         "menus": {
-            "vscode-azure/staticWebApps/workspaceActions": [
-                {
-                    "command": "vscode-azure/staticWebApps/createSwaConfigFile",
-                    "group": "1_project@1"
-                },
-                {
-                    "command": "vscode-azure/staticWebApps/createNew",
-                    "group": "2_create@1"
-                }
-            ],
             "commandPalette": [
                 {
                     "command": "vscode-azure/acquireTool",
@@ -292,11 +272,6 @@
                     "command": "vscode-azure/workspace/refresh",
                     "when": "view == vscode-azure/workspace",
                     "group": "navigation@1"
-                },
-                {
-                    "submenu": "vscode-azure/staticWebApps/workspaceActions",
-                    "when": "view == vscode-azure/workspace",
-                    "group": "navigation@3"
                 },
                 {
                     "command": "vscode-azure/activity/clearSuccessful",
