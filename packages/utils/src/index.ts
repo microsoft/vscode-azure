@@ -19,6 +19,7 @@ export * from './data/collectAsync';
 export * from './data/InflightMap';
 export * from './data/Limiter';
 export * from './data/Page';
+export * from './data/redactSecrets';
 export * from './tree/DataItemTree';
 export * from './tree/DataProvider';
 export * from './tree/drillChildren';

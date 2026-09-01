@@ -10,6 +10,7 @@ import type { ManagedCommandRegistration } from '../registration/ProductRegistra
 import { userToolRequest } from '../tools/ToolService';
 import { AzdDown } from './deploy/AzdDown';
 import { AzdUp } from './deploy/AzdUp';
+import { ConfigureCicd } from './deploy/ConfigureCicd';
 import { ClearActivities } from './deploy/ClearActivities';
 import type { ManagedCommand } from './ManagedCommand';
 import { AcquireTool } from './tools/AcquireTool';
@@ -37,6 +38,7 @@ export function registerCommands(
 
     registerManagedCommand(container, AzdUpCommandId, AzdUp);
     registerManagedCommand(container, AzdDownCommandId, AzdDown);
+    registerManagedCommand(container, 'vscode-azure/configureCicd', ConfigureCicd);
     // Callable by other extensions, which pass an AcquireToolRequest and get
     // back an AcquireToolResult. Hidden from the palette via `when: false`.
     registerManagedCommand(container, 'vscode-azure/acquireTool', AcquireTool);

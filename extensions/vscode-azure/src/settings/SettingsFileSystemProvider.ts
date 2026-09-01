@@ -191,7 +191,8 @@ export class SettingsFileSystemProvider implements vscode.FileSystemProvider, Di
 
     /**
      * @inheritdoc
-     * @throws `FileNotFound` if the URI cannot be resolved to a settings node and adapter.
+     * @throws `Unavailable` if the URI cannot be resolved to a settings node, or the adapter
+     * fails to read it. The thrown message carries the underlying cause.
      */
     public async stat(uri: vscode.Uri): Promise<vscode.FileStat> {
         const entry = await this.load(uri, { allowReuse: false, showProgress: false });
@@ -209,7 +210,8 @@ export class SettingsFileSystemProvider implements vscode.FileSystemProvider, Di
 
     /**
      * @inheritdoc
-     * @throws `FileNotFound` if the URI cannot be resolved to a settings node and adapter.
+     * @throws `Unavailable` if the URI cannot be resolved to a settings node, or the adapter
+     * fails to read it. The thrown message carries the underlying cause.
      */
     public async readFile(uri: vscode.Uri): Promise<Uint8Array> {
         const entry = await this.load(uri, { allowReuse: true, showProgress: true });
@@ -341,9 +343,13 @@ export class SettingsFileSystemProvider implements vscode.FileSystemProvider, Di
                 )
                 : await read;
         } catch (error) {
-            // The editor only acts on `FileNotFound`; anything else surfaces as an opaque failure.
-            // Preserve the original message so the cause is not lost.
-            throw this.code.FileSystemError.FileNotFound(stringifyError(error));
+            // Deliberately *not* `FileNotFound`. The editor calls `stat` before `readFile`, and a
+            // `FileNotFound` from `stat` is the one shape whose message it discards: it reports its
+            // own 'Unable to resolve nonexistent file <uri>' instead, so the real cause -- an ARM
+            // rejection, say -- never reaches the user and the failure looks like a bug in the URI.
+            // Every other code preserves the message, and `Unavailable` is the honest one: the
+            // document exists, the service backing it just could not produce it.
+            throw this.code.FileSystemError.Unavailable(stringifyError(error));
         }
 
         return this.store(uri, snapshot);

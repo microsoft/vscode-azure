@@ -5,7 +5,7 @@
 
 import type { AzureAccount, AzureListingCache, AzureSubscription, AzureTenant } from '@microsoft/vscode-azure-azutils';
 import { DiscoveryConcurrency, isNotSignedInError } from '@microsoft/vscode-azure-azutils';
-import { CaselessMap } from '@microsoft/vscode-azure-utils';
+import { CaselessMap, type Page } from '@microsoft/vscode-azure-utils';
 import { subscriptionFilterKey } from '../../utils/subscriptionFilter';
 
 /**
@@ -59,40 +59,72 @@ export interface ReachableSubscriptionsResult {
 }
 
 /**
- * Enumerate the first page of reachable tenants across all signed-in accounts.
+ * Enumerate the tenants reachable across all signed-in accounts, one aggregate
+ * page at a time.
  *
- * An account can have access to a very large number of tenants (hundreds), so
- * this deliberately reads only the first page of each account's tenants. The
- * result is intended to seed a combobox where the user can either pick a
- * suggested tenant or type any tenant ID directly, so an exhaustive list is
- * neither needed nor desirable.
+ * Each advance pulls one page from **every** account that still has more, in
+ * parallel, and yields every tenant discovered so far -- deduplicated and sorted
+ * for direct display. A caller can therefore show the first page immediately and
+ * pay for further round trips only when the user asks to see more.
+ *
+ * Reading further is cheap relative to the rest of the auth walk: one
+ * account-scoped token covers every page and no per-tenant token is minted, so
+ * the cost is round trips rather than sign-in prompts. It is still opt-in,
+ * because an account with access to hundreds of tenants would otherwise pay for
+ * all of them on every sign-in.
  *
  * Read **unfiltered**: this feeds a flow that decides which tenants to sign in
  * to, and a list narrowed by the current filter could only ever narrow it
  * further.
+ *
+ * An account whose listing fails drops out of the walk rather than failing the
+ * whole generator, and tenants already gathered from it are kept. Enumeration
+ * being blocked outright (conditional access) is precisely the case that sends a
+ * user here, and collapsing the suggestions to nothing because one account of
+ * several refused would take away the list they were reading.
  */
-export async function listFirstPageReachableTenants(listings: AzureListingCache): Promise<ReachableTenant[]> {
+export async function* listReachableTenantPages(listings: AzureListingCache): AsyncIterable<Page<ReachableTenant>> {
     const tenants = new CaselessMap<ReachableTenant>();
+    let walking = (await listings.listAccounts()).map(account => ({
+        account,
+        iterator: listings.listTenants(account)[Symbol.asyncIterator](),
+    }));
 
-    for (const account of await listings.listAccounts()) {
-        // First page only -- the loop breaks rather than draining the listing,
-        // so later pages are never pulled.
-        for await (const page of listings.listTenants(account)) {
-            for (const tenant of page.items) {
-                const key = `${account.id}/${tenant.tenantId}`;
+    while (walking.length > 0) {
+        const results = await Promise.all(walking.map(async walk => {
+            try {
+                return { walk, result: await walk.iterator.next() };
+            } catch {
+                // This account stops contributing; the others carry on.
+                return { walk, result: undefined };
+            }
+        }));
+
+        walking = [];
+        for (const { walk, result } of results) {
+            if (!result || result.done) {
+                continue;
+            }
+
+            for (const tenant of result.value.items) {
+                const key = `${walk.account.id}/${tenant.tenantId}`;
                 if (!tenants.has(key)) {
-                    tenants.set(key, { account, tenant });
+                    tenants.set(key, { account: walk.account, tenant });
                 }
             }
-            break;
-        }
-    }
 
-    return [...tenants.values()].sort((a, b) => {
-        return a.tenant.displayName.localeCompare(b.tenant.displayName)
-            || a.tenant.tenantId.localeCompare(b.tenant.tenantId)
-            || a.account.label.localeCompare(b.account.label);
-    });
+            if (result.value.hasMore) {
+                walking.push(walk);
+            }
+        }
+
+        const items = [...tenants.values()].sort((a, b) => {
+            return a.tenant.displayName.localeCompare(b.tenant.displayName)
+                || a.tenant.tenantId.localeCompare(b.tenant.tenantId)
+                || a.account.label.localeCompare(b.account.label);
+        });
+        yield { items, hasMore: walking.length > 0 };
+    }
 }
 
 /**

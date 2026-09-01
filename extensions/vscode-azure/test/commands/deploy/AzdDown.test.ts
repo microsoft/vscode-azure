@@ -71,7 +71,7 @@ describe('AzdDown (unit)', () => {
         await cmd.execute(MockUri.file('/workspace/azure.yaml'));
 
         expect(azd.down.mock.callCount()).to.equal(1);
-        const cwd = azd.down.mock.calls[0].arguments[0] as vscode.Uri;
+        const cwd = azd.down.mock.calls[0].arguments[0];
         expect(cwd.path).to.equal('/workspace');
 
         // The tree should be refreshed after the teardown
@@ -98,7 +98,7 @@ describe('AzdDown (unit)', () => {
 
         expect(mockResult.window.showWarningMessage.mock.callCount()).to.equal(0);
         expect(azd.down.mock.callCount()).to.equal(1);
-        expect((azd.down.mock.calls[0].arguments[0] as vscode.Uri).path).to.equal('/workspace');
+        expect((azd.down.mock.calls[0].arguments[0]).path).to.equal('/workspace');
         expect(invalidate.mock.callCount()).to.equal(1);
     });
 
@@ -109,7 +109,7 @@ describe('AzdDown (unit)', () => {
         await cmd.execute();
 
         expect(azd.down.mock.callCount()).to.equal(1);
-        expect((azd.down.mock.calls[0].arguments[0] as vscode.Uri).path).to.equal('/workspace');
+        expect((azd.down.mock.calls[0].arguments[0]).path).to.equal('/workspace');
     });
 
     it('should show error when no workspace folders are open', async () => {

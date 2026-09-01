@@ -16,7 +16,7 @@ import { MockQuickPick } from './input/MockQuickPick';
 import { MockFileChangeType, MockFilePermission, MockFileSystem, MockFileSystemError, MockFileType } from './MockFileSystem';
 import { MockOutputChannel } from './MockOutputChannel';
 import { MockUri } from './MockUri';
-import { MockConfigurationTarget, MockProgressLocation, MockRelativePattern, MockShellExecution, MockTask, MockTaskScope, MockThemeColor, MockThemeIcon, MockTreeItemCollapsibleState } from './MockValueTypes';
+import { MockConfigurationTarget, MockMarkdownString, MockProgressLocation, MockRelativePattern, MockShellExecution, MockTask, MockTaskScope, MockThemeColor, MockThemeIcon, MockTreeItemCollapsibleState } from './MockValueTypes';
 import { MockTreeItem } from './tree/MockTreeItem';
 
 /**
@@ -354,14 +354,49 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
     const taskProcessEndEmitter = new EventEmitter<vscode.TaskProcessEndEvent>();
 
     const textDocuments: vscode.TextDocument[] = [];
+    const textDocumentContentProviders = new Map<string, vscode.TextDocumentContentProvider>();
 
     const registerFileSystemProvider = mock.fn(
         (_scheme: string, _provider: vscode.FileSystemProvider) => ({ dispose: () => undefined }),
     );
 
+    const registerTextDocumentContentProvider = mock.fn(
+        (scheme: string, provider: vscode.TextDocumentContentProvider) => {
+            if (textDocumentContentProviders.has(scheme)) {
+                throw new Error(`A text document content provider is already registered for '${scheme}'.`);
+            }
+
+            textDocumentContentProviders.set(scheme, provider);
+            return {
+                dispose: () => {
+                    textDocumentContentProviders.delete(scheme);
+                },
+            };
+        },
+    );
+
+    const readUriText = async (uri: vscode.Uri): Promise<string> => {
+        const provider = textDocumentContentProviders.get(uri.scheme);
+        if (provider) {
+            const token = {
+                isCancellationRequested: false,
+                onCancellationRequested: () => Disposable.None,
+            } satisfies vscode.CancellationToken;
+            return (await Promise.resolve(provider.provideTextDocumentContent(uri, token))) ?? '';
+        }
+
+        return Buffer.from(fs.files.get(uri.path) ?? new Uint8Array()).toString();
+    };
+
     const openTextDocument = mock.fn(
-        (uri: vscode.Uri): Promise<vscode.TextDocument> => {
-            const document = { uri } as vscode.TextDocument;
+        async (uri: vscode.Uri): Promise<vscode.TextDocument> => {
+            const content = await readUriText(uri);
+            const document = {
+                uri,
+                isUntitled: false,
+                languageId: languageFromPath(uri.path),
+                getText: () => content,
+            } as unknown as vscode.TextDocument;
             textDocuments.push(document);
             return Promise.resolve(document);
         },
@@ -402,6 +437,7 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         get workspaceFolders() { return workspaceFolders.length > 0 ? workspaceFolders : undefined; },
         fs,
         registerFileSystemProvider,
+        registerTextDocumentContentProvider,
         openTextDocument,
     };
 
@@ -436,6 +472,7 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         ProgressLocation: MockProgressLocation,
         ThemeIcon: MockThemeIcon,
         ThemeColor: MockThemeColor,
+        MarkdownString: MockMarkdownString,
         ShellExecution: MockShellExecution,
         RelativePattern: MockRelativePattern,
         Task: MockTask,
@@ -466,6 +503,18 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         textDocuments,
         shownDocuments,
     } as unknown as MockVsCodeResult;
+}
+
+function languageFromPath(path: string): string | undefined {
+    if (path.endsWith('.json')) {
+        return 'json';
+    }
+
+    if (path.endsWith('.jsonc')) {
+        return 'jsonc';
+    }
+
+    return undefined;
 }
 
 /**
@@ -695,6 +744,9 @@ export interface ResponseTracker {
  * Responses are consumed in order: the first response answers the
  * first supported UI shown, the second answers the next, etc.
  *
+ * Notifications shown without any buttons are fire-and-forget and do not
+ * consume a response, since there is nothing for a test to answer.
+ *
  * @example
  * ```ts
  * const { ctx, mock } = createMockCodeContext();
@@ -757,6 +809,15 @@ export function respondToPrompts(
     });
 
     const respondToMessage = (...args: unknown[]): Promise<string | undefined> => {
+        const buttons = args.slice(1).filter((arg): arg is string => typeof arg === 'string');
+        if (buttons.length === 0) {
+            // A notification with no buttons is fire-and-forget: there is
+            // nothing for the caller to answer, so it must not consume a
+            // queued response. Otherwise adding a toast to product code would
+            // break every test that drives unrelated UI through this queue.
+            return Promise.resolve(undefined);
+        }
+
         const response = nextResponse('message');
         if (response === 'cancel') {
             return Promise.resolve(undefined);
@@ -765,7 +826,6 @@ export function respondToPrompts(
             throw new Error('Got a non-button response but a message was shown');
         }
 
-        const buttons = args.slice(1).filter((arg): arg is string => typeof arg === 'string');
         if (!buttons.includes(response.button)) {
             throw new Error(`Message does not have a '${response.button}' button`);
         }

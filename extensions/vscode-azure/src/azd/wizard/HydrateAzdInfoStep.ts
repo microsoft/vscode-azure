@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { PromptStep, fileExists, type AsWritable, IVsCode, showMessage } from '@microsoft/vscode-azure-utils';
+import { PromptStep, fileExists, type AsWritable, IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 import { type AzdEnvironment, IAzdService } from '../AzdService';
@@ -69,13 +69,6 @@ export class HydrateAzdInfoStep<TContext extends AzdWizardContext> extends Promp
 
             if (serviceNames.length > 0) {
                 result.azdServiceName = serviceNames[0];
-            } else {
-                // Surface a non-blocking warning. Provisioning will still
-                // succeed, but `azd deploy` won't be able to target the new
-                // resource until the user adds a `services:` entry.
-                void showMessage(this.code, this.code.l10n.t(
-                    'azure.yaml has no `services` entry. `azd deploy` and `azd up` will not be able to target this resource until you add a service (e.g. by running `azd add`).',
-                ), { severity: 'warning' });
             }
         }
 

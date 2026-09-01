@@ -12,35 +12,35 @@ describe('PickRuntimeVersionStep (unit)', () => {
         it('should return false when no runtime is selected', () => {
             const { ctx } = createMockCodeContext();
             const step = new PickRuntimeVersionStep(ctx);
-            expect(step.shouldPrompt({})).to.be.false;
+            expect(step.shouldPrompt({ resourceDisplayName: 'Function App' })).to.be.false;
         });
 
         it('should return false when runtimeVersion is already set', () => {
             const { ctx } = createMockCodeContext();
             const step = new PickRuntimeVersionStep(ctx);
             const context: Partial<CreateFunctionAppContext> = { functionWorkerRuntime: 'node', runtimeVersion: '24' };
-            expect(step.shouldPrompt(context)).to.be.false;
+            expect(step.shouldPrompt({ resourceDisplayName: 'Function App', ...context })).to.be.false;
         });
 
         it('should return true when a single-version runtime is selected (resolved without prompting)', () => {
             const { ctx } = createMockCodeContext();
             const step = new PickRuntimeVersionStep(ctx);
             const context: Partial<CreateFunctionAppContext> = { functionWorkerRuntime: 'custom' };
-            expect(step.shouldPrompt(context)).to.be.true;
+            expect(step.shouldPrompt({ resourceDisplayName: 'Function App', ...context })).to.be.true;
         });
 
         it('should return true when the runtime supports multiple versions', () => {
             const { ctx } = createMockCodeContext();
             const step = new PickRuntimeVersionStep(ctx);
             const context: Partial<CreateFunctionAppContext> = { functionWorkerRuntime: 'node' };
-            expect(step.shouldPrompt(context)).to.be.true;
+            expect(step.shouldPrompt({ resourceDisplayName: 'Function App', ...context })).to.be.true;
         });
 
         it('should return false when infrastructure already exists (hasInfra)', () => {
             const { ctx } = createMockCodeContext();
             const step = new PickRuntimeVersionStep(ctx);
             const context: Partial<CreateFunctionAppContext> = { functionWorkerRuntime: 'node', hasInfra: true };
-            expect(step.shouldPrompt(context)).to.be.false;
+            expect(step.shouldPrompt({ resourceDisplayName: 'Function App', ...context })).to.be.false;
         });
     });
 
@@ -50,7 +50,7 @@ describe('PickRuntimeVersionStep (unit)', () => {
             respondToPrompts(mockResult, [{ pick: '24' }]);
 
             const step = new PickRuntimeVersionStep(ctx);
-            const result = await step.prompt({ functionWorkerRuntime: 'node' });
+            const result = await step.prompt({ resourceDisplayName: 'Function App', functionWorkerRuntime: 'node' });
 
             expect(result.runtimeVersion).to.equal('24');
         });
@@ -59,7 +59,7 @@ describe('PickRuntimeVersionStep (unit)', () => {
             const { ctx } = createMockCodeContext();
 
             const step = new PickRuntimeVersionStep(ctx);
-            const result = await step.prompt({ functionWorkerRuntime: 'custom' });
+            const result = await step.prompt({ resourceDisplayName: 'Function App', functionWorkerRuntime: 'custom' });
 
             expect(result.runtimeVersion).to.equal('');
         });

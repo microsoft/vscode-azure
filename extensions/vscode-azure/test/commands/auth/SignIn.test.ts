@@ -5,7 +5,7 @@
 
 import { AzureListingCache, createDefaultCredentialFactory, type AzureAccount, type AzureTenant, type ICredentialFactory } from '@microsoft/vscode-azure-azutils';
 import { createMockAzureListingFetcher, makeAccount, makeTenant, type MockAzureListingFetcher } from '@microsoft/vscode-azure-azutils/testing';
-import { CancellationError, collectPages, Everything, Roots, type IVsCode } from '@microsoft/vscode-azure-utils';
+import { CancellationError, collectPages, Everything, Roots, type IVsCode, type Page } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, createTestActionExecutor, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { mock, type Mock } from 'node:test';
 import { pickTenantOrEnterId, SignIn } from '../../../src/commands/auth/SignIn';
@@ -370,50 +370,156 @@ describe('SignIn (unit)', () => {
 });
 
 describe('pickTenantOrEnterId (unit)', () => {
-    function makeReachableTenant(tenantId: string, displayName: string): ReachableTenant {
-        const account = makeAccount({ id: 'acct-1', label: 'Account One' });
+    function makeReachableTenant(tenantId: string, displayName: string, accountId = 'acct-1', accountLabel = 'Account One'): ReachableTenant {
+        const account = makeAccount({ id: accountId, label: accountLabel });
         return { account, tenant: makeTenant({ tenantId, displayName, accountId: account.id }) };
     }
 
+    /** Pages of suggestions to drive the picker with. An `Error` makes that advance throw. */
+    // eslint-disable-next-line @typescript-eslint/require-await -- a generator over fixed pages has nothing to await
+    async function* tenantPages(...values: (Page<ReachableTenant> | Error)[]): AsyncIterable<Page<ReachableTenant>> {
+        for (const value of values) {
+            if (value instanceof Error) {
+                throw value;
+            }
+            yield value;
+        }
+    }
+
+    const onFirstPage = makeReachableTenant('tenant-1', 'Tenant One');
+    const onLaterPage = makeReachableTenant('tenant-2', 'Tenant Two', 'acct-2', 'Account Two');
+    const loadMoreLabel = 'Load More Tenants...';
+
     it('should offer a synthetic sign-in item for a pasted tenant GUID', async () => {
-        const { ctx, mock } = createMockCodeContext();
+        const { ctx, mock: code } = createMockCodeContext();
         const tenantId = 'aaaaaaaa-1111-2222-3333-444455556666';
+        respondToPrompts(code, [{ value: tenantId }]);
 
-        const resultPromise = pickTenantOrEnterId(ctx, [makeReachableTenant('tenant-1', 'Tenant One')]);
-
-        const qp = mock.quickPicks[0];
-        qp.changeValue(tenantId);
+        const pick = await pickTenantOrEnterId(ctx, tenantPages({ items: [onFirstPage], hasMore: false }));
 
         // The synthetic "sign in to <id>" item is listed after the suggestion.
-        const synthetic = qp.items[qp.items.length - 1];
-        expect(synthetic.label).to.equal(`Sign in to tenant: ${tenantId}`);
-
-        qp.accept();
-        const pick = await resultPromise;
+        const items = code.quickPicks[0].items;
+        expect(items[items.length - 1].label).to.equal(`Sign in to tenant: ${tenantId}`);
         expect(pick.tenantId).to.equal(tenantId);
         // A typed tenant ID has no known account context.
         expect(pick.accountId).to.be.undefined;
     });
 
     it('should not offer a synthetic item when the typed value is not a GUID', async () => {
-        const { ctx, mock } = createMockCodeContext();
+        const { ctx, mock: code } = createMockCodeContext();
+        // Users paste tenant GUIDs rather than typing them, so a non-GUID value
+        // is a filter over the suggestions, not a sign-in target.
+        respondToPrompts(code, [{ value: 'Tenant' }]);
 
-        const resultPromise = pickTenantOrEnterId(ctx, [makeReachableTenant('tenant-1', 'Tenant One')]);
+        const pick = await pickTenantOrEnterId(ctx, tenantPages({ items: [onFirstPage], hasMore: false }));
 
-        const qp = mock.quickPicks[0];
-        // Users never type a tenant GUID -- a non-GUID value is a filter, so no
-        // synthetic sign-in item should be offered.
-        qp.changeValue('Tenant');
-
-        expect(qp.items.some(item => item.label.startsWith('Sign in to tenant:'))).to.be.false;
-        expect(qp.items).to.have.length(1);
-
-        // Activate and accept the remaining suggestion so the prompt resolves
-        // (the mock does not auto-activate filtered items the way VS Code does).
-        qp.activeItems = [qp.items[0]];
-        qp.accept();
-        const pick = await resultPromise;
+        expect(code.quickPicks[0].items.map(item => item.label)).to.deep.equal(['Tenant One (tenant-1)']);
         expect(pick.tenantId).to.equal('tenant-1');
         expect(pick.accountId).to.equal('acct-1');
+    });
+
+    describe('loading more tenants', () => {
+        it('should not offer to load more when the page is the whole listing', async () => {
+            const { ctx, mock: code } = createMockCodeContext();
+            respondToPrompts(code, [{ pick: 'Tenant One (tenant-1)' }]);
+
+            await pickTenantOrEnterId(ctx, tenantPages({ items: [onFirstPage], hasMore: false }));
+
+            expect(code.quickPicks[0].items.map(item => item.label)).to.not.include(loadMoreLabel);
+        });
+
+        it('should show the next page of suggestions when asked', async () => {
+            const { ctx, mock: code } = createMockCodeContext();
+            respondToPrompts(code, [{ pick: loadMoreLabel }, { pick: 'Tenant Two (tenant-2)' }]);
+
+            const pick = await pickTenantOrEnterId(ctx, tenantPages(
+                { items: [onFirstPage], hasMore: true },
+                { items: [onFirstPage, onLaterPage], hasMore: false },
+            ));
+
+            // The row goes away once there is nothing further to load.
+            expect(code.quickPicks[1].items.map(item => item.label)).to.deep.equal([
+                'Tenant One (tenant-1)',
+                'Tenant Two (tenant-2)',
+            ]);
+            // The tenant the user could not otherwise have reached without
+            // producing its id by hand, listed under the account that found it.
+            expect(pick).to.deep.equal({ tenantId: 'tenant-2', accountId: 'acct-2' });
+        });
+
+        it('should keep offering to load more while pages remain', async () => {
+            const { ctx, mock: code } = createMockCodeContext();
+            respondToPrompts(code, [{ pick: loadMoreLabel }, { pick: 'Tenant Two (tenant-2)' }]);
+
+            await pickTenantOrEnterId(ctx, tenantPages(
+                { items: [onFirstPage], hasMore: true },
+                { items: [onFirstPage, onLaterPage], hasMore: true },
+            ));
+
+            const row = code.quickPicks[1].items.find(item => item.label === loadMoreLabel);
+            // Always shown, because the row exists to rescue a filter that
+            // matched nothing in the pages read so far.
+            expect(row?.alwaysShow).to.be.true;
+        });
+
+        it('should carry the typed filter across the reload', async () => {
+            const { ctx, mock: code } = createMockCodeContext();
+            // 'Two' matches nothing on the first page, so the load-more row is
+            // the only thing left to accept -- exactly what it is there for.
+            respondToPrompts(code, [{ value: 'Two' }, { pick: 'Tenant Two (tenant-2)' }]);
+
+            const pick = await pickTenantOrEnterId(ctx, tenantPages(
+                { items: [onFirstPage], hasMore: true },
+                { items: [onFirstPage, onLaterPage], hasMore: false },
+            ));
+
+            expect(code.quickPicks[1].value).to.equal('Two');
+            expect(pick.tenantId).to.equal('tenant-2');
+        });
+
+        it('should keep the suggestions it has when the next page fails', async () => {
+            const { ctx, mock: code } = createMockCodeContext();
+            respondToPrompts(code, [{ pick: loadMoreLabel }, { pick: 'Tenant One (tenant-1)' }]);
+
+            const pick = await pickTenantOrEnterId(ctx, tenantPages(
+                { items: [onFirstPage], hasMore: true },
+                new Error('listing tenants failed'),
+            ));
+
+            // A failed advance ends the listing rather than the picker: what was
+            // already found stays on screen.
+            expect(code.quickPicks[1].items.map(item => item.label)).to.deep.equal(['Tenant One (tenant-1)']);
+            expect(pick.tenantId).to.equal('tenant-1');
+        });
+
+        it('should sign in to a pasted tenant GUID rather than loading more', async () => {
+            const { ctx, mock: code } = createMockCodeContext();
+            const tenantId = 'aaaaaaaa-1111-2222-3333-444455556666';
+            respondToPrompts(code, [{ value: tenantId }]);
+
+            const pick = await pickTenantOrEnterId(ctx, tenantPages(
+                { items: [onFirstPage], hasMore: true },
+                { items: [onFirstPage, onLaterPage], hasMore: false },
+            ));
+
+            // A pasted GUID filters out every suggestion, leaving two rows that
+            // refuse to be filtered: the load-more action and the sign-in row
+            // the user's own typing produced. Enter has to take the latter, or
+            // pasting a tenant ID just pages the list instead.
+            expect(pick).to.deep.equal({ tenantId });
+            expect(code.quickPicks).to.have.length(1);
+        });
+
+        it('should still allow a pasted tenant GUID when listing is blocked outright', async () => {
+            const { ctx, mock: code } = createMockCodeContext();
+            const tenantId = 'aaaaaaaa-1111-2222-3333-444455556666';
+            respondToPrompts(code, [{ value: tenantId }]);
+
+            // Conditional access can deny tenant enumeration entirely, which is
+            // one of the reasons a user reaches for Sign In in the first place.
+            const pick = await pickTenantOrEnterId(ctx, tenantPages(new Error('conditional access denied tenant listing')));
+
+            expect(pick).to.deep.equal({ tenantId });
+        });
     });
 });

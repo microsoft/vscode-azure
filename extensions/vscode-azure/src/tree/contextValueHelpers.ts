@@ -7,6 +7,7 @@ import type { GenericResource } from '@microsoft/vscode-azure-azutils';
 import { BrowseWebsite } from '../commands/tree/BrowseWebsite';
 import { DeleteAzureResource } from '../commands/tree/DeleteAzureResource';
 import { OpenInPortal } from '../commands/tree/OpenInPortal';
+import { ViewProperties } from '../commands/tree/ViewProperties';
 import { getWebsiteUrl } from './resources/websiteUrl';
 
 /**
@@ -34,6 +35,7 @@ export function resourceContextValue(resource: GenericResource, ...additional: s
     const contextValues = [
         OpenInPortal.ContextValue,
         DeleteAzureResource.ResourceContextValue,
+        ViewProperties.ContextValue,
         ...additional,
     ];
 

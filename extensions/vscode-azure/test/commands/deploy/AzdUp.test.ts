@@ -65,7 +65,7 @@ describe('AzdUp (unit)', () => {
         await cmd.execute();
 
         expect(azd.provision.mock.callCount()).to.equal(1);
-        expect((azd.provision.mock.calls[0].arguments[0] as vscode.Uri).path).to.equal('/workspace');
+        expect((azd.provision.mock.calls[0].arguments[0]).path).to.equal('/workspace');
     });
 
     it('should show error when no workspace folders are open', async () => {

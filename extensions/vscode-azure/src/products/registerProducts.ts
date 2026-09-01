@@ -8,12 +8,14 @@ import { registerAcr } from './registerAcr';
 import { registerFunctions } from './registerFunctions';
 import { registerGenericAzure } from './registerGenericAzure';
 import { registerSettings } from './registerSettings';
+import { registerStaticWebApps } from './registerStaticWebApps';
 
 /** Apply each product's single registration entry point in dispatch order. */
 export function registerProducts(registrar: ProductRegistrar): void {
     // First: claims only the settings virtual nodes, never a resource, so it must win dispatch over
     // any product provider that claims the resource those nodes hang off.
     registerSettings(registrar);
+    registerStaticWebApps(registrar);
     registerAcr(registrar);
     registerFunctions(registrar);
     registerGenericAzure(registrar);

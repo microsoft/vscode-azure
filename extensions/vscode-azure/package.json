@@ -16,6 +16,12 @@
     "license": "MIT",
     "author": "Microsoft Corporation",
     "main": "main.js",
+    "capabilities": {
+        "virtualWorkspaces": {
+            "supported": "limited",
+            "description": "%capabilities.virtualWorkspaces.description%"
+        }
+    },
     "contributes": {
         "commands": [
             {
@@ -39,6 +45,7 @@
             },
             {
                 "command": "vscode-azure/resources/delete",
+                "category": "%commands.category.azure%",
                 "icon": "$(trash)",
                 "title": "%commands.vscode-azure/resources/delete%"
             },
@@ -49,8 +56,14 @@
             },
             {
                 "command": "vscode-azure/resources/browseWebsite",
+                "category": "%commands.category.azure%",
                 "icon": "$(globe)",
                 "title": "%commands.vscode-azure/resources/browseWebsite%"
+            },
+            {
+                "command": "vscode-azure/resources/viewProperties",
+                "icon": "$(json)",
+                "title": "%commands.vscode-azure/resources/viewProperties%"
             },
             {
                 "command": "vscode-azure/installAzd",
@@ -103,6 +116,7 @@
             },
             {
                 "command": "vscode-azure/settings/edit",
+                "category": "%commands.category.azure%",
                 "icon": "$(edit)",
                 "title": "%commands.vscode-azure/settings/edit%"
             },
@@ -117,6 +131,37 @@
                 "title": "%commands.vscode-azure/functions/deploy%"
             },
             {
+                "command": "vscode-azure/staticWebApps/createNew",
+                "category": "%commands.category.azureStaticWebApps%",
+                "icon": "$(add)",
+                "title": "%commands.vscode-azure/staticWebApps/createNew%"
+            },
+            {
+                "command": "vscode-azure/staticWebApps/deleteEnvironment",
+                "category": "%commands.category.azureStaticWebApps%",
+                "icon": "$(trash)",
+                "title": "%commands.vscode-azure/staticWebApps/deleteEnvironment%"
+            },
+            {
+                "command": "vscode-azure/staticWebApps/createSwaConfigFile",
+                "category": "%commands.category.azureStaticWebApps%",
+                "enablement": "!isWeb",
+                "icon": "$(new-file)",
+                "title": "%commands.vscode-azure/staticWebApps/createSwaConfigFile%"
+            },
+            {
+                "command": "vscode-azure/staticWebApps/showDocumentation",
+                "category": "%commands.category.azureStaticWebApps%",
+                "icon": "$(book)",
+                "title": "%commands.vscode-azure/staticWebApps/showDocumentation%"
+            },
+            {
+                "command": "vscode-azure/staticWebApps/showFunctionsDocumentation",
+                "category": "%commands.category.azureStaticWebApps%",
+                "icon": "$(book)",
+                "title": "%commands.vscode-azure/staticWebApps/showFunctionsDocumentation%"
+            },
+            {
                 "command": "vscode-azure/azdUp",
                 "category": "%commands.category.azure%",
                 "icon": "$(rocket)",
@@ -127,6 +172,13 @@
                 "category": "%commands.category.azure%",
                 "icon": "$(trash)",
                 "title": "%commands.vscode-azure/azdDown%"
+            },
+            {
+                "command": "vscode-azure/configureCicd",
+                "category": "%commands.category.azure%",
+                "enablement": "!virtualWorkspace",
+                "icon": "$(settings-gear)",
+                "title": "%commands.vscode-azure/configureCicd%"
             },
             {
                 "command": "vscode-azure/signIn",
@@ -168,15 +220,11 @@
                     "when": "false"
                 },
                 {
-                    "command": "vscode-azure/resources/delete",
-                    "when": "false"
-                },
-                {
                     "command": "vscode-azure/resourceGroups/delete",
                     "when": "false"
                 },
                 {
-                    "command": "vscode-azure/resources/browseWebsite",
+                    "command": "vscode-azure/resources/viewProperties",
                     "when": "false"
                 },
                 {
@@ -200,7 +248,7 @@
                     "when": "false"
                 },
                 {
-                    "command": "vscode-azure/settings/edit",
+                    "command": "vscode-azure/staticWebApps/showFunctionsDocumentation",
                     "when": "false"
                 }
             ],
@@ -263,9 +311,28 @@
                     "when": "view == vscode-azure/resources && viewItem =~ /\\bbrowseWebsite\\b/i"
                 },
                 {
+                    "command": "vscode-azure/resources/viewProperties",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\bviewProperties\\b/i"
+                },
+                {
                     "command": "vscode-azure/settings/edit",
                     "when": "view == vscode-azure/resources && viewItem =~ /\\beditSettings\\b/i",
                     "group": "inline@1"
+                },
+                {
+                    "command": "vscode-azure/staticWebApps/createNew",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\bStaticWebApps\\b/i && viewItem =~ /\\bazureResourceTypeGroup\\b/i",
+                    "group": "1@1"
+                },
+                {
+                    "command": "vscode-azure/staticWebApps/deleteEnvironment",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\b(?:deleteStaticWebAppEnvironment|azureStaticEnvironment)\\b/i",
+                    "group": "3@2"
+                },
+                {
+                    "command": "vscode-azure/resources/refresh",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\b(?:azureStaticEnvironment|azureStaticFunctions)\\b/i",
+                    "group": "9@3"
                 },
                 {
                     "command": "vscode-azure/workspace/revealInExplorer",
@@ -281,6 +348,11 @@
                 },
                 {
                     "command": "vscode-azure/azdDown",
+                    "when": "resourceFilename =~ /^azure\\.ya?ml$/i",
+                    "group": "navigation"
+                },
+                {
+                    "command": "vscode-azure/configureCicd",
                     "when": "resourceFilename =~ /^azure\\.ya?ml$/i",
                     "group": "navigation"
                 }
@@ -406,7 +478,17 @@
                     "description": "%settings.vscode-azure.selectedSubscriptions%"
                 }
             }
-        }
+        },
+        "jsonValidation": [
+            {
+                "fileMatch": "staticwebapp.config.json",
+                "url": "https://json.schemastore.org/staticwebapp.config.json"
+            },
+            {
+                "fileMatch": "swa-cli.config.json",
+                "url": "https://raw.githubusercontent.com/Azure/static-web-apps-cli/main/schema/swa-cli.config.schema.json"
+            }
+        ]
     },
     "scripts": {
         "lint": "eslint --max-warnings 0 --cache",
@@ -440,6 +522,8 @@
         "inversify": "catalog:",
         "jsonc-parser": "^3.3.1",
         "semver": "catalog:",
+        "vscode-uri": "catalog:",
+        "yaml": "^2.9.0",
         "zod": "catalog:"
     }
 }

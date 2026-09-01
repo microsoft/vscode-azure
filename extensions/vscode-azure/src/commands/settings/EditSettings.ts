@@ -5,8 +5,8 @@
 
 import { ICodeContext } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import { IAzureViewDataTree } from '../../services';
 import { SettingsUri } from '../../settings/SettingsUri';
+import { IResourceSelector } from '../../tree/resources/ResourceSelector';
 import { isSettingsNode } from '../../tree/resources/settings/SettingsNode';
 import type { ManagedCommand } from '../ManagedCommand';
 
@@ -23,19 +23,12 @@ export class EditSettings implements ManagedCommand {
 
     public constructor(
         @inject(ICodeContext) private readonly ctx: ICodeContext,
-        @inject(IAzureViewDataTree) private readonly tree: IAzureViewDataTree,
+        @inject(IResourceSelector) private readonly selector: IResourceSelector,
     ) { }
 
     /** @inheritdoc */
     public async execute(key?: string): Promise<void> {
-        if (!key) {
-            return;
-        }
-
-        const node = this.tree.get(key);
-        if (!isSettingsNode(node)) {
-            return;
-        }
+        const node = await this.selector.selectVirtual({ key, canHandle: isSettingsNode });
 
         // `preview: false` so the tab is not reused: the URI identifies the resource, and two views
         // of one resource's settings could disagree after a save.

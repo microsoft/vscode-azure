@@ -5,10 +5,15 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import * as vscode from 'vscode';
 import { ExtensionId } from '../src/constants';
 
-describe('extension', () => {
+let vscode: typeof import('vscode');
+
+describe('extension (vscode integration)', () => {
+    before(async () => {
+        vscode = await import('vscode');
+    });
+
     it('should activate', async () => {
         const extension = vscode.extensions.getExtension(ExtensionId);
         if (!extension) {
@@ -19,7 +24,39 @@ describe('extension', () => {
     });
 });
 
-describe('bundle size guardrail (integration)', () => {
+describe('command contributions (vscode integration)', () => {
+    before(async () => {
+        vscode = await import('vscode');
+    });
+
+    // `package.json` and the DI registration are independent sources that can drift:
+    // deleting a command class does not delete its manifest entry, which leaves a
+    // Command Palette item that throws "command not found" when invoked.
+    it('should register a handler for every contributed command', async () => {
+        const extension = vscode.extensions.getExtension(ExtensionId);
+        if (!extension) {
+            expect.fail('Extension not found');
+        }
+
+        await extension.activate();
+
+        const manifestPath = path.join(extension.extensionPath, 'package.json');
+        const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as {
+            contributes?: { commands?: readonly { readonly command: string }[] };
+        };
+        const contributed = manifest.contributes?.commands?.map((c) => c.command) ?? [];
+        const registered = new Set(await vscode.commands.getCommands(true));
+
+        expect(contributed).to.not.be.empty;
+        expect(contributed.filter((command) => !registered.has(command))).to.deep.equal([]);
+    });
+});
+
+describe('bundle size guardrail (vscode integration)', () => {
+    before(async () => {
+        vscode = await import('vscode');
+    });
+
     // Baseline size (in bytes) of the packaged VSIX.
     //
     // This is a guardrail, NOT a target. The intent is to notice when the extension
@@ -33,7 +70,7 @@ describe('bundle size guardrail (integration)', () => {
     // upgrade). A PR that touches this number should explain, in its description,
     // *why* the bundle legitimately grew or shrank. If you cannot explain it,
     // investigate before updating the baseline.
-    const VSIX_BASELINE_BYTES = 309853;
+    const VSIX_BASELINE_BYTES = 356_985;
     const VSIX_TOLERANCE = 0.1;
     const VSIX_WARN_THRESHOLD = 0.05;
 

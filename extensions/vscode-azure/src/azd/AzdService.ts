@@ -7,6 +7,7 @@ import { CancellationError, IActionExecutor, IProcessExecutor, IVsCode, command,
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
 import * as semver from 'semver';
 import type * as vscode from 'vscode';
+import { parseDocument } from 'yaml';
 import { IToolService } from '../tools/ToolService';
 import { IAzdAuthServer } from './AzdAuthServer';
 
@@ -16,12 +17,40 @@ export const AzdCommand = 'azd';
 
 /** Minimum `azd` version required by this extension. */
 export const MinAzdVersion = '1.32.0-0';
+/**
+ * Minimum `azd` version required to configure CI/CD through `azd pipeline config`.
+ *
+ * 1.30.0 is the first release in which `--provider azdo` accepts federated
+ * authentication, which is the default `azd` picks for Azure DevOps; earlier versions
+ * reject it and the command fails part-way through. Feature-specific gate, independent
+ * of the repo-wide {@linkcode MinAzdVersion}.
+ */
+export const MinAzdPipelineVersion = '1.30.0';
 
 /** File names that mark an azd project. */
 export const AzureYamlFileNames = ['azure.yaml', 'azure.yml'];
 
 /** Glob pattern matching `azure.yaml` / `azure.yml` at the workspace root only. */
 export const AzureYamlGlobPattern = `{${AzureYamlFileNames.join(',')}}`;
+
+/** A value that can be represented in `azure.yaml`. */
+export type AzureYamlValue =
+    | string
+    | number
+    | boolean
+    | null
+    | readonly AzureYamlValue[]
+    | { readonly [key: string]: AzureYamlValue };
+
+/**
+ * Provides narrow, library-independent operations for updating `azure.yaml`.
+ *
+ * Paths address mapping keys from the document root. Missing parent mappings are
+ * created, and an existing value at the path is replaced.
+ */
+export interface AzureYamlEditor {
+    set(path: readonly [string, ...string[]], value: AzureYamlValue): void;
+}
 
 export interface IAzdService {
     /**
@@ -35,6 +64,20 @@ export interface IAzdService {
      * @param maxResults - Cap the number of results. Defaults to `1`.
      */
     findAzureYaml(directory?: vscode.Uri, maxResults?: number): Promise<vscode.Uri[]>;
+
+    /**
+     * Applies a batch of comment-preserving updates to the azd project file in
+     * {@linkcode cwd}.
+     *
+     * The updater is invoked once and awaited, and the file is written at most once.
+     *
+     * @deprecated This is a temporary workaround for missing first-class
+     * `azure.yaml` editing in azd. Use with caution. It will be removed when azd
+     * provides that capability. Track
+     * https://github.com/microsoft/vscode-azure/issues/114 and
+     * https://github.com/Azure/azure-dev/issues/9718.
+     */
+    updateAzureYaml(cwd: vscode.Uri, updater: (editor: AzureYamlEditor) => void | Promise<void>): Promise<void>;
 
     /** Runs `azd init --minimal --no-prompt` in the given directory. */
     init(cwd: vscode.Uri): Promise<void>;
@@ -84,6 +127,24 @@ export interface IAzdService {
     deploy(cwd: vscode.Uri): Promise<void>;
 
     /**
+     * Runs `azd pipeline config` as a visible VS Code task, interactively
+     * configuring CI/CD (GitHub Actions or Azure Pipelines) for the project in
+     * {@linkcode cwd}.
+     *
+     * Never passes `--no-prompt` -- `azd` may need to interactively
+     * authenticate against the provider and/or the Git remote, and it offers to
+     * create and push a repository when the project has none. Output is
+     * never captured, so no secrets/PATs can leak into telemetry, logs, or
+     * the output channel.
+     *
+     * @param provider - `'github'` or `'azdo'` (Azure DevOps). Omit to let
+     *   `azd` prompt for one.
+     * @param environmentName - Optional azd environment to target; passed as
+     *   `--environment` when provided.
+     */
+    pipelineConfig(cwd: vscode.Uri, provider?: 'github' | 'azdo', environmentName?: string): Promise<void>;
+
+    /**
      * Runs `azd down --force --purge` as a visible VS Code task, deleting
      * all resources provisioned for the project's default environment and
      * purging any soft-deleted resources.
@@ -124,7 +185,7 @@ export interface AzdShowResult {
      * Map of `azd-service-name` -> service descriptor as declared under
      * `services:` in `azure.yaml`. An empty / missing object means no
      * services are configured -- `azd deploy` will not have anything to
-     * target until the user runs `azd add`.
+     * target until an entry is added.
      */
     readonly services?: Readonly<Record<string, AzdServiceDescriptor>>;
 }
@@ -212,6 +273,48 @@ export class AzdService implements IAzdService {
 
         // Search across all workspace folders via findFiles.
         return this.code.workspace.findFiles(AzureYamlGlobPattern, undefined, maxResults);
+    }
+
+    /** @inheritdoc */
+    public async updateAzureYaml(cwd: vscode.Uri, updater: (editor: AzureYamlEditor) => void | Promise<void>): Promise<void> {
+        const files = await this.findAzureYaml(cwd);
+        if (files.length === 0) {
+            throw new Error(this.code.l10n.t('No azure.yaml or azure.yml file was found in "{0}".', cwd.fsPath));
+        }
+        const fileUri = files[0];
+
+        const bytes = await this.code.workspace.fs.readFile(fileUri);
+        const original = new TextDecoder().decode(bytes);
+        const document = parseDocument(original, { keepSourceTokens: true });
+        if (document.errors.length > 0) {
+            throw new Error(this.code.l10n.t('The azd project file "{0}" contains invalid YAML.', fileUri.fsPath), {
+                cause: document.errors[0],
+            });
+        }
+
+        const updates: { readonly path: readonly string[]; readonly value: AzureYamlValue }[] = [];
+        await updater({
+            set: (path, value) => {
+                if (path.length === 0 || path.some(segment => segment.length === 0)) {
+                    throw new Error(this.code.l10n.t('azure.yaml update paths must contain at least one non-empty key.'));
+                }
+
+                updates.push({ path, value });
+            },
+        });
+
+        if (updates.length === 0) {
+            return;
+        }
+
+        for (const update of updates) {
+            document.setIn(update.path, update.value);
+        }
+
+        const updated = document.toString();
+        if (updated !== original) {
+            await this.code.workspace.fs.writeFile(fileUri, new TextEncoder().encode(updated));
+        }
     }
 
     /** @inheritdoc */
@@ -336,6 +439,27 @@ export class AzdService implements IAzdService {
                 cwd,
                 env: authEnv,
                 name: 'azd deploy',
+                source: 'azd',
+            });
+        } catch (e) {
+            throw await this.wrapAzdError(e);
+        }
+    }
+
+    /** @inheritdoc */
+    public async pipelineConfig(cwd: vscode.Uri, provider?: 'github' | 'azdo', environmentName?: string): Promise<void> {
+        const authEnv = await this.authServer.getEnv();
+
+        try {
+            await this.processExecutor.spawn({
+                execution: 'foreground',
+                command: command(this.getAzdCommand())
+                    .arg('pipeline', 'config')
+                    .namedArg('--provider', provider)
+                    .namedArg('--environment', environmentName),
+                cwd,
+                env: authEnv,
+                name: 'azd pipeline config',
                 source: 'azd',
             });
         } catch (e) {

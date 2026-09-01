@@ -12,7 +12,7 @@ extensions/vscode-azure/test/
 
 ## Test Labels
 
-Label tests with `(unit)`, `(integration)`, or `(e2e)` **after** the name in the root `describe` description:
+Label tests with `(unit)`, `(integration)`, or `(e2e)` **after** the name in the root `describe` description. Add `(vscode integration)` when the suite requires the real VS Code extension host:
 
 ```typescript
 describe('AzureNodeId (unit)', () => {
@@ -21,6 +21,10 @@ describe('AzureNodeId (unit)', () => {
 
 describe('RefreshResourcesView (integration)', () => {
     it('should execute without error', async () => { ... });
+});
+
+describe('azd up (e2e) (vscode integration)', () => {
+    it('should provision the application', async () => { ... });
 });
 ```
 
@@ -121,6 +125,8 @@ Key patterns:
 - Use `Mock` from `node:test` to track call counts and arguments — prefer over manual `let callCount = 0` patterns
 - Use `makeVirtualResource()` from `@microsoft/vscode-azure-azutils/testing` instead of hand-rolling `VirtualResource` objects
 - For Azure environments in azutils tests, use the `AzurePublicCloud` preset (or `AzureUSGovernment` / `AzureChinaCloud`) from `@microsoft/vscode-azure-azutils` instead of hand-rolled environment objects. Test credentials come from `makeCredential()` in `mockAzure.ts`.
+- Mock `IProcessExecutor` for CLI tests and inject HTTP responses; tests must
+  never contact npm.
 
 ### Driving Wizard UI in Tests
 
@@ -192,6 +198,52 @@ const subscription = makeSubscription({ subscriptionId: 'sub-1' });
 
 If the shared factory can't express what you need, change the shared factory.
 
+### Producing Async Iterables and Pages
+
+Anything that fetches lazily -- tree data providers, wrapped Azure clients,
+listing fetchers -- hands back an async iterable rather than an array, so a test
+that stands one of these in needs to *produce* one. Use the shared builders
+instead of hand-rolling a `[Symbol.asyncIterator]` object.
+
+From `@microsoft/vscode-azure-utils/testing`:
+
+| Helper | Produces | Use for |
+| --- | --- | --- |
+| `asAsyncIterable(values)` | `AsyncIterable<T>` | Any fixed sequence, replayable from the start on each iteration |
+| `pagesOf(...pages)` | `AsyncIterable<Page<T>>` | The project-standard paged shape; one array per page, `hasMore` set on all but the last |
+| `rejectingAsyncIterable(error)` | `AsyncIterable<T>` that rejects on first read | Failure paths, where the service refuses mid-iteration |
+
+From `@microsoft/vscode-azure-azutils/testing`:
+
+| Helper | Produces | Use for |
+| --- | --- | --- |
+| `makePagedAsyncIterable(...pages)` | `PagedAsyncIterableIterator<T, T[]>` | A client that hands back the raw Azure SDK pager, with `byPage()` and continuation tokens |
+
+```typescript
+// GOOD -- one page of resource groups, no more to come
+resourceGroups: { list: () => pagesOf(groups) }
+
+// GOOD -- two pages, so the first reports hasMore: true
+getChildren: () => pagesOf([{ id: 'p1' }], [{ id: 'p2' }])
+
+// GOOD -- conditional access refuses the tenant listing
+mock.method(SubscriptionClient, 'create', () => ({
+    tenants: { list: () => rejectingAsyncIterable(new Error('interaction_required')) },
+}));
+```
+
+These are the produce-side counterparts to the drain helpers `collectAsync`,
+`collectPages`, and `collectPageItems`, also in
+`@microsoft/vscode-azure-utils/testing`.
+
+Keep a local builder only when the iteration *mechanics* are the subject of the
+test rather than a fixture of convenience -- for example
+`packages/azutils/test/rest/toPages.test.ts`, which deliberately exercises both
+continuation-token shapes and a multi-page result carrying no tokens at all, and
+the `loadMore` tests in `DataItemTree.test.ts` / `ViewItemTree.test.ts`, whose
+iterables behave specially on later `next()` calls. Bending a shared helper to
+cover those would grow it options that no other caller wants.
+
 ### Debounced Work
 
 Code that debounces work should depend on `IDebounceScheduler` rather than
@@ -200,6 +252,52 @@ timers directly. Tests inject `ManualDebounceScheduler` from
 (`hasPending`), and then `await scheduler.flush()` to run it to completion.
 This avoids interleaving fake timers with real promise continuations, which is
 a common source of flakiness.
+
+### Timers You Don't Own
+
+Third-party code that arms its own timers -- the Azure SDK's LRO poller, for
+instance -- can't be handed a scheduler, so those tests do need a fake clock.
+Use `ManualTimers` from `@microsoft/vscode-azure-utils/testing` instead of
+`mock.timers` directly: it installs the same Node fake timers and adds
+`whenScheduled()`, which resolves once a timer has actually been armed.
+
+```typescript
+const timers = new ManualTimers();
+beforeEach(() => { timers.enable(); });
+afterEach(() => { timers.reset(); });
+
+it('should poll again after the interval', async () => {
+    startPolling();
+    await timers.whenScheduled();
+    timers.tick(1000);
+});
+```
+
+Advancing a fake clock only fires timers that already exist. Code that arms its
+next timer from a promise continuation hasn't called `setTimeout` yet when the
+awaited work resolves, so a tick issued at that moment fires nothing and the
+loop stalls until the test times out. Waiting on an observable side effect --
+a request count, a status change -- doesn't close the gap, because the effect
+lands before the timer is armed. Waiting for the arm itself does.
+
+### Disposing What a Test Creates
+
+A test that constructs something holding an open handle -- a poller's timer, a
+watcher, a server -- must dispose it, or the handle outlives the test. Bind the
+lifetime to the test with `using` and `autoDispose` from
+`@microsoft/vscode-azure-utils/testing`, which adapts the codebase's `dispose()`
+convention to the `Symbol.dispose` protocol:
+
+```typescript
+it('should poll until the deployment finishes', async () => {
+    using provider = autoDispose(new ArmDeploymentDataProvider(...));
+    // disposed when the body exits, however it exits
+});
+```
+
+Prefer this over an `afterEach`: cleanup stays next to creation, so a new test
+can't quietly skip it. When a factory helper builds the object, wrap it once
+inside the factory and every call site just declares `using`.
 
 ### Integration Tests
 
