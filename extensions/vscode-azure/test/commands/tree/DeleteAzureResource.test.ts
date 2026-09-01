@@ -4,15 +4,17 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureNodeId, IResourceClientProvider, type ConcreteAzureNode, type GenericResource } from '@microsoft/vscode-azure-azutils';
-import { createMockDataItemTree, makeGenericResource, makeResourceGroup, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
-import { CancellationError, createActionContext, IActionContext, ICodeContext } from '@microsoft/vscode-azure-utils';
+import { createMockDataItemTree, createMockViewItemTree, makeGenericResource, makeResourceGroup, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
+import { CancellationError, ICodeContext } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, respondToPrompts, waitFor, type MockCodeContextResult, type MockVsCodeResult } from '@microsoft/vscode-azure-utils/testing';
 import { Container } from 'inversify';
 import { mock, type Mock } from 'node:test';
 import { DeleteAzureResource } from '../../../src/commands/tree/DeleteAzureResource';
-import { IAzureViewDataTree } from '../../../src/services';
+import { IAzureViewDataTree, type IAzureViewViewItemTree } from '../../../src/services';
 import type { Activity } from '../../../src/tree/activity/Activity';
 import { GenericActivityDataProvider, IGenericActivityDataProvider } from '../../../src/tree/activity/GenericActivityDataProvider';
+import { IResourceSelector } from '../../../src/tree/resources/ResourceSelector';
+import { createTestResourceSelector } from '../../tree/resources/testResourceSelector';
 
 describe('DeleteAzureResource (unit)', () => {
     afterEach(() => {
@@ -202,10 +204,32 @@ describe('DeleteAzureResource (unit)', () => {
         expect(setup.deleteResourceGroup.mock.callCount()).to.equal(1);
     });
 
-    it('throws for a missing key and for a node that is no longer cached', async () => {
+    it('prompts for an individual resource when invoked from the command palette', async () => {
+        const resource = makeGenericResource();
+        const resourceGroup = makeResourceGroup();
+        const resourceGroupKey = AzureNodeId.from(resourceGroup).toString();
+        const setup = createCommand(resource, {
+            extraNodes: [resourceGroup],
+            pickerTree: {
+                '': [resourceGroupKey],
+                [resourceGroupKey]: [AzureNodeId.from(resource).toString()],
+            },
+        });
+        const tracker = respondToPrompts(setup.mockResult, [
+            { pick: `${resourceGroup.name} $(chevron-right)` },
+            { pick: resource.name },
+            { button: 'Delete' },
+        ]);
+
+        await setup.command.execute();
+
+        tracker.assertAllConsumed();
+        expect(setup.deleteById.mock.callCount()).to.equal(1);
+    });
+
+    it('throws for a node that is no longer cached', async () => {
         const setup = createCommand(makeGenericResource());
 
-        await expect(setup.command.execute()).to.be.rejectedWith(/Select an Azure resource/);
         await expect(setup.command.execute('azr://missing@portal.azure.com/tenants/t1/subscriptions/sub1'))
             .to.be.rejectedWith(/no longer available/);
     });
@@ -222,6 +246,7 @@ describe('DeleteAzureResource (unit)', () => {
 interface CommandOptions {
     readonly deleteById?: Mock<(resourceId: string, resourceType: string) => Promise<void>>;
     readonly extraNodes?: readonly ConcreteAzureNode[];
+    readonly pickerTree?: Partial<Record<string, string[]>>;
     /** Reuse a context (and its workspace state) from an earlier invocation. */
     readonly codeContext?: MockCodeContextResult;
 }
@@ -245,15 +270,18 @@ function createCommand(resource: GenericResource, options: CommandOptions = {}):
     const codeContext = options.codeContext ?? createMockCodeContext();
     const { ctx, mock: mockResult } = codeContext;
     const dataTree = createMockDataItemTree([resource, ...(options.extraNodes ?? [])]);
+    const resourceKey = AzureNodeId.from(resource).toString();
+    const viewTree = createMockViewItemTree(options.pickerTree ?? { '': [resourceKey] }) as unknown as IAzureViewViewItemTree;
     const remove = (dataTree as unknown as { remove: Mock<(target: unknown) => void> }).remove;
 
     const deleteById = options.deleteById ?? mock.fn((_resourceId: string, _resourceType: string) => Promise.resolve());
     const deleteResourceGroup = mock.fn((_name: string) => Promise.resolve());
     const activityProvider = new GenericActivityDataProvider();
+    const { selector } = createTestResourceSelector({ cache: dataTree, codeContext, viewTree });
     const container = new Container();
     container.bind(ICodeContext).toConstantValue(ctx);
-    container.bind(IActionContext).toConstantValue(createActionContext('deleteAzureResource'));
     container.bind(IAzureViewDataTree).toConstantValue(dataTree);
+    container.bind(IResourceSelector).toConstantValue(selector);
     container.bind(IGenericActivityDataProvider).toConstantValue(activityProvider);
     container.bind(IResourceClientProvider).toConstantValue(() => ({
         resources: { deleteById },
