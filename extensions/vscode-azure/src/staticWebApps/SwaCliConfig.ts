@@ -9,39 +9,16 @@ import type * as vscode from 'vscode';
 /** File name used by the Azure Static Web Apps CLI for project configurations. */
 export const SwaCliConfigFileName = 'swa-cli.config.json';
 
-/** Complete option surface accepted by a named Static Web Apps CLI configuration. */
+/**
+ * Static Web Apps CLI options consumed by this extension.
+ *
+ * The CLI configuration schema supports additional options that remain owned by the CLI.
+ */
 export interface SWACLIOptions {
-    readonly context?: string;
-    /** Directory containing `staticwebapp.database.config.json`. */
-    readonly dataApiLocation?: string;
-    readonly port?: number;
-    readonly host?: string;
-    readonly apiPort?: number;
-    readonly ssl?: boolean;
-    readonly apiPrefix?: 'api';
-    readonly sslCert?: string;
-    readonly sslKey?: string;
-    readonly swaConfigFilename?: 'staticwebapp.config.json';
-    readonly swaConfigFilenameLegacy?: 'routes.json';
-    readonly app?: string;
-    readonly apiLocation?: string;
-    readonly apiLanguage?: string;
-    readonly apiVersion?: string;
-    readonly build?: boolean;
-    readonly verbose?: string;
-    readonly run?: string;
-    readonly swaConfigLocation?: string;
-    readonly customUrlScheme?: string;
-    readonly overridableErrorCode?: readonly number[];
-    readonly devserverTimeout?: number;
-    readonly funcArgs?: string;
-    readonly appBuildCommand?: string;
-    readonly apiBuildCommand?: string;
     readonly appLocation?: string;
-    readonly appDevserverUrl?: string;
-    readonly apiDevserverUrl?: string;
+    readonly apiLocation?: string;
     readonly outputLocation?: string;
-    readonly files?: readonly string[];
+    readonly appBuildCommand?: string;
 }
 
 /** Root shape of `swa-cli.config.json`. */
