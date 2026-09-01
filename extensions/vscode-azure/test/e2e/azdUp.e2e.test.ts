@@ -42,7 +42,7 @@ import { E2ETimeoutMs, getE2EConfig, type E2EConfig } from './e2eConfig';
  */
 let vscode: typeof import('vscode');
 
-describeLongRunning('azd up (vscode integration)', function () {
+describeLongRunning('azd up (e2e) (vscode integration)', function () {
     let config: E2EConfig;
     let azdService: IAzdService;
     let projectDir: URI | undefined;

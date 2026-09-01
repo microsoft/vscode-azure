@@ -12,7 +12,7 @@ extensions/vscode-azure/test/
 
 ## Test Labels
 
-Label tests with `(unit)`, `(integration)`, or `(e2e)` **after** the name in the root `describe` description:
+Label tests with `(unit)`, `(integration)`, or `(e2e)` **after** the name in the root `describe` description. Add `(vscode integration)` when the suite requires the real VS Code extension host:
 
 ```typescript
 describe('AzureNodeId (unit)', () => {
@@ -22,11 +22,11 @@ describe('AzureNodeId (unit)', () => {
 describe('RefreshResourcesView (integration)', () => {
     it('should execute without error', async () => { ... });
 });
-```
 
-A suite that can only run inside the extension host -- because it touches the
-real `vscode` API rather than a mock -- uses `(vscode integration)`, so the
-suites that need a VS Code instance are identifiable by name.
+describe('azd up (e2e) (vscode integration)', () => {
+    it('should provision the application', async () => { ... });
+});
+```
 
 ## Test Runners
 
