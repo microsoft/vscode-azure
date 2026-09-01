@@ -37,7 +37,7 @@ export function registerContainerApps(registrar: ProductRegistrar): void {
     });
 
     registrar.registerBinding(container => {
-        container.bind(IContainerAppLogStreamService).to(ContainerAppLogStreamService).inSingletonScope();
+        container.bind(IContainerAppLogStreamService).to(ContainerAppLogStreamService).inSingletonScope().onActivation(pushDisposable);
         container.bind(IWorkspaceDetector).toConstantValue(containerAppsDetector);
     });
 
@@ -51,8 +51,4 @@ export function registerContainerApps(registrar: ProductRegistrar): void {
     registrar.registerCommand('vscode-azure/containerApps/startStreamingLogs', StartStreamingLogs);
     registrar.registerCommand('vscode-azure/containerApps/createNew', CreateContainerApp, 'createNew');
     registrar.registerCommand('vscode-azure/containerApps/deploy', CreateContainerApp, 'deploy');
-
-    registrar.registerActivation(container => {
-        pushDisposable(container, container.get(IContainerAppLogStreamService));
-    });
 }

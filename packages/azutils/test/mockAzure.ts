@@ -198,6 +198,33 @@ export function makeGenericResource(overrides?: Partial<GenericResource>): Gener
 }
 
 /**
+ * Container App resource fixture enriched with the fields used by tree and command consumers.
+ */
+export interface MockContainerApp extends GenericResource {
+    readonly environmentId: string | undefined;
+    readonly provisioningState: string | undefined;
+    readonly latestRevisionName: string | undefined;
+    readonly containers: readonly Container[];
+}
+
+/**
+ * Builds an enriched Container App resource in the default resource group.
+ */
+export function makeContainerApp(overrides?: Partial<MockContainerApp>): MockContainerApp {
+    return makeGenericResource<MockContainerApp>({
+        id: '/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.App/containerApps/app1',
+        name: 'app1',
+        type: 'Microsoft.App/containerApps',
+        logicalType: 'Microsoft.App/containerApps',
+        environmentId: undefined,
+        provisioningState: 'Succeeded',
+        latestRevisionName: 'app1--abc123',
+        containers: [],
+        ...overrides,
+    });
+}
+
+/**
  * Builds a mock {@linkcode VirtualGroup} (a non-Azure grouping node in
  * the tree) for the default subscription.
  */

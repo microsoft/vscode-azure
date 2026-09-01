@@ -4,32 +4,18 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureNodeId } from '@microsoft/vscode-azure-azutils';
-import { createMockDataItemTree, makeGenericResource } from '@microsoft/vscode-azure-azutils/testing';
+import { createMockDataItemTree, makeContainerApp } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockCodeContext, MockOutputChannel } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import { RevealContainerAppEnvironment } from '../../../src/commands/containerApps/RevealContainerAppEnvironment';
 import type { IAzureViewViewItemTree } from '../../../src/services';
-import { ContainerAppResourceType, type ContainerApp } from '../../../src/tree/resources/containerApps/ContainerApp';
 import { ResourceSelector } from '../../../src/tree/resources/ResourceSelector';
 
 const EnvironmentId = '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/OtherRG/providers/Microsoft.App/managedEnvironments/MyEnv';
 
-function makeApp(environmentId: string | undefined): ContainerApp {
-    return makeGenericResource<ContainerApp>({
-        id: '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/MyRG/providers/Microsoft.App/containerApps/MyApp',
-        name: 'MyApp',
-        type: ContainerAppResourceType,
-        logicalType: ContainerAppResourceType,
-        environmentId,
-        provisioningState: 'Succeeded',
-        latestRevisionName: 'myapp--abc123',
-        containers: [],
-    });
-}
-
 function createCommand(environmentId: string | undefined, revealImpl?: () => Promise<void>) {
     const { ctx, mock: mockResult } = createMockCodeContext();
-    const app = makeApp(environmentId);
+    const app = makeContainerApp({ environmentId });
     const cache = createMockDataItemTree([app]);
     const selector = new ResourceSelector(ctx, new MockOutputChannel('test'), cache, undefined as unknown as IAzureViewViewItemTree);
     const reveal = mock.fn((_key: string, _options?: { select?: boolean; focus?: boolean }) =>

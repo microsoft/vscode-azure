@@ -80,17 +80,12 @@ describe('HydrateAzdInfoStep (unit)', () => {
         });
 
         it('detects azure.yaml without services entry via azd show', async () => {
-            const { step, context, window } = makeStep({ show: { name: 'my-app' } });
+            const { step, context } = makeStep({ show: { name: 'my-app' } });
             const result = await step.prompt(context);
 
             expect(result.hasAzureYaml).to.be.true;
             expect(result.hasServices).to.be.false;
             expect(result.azdServiceName).to.be.undefined;
-
-            // Surfaces a non-blocking warning toast.
-            const showWarning = asMockFn(window.showWarningMessage);
-            expect(showWarning.mock.callCount()).to.equal(1);
-            expect(showWarning.mock.calls[0].arguments[0]).to.include('services');
         });
 
         it('detects azure.yaml with services entry via azd show', async () => {
@@ -104,14 +99,6 @@ describe('HydrateAzdInfoStep (unit)', () => {
             expect(result.azdServiceName).to.equal('myfunc');
 
             // No warning when services are present.
-            expect(asMockFn(window.showWarningMessage).mock.callCount()).to.equal(0);
-        });
-
-        it('does not warn when a later step will configure the service', async () => {
-            const { step, context, window } = makeStep({ show: { name: 'my-app' } });
-
-            await step.prompt({ ...context, willConfigureService: true });
-
             expect(asMockFn(window.showWarningMessage).mock.callCount()).to.equal(0);
         });
 

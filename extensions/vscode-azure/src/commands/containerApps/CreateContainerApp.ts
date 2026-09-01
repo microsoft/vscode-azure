@@ -85,7 +85,6 @@ export class CreateContainerApp implements ManagedCommand {
             this.output,
             {
                 job,
-                willConfigureService: job === 'deploy',
                 provision: true, // Provisioning is assumed unless an environment exists, in which case the user will be prompted to confirm
                 deploy: job === 'deploy', // Only deploy if the deploy job is selected
             },

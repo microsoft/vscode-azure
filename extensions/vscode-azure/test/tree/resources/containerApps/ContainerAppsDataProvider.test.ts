@@ -3,23 +3,12 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { GenericResource } from '@microsoft/vscode-azure-azutils';
-import { createMockContainerAppsClient, makeGenericResource } from '@microsoft/vscode-azure-azutils/testing';
+import { createMockContainerAppsClient, makeContainerApp } from '@microsoft/vscode-azure-azutils/testing';
 import { createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
-import { ContainerAppResourceType, type ContainerApp } from '../../../../src/tree/resources/containerApps/ContainerApp';
+import { ContainerAppResourceType } from '../../../../src/tree/resources/containerApps/ContainerApp';
 import { ContainerAppsDataProvider, isContainerNode } from '../../../../src/tree/resources/containerApps/ContainerAppsDataProvider';
 import { ManagedEnvironmentResourceType } from '../../../../src/tree/resources/containerApps/ManagedEnvironment';
 import { getWebsiteUrl } from '../../../../src/tree/resources/websiteUrl';
-
-function makeApp(overrides?: Partial<GenericResource>): GenericResource {
-    return makeGenericResource({
-        id: '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/MyRG/providers/Microsoft.App/containerApps/MyApp',
-        name: 'MyApp',
-        type: ContainerAppResourceType,
-        logicalType: ContainerAppResourceType,
-        ...overrides,
-    });
-}
 
 describe('ContainerAppsDataProvider (unit)', () => {
     const { executor } = createTestActionExecutor();
@@ -27,9 +16,9 @@ describe('ContainerAppsDataProvider (unit)', () => {
     it('claims container apps and managed environments', () => {
         const provider = new ContainerAppsDataProvider(executor, () => createMockContainerAppsClient());
 
-        expect(provider.canHandle(makeApp())).to.be.true;
-        expect(provider.canHandle(makeApp({ logicalType: ManagedEnvironmentResourceType }))).to.be.true;
-        expect(provider.canHandle(makeApp({ logicalType: 'Microsoft.Storage/storageAccounts' }))).to.be.false;
+        expect(provider.canHandle(makeContainerApp())).to.be.true;
+        expect(provider.canHandle(makeContainerApp({ logicalType: ManagedEnvironmentResourceType }))).to.be.true;
+        expect(provider.canHandle(makeContainerApp({ logicalType: 'Microsoft.Storage/storageAccounts' }))).to.be.false;
     });
 
     it('enriches an app with its environment, state, revision and website URL', async () => {
@@ -40,16 +29,16 @@ describe('ContainerAppsDataProvider (unit)', () => {
             containers: [{ name: 'main', image: 'myacr.azurecr.io/api:v3' }],
         });
         const provider = new ContainerAppsDataProvider(executor, () => client);
-        const resource = makeApp();
+        const resource = makeContainerApp();
 
         await provider.enrich(resource);
 
-        const app = resource as ContainerApp;
+        const app = resource;
         expect(app.environmentId).to.equal('/subscriptions/sub/resourceGroups/MyRG/providers/Microsoft.App/managedEnvironments/MyEnv');
         expect(app.latestRevisionName).to.equal('myapp--abc123');
         expect(app.containers).to.have.lengthOf(1);
         expect(getWebsiteUrl(resource)).to.equal('https://myapp.happyrock.eastus.azurecontainerapps.io');
-        expect(client.containerApps.get.mock.calls[0].arguments).to.deep.equal(['MyRG', 'MyApp']);
+        expect(client.containerApps.get.mock.calls[0].arguments).to.deep.equal(['rg1', 'app1']);
     });
 
     it('prefers environmentId over the deprecated managedEnvironmentId', async () => {
@@ -65,18 +54,18 @@ describe('ContainerAppsDataProvider (unit)', () => {
             managedEnvironmentId: '/environments/deprecated',
         }));
         const provider = new ContainerAppsDataProvider(executor, () => client);
-        const resource = makeApp();
+        const resource = makeContainerApp();
 
         await provider.enrich(resource);
 
-        expect((resource as ContainerApp).environmentId).to.equal('/environments/current');
+        expect(resource.environmentId).to.equal('/environments/current');
     });
 
     it('leaves managed environments unenriched', async () => {
         const client = createMockContainerAppsClient();
         const provider = new ContainerAppsDataProvider(executor, () => client);
 
-        await provider.enrich(makeApp({ logicalType: ManagedEnvironmentResourceType }));
+        await provider.enrich(makeContainerApp({ logicalType: ManagedEnvironmentResourceType }));
 
         expect(client.containerApps.get.mock.callCount()).to.equal(0);
     });
@@ -86,7 +75,7 @@ describe('ContainerAppsDataProvider (unit)', () => {
             containers: [{ name: 'api', image: 'api:1' }, { name: 'sidecar', image: 'sidecar:1' }],
         });
         const provider = new ContainerAppsDataProvider(executor, () => client);
-        const resource = makeApp();
+        const resource = makeContainerApp();
         await provider.enrich(resource);
 
         const children = provider.getChildren(resource);
@@ -99,7 +88,7 @@ describe('ContainerAppsDataProvider (unit)', () => {
     it('keeps unnamed containers distinguishable', async () => {
         const client = createMockContainerAppsClient({ containers: [{ image: 'a:1' }, { image: 'b:1' }] });
         const provider = new ContainerAppsDataProvider(executor, () => client);
-        const resource = makeApp();
+        const resource = makeContainerApp();
         await provider.enrich(resource);
 
         const paths = provider.getChildren(resource).map(child => isContainerNode(child) && child.virtualPath);
@@ -110,6 +99,6 @@ describe('ContainerAppsDataProvider (unit)', () => {
     it('returns no children for a managed environment', () => {
         const provider = new ContainerAppsDataProvider(executor, () => createMockContainerAppsClient());
 
-        expect(provider.getChildren(makeApp({ logicalType: ManagedEnvironmentResourceType }))).to.be.empty;
+        expect(provider.getChildren(makeContainerApp({ logicalType: ManagedEnvironmentResourceType }))).to.be.empty;
     });
 });

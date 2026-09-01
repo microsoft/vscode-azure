@@ -4,11 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { GenericResource } from '@microsoft/vscode-azure-azutils';
-import { createMockContainerAppsClient, makeGenericResource } from '@microsoft/vscode-azure-azutils/testing';
+import { createMockContainerAppsClient, makeContainerApp } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockVsCode, createTestActionExecutor, waitFor } from '@microsoft/vscode-azure-utils/testing';
 import { mock, type Mock } from 'node:test';
 import type * as vscode from 'vscode';
-import { ContainerAppResourceType } from '../../../../src/tree/resources/containerApps/ContainerApp';
 import { ContainerAppLogStreamService, type LogStreamTarget } from '../../../../src/tree/resources/containerApps/ContainerAppLogStream';
 
 const LogStreamEndpoint = 'https://myapp.eastus.azurecontainerapps.io/logstream';
@@ -19,15 +18,6 @@ interface TestTerminal {
     readonly writes: string[];
     readonly show: Mock<() => void>;
     readonly dispose: Mock<() => void>;
-}
-
-function makeApp(): GenericResource {
-    return makeGenericResource({
-        id: '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/MyRG/providers/Microsoft.App/containerApps/MyApp',
-        name: 'MyApp',
-        type: ContainerAppResourceType,
-        logicalType: ContainerAppResourceType,
-    });
 }
 
 function makeTarget(app: GenericResource): LogStreamTarget {
@@ -97,7 +87,7 @@ describe('ContainerAppLogStreamService (unit)', () => {
 
     it('writes streamed chunks to a named terminal', async () => {
         mock.method(globalThis, 'fetch', () => Promise.resolve(new Response(openBody(), { status: 200 })));
-        const app = makeApp();
+        const app = makeContainerApp();
         const { service, terminals } = createService(createStreamingClient());
 
         await service.start(makeTarget(app));
@@ -113,7 +103,7 @@ describe('ContainerAppLogStreamService (unit)', () => {
 
     it('reuses the existing terminal when the same container is started twice', async () => {
         const fetchMock = mock.method(globalThis, 'fetch', () => Promise.resolve(new Response(openBody(), { status: 200 })));
-        const app = makeApp();
+        const app = makeContainerApp();
         const { service, terminals } = createService(createStreamingClient());
 
         await service.start(makeTarget(app));
@@ -129,7 +119,7 @@ describe('ContainerAppLogStreamService (unit)', () => {
     it('cancels the stream when its terminal closes', async () => {
         let cancelled = false;
         mock.method(globalThis, 'fetch', () => Promise.resolve(new Response(openBody(() => { cancelled = true; }), { status: 200 })));
-        const app = makeApp();
+        const app = makeContainerApp();
         const { service, terminals } = createService(createStreamingClient());
         await service.start(makeTarget(app));
 
@@ -152,7 +142,7 @@ describe('ContainerAppLogStreamService (unit)', () => {
         });
         const { service } = createService(createStreamingClient());
 
-        await service.start(makeTarget(makeApp()));
+        await service.start(makeTarget(makeContainerApp()));
 
         expect(urls).to.deep.equal([LogStreamEndpoint, 'https://other.eastus.azurecontainerapps.io/logstream']);
 
@@ -165,7 +155,7 @@ describe('ContainerAppLogStreamService (unit)', () => {
         ));
         const { service, terminals } = createService(createStreamingClient());
 
-        await expect(service.start(makeTarget(makeApp()))).to.be.rejectedWith(/redirected outside/i);
+        await expect(service.start(makeTarget(makeContainerApp()))).to.be.rejectedWith(/redirected outside/i);
         expect(terminals).to.be.empty;
     });
 
@@ -175,25 +165,25 @@ describe('ContainerAppLogStreamService (unit)', () => {
         ));
         const { service } = createService(createStreamingClient());
 
-        await expect(service.start(makeTarget(makeApp()))).to.be.rejectedWith(/redirected outside/i);
+        await expect(service.start(makeTarget(makeContainerApp()))).to.be.rejectedWith(/redirected outside/i);
     });
 
     it('reports a container that exposes no endpoint', async () => {
         const { service } = createService(createClient(undefined));
 
-        await expect(service.start(makeTarget(makeApp()))).to.be.rejectedWith(/No log stream is available/i);
+        await expect(service.start(makeTarget(makeContainerApp()))).to.be.rejectedWith(/No log stream is available/i);
     });
 
     it('surfaces a rejection from the endpoint', async () => {
         mock.method(globalThis, 'fetch', () => Promise.resolve(new Response(null, { status: 403 })));
         const { service } = createService(createStreamingClient());
 
-        await expect(service.start(makeTarget(makeApp()))).to.be.rejectedWith(/returned 403/i);
+        await expect(service.start(makeTarget(makeContainerApp()))).to.be.rejectedWith(/returned 403/i);
     });
 
     it('closes every terminal on dispose', async () => {
         mock.method(globalThis, 'fetch', () => Promise.resolve(new Response(openBody(), { status: 200 })));
-        const app = makeApp();
+        const app = makeContainerApp();
         const { service, terminals } = createService(createStreamingClient());
         await service.start(makeTarget(app));
 

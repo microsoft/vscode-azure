@@ -5,31 +5,17 @@
 
 import type { Replica, Revision } from '@microsoft/vscode-azure-azutils';
 import { AzureNodeId } from '@microsoft/vscode-azure-azutils';
-import { createMockContainerAppsClient, createMockDataItemTree, makeGenericResource } from '@microsoft/vscode-azure-azutils/testing';
+import { createMockContainerAppsClient, createMockDataItemTree, makeContainerApp } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockCodeContext, MockOutputChannel, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import { StartStreamingLogs } from '../../../src/commands/containerApps/StartStreamingLogs';
 import type { IAzureViewViewItemTree } from '../../../src/services';
-import { ContainerAppResourceType, type ContainerApp } from '../../../src/tree/resources/containerApps/ContainerApp';
 import type { LogStreamTarget } from '../../../src/tree/resources/containerApps/ContainerAppLogStream';
 import { ResourceSelector } from '../../../src/tree/resources/ResourceSelector';
 
-function makeApp(): ContainerApp {
-    return makeGenericResource<ContainerApp>({
-        id: '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/MyRG/providers/Microsoft.App/containerApps/MyApp',
-        name: 'MyApp',
-        type: ContainerAppResourceType,
-        logicalType: ContainerAppResourceType,
-        environmentId: undefined,
-        provisioningState: 'Succeeded',
-        latestRevisionName: 'myapp--abc123',
-        containers: [],
-    });
-}
-
 function createCommand(revisions: Partial<Revision>[], replicas: Partial<Replica>[]) {
     const { ctx, mock: mockResult } = createMockCodeContext();
-    const app = makeApp();
+    const app = makeContainerApp();
     const cache = createMockDataItemTree([app]);
     const selector = new ResourceSelector(ctx, new MockOutputChannel('test'), cache, undefined as unknown as IAzureViewViewItemTree);
 

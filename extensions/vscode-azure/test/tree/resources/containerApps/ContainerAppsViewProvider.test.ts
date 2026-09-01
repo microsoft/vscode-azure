@@ -5,32 +5,14 @@
 
 import type { ConcreteAzureNode, GenericResource } from '@microsoft/vscode-azure-azutils';
 import { AzureNodeId } from '@microsoft/vscode-azure-azutils';
-import { makeGenericResource } from '@microsoft/vscode-azure-azutils/testing';
-import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
+import { makeContainerApp, makeGenericResource } from '@microsoft/vscode-azure-azutils/testing';
+import { createMockCodeContext, createTestActionExecutor, MockTreeItemCollapsibleState } from '@microsoft/vscode-azure-utils/testing';
 import { OpenContainerAppConsole, OpenContainerAppLogs } from '../../../../src/commands/containerApps/portalBlades';
 import { RevealContainerAppEnvironment } from '../../../../src/commands/containerApps/RevealContainerAppEnvironment';
 import { StartStreamingLogs } from '../../../../src/commands/containerApps/StartStreamingLogs';
-import { ContainerAppResourceType, type ContainerApp } from '../../../../src/tree/resources/containerApps/ContainerApp';
 import { ContainerVirtualType } from '../../../../src/tree/resources/containerApps/ContainerAppsDataProvider';
 import { ContainerAppsViewProvider, shortenImageReference } from '../../../../src/tree/resources/containerApps/ContainerAppsViewProvider';
 import { ManagedEnvironmentResourceType } from '../../../../src/tree/resources/containerApps/ManagedEnvironment';
-
-const Collapsed = 1;
-const None = 0;
-
-function makeApp(overrides?: Partial<ContainerApp>): ContainerApp {
-    return makeGenericResource<ContainerApp>({
-        id: '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/MyRG/providers/Microsoft.App/containerApps/MyApp',
-        name: 'MyApp',
-        type: ContainerAppResourceType,
-        logicalType: ContainerAppResourceType,
-        environmentId: undefined,
-        provisioningState: 'Succeeded',
-        latestRevisionName: 'myapp--abc123',
-        containers: [],
-        ...overrides,
-    });
-}
 
 function makeEnvironment(): GenericResource {
     return makeGenericResource({
@@ -57,7 +39,7 @@ function createProvider(
 
 describe('ContainerAppsViewProvider (unit)', () => {
     it('claims apps, environments and container nodes', () => {
-        const app = makeApp();
+        const app = makeContainerApp();
         const environment = makeEnvironment();
         const container = { virtualType: ContainerVirtualType, virtualPath: 'api', azureResource: app };
         const provider = createProvider([app, environment, container]);
@@ -69,16 +51,16 @@ describe('ContainerAppsViewProvider (unit)', () => {
     });
 
     it('renders an app as expandable and an environment as a leaf', () => {
-        const app = makeApp();
+        const app = makeContainerApp();
         const environment = makeEnvironment();
         const provider = createProvider([app, environment]);
 
-        expect(provider.getTreeItem(AzureNodeId.from(app).toString()).collapsibleState).to.equal(Collapsed);
-        expect(provider.getTreeItem(AzureNodeId.from(environment).toString()).collapsibleState).to.equal(None);
+        expect(provider.getTreeItem(AzureNodeId.from(app).toString()).collapsibleState).to.equal(MockTreeItemCollapsibleState.Collapsed);
+        expect(provider.getTreeItem(AzureNodeId.from(environment).toString()).collapsibleState).to.equal(MockTreeItemCollapsibleState.None);
     });
 
     it('offers the console and logs blades on an app but not on an environment', () => {
-        const app = makeApp();
+        const app = makeContainerApp();
         const environment = makeEnvironment();
         const provider = createProvider([app, environment]);
 
@@ -91,7 +73,7 @@ describe('ContainerAppsViewProvider (unit)', () => {
     });
 
     it('offers to start a stream', () => {
-        const app = makeApp();
+        const app = makeContainerApp();
         const provider = createProvider([app]);
 
         const context = provider.getTreeItem(AzureNodeId.from(app).toString()).contextValue ?? '';
@@ -100,8 +82,8 @@ describe('ContainerAppsViewProvider (unit)', () => {
     });
 
     it('offers to reveal the environment only once one is known', () => {
-        const unenriched = makeApp();
-        const enriched = makeApp({
+        const unenriched = makeContainerApp();
+        const enriched = makeContainerApp({
             id: '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/MyRG/providers/Microsoft.App/containerApps/Hosted',
             name: 'Hosted',
             environmentId: '/subscriptions/sub/resourceGroups/MyRG/providers/Microsoft.App/managedEnvironments/MyEnv',
@@ -115,8 +97,8 @@ describe('ContainerAppsViewProvider (unit)', () => {
     });
 
     it('describes an app only when it is not in a successful state', () => {
-        const healthy = makeApp();
-        const failed = makeApp({
+        const healthy = makeContainerApp();
+        const failed = makeContainerApp({
             id: '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/MyRG/providers/Microsoft.App/containerApps/Broken',
             name: 'Broken',
             provisioningState: 'Failed',
@@ -128,19 +110,19 @@ describe('ContainerAppsViewProvider (unit)', () => {
     });
 
     it('renders a container with its image as the description', () => {
-        const app = makeApp({ containers: [{ name: 'api', image: 'myacr.azurecr.io/store/api:v3' }] });
+        const app = makeContainerApp({ containers: [{ name: 'api', image: 'myacr.azurecr.io/store/api:v3' }] });
         const container = { virtualType: ContainerVirtualType, virtualPath: 'api', azureResource: app };
         const provider = createProvider([app, container]);
 
         const item = provider.getTreeItem(AzureNodeId.from(container).toString());
 
         expect(item.label).to.equal('api');
-        expect(item.collapsibleState).to.equal(None);
+        expect(item.collapsibleState).to.equal(MockTreeItemCollapsibleState.None);
         expect(item.description).to.equal('store/api:v3');
     });
 
     it('leaves a container undescribed when the app has not been enriched', () => {
-        const app = makeApp();
+        const app = makeContainerApp();
         const container = { virtualType: ContainerVirtualType, virtualPath: 'api', azureResource: app };
         const provider = createProvider([app, container]);
 
@@ -148,7 +130,7 @@ describe('ContainerAppsViewProvider (unit)', () => {
     });
 
     it('returns container keys as an app\'s children', async () => {
-        const app = makeApp({ containers: [{ name: 'api', image: 'api:1' }] });
+        const app = makeContainerApp({ containers: [{ name: 'api', image: 'api:1' }] });
         const container = { virtualType: ContainerVirtualType, virtualPath: 'api', azureResource: app };
         const provider = createProvider([app, container], [container]);
 
