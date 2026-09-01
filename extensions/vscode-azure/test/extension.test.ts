@@ -19,6 +19,30 @@ describe('extension', () => {
     });
 });
 
+describe('command contributions (integration)', () => {
+    // `package.json` and the DI registration are independent sources that can drift:
+    // deleting a command class does not delete its manifest entry, which leaves a
+    // Command Palette item that throws "command not found" when invoked.
+    it('should register a handler for every contributed command', async () => {
+        const extension = vscode.extensions.getExtension(ExtensionId);
+        if (!extension) {
+            expect.fail('Extension not found');
+        }
+
+        await extension.activate();
+
+        const manifestPath = path.join(extension.extensionPath, 'package.json');
+        const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as {
+            contributes?: { commands?: readonly { readonly command: string }[] };
+        };
+        const contributed = manifest.contributes?.commands?.map((c) => c.command) ?? [];
+        const registered = new Set(await vscode.commands.getCommands(true));
+
+        expect(contributed).to.not.be.empty;
+        expect(contributed.filter((command) => !registered.has(command))).to.deep.equal([]);
+    });
+});
+
 describe('bundle size guardrail (integration)', () => {
     // Baseline size (in bytes) of the packaged VSIX.
     //
@@ -33,7 +57,7 @@ describe('bundle size guardrail (integration)', () => {
     // upgrade). A PR that touches this number should explain, in its description,
     // *why* the bundle legitimately grew or shrank. If you cannot explain it,
     // investigate before updating the baseline.
-    const VSIX_BASELINE_BYTES = 376_657;
+    const VSIX_BASELINE_BYTES = 390_199;
     const VSIX_TOLERANCE = 0.1;
     const VSIX_WARN_THRESHOLD = 0.05;
 

@@ -8,7 +8,6 @@ import type { AzureSubscription } from '@microsoft/vscode-azure-azutils';
 import { makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockCodeContext, MockOutputChannel, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
-import type * as vscode from 'vscode';
 import { TempDirManager } from '../../../src/azd/TempDirManager';
 import { AzdProvisionStep } from '../../../src/azd/wizard/AzdProvisionStep';
 import type { AzdWizardContext } from '../../../src/azd/wizard/AzdWizardContext';
@@ -99,7 +98,7 @@ describe('AzdProvisionStep (unit)', () => {
             await step.execute(context);
 
             expect(azd.provision.mock.callCount()).to.equal(1);
-            expect((azd.provision.mock.calls[0].arguments[0] as vscode.Uri).path).to.equal('/project');
+            expect((azd.provision.mock.calls[0].arguments[0]).path).to.equal('/project');
             const env = azd.provision.mock.calls[0].arguments[1] as Record<string, string>;
             expect(env).to.have.property('AZD_DEPLOYMENT_ID_FILE');
             expect(env.AZD_DEPLOYMENT_ID_FILE).to.include('.jsonl');

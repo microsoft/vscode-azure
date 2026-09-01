@@ -34,7 +34,7 @@ export class RestartContainerApp implements ManagedCommand {
 
     /** @inheritdoc */
     public async execute(key?: string): Promise<void> {
-        const resource = await this.selector.select(ContainerAppResourceType, key);
+        const resource = await this.selector.selectResource({ logicalType: ContainerAppResourceType, key });
         if (!isContainerApp(resource)) {
             return;
         }

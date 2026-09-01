@@ -121,6 +121,8 @@ Key patterns:
 - Use `Mock` from `node:test` to track call counts and arguments — prefer over manual `let callCount = 0` patterns
 - Use `makeVirtualResource()` from `@microsoft/vscode-azure-azutils/testing` instead of hand-rolling `VirtualResource` objects
 - For Azure environments in azutils tests, use the `AzurePublicCloud` preset (or `AzureUSGovernment` / `AzureChinaCloud`) from `@microsoft/vscode-azure-azutils` instead of hand-rolled environment objects. Test credentials come from `makeCredential()` in `mockAzure.ts`.
+- Mock `IProcessExecutor` for CLI tests and inject HTTP responses; tests must
+  never contact npm.
 
 ### Driving Wizard UI in Tests
 
@@ -246,6 +248,33 @@ timers directly. Tests inject `ManualDebounceScheduler` from
 (`hasPending`), and then `await scheduler.flush()` to run it to completion.
 This avoids interleaving fake timers with real promise continuations, which is
 a common source of flakiness.
+
+### Timers You Don't Own
+
+Third-party code that arms its own timers -- the Azure SDK's LRO poller, for
+instance -- can't be handed a scheduler, so those tests do need a fake clock.
+Use `ManualTimers` from `@microsoft/vscode-azure-utils/testing` instead of
+`mock.timers` directly: it installs the same Node fake timers and adds
+`whenScheduled()`, which resolves once a timer has actually been armed.
+
+```typescript
+const timers = new ManualTimers();
+beforeEach(() => { timers.enable(); });
+afterEach(() => { timers.reset(); });
+
+it('should poll again after the interval', async () => {
+    startPolling();
+    await timers.whenScheduled();
+    timers.tick(1000);
+});
+```
+
+Advancing a fake clock only fires timers that already exist. Code that arms its
+next timer from a promise continuation hasn't called `setTimeout` yet when the
+awaited work resolves, so a tick issued at that moment fires nothing and the
+loop stalls until the test times out. Waiting on an observable side effect --
+a request count, a status change -- doesn't close the gap, because the effect
+lands before the timer is armed. Waiting for the arm itself does.
 
 ### Integration Tests
 

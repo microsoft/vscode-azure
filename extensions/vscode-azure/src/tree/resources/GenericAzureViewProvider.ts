@@ -10,6 +10,7 @@ import { Disposable, EventEmitter, Everything, IActionExecutor, ICodeContext, Li
 import { inject, injectable } from 'inversify';
 import { DeleteAzureResource } from '../../commands/tree/DeleteAzureResource';
 import { OpenInPortal } from '../../commands/tree/OpenInPortal';
+import { ViewProperties } from '../../commands/tree/ViewProperties';
 import { AzdEnvNameTag, ConfigurationSection } from '../../constants';
 import { IAzureViewDataTree } from '../../services';
 import { combineContextValues, resourceContextValue } from '../contextValueHelpers';
@@ -153,7 +154,7 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
             case isResourceGroup(resource): {
                 const item = new this.ctx.code.TreeItem(resource.name, this.ctx.code.TreeItemCollapsibleState.Collapsed);
                 item.id = key;
-                item.contextValue = combineContextValues(OpenInPortal.ContextValue, DeleteAzureResource.ResourceGroupContextValue);
+                item.contextValue = combineContextValues(OpenInPortal.ContextValue, DeleteAzureResource.ResourceGroupContextValue, ViewProperties.ContextValue);
                 const azdEnvName = resource.tags?.[AzdEnvNameTag];
                 if (azdEnvName) {
                     item.iconPath = new this.ctx.code.ThemeIcon('rocket');

@@ -97,20 +97,21 @@ class SelectResourceStep extends PromptStep<MyContext> {
 
 ## Reusable Azure Pick Steps
 
-`packages/azutils/src/wizard/` provides reusable Azure prompt steps. The first three extend `RecursivePickStep` and drill through the Azure resource tree; `ChooseLocationStep` is a plain `PromptStep` over a flat list from ARM:
+`packages/azutils/src/wizard/` provides reusable Azure prompt steps. The first two extend `RecursivePickStep` and drill through the Azure resource tree; `ChooseLocationStep` is a plain `PromptStep` over a flat list from ARM:
 
 | Step | Picks From | Sets on Context |
 |------|-----------|-----------------|
 | `ChooseSubscriptionStep` | Account > Tenant > Subscription | `subscription` |
 | `ChooseResourceGroupStep` | Account > Tenant > Subscription > Resource Group | `subscription`, `resourceGroup` |
-| `ChooseResourceStep<T>` | Full tree, filtering by `logicalType` | `resource` (single) or `resources` (multi-pick) |
 | `ChooseLocationStep` | Flat list from ARM API | `location` |
 
 Each step defines a context interface (e.g. `ChooseSubscriptionContext`) that the caller's wizard context must extend. Steps omit `classify` (and sometimes `tree`) from their constructor options since they provide these internally.
 
 `RecursivePickStep` accepts a `recursiveClass` parameter so subclasses can ensure recursion creates instances of the correct type, preserving the overridden `prompt()` logic at every drill level.
 
-Convenience wrappers (`subscriptionExperience`, `resourceGroupExperience`, `resourceExperience`) run a single-step wizard and return the picked object directly, for use outside of larger wizard flows.
+Convenience wrappers (`subscriptionExperience`, `resourceGroupExperience`) run a single-step wizard and return the picked object directly, for use outside of larger wizard flows.
+
+For picking an arbitrary node out of the resource tree, `nodeExperience` runs a `RecursivePickStep` directly against a caller-supplied classifier and type guard, then resolves the picked key back to its data-layer node. `resourceExperience` builds on it with a classifier that treats accounts, tenants, subscriptions, resource groups, and virtual groups as navigable and ARM resources as selectable, optionally filtered to a single `logicalType`.
 
 ## Resource Creation Wizards
 

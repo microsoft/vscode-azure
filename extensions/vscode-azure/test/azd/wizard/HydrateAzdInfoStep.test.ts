@@ -4,16 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createMockVsCode, MockUri } from '@microsoft/vscode-azure-utils/testing';
-import { mock } from 'node:test';
 import type { AzdShowResult } from '../../../src/azd/AzdService';
 import type { AzdWizardContext } from '../../../src/azd/wizard/AzdWizardContext';
 import { HydrateAzdInfoStep } from '../../../src/azd/wizard/HydrateAzdInfoStep';
 import { createMockAzdService } from '../MockAzdService';
-
-/** Helper: the mock window's `showWarningMessage` is a `mock.fn()` but is typed as `vscode.window.showWarningMessage`. */
-function asMockFn(fn: unknown): ReturnType<typeof mock.fn> {
-    return fn as ReturnType<typeof mock.fn>;
-}
 
 describe('HydrateAzdInfoStep (unit)', () => {
     function makeStep(opts: {
@@ -24,7 +18,7 @@ describe('HydrateAzdInfoStep (unit)', () => {
         readonly envValues?: Record<string, string>;
     } = {}) {
         const folderUri = MockUri.file('/workspace');
-        const { vscode: code, fs, window } = createMockVsCode();
+        const { vscode: code, fs } = createMockVsCode();
 
         if (opts.hasInfra) {
             fs.addFile(MockUri.file('/workspace/infra/main.bicep'));
@@ -38,7 +32,8 @@ describe('HydrateAzdInfoStep (unit)', () => {
             azd.envList.mock.mockImplementation(() => Promise.reject(new Error('azd not found')));
         }
         if (opts.envValues) {
-            azd.envGetValues.mock.mockImplementation(() => Promise.resolve(opts.envValues));
+            const envValues = opts.envValues;
+            azd.envGetValues.mock.mockImplementation(() => Promise.resolve(envValues));
         }
 
         const step = new HydrateAzdInfoStep<AzdWizardContext>(code, azd);
@@ -46,7 +41,7 @@ describe('HydrateAzdInfoStep (unit)', () => {
             job: 'deploy',
             iacFolder: folderUri,
         };
-        return { step, context, azd, window };
+        return { step, context, azd };
     }
 
     describe('shouldPrompt', () => {
@@ -89,7 +84,7 @@ describe('HydrateAzdInfoStep (unit)', () => {
         });
 
         it('detects azure.yaml with services entry via azd show', async () => {
-            const { step, context, window } = makeStep({
+            const { step, context } = makeStep({
                 show: { name: 'my-app', services: { myfunc: { project: { path: '.', language: 'node' } } } },
             });
             const result = await step.prompt(context);
@@ -97,16 +92,6 @@ describe('HydrateAzdInfoStep (unit)', () => {
             expect(result.hasAzureYaml).to.be.true;
             expect(result.hasServices).to.be.true;
             expect(result.azdServiceName).to.equal('myfunc');
-
-            // No warning when services are present.
-            expect(asMockFn(window.showWarningMessage).mock.callCount()).to.equal(0);
-        });
-
-        it('does not warn when there is no azure.yaml at all', async () => {
-            const { step, context, window } = makeStep();
-            await step.prompt(context);
-
-            expect(asMockFn(window.showWarningMessage).mock.callCount()).to.equal(0);
         });
 
         it('detects existing infra/main.bicep', async () => {

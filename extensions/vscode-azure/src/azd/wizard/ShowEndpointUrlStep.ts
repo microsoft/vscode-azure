@@ -13,8 +13,11 @@ import type { AzdWizardContext } from './AzdWizardContext';
  * After deployment, queries `azd show` for ingress URLs and shows a
  * toast notification offering to open the first one in a browser.
  *
- * Best-effort: silently skips when no URLs are available or when
- * `azd show` fails.
+ * Only runs when {@linkcode AzdWizardContext.deploy deploy} is `true` --
+ * i.e. only when {@linkcode AzdDeployStep} actually ran -- so a
+ * provision-only, CI/CD-routed, or otherwise-blocked flow never claims a
+ * deployment that didn't happen. Best-effort otherwise: silently skips when
+ * no URLs are available or when `azd show` fails.
  */
 @injectable()
 export class ShowEndpointUrlStep<TContext extends AzdWizardContext> extends ExecuteStep<TContext> {
@@ -28,7 +31,7 @@ export class ShowEndpointUrlStep<TContext extends AzdWizardContext> extends Exec
     }
 
     public override shouldExecute(context: Readonly<TContext>): boolean {
-        return !!context.iacFolder;
+        return context.deploy === true && !!context.iacFolder;
     }
 
     public async execute(context: Readonly<TContext>): Promise<void> {

@@ -8,6 +8,8 @@ import type { AzdWizardContext } from '../../azd/wizard/AzdWizardContext';
 
 /** Accumulated wizard context for Function App creation. */
 export interface CreateFunctionAppContext extends AzdWizardContext, PickContext<string> {
+    /** Always set; shared prompts name the product rather than assuming one. */
+    readonly resourceDisplayName: string;
     readonly functionWorkerRuntime?: FunctionWorkerRuntime;
     readonly runtimeVersion?: string;
     readonly appServicePlanSkuName?: AppServicePlanSku;

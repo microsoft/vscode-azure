@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { PickContext } from '@microsoft/vscode-azure-utils';
-import { Wizard } from '@microsoft/vscode-azure-utils';
+import { CaselessSet, Wizard } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, MockOutputChannel, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import type { AzureSubscription } from '../../src/auth/AzureSubscription';
 import type { Location } from '../../src/rest/clients/SubscriptionClient';
@@ -20,6 +20,7 @@ const northeurope: Location = { name: 'northeurope', displayName: 'North Europe'
 interface TestContext extends PickContext<string> {
     readonly subscription: AzureSubscription;
     readonly location?: Location;
+    readonly allowedLocationNames?: Iterable<string>;
 }
 
 describe('ChooseLocationStep (unit)', () => {
@@ -82,6 +83,59 @@ describe('ChooseLocationStep (unit)', () => {
         const result = await wizard.run();
 
         expect(result.location?.name).to.equal('eastus');
+        tracker.assertAllConsumed();
+    });
+
+    it('should honor a resource-specific location allow-list', async () => {
+        const { ctx, mock } = createMockCodeContext();
+        const provider = createMockSubscriptionClientProvider([westus, eastus]);
+        const tracker = respondToPrompts(mock, [{ pick: 'East US' }]);
+
+        const wizard = new Wizard<TestContext>(
+            output,
+            { picks: [], subscription, allowedLocationNames: new Set(['eastus']) },
+            [new ChooseLocationStep(ctx, provider, output)],
+        );
+        const result = await wizard.run();
+
+        expect(result.location?.name).to.equal('eastus');
+        expect(mock.quickPicks[0].items.map(item => item.label)).to.deep.equal(['East US']);
+        tracker.assertAllConsumed();
+    });
+
+    it('matches the allow-list case-insensitively even when the caller passes a plain Set', async () => {
+        // A plain Set structurally satisfies the allow-list type but compares exactly, so
+        // this pins that the step folds the casing itself rather than trusting the caller.
+        const { ctx, mock } = createMockCodeContext();
+        const provider = createMockSubscriptionClientProvider([westus, eastus]);
+        const tracker = respondToPrompts(mock, [{ pick: 'East US' }]);
+
+        const wizard = new Wizard<TestContext>(
+            output,
+            { picks: [], subscription, allowedLocationNames: new Set(['EastUS']) },
+            [new ChooseLocationStep(ctx, provider, output)],
+        );
+        const result = await wizard.run();
+
+        expect(result.location?.name).to.equal('eastus');
+        expect(mock.quickPicks[0].items.map(item => item.label)).to.deep.equal(['East US']);
+        tracker.assertAllConsumed();
+    });
+
+    it('matches the allow-list case-insensitively when ARM returns unexpected casing', async () => {
+        const { ctx, mock } = createMockCodeContext();
+        const provider = createMockSubscriptionClientProvider([westus, { name: 'EastUs', displayName: 'East US' }]);
+        const tracker = respondToPrompts(mock, [{ pick: 'East US' }]);
+
+        const wizard = new Wizard<TestContext>(
+            output,
+            { picks: [], subscription, allowedLocationNames: new CaselessSet(['eastus']) },
+            [new ChooseLocationStep(ctx, provider, output)],
+        );
+        const result = await wizard.run();
+
+        expect(result.location?.name).to.equal('EastUs');
+        expect(mock.quickPicks[0].items.map(item => item.label)).to.deep.equal(['East US']);
         tracker.assertAllConsumed();
     });
 

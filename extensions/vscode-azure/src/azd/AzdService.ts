@@ -17,6 +17,15 @@ export const AzdCommand = 'azd';
 
 /** Minimum `azd` version required by this extension. */
 export const MinAzdVersion = '1.25.0-0';
+/**
+ * Minimum `azd` version required to configure CI/CD through `azd pipeline config`.
+ *
+ * 1.30.0 is the first release in which `--provider azdo` accepts federated
+ * authentication, which is the default `azd` picks for Azure DevOps; earlier versions
+ * reject it and the command fails part-way through. Feature-specific gate, independent
+ * of the repo-wide {@linkcode MinAzdVersion}.
+ */
+export const MinAzdPipelineVersion = '1.30.0';
 
 /** File names that mark an azd project. */
 export const AzureYamlFileNames = ['azure.yaml', 'azure.yml'];
@@ -118,6 +127,24 @@ export interface IAzdService {
     deploy(cwd: vscode.Uri): Promise<void>;
 
     /**
+     * Runs `azd pipeline config` as a visible VS Code task, interactively
+     * configuring CI/CD (GitHub Actions or Azure Pipelines) for the project in
+     * {@linkcode cwd}.
+     *
+     * Never passes `--no-prompt` -- `azd` may need to interactively
+     * authenticate against the provider and/or the Git remote, and it offers to
+     * create and push a repository when the project has none. Output is
+     * never captured, so no secrets/PATs can leak into telemetry, logs, or
+     * the output channel.
+     *
+     * @param provider - `'github'` or `'azdo'` (Azure DevOps). Omit to let
+     *   `azd` prompt for one.
+     * @param environmentName - Optional azd environment to target; passed as
+     *   `--environment` when provided.
+     */
+    pipelineConfig(cwd: vscode.Uri, provider?: 'github' | 'azdo', environmentName?: string): Promise<void>;
+
+    /**
      * Runs `azd down --force --purge` as a visible VS Code task, deleting
      * all resources provisioned for the project's default environment and
      * purging any soft-deleted resources.
@@ -158,7 +185,7 @@ export interface AzdShowResult {
      * Map of `azd-service-name` -> service descriptor as declared under
      * `services:` in `azure.yaml`. An empty / missing object means no
      * services are configured -- `azd deploy` will not have anything to
-     * target until the user runs `azd add`.
+     * target until an entry is added.
      */
     readonly services?: Readonly<Record<string, AzdServiceDescriptor>>;
 }
@@ -412,6 +439,27 @@ export class AzdService implements IAzdService {
                 cwd,
                 env: authEnv,
                 name: 'azd deploy',
+                source: 'azd',
+            });
+        } catch (e) {
+            throw await this.wrapAzdError(e);
+        }
+    }
+
+    /** @inheritdoc */
+    public async pipelineConfig(cwd: vscode.Uri, provider?: 'github' | 'azdo', environmentName?: string): Promise<void> {
+        const authEnv = await this.authServer.getEnv();
+
+        try {
+            await this.processExecutor.spawn({
+                execution: 'foreground',
+                command: command(this.getAzdCommand())
+                    .arg('pipeline', 'config')
+                    .namedArg('--provider', provider)
+                    .namedArg('--environment', environmentName),
+                cwd,
+                env: authEnv,
+                name: 'azd pipeline config',
                 source: 'azd',
             });
         } catch (e) {

@@ -75,6 +75,62 @@ A product only needs its own delete command for targets the generic command
 cannot express -- for example a virtual child node that maps to a
 service-specific API rather than an ARM resource ID.
 
+### Viewing resource properties
+
+`ViewProperties` opens a node's live properties as a JSON document. It resolves
+the selected node through `ResourceSelector` and owns telemetry, redaction, and
+document presentation; what differs per resource type is only *where the
+properties come from*, which is supplied by a `PropertiesAdapter`:
+
+```typescript
+export interface PropertiesAdapter<TNode extends ConcreteAzureNode = ConcreteAzureNode> {
+    canHandle(node: ConcreteAzureNode): node is TNode;
+    read(node: TNode): Promise<unknown>;
+    readonly redact?: RedactionPolicy;
+}
+```
+
+Adapters are `@multiInject`ed and dispatched first-match-wins, so a product
+binds its adapter in its own `register*.ts` and gets priority over
+`GenericArmPropertiesAdapter`, which is bound from `registerGenericAzure.ts` —
+registered last — and serializes any resolved ARM resource or resource group
+after dropping metadata attached by this repo.
+
+Most products need no adapter at all. Write one only when the properties worth
+showing are not what an ARM GET returns, for example a virtual child node backed
+by a data-plane API.
+
+Redaction is **declared, not implemented**: an adapter sets `redact` and the
+command applies it through `applyRedaction` from `@microsoft/vscode-azure-utils`.
+It is on by default, so an adapter written without a thought for secrets is safe;
+`redact: false` is the deliberate opt-out and `{ alsoRedact: [...] }` adds names
+specific to that payload. VS Code's telemetry API works the same way — everything
+is cleaned, and `TelemetryTrustedValue` opts a value out.
+
+Three things are withheld. A property whose **name** says it holds a credential
+(`isSecretPropertyName`, which reads the last word of a compound so `keyVaultUri`
+survives while `primaryKey` does not), including a `{ name, value }` entry whose
+`name` names a credential; a **value** that is recognisably a credential on its
+own, screened with the regexes VS Code uses in
+`src/vs/platform/telemetry/common/telemetryUtils.ts`; and the credential-bearing
+**segments** of a signed URL or a `key=value;` connection string, so the endpoint
+stays readable and only the signature goes. That last one uses an allow list of
+query parameters, matching the `Sanitizer` that `@azure/core-rest-pipeline`
+scrubs request URLs with.
+
+Anything withheld on one of those grounds is then withheld everywhere else it
+appears in the payload, so a key that also sits embedded in some URI does not
+survive because only one of its two homes was recognised. Redacted values are
+replaced with a visible marker rather than dropped, so the reader can tell a
+withheld property from an absent one; a value recognised by its shape says what
+it was taken for (`<redacted: JWT>`).
+
+This is a best-effort screen over a payload of unknown shape, not an
+authorization boundary.
+
+The opened JSON document is a readonly snapshot of the current state. Editable
+resource configuration belongs in the settings framework instead.
+
 ### `prefixArgs` Pattern
 
 Both registration functions accept optional trailing `...prefixArgs`, which are prepended to the arguments VS Code passes to `execute()`. This lets one command class be registered several times with different fixed arguments instead of being split into near-identical subclasses:
@@ -157,19 +213,57 @@ The `\b` word boundary prevents unintended partial matches (e.g. `openInPortal` 
 
 A context value does not have to be unconditional. When whether a command applies is a property of the *data* rather than of the node type, the view provider decides per node, and the command is contributed only when it is genuinely available.
 
-Prefer expressing this in the view provider that owns the node rather than inventing a separate permission model: a product that permits only a subset of the shared settings commands registers its own view provider ahead of `SettingsViewProvider` and attaches only the context values it wants. This is preferable to contributing the command and failing at execution time — the user never sees an action that cannot work.
+Prefer expressing this in the view provider that owns the node rather than inventing a separate permission model: a product that permits only a subset of the shared settings commands registers its own view provider ahead of `SettingsViewProvider` and attaches only the context values it wants. This is preferable to contributing the command and failing at execution time -- the user never sees an action that cannot work.
 
 Note that a context value only controls *menu visibility*. The command palette ignores it, so anything that must never happen has to be enforced where the work is actually done (for settings, that is `SettingsAdapter.write`). See [Settings](settings.md).
 
 ## Commands with Resource Selection
 
-Commands that operate on tree items accept an optional `key` parameter. When invoked from a tree item context menu, the key is provided. When invoked from the command palette, the command prompts the user to select a resource.
+Commands that operate on tree items accept an optional `key` parameter. When invoked from a tree item context menu, the key is provided. When invoked from the command palette, the command either prompts the user to select a resource or reports that a selection is required.
 
-The `ResourceSelector` service encapsulates this pattern. It resolves a resource from the data cache when a key is provided, or prompts the user via `resourceExperience` when no key is given. A command therefore handles both entry points in one line:
+The `ResourceSelector` service encapsulates all of this. It replaces the repeated pattern of injecting `ICodeContext`, `IOutputChannel`, `IAzureViewDataTree`, and `IAzureViewViewItemTree` into every command that resolves a node, and it records the resolved node's type in the running action's telemetry so no command has to remember to.
+
+### Resolving a key
+
+`resolve` throws when the key is absent, stale, or points at a node the command cannot act on; `tryResolve` returns `undefined` in exactly the same cases. That pair covers both policies without a flag:
+
+```typescript
+// Reports the problem to the user
+const resource = this.selector.resolve({
+    key,
+    canHandle: isDeletable,
+    messages: {
+        missingKey: this.ctx.code.l10n.t('Select an Azure resource to delete.'),
+        invalidNode: this.ctx.code.l10n.t('The selected item cannot be deleted.'),
+    },
+});
+
+// Quietly does nothing
+const node = this.selector.tryResolve({ key, canHandle: isSettingsNode });
+if (!node) {
+    return;
+}
+```
+
+`canHandle` may be a predicate or a type guard. A type guard narrows the return type to whatever it proves; a plain predicate validates the node at runtime but leaves the return type as `ConcreteAzureNode`. Omit it to accept any cached node. `ViewProperties` does, because it acts on a subscription or resource group as readily as a resource and leaves the question of what it can serve to its adapters.
+
+Each `messages` entry is a localized string. Omitted entries fall back to a generic localized message.
+
+Commands keep their own `execute` signature, so `prefixArgs` and non-`key` first arguments stay expressible -- `BrowseWebsite` resolves out of `...args: unknown[]`.
+
+Use `selectVirtual` for commands targeting a virtual resource. It resolves a supplied key directly, or prompts the user to navigate through collapsible resource-tree nodes when invoked from the command palette:
+
+```typescript
+const node = await this.selector.selectVirtual({ key, canHandle: isSettingsNode });
+```
+
+### Prompting instead
+
+When a command should prompt rather than fail, `selectResource` resolves from the key when there is one and runs the resource picker when there is not:
 
 ```typescript
 public async execute(key?: string): Promise<void> {
-    const resource = await this.selector.select(AcrResourceType, key);
+    const resource = await this.selector.selectResource({ logicalType: AcrResourceType, key });
     if (!isAcrRegistry(resource)) {
         return;
     }
@@ -182,7 +276,7 @@ public async execute(key?: string): Promise<void> {
 
 Wrap that wait in `withDelayedProgress` when enrichment may not have landed yet, so a slow ARM call shows progress instead of appearing to hang.
 
-For more complex selection flows (e.g. multi-step wizards), use the `Choose*Step` classes in `packages/azutils/src/wizard/` or the convenience wrappers `subscriptionExperience`, `resourceGroupExperience`, and `resourceExperience` directly.
+Resource and virtual-resource selection share the recursive `nodeExperience` picker. For more complex selection flows (e.g. multi-step wizards), use the `Choose*Step` classes in `packages/azutils/src/wizard/` or the convenience wrappers `subscriptionExperience`, `resourceGroupExperience`, and `resourceExperience` directly.
 
 ## Activity Commands
 
@@ -198,3 +292,5 @@ Every command execution is automatically wrapped with telemetry. The `IActionCon
 - `errorHandling.rethrow` — whether to rethrow errors after recording them
 
 See [Telemetry](telemetry.md) for details.
+
+Services shared across command executions cannot inject `IActionContext`, because a singleton would capture whichever execution constructed it first. They inject `IActionExecutor` and call `setTelProp` instead, which writes to the action in flight. `ResourceSelector` records `nodeType` this way for every command that resolves through it.

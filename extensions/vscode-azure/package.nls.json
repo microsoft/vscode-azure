@@ -7,6 +7,7 @@
     "views.vscode-azure/workspace": "Workspace",
     "views.vscode-azure/activity": "Activity Log",
     "commands.category.azure": "Azure",
+    "commands.category.azureStaticWebApps": "Azure Static Web Apps",
     "commands.vscode-azure/resources/refresh": "Refresh",
     "commands.vscode-azure/workspace/refresh": "Refresh",
     "commands.vscode-azure/workspace/revealInExplorer": "Reveal in Explorer View",
@@ -14,6 +15,7 @@
     "commands.vscode-azure/resources/delete": "Delete Resource...",
     "commands.vscode-azure/resourceGroups/delete": "Delete Resource Group...",
     "commands.vscode-azure/resources/browseWebsite": "Browse Website",
+    "commands.vscode-azure/resources/viewProperties": "View Properties",
     "commands.vscode-azure/resources/loadMore": "Load More...",
     "commands.vscode-azure/resources/groupBy": "Group By...",
     "commands.vscode-azure/activity/clearSuccessful": "Clear Successful",
@@ -29,8 +31,14 @@
     "commands.vscode-azure/containerApps/startStreamingLogs": "Start Streaming Logs...",
     "commands.vscode-azure/containerApps/createNew": "Create Empty Container App in Azure...",
     "commands.vscode-azure/containerApps/deploy": "Deploy Project as Container App...",
+    "commands.vscode-azure/staticWebApps/createNew": "Create Static Web App...",
+    "commands.vscode-azure/staticWebApps/deleteEnvironment": "Delete Environment...",
+    "commands.vscode-azure/staticWebApps/createSwaConfigFile": "Create Configuration File",
+    "commands.vscode-azure/staticWebApps/showDocumentation": "Documentation",
+    "commands.vscode-azure/staticWebApps/showFunctionsDocumentation": "Azure Functions Documentation",
     "commands.vscode-azure/azdUp": "Provision & Deploy",
     "commands.vscode-azure/azdDown": "Delete Deployment",
+    "commands.vscode-azure/configureCicd": "Configure CI/CD",
     "commands.vscode-azure/signIn": "Sign in to Azure...",
     "commands.vscode-azure/selectSubscriptions": "Select Subscriptions...",
     "commands.vscode-azure/installAzd": "Install / Update Azure Developer CLI (azd)",
@@ -49,5 +57,6 @@
     "settings.vscode-azure.signedInTenants": "Tenants you signed in to by entering a tenant ID. These are merged into the Resources tree so the tenants remain reachable when listing tenants is blocked (for example by conditional access). Remove entries here to stop showing a tenant.",
     "settings.vscode-azure.signedInTenants.tenantId.patternError": "Tenant ID must be a GUID (e.g. 00000000-0000-0000-0000-000000000000).",
     "settings.vscode-azure.selectedSubscriptions": "The tenants and subscriptions to show in the Azure resources view, as an array of 'tenantId/subscriptionId' strings. When empty, all subscriptions are shown. Use the 'Azure: Select Subscriptions' command to edit this.",
-    "settings.vscode-azure.selectedSubscriptions.patternError": "Each entry must be in the form 'tenantId/subscriptionId', where both are GUIDs (for example '00000000-0000-0000-0000-000000000000/11111111-1111-1111-1111-111111111111')."
+    "settings.vscode-azure.selectedSubscriptions.patternError": "Each entry must be in the form 'tenantId/subscriptionId', where both are GUIDs (for example '00000000-0000-0000-0000-000000000000/11111111-1111-1111-1111-111111111111').",
+    "capabilities.virtualWorkspaces.description": "Some features are not supported in virtual workspaces."
 }

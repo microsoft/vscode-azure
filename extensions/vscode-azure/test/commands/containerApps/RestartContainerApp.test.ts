@@ -4,18 +4,15 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureNodeId } from '@microsoft/vscode-azure-azutils';
-import { createMockContainerAppsClient, createMockDataItemTree, makeContainerApp } from '@microsoft/vscode-azure-azutils/testing';
-import { createMockCodeContext, MockOutputChannel } from '@microsoft/vscode-azure-utils/testing';
+import { createMockContainerAppsClient, makeContainerApp } from '@microsoft/vscode-azure-azutils/testing';
 import { mock } from 'node:test';
-import type { IAzureViewViewItemTree } from '../../../src/services';
 import { RestartContainerApp } from '../../../src/commands/containerApps/RestartContainerApp';
 import type { ContainerApp } from '../../../src/tree/resources/containerApps/ContainerApp';
-import { ResourceSelector } from '../../../src/tree/resources/ResourceSelector';
+import { createTestResourceSelector } from '../../tree/resources/testResourceSelector';
 
 function createCommand(app: ContainerApp) {
-    const { ctx, mock: mockResult } = createMockCodeContext();
-    const cache = createMockDataItemTree([app]);
-    const selector = new ResourceSelector(ctx, new MockOutputChannel('test'), cache, undefined as unknown as IAzureViewViewItemTree);
+    const { selector, cache, codeContext } = createTestResourceSelector({ nodes: [app] });
+    const mockResult = codeContext.mock;
     const client = createMockContainerAppsClient();
 
     const command = new RestartContainerApp(

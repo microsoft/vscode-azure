@@ -5,19 +5,17 @@
 
 import type { Replica, Revision } from '@microsoft/vscode-azure-azutils';
 import { AzureNodeId } from '@microsoft/vscode-azure-azutils';
-import { createMockContainerAppsClient, createMockDataItemTree, makeContainerApp } from '@microsoft/vscode-azure-azutils/testing';
-import { createMockCodeContext, MockOutputChannel, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
+import { createMockContainerAppsClient, makeContainerApp } from '@microsoft/vscode-azure-azutils/testing';
+import { respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import { StartStreamingLogs } from '../../../src/commands/containerApps/StartStreamingLogs';
-import type { IAzureViewViewItemTree } from '../../../src/services';
 import type { LogStreamTarget } from '../../../src/tree/resources/containerApps/ContainerAppLogStream';
-import { ResourceSelector } from '../../../src/tree/resources/ResourceSelector';
+import { createTestResourceSelector } from '../../tree/resources/testResourceSelector';
 
 function createCommand(revisions: Partial<Revision>[], replicas: Partial<Replica>[]) {
-    const { ctx, mock: mockResult } = createMockCodeContext();
     const app = makeContainerApp();
-    const cache = createMockDataItemTree([app]);
-    const selector = new ResourceSelector(ctx, new MockOutputChannel('test'), cache, undefined as unknown as IAzureViewViewItemTree);
+    const { selector, ctx, codeContext } = createTestResourceSelector({ nodes: [app] });
+    const mockResult = codeContext.mock;
 
     const client = createMockContainerAppsClient({
         revisions: revisions as Revision[],

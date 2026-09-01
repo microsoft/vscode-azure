@@ -4,20 +4,17 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureNodeId } from '@microsoft/vscode-azure-azutils';
-import { createMockDataItemTree, makeContainerApp } from '@microsoft/vscode-azure-azutils/testing';
-import { createMockCodeContext, MockOutputChannel } from '@microsoft/vscode-azure-utils/testing';
+import { makeContainerApp } from '@microsoft/vscode-azure-azutils/testing';
 import { mock } from 'node:test';
 import { RevealContainerAppEnvironment } from '../../../src/commands/containerApps/RevealContainerAppEnvironment';
-import type { IAzureViewViewItemTree } from '../../../src/services';
-import { ResourceSelector } from '../../../src/tree/resources/ResourceSelector';
+import { createTestResourceSelector } from '../../tree/resources/testResourceSelector';
 
 const EnvironmentId = '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/OtherRG/providers/Microsoft.App/managedEnvironments/MyEnv';
 
 function createCommand(environmentId: string | undefined, revealImpl?: () => Promise<void>) {
-    const { ctx, mock: mockResult } = createMockCodeContext();
     const app = makeContainerApp({ environmentId });
-    const cache = createMockDataItemTree([app]);
-    const selector = new ResourceSelector(ctx, new MockOutputChannel('test'), cache, undefined as unknown as IAzureViewViewItemTree);
+    const { selector, codeContext } = createTestResourceSelector({ nodes: [app] });
+    const mockResult = codeContext.mock;
     const reveal = mock.fn((_key: string, _options?: { select?: boolean; focus?: boolean }) =>
         revealImpl ? revealImpl() : Promise.resolve());
 
