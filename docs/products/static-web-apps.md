@@ -133,12 +133,6 @@ the provider, and writes the workflow file. The extension deliberately does not
 inspect Git metadata beforehand, because every such check could only remove a
 capability azd already has.
 
-The one precondition enforced locally is `MinAzdPipelineVersion`, since
-federated Azure DevOps authentication fails below it and azd asks which provider
-to use only once it is already running. When no azd version can be read at all,
-the command proceeds so azd's own "not found" install prompt is what the user
-sees.
-
 A successful run means the pipeline is configured, not that code was deployed;
 that happens on the next push.
 

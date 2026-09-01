@@ -16,16 +16,7 @@ export const IAzdService: ServiceIdentifier<IAzdService> = Symbol.for('IAzdServi
 export const AzdCommand = 'azd';
 
 /** Minimum `azd` version required by this extension. */
-export const MinAzdVersion = '1.32.0-0';
-/**
- * Minimum `azd` version required to configure CI/CD through `azd pipeline config`.
- *
- * 1.30.0 is the first release in which `--provider azdo` accepts federated
- * authentication, which is the default `azd` picks for Azure DevOps; earlier versions
- * reject it and the command fails part-way through. Feature-specific gate, independent
- * of the repo-wide {@linkcode MinAzdVersion}.
- */
-export const MinAzdPipelineVersion = '1.30.0';
+export const MinAzdVersion = '1.33.0-0';
 
 /** File names that mark an azd project. */
 export const AzureYamlFileNames = ['azure.yaml', 'azure.yml'];

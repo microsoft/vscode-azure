@@ -7,7 +7,7 @@ import { ExecuteStep, IActionContext, IVsCode } from '@microsoft/vscode-azure-ut
 import { inject, injectable } from 'inversify';
 import { ActivityTreeViewId } from '../../constants';
 import { ICodeDeploymentDataProvider } from '../../tree/activity/CodeDeploymentDataProvider';
-import { IAzdService, MinAzdPipelineVersion } from '../AzdService';
+import { IAzdService } from '../AzdService';
 import type { AzdWizardContext } from './AzdWizardContext';
 
 /**
@@ -37,20 +37,6 @@ export class AzdPipelineConfigStep<TContext extends AzdWizardContext> extends Ex
     }
 
     public async execute(context: Readonly<TContext>): Promise<void> {
-        // TODO(#165): Remove this dedicated check when the extension-wide azd minimum exceeds it.
-        // Enforced whichever provider the user goes on to pick: the floor exists
-        // for Azure DevOps, and `azd` only asks which provider to use once it is
-        // already running, so failing here beats failing part-way through setup.
-        // `undefined` means no version could be read at all, in which case
-        // `pipelineConfig` raises the "not found" install prompt instead.
-        if (await this.azd.checkVersion(MinAzdPipelineVersion) === false) {
-            this.actionContext.errorHandling.suppress = 'display';
-            throw new Error(this.code.l10n.t(
-                'Azure Developer CLI (azd) version {0} or later is required to configure CI/CD.',
-                MinAzdPipelineVersion,
-            ));
-        }
-
         const handle = this.codeProvider.trackDeployment({ title: 'azd pipeline config' });
 
         void this.code.commands.executeCommand(`${ActivityTreeViewId}.focus`);
