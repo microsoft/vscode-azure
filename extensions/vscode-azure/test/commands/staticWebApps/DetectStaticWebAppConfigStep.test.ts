@@ -69,6 +69,10 @@ describe('DetectStaticWebAppConfigStep (unit)', () => {
             expect(result.appLocation).to.equal('app');
             expect(result.apiLocation).to.equal('api');
             expect(result.outputLocation).to.equal('dist');
+            expect(result.swaCliConfigNeedsWrite).to.equal(false);
+            expect(result.swaCliConfig).to.deep.equal({
+                configurations: { mine: { appLocation: 'app', apiLocation: 'api', outputLocation: 'dist' } },
+            });
         });
 
         it('should fall back to the CLI when no configuration exists', async () => {
@@ -79,6 +83,10 @@ describe('DetectStaticWebAppConfigStep (unit)', () => {
             expect(swa.detect.mock.callCount()).to.equal(1);
             expect(result.appLocation).to.equal('src');
             expect(result.outputLocation).to.equal('build');
+            expect(result.swaCliConfigNeedsWrite).to.equal(true);
+            expect(result.swaCliConfig).to.deep.equal({
+                configurations: { detected: { appLocation: 'src', apiLocation: 'api', outputLocation: 'build' } },
+            });
         });
 
         it('should apply Static Web Apps defaults for paths the CLI omits', async () => {
@@ -89,6 +97,17 @@ describe('DetectStaticWebAppConfigStep (unit)', () => {
             expect(result.appLocation).to.equal('/');
             expect(result.apiLocation).to.equal('');
             expect(result.outputLocation).to.equal('');
+        });
+
+        it('should surface malformed existing configuration rather than replace it', async () => {
+            const { step, swa, ctx } = createStep({ appLocation: 'detected' });
+            ctx.code.workspace.fs.writeFile(
+                ctx.code.Uri.joinPath(MockUri.file(ProjectDir), SwaCliConfigFileName),
+                new TextEncoder().encode('{'),
+            );
+
+            await expect(step.prompt(createContext())).to.be.rejectedWith(/Unable to parse/i);
+            expect(swa.detect.mock.callCount()).to.equal(0);
         });
 
         it('should enable deployment for a distinct build output', async () => {
@@ -108,7 +127,10 @@ describe('DetectStaticWebAppConfigStep (unit)', () => {
         it('should skip deployment when the project has no build output', async () => {
             const { step } = createStep({ appLocation: '/', outputLocation: '' });
 
-            expect((await step.prompt(createContext())).deploy).to.equal(false);
+            const result = await step.prompt(createContext());
+
+            expect(result.deploy).to.equal(false);
+            expect(result.swaCliConfigNeedsWrite).to.equal(false);
         });
 
         it('should never deploy for a job that only creates', async () => {
@@ -139,6 +161,31 @@ describe('DetectStaticWebAppConfigStep (unit)', () => {
             const { step } = createStep({ outputLocation: 'dist', appBuildCommand: 'npm run build' });
 
             expect((await step.prompt(createContext())).detectedLanguage).to.equal('js');
+        });
+
+        it('should record python for an API-only Python project', async () => {
+            const { step } = createStep({ outputLocation: 'dist', apiLanguage: 'python' });
+
+            expect((await step.prompt(createContext())).detectedLanguage).to.equal('python');
+        });
+
+        it('should prefer the app build language for a JavaScript app with a Python API', async () => {
+            const { step } = createStep({
+                outputLocation: 'dist',
+                appBuildCommand: 'npm run build',
+                apiLanguage: 'python',
+            });
+
+            expect((await step.prompt(createContext())).detectedLanguage).to.equal('js');
+        });
+
+        it('should not retain generated configuration for a provision-only job', async () => {
+            const { step } = createStep({ outputLocation: 'dist', apiLanguage: 'python' });
+
+            const result = await step.prompt(createContext({ job: 'createNew' }));
+
+            expect(result.swaCliConfig).to.equal(undefined);
+            expect(result.swaCliConfigNeedsWrite).to.equal(false);
         });
 
         it('should normalize windows separators the CLI may emit', async () => {

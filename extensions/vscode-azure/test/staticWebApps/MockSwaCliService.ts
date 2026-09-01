@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { mock } from 'node:test';
-import type { SWACLIOptions } from '../../src/staticWebApps/SwaCliConfig';
+import type { StaticWebAppsCliConfigFile, SWACLIOptions } from '../../src/staticWebApps/SwaCliConfig';
 import type { ISwaCliService } from '../../src/staticWebApps/SwaCliService';
 
 /**
@@ -23,8 +23,11 @@ export type MockSwaCliService = ISwaCliService & {
  *   single-page app at the repository root with no API and no build output.
  */
 export function createMockSwaCliService(detectResult: SWACLIOptions = { appLocation: '/' }): MockSwaCliService {
+    const config: StaticWebAppsCliConfigFile = {
+        configurations: { detected: detectResult },
+    };
     return {
-        detect: mock.fn(() => Promise.resolve(detectResult)),
+        detect: mock.fn(() => Promise.resolve({ config, options: detectResult })),
         checkVersion: mock.fn(() => Promise.resolve(true)),
     };
 }

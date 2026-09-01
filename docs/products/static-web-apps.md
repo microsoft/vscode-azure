@@ -93,27 +93,30 @@ which keeps the framework table the CLI's to maintain rather than mirroring it
 here. Creation therefore requires `swa`; when it is missing or too old the step
 fails with the same actionable install toast the rest of the product uses.
 
-Detection is read-only even though `swa init` is a scaffolding command. The CLI
-scans its working directory but writes to the path given by `--config`, and
-stores what it found verbatim rather than rebasing it onto the configuration's
-own location. Pointing `--config` at a scratch directory therefore yields the
-detection-only mode the CLI does not otherwise offer, and the project is left
-untouched. A detection run still exits zero when it finds nothing, so the
-result is read back by name instead of trusted from the exit code.
+Detection itself is read-only even though `swa init` is a scaffolding command.
+The CLI scans its working directory but writes to the path given by `--config`,
+and stores what it found verbatim rather than rebasing it onto the
+configuration's own location. Pointing `--config` at a scratch directory
+therefore yields the detection-only mode the CLI does not otherwise offer. For
+an eligible deploy job, the detected file is written to the workspace only
+after the user confirms; a provision-only job leaves the project untouched. A
+detection run still exits zero when it finds nothing, so the result is read
+back by name instead of trusted from the exit code.
 
 The generated Bicep provisions a Static Web App through the pinned
 `avm/res/web/static-site:0.9.5` module. The plan defaults to Free; changing the
 `staticWebAppSkuName` parameter and provisioning again applies a different
 supported SKU. The resource receives the shared azd environment/service tags.
 
-The `host: staticwebapp` azd service records `project` and `dist` for deployable
-static artifacts. `canAzdDeployStaticWebApp` is the single gate on whether an
-output location produces one. Empty, `/`, and `.` provision the ARM resource
-with nothing to deploy. So does `.next`: the CLI reports one output location per
-framework, so a server-rendered Next.js project and its static export both
-resolve to the server build, which would be a broken site if uploaded as static
-content. In every case the wizard provisions and warns rather than deploying,
-pointing at `swa-cli.config.json` as the way to state a real build output.
+The `host: staticwebapp` azd service runs from the workspace root when an SWA
+CLI configuration owns the build. This lets azd discover the file, invoke
+`swa build`, and preserve API runtime metadata such as Python. Without that
+file, the service records `project` and `dist` for a prebuilt static artifact.
+`canAzdDeployStaticWebApp` is the single gate on whether an output location
+produces one. Empty, `/`, and `.` provision the ARM resource with nothing to
+deploy. So does `.next`: the CLI reports one output location per framework, so
+a server-rendered Next.js project and its static export both resolve to the
+server build, which would be a broken site if uploaded as static content.
 
 ## Configuring CI/CD
 
@@ -158,11 +161,10 @@ npm package. No CLI check or outdated-version warning runs at activation.
 `SwaCliService` invokes that executable, mirroring `AzdService`: it resolves the
 path the tool service last acquired and falls back to the bare command name, and
 it turns a missing or too-old CLI into a warning toast offering the install
-command. `init()` runs `swa init --yes` to let the CLI detect a project's
-framework, then reads `swa-cli.config.json` back rather than trusting the exit
-code -- the CLI reports a detection or write failure on its output alone and
-still exits zero. Because `--yes` accepts the overwrite prompt, the call
-replaces the configuration entry it targets.
+command. `detect()` runs `swa init --yes` against a scratch file to let the CLI
+detect a project's framework, then reads the file back rather than trusting the
+exit code -- the CLI reports a detection or write failure on its output alone
+and still exits zero.
 
 ## Current limitations
 

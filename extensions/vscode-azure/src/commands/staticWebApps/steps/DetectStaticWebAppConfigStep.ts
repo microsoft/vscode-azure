@@ -6,7 +6,7 @@
 import { IActionContext, ICodeContext, PromptStep, showMessage } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { ISwaCliService } from '../../../staticWebApps/SwaCliService';
-import { tryGetStaticWebAppCliOptions, canAzdDeployStaticWebApp, type SWACLIOptions } from '../../../staticWebApps/SwaCliConfig';
+import { canAzdDeployStaticWebApp, tryGetStaticWebAppsCliConfig, type SWACLIOptions } from '../../../staticWebApps/SwaCliConfig';
 import type { CreateStaticWebAppContext, StaticWebAppAzdLanguage } from '../CreateStaticWebAppContext';
 
 /** Defaults the Static Web Apps build applies when a path is not stated. */
@@ -52,9 +52,25 @@ export class DetectStaticWebAppConfigStep extends PromptStep<CreateStaticWebAppC
             return {};
         }
 
-        const declared = await tryGetStaticWebAppCliOptions(this.ctx.code, iacFolder);
-        const options = declared ?? await this.swa.detect(iacFolder);
-        this.actionContext.telemetry.properties.swaLayoutSource = declared ? 'config' : 'cli';
+        const declaredConfig = await tryGetStaticWebAppsCliConfig(this.ctx.code, iacFolder);
+        let options: SWACLIOptions;
+        let swaCliConfig = declaredConfig;
+        let swaCliConfigNeedsWrite = false;
+        if (declaredConfig) {
+            const configurations = declaredConfig.configurations;
+            const configName = configurations ? Object.keys(configurations)[0] : undefined;
+            if (!configurations || !configName) {
+                throw new Error(this.ctx.code.l10n.t('The Static Web Apps CLI configuration does not define a project configuration.'));
+            }
+            options = configurations[configName];
+            this.actionContext.telemetry.properties.swaLayoutSource = 'config';
+        } else {
+            const detected = await this.swa.detect(iacFolder);
+            options = detected.options;
+            swaCliConfig = detected.config;
+            swaCliConfigNeedsWrite = context.job === 'deploy';
+            this.actionContext.telemetry.properties.swaLayoutSource = 'cli';
+        }
 
         const appLocation = normalize(options.appLocation) ?? DefaultAppLocation;
         const apiLocation = normalize(options.apiLocation) ?? DefaultApiLocation;
@@ -78,6 +94,8 @@ export class DetectStaticWebAppConfigStep extends PromptStep<CreateStaticWebAppC
             outputLocation,
             detectedLanguage: resolveLanguage(options),
             deploy: context.job === 'deploy' ? deploySupported : false,
+            swaCliConfig: context.job === 'deploy' ? swaCliConfig : undefined,
+            swaCliConfigNeedsWrite: swaCliConfigNeedsWrite && deploySupported,
         };
     }
 }
@@ -117,11 +135,19 @@ function addLocationTelemetry(
 /**
  * Maps the detected build to the language azd records on the service.
  *
- * The CLI reports a language for the API but not for the app, so the app's
- * toolchain is taken from the build command it produced. azd treats `js` and
- * `ts` identically for Static Web Apps -- both run the project's npm build --
- * so the distinction is not worth recovering.
+ * The CLI reports a language for the API but not for the app, so an explicit
+ * app build command takes precedence. An API-only Python project uses Python
+ * for dependency restoration before `swa build` handles both app and API.
  */
 function resolveLanguage(options: SWACLIOptions): StaticWebAppAzdLanguage {
-    return options.appBuildCommand?.trim().toLowerCase().startsWith('dotnet') ? 'dotnet' : 'js';
+    const appBuildCommand = options.appBuildCommand?.trim().toLowerCase();
+    if (appBuildCommand?.startsWith('dotnet')) {
+        return 'dotnet';
+    }
+
+    if (!appBuildCommand && options.apiLanguage?.trim().toLowerCase() === 'python') {
+        return 'python';
+    }
+
+    return 'js';
 }

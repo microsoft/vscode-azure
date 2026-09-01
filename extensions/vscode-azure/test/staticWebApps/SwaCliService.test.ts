@@ -104,7 +104,9 @@ describe('SwaCliService (unit)', () => {
             };
             seedDetected(fs, code, detected);
 
-            expect(await service.detect(MockUri.file(ProjectDir))).to.deep.equal(detected);
+            const result = await service.detect(MockUri.file(ProjectDir));
+            expect(result.options).to.deep.equal(detected);
+            expect(result.config).to.deep.equal({ configurations: { detected } });
         });
 
         it('should read back the entry it named rather than the first one', async () => {
@@ -117,7 +119,7 @@ describe('SwaCliService (unit)', () => {
             const result = await service.detect(MockUri.file(ProjectDir));
 
             expect(argsToStrings((spawnMock.mock.calls[0].arguments[0] as SpawnOpts).command.slice(1))).to.include('detected');
-            expect(result).to.deep.equal({ appLocation: 'src' });
+            expect(result.options).to.deep.equal({ appLocation: 'src' });
         });
 
         it('should throw when the CLI exits zero without detecting anything', async () => {

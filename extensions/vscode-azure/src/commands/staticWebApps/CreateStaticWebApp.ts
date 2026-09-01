@@ -23,6 +23,7 @@ import type { ManagedCommand } from '../ManagedCommand';
 import { staticWebAppLocationNames, type CreateStaticWebAppContext } from './CreateStaticWebAppContext';
 import { ConfigureStaticWebAppAzureYamlStep } from './steps/ConfigureStaticWebAppAzureYamlStep';
 import { DetectStaticWebAppConfigStep } from './steps/DetectStaticWebAppConfigStep';
+import { WriteStaticWebAppCliConfigStep } from './steps/WriteStaticWebAppCliConfigStep';
 
 /**
  * Creates and optionally deploys a Static Web App through azd-generated Bicep.
@@ -67,6 +68,7 @@ export class CreateStaticWebApp implements ManagedCommand {
                 ],
             ),
             get(GenerateAzureYamlStep),
+            get(WriteStaticWebAppCliConfigStep),
             get(ConfigureStaticWebAppAzureYamlStep),
             get(CreateAzdEnvStep),
             get(AzdProvisionStep),

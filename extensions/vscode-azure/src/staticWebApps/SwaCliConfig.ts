@@ -15,10 +15,12 @@ export const SwaCliConfigFileName = 'swa-cli.config.json';
  * The CLI configuration schema supports additional options that remain owned by the CLI.
  */
 export interface SWACLIOptions {
+    readonly [option: string]: unknown;
     readonly appLocation?: string;
     readonly apiLocation?: string;
     readonly outputLocation?: string;
     readonly appBuildCommand?: string;
+    readonly apiLanguage?: string;
 }
 
 /** Root shape of `swa-cli.config.json`. */
@@ -72,38 +74,4 @@ export async function tryGetStaticWebAppsCliConfig(
             stringifyError(error),
         ), { cause: error });
     }
-}
-
-/**
- * Reads the Static Web Apps CLI configuration a user has already authored.
- *
- * @remarks
- * This file is the canonical home for a project's layout: it names every path
- * identically, `swa init` writes it, and `azd deploy` reaches those paths by
- * running `swa build`, which reads it. Preferring it keeps one source of truth
- * instead of a parallel copy the user has to keep in sync.
- *
- * A configuration file may declare several named configurations. Neither azd
- * nor this extension passes `--config-name`, and in that case the CLI resolves
- * the first one, so this mirrors that rather than inventing its own rule -- the
- * values returned are the ones a later `swa build` would actually use. A
- * malformed file is treated as absent, since failing a creation wizard over it
- * would be hostile.
- */
-export async function tryGetStaticWebAppCliOptions(
-    code: IVsCode,
-    workspaceFolder: vscode.Uri | undefined,
-): Promise<SWACLIOptions | undefined> {
-    if (!workspaceFolder) {
-        return undefined;
-    }
-
-    let config: StaticWebAppsCliConfigFile | undefined;
-    try {
-        config = await tryGetStaticWebAppsCliConfig(code, workspaceFolder);
-    } catch {
-        return undefined;
-    }
-
-    return Object.values(config?.configurations ?? {})[0];
 }

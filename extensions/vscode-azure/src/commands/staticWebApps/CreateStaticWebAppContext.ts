@@ -5,9 +5,10 @@
 
 import { CaselessSet, type ICaselessSetReader, type PickContext } from '@microsoft/vscode-azure-utils';
 import type { AzdWizardContext } from '../../azd/wizard/AzdWizardContext';
+import type { StaticWebAppsCliConfigFile } from '../../staticWebApps/SwaCliConfig';
 
 /** Languages emitted into an azd Static Web Apps service definition. */
-export type StaticWebAppAzdLanguage = 'dotnet' | 'js';
+export type StaticWebAppAzdLanguage = 'dotnet' | 'js' | 'python';
 
 /** Regions supported by the Static Web Apps creation API. */
 export const staticWebAppLocationNames: ICaselessSetReader = new CaselessSet([
@@ -28,4 +29,8 @@ export interface CreateStaticWebAppContext extends AzdWizardContext, PickContext
     readonly apiLocation?: string;
     /** Build output, relative to {@linkcode appLocation}. */
     readonly outputLocation?: string;
+    /** Configuration that lets azd delegate app and API builds to the SWA CLI. */
+    readonly swaCliConfig?: StaticWebAppsCliConfigFile;
+    /** Whether {@linkcode swaCliConfig} must be materialized after confirmation. */
+    readonly swaCliConfigNeedsWrite?: boolean;
 }

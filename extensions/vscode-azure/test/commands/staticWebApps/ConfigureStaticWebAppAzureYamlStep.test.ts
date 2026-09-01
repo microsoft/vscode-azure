@@ -52,17 +52,48 @@ describe('ConfigureStaticWebAppAzureYamlStep (unit)', () => {
         const step = new ConfigureStaticWebAppAzureYamlStep(azd);
 
         await step.execute({
+            resourceDisplayName: 'Static Web App',
             job: 'deploy',
             iacFolder: MockUri.file('/workspace'),
             azdServiceName: 'web',
             appLocation: 'app',
             outputLocation: 'dist',
-        } as CreateStaticWebAppContext);
+        });
 
         const edits: { path: readonly string[]; value: unknown }[] = [];
         await azd.updateAzureYaml.mock.calls[0].arguments[1]({ set: (path, value) => void edits.push({ path, value }) });
 
         expect(edits[0].value).to.not.have.property('language');
+    });
+
+    it('should run the service from the configuration root when the SWA CLI owns the build', async () => {
+        const azd = createMockAzdService();
+        azd.findAzureYaml.mock.mockImplementation(() => Promise.resolve([MockUri.file('/workspace/azure.yaml')]));
+        const step = new ConfigureStaticWebAppAzureYamlStep(azd);
+
+        await step.execute({
+            resourceDisplayName: 'Static Web App',
+            job: 'deploy',
+            iacFolder: MockUri.file('/workspace'),
+            azdServiceName: 'web',
+            appLocation: 'app',
+            outputLocation: 'dist',
+            detectedLanguage: 'python',
+            swaCliConfig: {
+                configurations: {
+                    detected: { appLocation: 'app', outputLocation: 'dist', apiLanguage: 'python' },
+                },
+            },
+        });
+
+        const edits: { path: readonly string[]; value: unknown }[] = [];
+        await azd.updateAzureYaml.mock.calls[0].arguments[1]({ set: (path, value) => void edits.push({ path, value }) });
+
+        expect(edits[0].value).to.deep.equal({
+            host: 'staticwebapp',
+            project: '.',
+            language: 'python',
+        });
     });
 
     it('should not add an unsupported root output service', async () => {

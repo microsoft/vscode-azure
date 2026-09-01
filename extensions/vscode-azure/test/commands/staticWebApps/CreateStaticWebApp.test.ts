@@ -97,5 +97,12 @@ describe('CreateStaticWebApp (unit)', () => {
         expect(parameters.parameters.appLocation.value).to.equal('/');
         expect(parameters.parameters.apiLocation.value).to.equal('');
         expect(parameters.parameters.outputLocation.value).to.equal('build');
+        const configPath = [...mock.fs.files.keys()].find(path => path.endsWith('/swa-cli.config.json'));
+        const config = JSON.parse(Buffer.from(mock.fs.files.get(configPath ?? '') ?? []).toString());
+        expect(config.configurations.detected).to.deep.equal({
+            appLocation: '/',
+            apiLocation: '',
+            outputLocation: 'build',
+        });
     });
 });

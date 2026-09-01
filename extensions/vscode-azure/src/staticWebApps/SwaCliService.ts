@@ -10,7 +10,7 @@ import type * as vscode from 'vscode';
 import { ITempDirManager } from '../azd/TempDirManager';
 import { IToolService } from '../tools/ToolService';
 import { getVersionFromOutput } from '../tools/toolInstallerHelpers';
-import { SwaCliConfigFileName, tryGetStaticWebAppsCliConfig, type SWACLIOptions } from './SwaCliConfig';
+import { SwaCliConfigFileName, tryGetStaticWebAppsCliConfig, type StaticWebAppsCliConfigFile, type SWACLIOptions } from './SwaCliConfig';
 
 export const ISwaCliService: ServiceIdentifier<ISwaCliService> = Symbol.for('ISwaCliService');
 
@@ -32,6 +32,14 @@ const DetectionConfigName = 'detected';
  */
 export const MinSwaVersion = '2.0.0';
 
+/** Complete detection output needed to reproduce the CLI's selected build. */
+export interface SwaCliDetectionResult {
+    /** Full file emitted by `swa init`, including options this extension does not interpret. */
+    readonly config: StaticWebAppsCliConfigFile;
+    /** Named configuration selected for path and language decisions. */
+    readonly options: SWACLIOptions;
+}
+
 export interface ISwaCliService {
     /**
      * Detects a project's Static Web Apps layout with `swa init --yes`, without
@@ -48,14 +56,15 @@ export interface ISwaCliService {
      * @param projectFolder - Project to detect. Doubles as the CLI's working
      *   directory, so it also scopes the scan.
      *
-     * @returns The layout the CLI detected. Paths are relative to
-     *   {@linkcode projectFolder}, except `outputLocation`, which the CLI
-     *   reports relative to the detected `appLocation`.
+     * @returns The full generated configuration and the named options selected
+     *   from it. Paths are relative to {@linkcode projectFolder}, except
+     *   `outputLocation`, which the CLI reports relative to the detected
+     *   `appLocation`.
      *
      * @throws When the CLI is missing, too old, exits non-zero, or detects
      *   nothing.
      */
-    detect(projectFolder: vscode.Uri): Promise<SWACLIOptions>;
+    detect(projectFolder: vscode.Uri): Promise<SwaCliDetectionResult>;
 
     /**
      * Returns whether the resolved `swa` satisfies {@linkcode minVersion},
@@ -81,7 +90,7 @@ export class SwaCliService implements ISwaCliService {
     ) { }
 
     /** @inheritdoc */
-    public async detect(projectFolder: vscode.Uri): Promise<SWACLIOptions> {
+    public async detect(projectFolder: vscode.Uri): Promise<SwaCliDetectionResult> {
         const scratchDir = await this.tempDirs.createTempDir();
         const configUri = this.code.Uri.joinPath(scratchDir, SwaCliConfigFileName);
 
@@ -109,13 +118,13 @@ export class SwaCliService implements ISwaCliService {
         const config = await tryGetStaticWebAppsCliConfig(this.code, scratchDir);
         const detected = config?.configurations?.[DetectionConfigName];
 
-        if (!detected) {
+        if (!config || !detected) {
             throw new Error(this.code.l10n.t(
                 'The Static Web Apps CLI could not detect this project.',
             ));
         }
 
-        return detected;
+        return { config, options: detected };
     }
 
     /** @inheritdoc */

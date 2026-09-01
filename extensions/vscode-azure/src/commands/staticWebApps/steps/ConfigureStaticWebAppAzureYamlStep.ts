@@ -50,9 +50,11 @@ export class ConfigureStaticWebAppAzureYamlStep extends ExecuteStep<CreateStatic
 
         const service: Record<string, string> = {
             host: 'staticwebapp',
-            project: normalizeProject(appLocation),
-            dist: outputLocation,
+            project: context.swaCliConfig ? '.' : normalizeProject(appLocation),
         };
+        if (!context.swaCliConfig) {
+            service.dist = outputLocation;
+        }
         if (context.detectedLanguage) {
             service.language = context.detectedLanguage;
         }
