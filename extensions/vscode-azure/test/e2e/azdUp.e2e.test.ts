@@ -8,7 +8,7 @@ import { randomBytes } from 'node:crypto';
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import * as vscode from 'vscode';
+import { URI, Utils } from 'vscode-uri';
 import { IAzdService } from '../../src/azd/AzdService';
 import { AzdDownCommandId, AzdUpCommandId, ExtensionId } from '../../src/constants';
 import type { E2EExtensionApi } from '../../src/extension';
@@ -40,14 +40,17 @@ import { E2ETimeoutMs, getE2EConfig, type E2EConfig } from './e2eConfig';
  * minimum supported version, so a missing dependency is visible until CI
  * installs it.
  */
-describeLongRunning('azd up', function () {
+let vscode: typeof import('vscode');
+
+describeLongRunning('azd up (vscode integration)', function () {
     let config: E2EConfig;
     let azdService: IAzdService;
-    let projectDir: vscode.Uri | undefined;
+    let projectDir: URI | undefined;
     let envName: string;
     let provisioned = false;
 
     before(async function () {
+        vscode = await import('vscode');
         config = await getE2EConfig();
         envName = `e2e-${randomBytes(3).toString('hex')}`;
 
@@ -89,7 +92,7 @@ describeLongRunning('azd up', function () {
             // provision real Azure resources, so a failed `azd down` must fail
             // the run rather than silently leak resources. Mocha treats a throw
             // in after() as a suite failure.
-            const azureYaml = vscode.Uri.joinPath(projectDir, 'azure.yaml');
+            const azureYaml = Utils.joinPath(projectDir, 'azure.yaml');
             await vscode.commands.executeCommand(AzdDownCommandId, azureYaml, { skipConfirmation: true });
         }
 
@@ -103,7 +106,7 @@ describeLongRunning('azd up', function () {
             expect.fail('Expected the sample project to be set up in before()');
         }
 
-        const azureYaml = vscode.Uri.joinPath(projectDir, 'azure.yaml');
+        const azureYaml = Utils.joinPath(projectDir, 'azure.yaml');
 
         // Mark for teardown before running so a partial failure still triggers
         // `azd down` in the after() hook (resources may exist even if a later
@@ -132,15 +135,15 @@ describeLongRunning('azd up', function () {
  * @param name - Folder name under `test/e2e/fixtures`.
  * @returns The temp directory containing the copied project.
  */
-async function copyFixtureToTempDir(name: string): Promise<vscode.Uri> {
+async function copyFixtureToTempDir(name: string): Promise<URI> {
     const ext = vscode.extensions.getExtension(ExtensionId);
     if (!ext) {
         expect.fail('Could not resolve the vscode-azure extension to locate fixtures');
     }
 
-    const source = vscode.Uri.joinPath(ext.extensionUri, 'src', 'test', 'e2e', 'fixtures', name);
+    const source = Utils.joinPath(URI.from(ext.extensionUri), 'src', 'test', 'e2e', 'fixtures', name);
     const destPath = path.join(os.tmpdir(), `vscode-azure-e2e-${randomBytes(4).toString('hex')}`);
-    const dest = vscode.Uri.file(destPath);
+    const dest = URI.file(destPath);
 
     await vscode.workspace.fs.copy(source, dest, { overwrite: true });
     return dest;

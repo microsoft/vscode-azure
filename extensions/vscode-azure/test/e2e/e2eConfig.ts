@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { command, ProcessExecutor, stringifyError } from '@microsoft/vscode-azure-utils';
-import * as vscode from 'vscode';
+import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
 
 /**
  * End-to-end (E2E) test configuration.
@@ -67,7 +67,7 @@ let azAccountPromise: Promise<AzAccount> | undefined;
  */
 function getAzAccount(): Promise<AzAccount> {
     azAccountPromise ??= (async () => {
-        const executor = new ProcessExecutor(vscode);
+        const executor = new ProcessExecutor(createMockVsCode().vscode);
         let account: AzAccount;
         try {
             const result = await executor.spawn<AzAccount>({

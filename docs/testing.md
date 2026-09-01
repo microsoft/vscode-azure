@@ -24,6 +24,10 @@ describe('RefreshResourcesView (integration)', () => {
 });
 ```
 
+A suite that can only run inside the extension host -- because it touches the
+real `vscode` API rather than a mock -- uses `(vscode integration)`, so the
+suites that need a VS Code instance are identifiable by name.
+
 ## Test Runners
 
 | Workspace | Runner | Environment |
