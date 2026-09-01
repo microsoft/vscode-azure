@@ -5,7 +5,7 @@
 
 import { AzurePublicCloud, type AzureSubscriptionTarget, type CredentialFactoryOptions } from '@microsoft/vscode-azure-azutils';
 import { createMockAccountDataProvider } from '@microsoft/vscode-azure-azutils/testing';
-import { createMockVsCode, createTestActionExecutor, ManualTimers } from '@microsoft/vscode-azure-utils/testing';
+import { autoDispose, createMockVsCode, createTestActionExecutor, ManualTimers } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import { ArmDeploymentDataProvider, isNestedDeploymentOp, isVisibleOperation, parseDeploymentId, type ArmDeploymentActivity } from '../../../src/tree/activity/ArmDeploymentDataProvider';
 import { CredentialOptionsScope } from '../../../src/utils/CredentialOptionsScope';
@@ -146,7 +146,7 @@ describe('ArmDeploymentDataProvider (unit)', () => {
         const createClientFn = clientOrFactory
             ? mock.fn(() => clientOrFactory)
             : mock.fn(() => ({}));
-        return new ArmDeploymentDataProvider(vscode, executor, createClientFn as never, new CredentialOptionsScope(), createMockAccountDataProvider());
+        return autoDispose(new ArmDeploymentDataProvider(vscode, executor, createClientFn as never, new CredentialOptionsScope(), createMockAccountDataProvider()));
     }
 
     /**
@@ -168,17 +168,17 @@ describe('ArmDeploymentDataProvider (unit)', () => {
 
     describe('canHandle', () => {
         it('should return true for armDeployment activities', () => {
-            const provider = createProvider();
+            using provider = createProvider();
             expect(provider.canHandle(makeActivity({ type: 'armDeployment' }))).to.be.true;
         });
 
         it('should return false for non-armDeployment activities', () => {
-            const provider = createProvider();
+            using provider = createProvider();
             expect(provider.canHandle(makeActivity())).to.be.false;
         });
 
         it('should return false for non-activity values', () => {
-            const provider = createProvider();
+            using provider = createProvider();
             expect(provider.canHandle('string')).to.be.false;
             expect(provider.canHandle(null)).to.be.false;
         });
@@ -186,7 +186,7 @@ describe('ArmDeploymentDataProvider (unit)', () => {
 
     describe('trackDeployment', () => {
         it('should add a deployment and return it from getChildren', () => {
-            const provider = createProvider();
+            using provider = createProvider();
             const deploymentId = '/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.Resources/deployments/myDeploy';
 
             provider.trackDeployment(deploymentId);
@@ -199,7 +199,7 @@ describe('ArmDeploymentDataProvider (unit)', () => {
         });
 
         it('should populate scope from the deployment ID', () => {
-            const provider = createProvider();
+            using provider = createProvider();
             provider.trackDeployment('/subscriptions/sub/resourceGroups/rg1/providers/Microsoft.Resources/deployments/d1');
 
             const activity = provider.getChildren()[0];
@@ -208,35 +208,35 @@ describe('ArmDeploymentDataProvider (unit)', () => {
         });
 
         it('should store the tenantId hint on the tracked deployment', () => {
-            const provider = createProvider();
+            using provider = createProvider();
             provider.trackDeployment('/subscriptions/test-sub/providers/Microsoft.Resources/deployments/d1', 'tenant-9');
 
             expect(provider.getChildren()[0].subscription.tenantId).to.equal('tenant-9');
         });
 
         it('should leave the tenantId unset when no hint is provided', () => {
-            const provider = createProvider();
+            using provider = createProvider();
             provider.trackDeployment('/subscriptions/test-sub/providers/Microsoft.Resources/deployments/d1');
 
             expect(provider.getChildren()[0].subscription.tenantId).to.be.undefined;
         });
 
         it('should store the accountId hint on the tracked deployment', () => {
-            const provider = createProvider();
+            using provider = createProvider();
             provider.trackDeployment('/subscriptions/test-sub/providers/Microsoft.Resources/deployments/d1', 'tenant-9', 'acct-9');
 
             expect(provider.getChildren()[0].subscription.accountId).to.equal('acct-9');
         });
 
         it('should leave the accountId unset when no hint is provided', () => {
-            const provider = createProvider();
+            using provider = createProvider();
             provider.trackDeployment('/subscriptions/test-sub/providers/Microsoft.Resources/deployments/d1');
 
             expect(provider.getChildren()[0].subscription.accountId).to.be.undefined;
         });
 
         it('should target the configured cloud', () => {
-            const provider = createProvider();
+            using provider = createProvider();
             provider.trackDeployment('/subscriptions/test-sub/providers/Microsoft.Resources/deployments/d1');
 
             expect(provider.getChildren()[0].subscription.environment.resourceManagerEndpointUrl)
@@ -244,7 +244,7 @@ describe('ArmDeploymentDataProvider (unit)', () => {
         });
 
         it('should fire onDidChange when tracking', () => {
-            const provider = createProvider();
+            using provider = createProvider();
             const onChange = mock.fn();
             provider.onDidChange(onChange);
 
@@ -254,7 +254,7 @@ describe('ArmDeploymentDataProvider (unit)', () => {
         });
 
         it('should track multiple deployments', () => {
-            const provider = createProvider();
+            using provider = createProvider();
 
             provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/d1');
             provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/d2');
@@ -266,7 +266,7 @@ describe('ArmDeploymentDataProvider (unit)', () => {
             const { executor } = createTestActionExecutor();
             const { vscode } = createMockVsCode();
             const accountProvider = createMockAccountDataProvider();
-            const provider = new ArmDeploymentDataProvider(vscode, executor, mock.fn(() => createMockClient()) as never, new CredentialOptionsScope(), accountProvider);
+            using provider = autoDispose(new ArmDeploymentDataProvider(vscode, executor, mock.fn(() => createMockClient()) as never, new CredentialOptionsScope(), accountProvider));
             provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/removed', 'tenant', 'ACCOUNT-1');
             provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/kept', 'tenant', 'account-2');
             const removed = provider.getChildren()[0];
@@ -280,7 +280,7 @@ describe('ArmDeploymentDataProvider (unit)', () => {
 
     describe('getChildren', () => {
         it('should return empty array when deployment has no operations', () => {
-            const provider = createProvider();
+            using provider = createProvider();
             provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/d1');
 
             const root = provider.getChildren()[0];
@@ -294,7 +294,7 @@ describe('ArmDeploymentDataProvider (unit)', () => {
             const mockClient = createMockClient([
                 { operationId: 'op1', targetId: '/subs/sub/rg/rg1/providers/Microsoft.Storage/storageAccounts/sa1', targetType: 'Microsoft.Storage/storageAccounts', targetName: 'sa1' },
             ]);
-            const provider = createProvider(mockClient);
+            using provider = createProvider(mockClient);
             provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/d1');
 
             const activity = provider.getChildren()[0];
@@ -309,7 +309,7 @@ describe('ArmDeploymentDataProvider (unit)', () => {
             const { executor } = createTestActionExecutor();
             const { vscode } = createMockVsCode();
             const createClient = mock.fn((_target: AzureSubscriptionTarget) => createMockClient());
-            const provider = new ArmDeploymentDataProvider(vscode, executor, createClient as never, new CredentialOptionsScope(), createMockAccountDataProvider());
+            using provider = autoDispose(new ArmDeploymentDataProvider(vscode, executor, createClient as never, new CredentialOptionsScope(), createMockAccountDataProvider()));
             provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/d1', 'tenant-9', 'acct-9');
 
             await provider.enrich(provider.getChildren()[0]);
@@ -330,7 +330,7 @@ describe('ArmDeploymentDataProvider (unit)', () => {
                 observed = scope.current;
                 return createMockClient();
             });
-            const provider = new ArmDeploymentDataProvider(vscode, executor, createClient as never, scope, createMockAccountDataProvider());
+            using provider = autoDispose(new ArmDeploymentDataProvider(vscode, executor, createClient as never, scope, createMockAccountDataProvider()));
             provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/d1');
 
             await provider.enrich(provider.getChildren()[0]);
@@ -349,7 +349,7 @@ describe('ArmDeploymentDataProvider (unit)', () => {
                     },
                 },
             };
-            const provider = createProvider(failingClient);
+            using provider = createProvider(failingClient);
             provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/d1');
 
             // The tree turns a rejected enrichment into an error notification,
@@ -364,7 +364,7 @@ describe('ArmDeploymentDataProvider (unit)', () => {
             const { vscode } = createMockVsCode();
             const client = createMockClient();
             const createClient = mock.fn(() => client);
-            const provider = new ArmDeploymentDataProvider(vscode, executor, createClient as never, new CredentialOptionsScope(), createMockAccountDataProvider());
+            using provider = autoDispose(new ArmDeploymentDataProvider(vscode, executor, createClient as never, new CredentialOptionsScope(), createMockAccountDataProvider()));
             provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/d1');
             const activity = provider.getChildren()[0];
 
@@ -375,7 +375,7 @@ describe('ArmDeploymentDataProvider (unit)', () => {
         });
 
         it('should return false if the deployment was aborted', async () => {
-            const provider = createProvider();
+            using provider = createProvider();
             provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/d1');
 
             const activity = provider.getChildren()[0];
@@ -387,7 +387,7 @@ describe('ArmDeploymentDataProvider (unit)', () => {
 
         it('should stop polling once the deployment reaches a terminal state', async () => {
             const client = createMockClient([], ['Running', 'Succeeded']);
-            const provider = createProvider(client);
+            using provider = createProvider(client);
             provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/d1');
             const activity = provider.getChildren()[0];
             const completed = waitForCompletedStatus(provider, activity);
@@ -414,7 +414,7 @@ describe('ArmDeploymentDataProvider (unit)', () => {
                 // The first poll response sets the pace, so the wait before the
                 // final poll is the 1s retry-after rather than the 10s default.
                 const client = createMockClient([], ['Running', 'Running', 'Succeeded'], '1');
-                const provider = createProvider(client);
+                using provider = createProvider(client);
                 provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/d1');
                 const activity = provider.getChildren()[0];
                 const completed = waitForCompletedStatus(provider, activity);
@@ -433,7 +433,7 @@ describe('ArmDeploymentDataProvider (unit)', () => {
 
             it('should keep polling after a transient request failure', async () => {
                 const client = createMockClient([], ['Running', 'Running', 'Succeeded'], '1', 2);
-                const provider = createProvider(client);
+                using provider = createProvider(client);
                 provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/d1');
                 const activity = provider.getChildren()[0];
                 const completed = waitForCompletedStatus(provider, activity);
@@ -460,7 +460,7 @@ describe('ArmDeploymentDataProvider (unit)', () => {
                 { operationId: 'op1', targetId: '/res/sa1', targetType: 'Microsoft.Storage/storageAccounts', targetName: 'sa1', provisioningOperation: 'Read' },
                 { operationId: 'op2', targetId: '/res/sa1', targetType: 'Microsoft.Storage/storageAccounts', targetName: 'sa1', provisioningOperation: 'Create' },
             ]);
-            const provider = createProvider(mockClient);
+            using provider = createProvider(mockClient);
             provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/d1');
 
             const activity = provider.getChildren()[0];
@@ -489,7 +489,7 @@ describe('ArmDeploymentDataProvider (unit)', () => {
                     },
                 },
             };
-            const provider = createProvider(mockClient);
+            using provider = createProvider(mockClient);
             provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/d1');
 
             const activity = provider.getChildren()[0];
@@ -505,7 +505,7 @@ describe('ArmDeploymentDataProvider (unit)', () => {
                 { operationId: 'op1', targetId: nestedId, targetType: 'Microsoft.Resources/deployments', targetName: 'nested1', provisioningState: 'Running' },
                 { operationId: 'op2', targetId: '/subs/sub/rg/rg1/providers/Microsoft.Storage/storageAccounts/sa1', targetType: 'Microsoft.Storage/storageAccounts', targetName: 'sa1' },
             ]);
-            const provider = createProvider(mockClient);
+            using provider = createProvider(mockClient);
             provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/d1');
 
             const root = provider.getChildren()[0];
@@ -523,7 +523,7 @@ describe('ArmDeploymentDataProvider (unit)', () => {
             const mockClient = createMockClient([
                 { operationId: 'op1', targetId: nestedId, targetType: 'Microsoft.Resources/deployments', targetName: 'nested1' },
             ]);
-            const provider = createProvider(mockClient);
+            using provider = createProvider(mockClient);
             provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/d1');
 
             const root = provider.getChildren()[0];
@@ -543,7 +543,7 @@ describe('ArmDeploymentDataProvider (unit)', () => {
 
     describe('clearActivities', () => {
         it('should remove deployments matching the filter', () => {
-            const provider = createProvider();
+            using provider = createProvider();
 
             provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/d1');
             provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/d2');
@@ -556,7 +556,7 @@ describe('ArmDeploymentDataProvider (unit)', () => {
         });
 
         it('should abort the deployment controller on clear', () => {
-            const provider = createProvider();
+            using provider = createProvider();
             provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/d1');
 
             const activity = provider.getChildren()[0];
@@ -567,7 +567,7 @@ describe('ArmDeploymentDataProvider (unit)', () => {
         });
 
         it('should not fire onDidChange when no activities match', () => {
-            const provider = createProvider();
+            using provider = createProvider();
             provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/d1');
 
             const onChange = mock.fn();
@@ -580,7 +580,7 @@ describe('ArmDeploymentDataProvider (unit)', () => {
 
     describe('dispose', () => {
         it('should abort all tracked deployments', () => {
-            const provider = createProvider();
+            using provider = createProvider();
             provider.trackDeployment('/subscriptions/sub/providers/Microsoft.Resources/deployments/d1');
 
             const activity = provider.getChildren()[0];

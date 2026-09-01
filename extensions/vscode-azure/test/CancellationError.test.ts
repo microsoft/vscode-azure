@@ -4,9 +4,14 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { CancellationError } from '@microsoft/vscode-azure-utils';
-import * as vscode from 'vscode';
 
-describe('CancellationError (integration)', () => {
+describe('CancellationError (vscode integration)', () => {
+    let vscode: typeof import('vscode');
+
+    before(async () => {
+        vscode = await import('vscode');
+    });
+
     it('should detect vscode.CancellationError via CancellationError.test()', () => {
         const vsCodeError = new vscode.CancellationError();
         expect(CancellationError.test(vsCodeError)).to.be.true;
