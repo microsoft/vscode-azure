@@ -5,7 +5,7 @@
 
 import { AzurePublicCloud, type AzureSubscriptionTarget, type CredentialFactoryOptions } from '@microsoft/vscode-azure-azutils';
 import { createMockAccountDataProvider } from '@microsoft/vscode-azure-azutils/testing';
-import { createMockVsCode, createTestActionExecutor, waitFor } from '@microsoft/vscode-azure-utils/testing';
+import { createMockVsCode, createTestActionExecutor, ManualTimers } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import { ArmDeploymentDataProvider, isNestedDeploymentOp, isVisibleOperation, parseDeploymentId, type ArmDeploymentActivity } from '../../../src/tree/activity/ArmDeploymentDataProvider';
 import { CredentialOptionsScope } from '../../../src/utils/CredentialOptionsScope';
@@ -400,12 +400,14 @@ describe('ArmDeploymentDataProvider (unit)', () => {
         });
 
         describe('poll timing', () => {
+            const timers = new ManualTimers();
+
             beforeEach(() => {
-                mock.timers.enable({ apis: ['setTimeout'] });
+                timers.enable();
             });
 
             afterEach(() => {
-                mock.timers.reset();
+                timers.reset();
             });
 
             it('should wait the server-provided retry-after interval between polls', async () => {
@@ -418,13 +420,13 @@ describe('ArmDeploymentDataProvider (unit)', () => {
                 const completed = waitForCompletedStatus(provider, activity);
 
                 await provider.enrich(activity);
-                await waitFor(() => client.deployments.getAtScope.mock.callCount() === 2, 'the initial deployment polls');
+                await timers.whenScheduled();
                 expect(client.deployments.getAtScope.mock.callCount()).to.equal(2);
 
-                mock.timers.tick(999);
+                timers.tick(999);
                 expect(client.deployments.getAtScope.mock.callCount()).to.equal(2);
 
-                mock.timers.tick(1);
+                timers.tick(1);
                 await completed;
                 expect(client.deployments.getAtScope.mock.callCount()).to.equal(3);
             });
@@ -437,14 +439,16 @@ describe('ArmDeploymentDataProvider (unit)', () => {
                 const completed = waitForCompletedStatus(provider, activity);
 
                 await provider.enrich(activity);
-                await waitFor(() => client.deployments.getAtScope.mock.callCount() === 2, 'the initial deployment polls');
+                await timers.whenScheduled();
                 expect(client.deployments.getAtScope.mock.callCount()).to.equal(2);
 
-                mock.timers.tick(1000);
-                await waitFor(() => client.deployments.getAtScope.mock.callCount() === 3, 'the transient deployment poll');
+                // The third request rejects; the poller keeps its interval and
+                // arms another wait instead of giving up.
+                timers.tick(1000);
+                await timers.whenScheduled();
                 expect(client.deployments.getAtScope.mock.callCount()).to.equal(3);
 
-                mock.timers.tick(1000);
+                timers.tick(1000);
                 await completed;
                 expect(activity.status).to.equal('Completed');
                 expect(client.deployments.getAtScope.mock.callCount()).to.equal(4);

@@ -247,6 +247,33 @@ timers directly. Tests inject `ManualDebounceScheduler` from
 This avoids interleaving fake timers with real promise continuations, which is
 a common source of flakiness.
 
+### Timers You Don't Own
+
+Third-party code that arms its own timers -- the Azure SDK's LRO poller, for
+instance -- can't be handed a scheduler, so those tests do need a fake clock.
+Use `ManualTimers` from `@microsoft/vscode-azure-utils/testing` instead of
+`mock.timers` directly: it installs the same Node fake timers and adds
+`whenScheduled()`, which resolves once a timer has actually been armed.
+
+```typescript
+const timers = new ManualTimers();
+beforeEach(() => { timers.enable(); });
+afterEach(() => { timers.reset(); });
+
+it('should poll again after the interval', async () => {
+    startPolling();
+    await timers.whenScheduled();
+    timers.tick(1000);
+});
+```
+
+Advancing a fake clock only fires timers that already exist. Code that arms its
+next timer from a promise continuation hasn't called `setTimeout` yet when the
+awaited work resolves, so a tick issued at that moment fires nothing and the
+loop stalls until the test times out. Waiting on an observable side effect --
+a request count, a status change -- doesn't close the gap, because the effect
+lands before the timer is armed. Waiting for the arm itself does.
+
 ### Integration Tests
 
 Integration tests use the real VS Code API and extension infrastructure:
