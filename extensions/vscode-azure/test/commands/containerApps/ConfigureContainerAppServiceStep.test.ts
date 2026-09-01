@@ -45,6 +45,7 @@ describe('ConfigureContainerAppServiceStep (unit)', () => {
 
         expect(azd.updateAzureYaml.mock.callCount()).to.equal(1); // eslint-disable-line @typescript-eslint/no-deprecated -- exercises the temporary compatibility API
         expect(azd.updateAzureYaml.mock.calls[0].arguments[0]).to.equal(iacFolder); // eslint-disable-line @typescript-eslint/no-deprecated -- exercises the temporary compatibility API
+        expect(set.mock.callCount()).to.equal(1);
         expect(set.mock.calls[0].arguments).to.deep.equal([
             ['services', 'api'],
             {
