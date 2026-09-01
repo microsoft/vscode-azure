@@ -15,7 +15,8 @@ describe('DeleteStaticWebAppEnvironment (unit)', () => {
         const { mock: mockResult } = createMockCodeContext();
         const remove = mock.fn();
         const dataTree = { remove };
-        const selector = { resolve: mock.fn(() => environment) };
+        const selectVirtual = mock.fn((_options: { readonly key?: string }) => Promise.resolve(environment));
+        const selector = { selectVirtual };
         return { dataTree, mockResult, remove, selector };
     }
 
@@ -58,5 +59,24 @@ describe('DeleteStaticWebAppEnvironment (unit)', () => {
         await command.execute('key');
         expect(deleteBuild.mock.calls[0].arguments.slice(0, 3)).to.deep.equal(['rg1', 'mySwa', '42']);
         expect(remove.mock.calls[0].arguments[0]).to.equal(environment);
+        expect(selector.selectVirtual.mock.calls[0].arguments[0].key).to.equal('key');
+    });
+
+    it('should prompt for an environment when invoked from the command palette', async () => {
+        const environment = makeStaticWebAppEnvironment({ isProduction: false });
+        const { dataTree, mockResult, selector } = createHarness(environment);
+        respondToPrompts(mockResult, [{ button: 'Delete' }]);
+        const command = new DeleteStaticWebAppEnvironment(
+            createActionContext('test'),
+            mockResult.vscode,
+            (() => ({ staticSites: { deleteStaticSiteBuild: mock.fn(() => Promise.resolve()) } })) as never,
+            selector as never,
+            dataTree as never,
+            new GenericActivityDataProvider(),
+        );
+
+        await command.execute();
+
+        expect(selector.selectVirtual.mock.calls[0].arguments[0].key).to.be.undefined;
     });
 });

@@ -69,6 +69,7 @@ export function createWizardCommandContainer(mocks: WizardCommandMocks): Contain
     if (mocks.codeProvider !== undefined) {
         container.bind(ICodeDeploymentDataProvider).toConstantValue(mocks.codeProvider);
     }
+
     container.bind(Container).toConstantValue(container);
     return container;
 }

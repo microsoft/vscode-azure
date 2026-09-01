@@ -40,7 +40,7 @@ export class DeleteStaticWebAppEnvironment implements ManagedCommand {
 
     /** @inheritdoc */
     public async execute(key?: string): Promise<void> {
-        const environment = this.selector.resolve({ key, canHandle: isStaticWebAppEnvironment });
+        const environment = await this.selector.selectVirtual({ key, canHandle: isStaticWebAppEnvironment });
         this.context.telemetry.properties.isProduction = String(environment.isProduction);
         if (environment.isProduction) {
             this.context.errorHandling.suppress = 'reportIssue';

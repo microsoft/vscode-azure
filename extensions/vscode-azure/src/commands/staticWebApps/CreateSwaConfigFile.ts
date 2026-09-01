@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { CancellationError, fileExists, getWorkspaceFolder, IVsCode } from '@microsoft/vscode-azure-utils';
+import { fileExists, getWorkspaceFolder, IVsCode, showMessage } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type { ManagedCommand } from '../ManagedCommand';
 
@@ -50,14 +50,16 @@ export class CreateSwaConfigFile implements ManagedCommand {
         const configUri = this.code.Uri.joinPath(folder.uri, staticWebAppConfigFileName);
         if (await fileExists(this.code, configUri)) {
             const overwriteLabel = this.code.l10n.t('Overwrite');
-            const response = await this.code.window.showWarningMessage(
+            await showMessage(
+                this.code,
                 this.code.l10n.t('Static Web App configuration file \'{0}\' already exists.', configUri.fsPath),
-                { modal: true },
+                {
+                    modal: true,
+                    severity: 'warning',
+                    stepName: 'Confirm Static Web Apps config overwrite',
+                },
                 overwriteLabel,
             );
-            if (response !== overwriteLabel) {
-                throw new CancellationError(undefined, 'Confirm Static Web Apps config overwrite');
-            }
         }
 
         const contents = `${JSON.stringify(staticWebAppExampleConfig, undefined, 4)}\n`;

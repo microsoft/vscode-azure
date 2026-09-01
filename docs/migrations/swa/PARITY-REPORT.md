@@ -8,7 +8,7 @@ Verification of the current branch against the signed retrospective
 | **Source** | `microsoft/vscode-azurestaticwebapps` at `84d7c8da77e431c3f1c115d88b851a3b3bbb4464` (v0.13.3) |
 | **Triage rows** | 67 |
 | **Accounted for** | 67 (0 unaccounted for) |
-| **Date** | 2026-08-28 |
+| **Date** | 2026-09-01 |
 
 Evidence paths are relative to `extensions/vscode-azure/src/` unless another
 root is named.
@@ -18,7 +18,7 @@ root is named.
 | Disposition | Rows | Current result |
 |---|---:|---|
 | Migrate | 8 | present |
-| Adapt | 14 | present, with ownership gaps noted below |
+| Adapt | 14 | present |
 | Reuse | 9 | shared capabilities wired |
 | Drop | 30 | confirmed absent from the SWA product surface |
 | Defer | 6 | unchecked in [MIGRATION-PLAN.md](MIGRATION-PLAN.md) |
@@ -135,15 +135,10 @@ searched for the source-specific command IDs/types:
 
 ## Known gaps and uncertainties
 
-1. **One ownership-boundary review thread remains unresolved on PR #237.**
-   The current branch parses/edits `azure.yaml`, and review feedback asks whether
-   that belongs in azd instead. Those rows are reported as landed, not as finally
-   accepted design. The related build-preset and framework-detection concern is
-   resolved: both are now delegated to the Static Web Apps CLI.
-2. **Debugging and generated tasks are not present.** Issue
+1. **Debugging and generated tasks are not present.** Issue
    [#339](https://github.com/microsoft/vscode-azure/issues/339) tracks the five
    related deferred rows after native Functions debugging.
-3. **Repository bootstrap is delegated to azd.** `azd pipeline config` offers to
+2. **Repository bootstrap is delegated to azd.** `azd pipeline config` offers to
    create and push a repository when the project has no remote, so the extension
    contributes no bootstrap code of its own.
-4. **No live-Azure verification is claimed by this documentation audit.**
+3. **No live-Azure verification is claimed by this documentation audit.**

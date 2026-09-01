@@ -81,9 +81,6 @@ export class CreateStaticWebApp implements ManagedCommand {
                 provision: true,
                 deploy: job === 'deploy',
                 allowedLocationNames: staticWebAppLocationNames,
-                // ConfigureStaticWebAppAzureYamlStep adds the `services:` entry,
-                // so hydration shouldn't warn that it's missing.
-                addsServiceEntry: true,
                 resourceDisplayName: this.ctx.code.l10n.t('Static Web App'),
             },
             promptSteps,

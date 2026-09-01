@@ -37,6 +37,7 @@ export class AzdPipelineConfigStep<TContext extends AzdWizardContext> extends Ex
     }
 
     public async execute(context: Readonly<TContext>): Promise<void> {
+        // TODO(#165): Remove this dedicated check when the extension-wide azd minimum exceeds it.
         // Enforced whichever provider the user goes on to pick: the floor exists
         // for Azure DevOps, and `azd` only asks which provider to use once it is
         // already running, so failing here beats failing part-way through setup.

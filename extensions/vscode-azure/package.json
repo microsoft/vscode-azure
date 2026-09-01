@@ -268,14 +268,6 @@
                     "when": "false"
                 },
                 {
-                    "command": "vscode-azure/settings/edit",
-                    "when": "false"
-                },
-                {
-                    "command": "vscode-azure/staticWebApps/deleteEnvironment",
-                    "when": "false"
-                },
-                {
                     "command": "vscode-azure/staticWebApps/showFunctionsDocumentation",
                     "when": "false"
                 }

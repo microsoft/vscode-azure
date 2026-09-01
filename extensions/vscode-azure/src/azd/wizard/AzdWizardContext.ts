@@ -49,18 +49,6 @@ export interface AzdWizardContext {
      * their contexts redeclare it as required so the compiler enforces that.
      */
     readonly resourceDisplayName?: string;
-    /**
-     * Set by wizards whose execute steps add the `services:` entry to
-     * `azure.yaml` themselves, so {@linkcode HydrateAzdInfoStep} stays quiet
-     * about the entry being missing when it hydrates.
-     *
-     * Only needed for hosts azd cannot scaffold on its own: `azd add` offers
-     * `host.appservice` and `host.containerapp` and nothing else, so a wizard
-     * targeting any other host (Static Web Apps, Functions) has to write the
-     * entry or leave the user to hand-edit the file.
-     */
-    readonly addsServiceEntry?: boolean;
-
     // ---- Hydration flags (set by HydrateAzdInfoStep, deploy job only) ----
     /** `true` when `azure.yaml` (or `azure.yml`) is present in {@linkcode iacFolder}. */
     readonly hasAzureYaml?: boolean;

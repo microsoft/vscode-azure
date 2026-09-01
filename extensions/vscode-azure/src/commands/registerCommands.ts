@@ -5,7 +5,7 @@
 
 import { IActionContext, ICommandRegistry } from '@microsoft/vscode-azure-utils';
 import { Container } from 'inversify';
-import { AzdDownCommandId, AzdUpCommandId, ConfigureCicdCommandId, LoadMoreCommandId } from '../constants';
+import { AzdDownCommandId, AzdUpCommandId, LoadMoreCommandId } from '../constants';
 import type { ManagedCommandRegistration } from '../registration/ProductRegistrar';
 import { userToolRequest } from '../tools/ToolService';
 import { AzdDown } from './deploy/AzdDown';
@@ -38,7 +38,7 @@ export function registerCommands(
 
     registerManagedCommand(container, AzdUpCommandId, AzdUp);
     registerManagedCommand(container, AzdDownCommandId, AzdDown);
-    registerManagedCommand(container, ConfigureCicdCommandId, ConfigureCicd);
+    registerManagedCommand(container, 'vscode-azure/configureCicd', ConfigureCicd);
     // Callable by other extensions, which pass an AcquireToolRequest and get
     // back an AcquireToolResult. Hidden from the palette via `when: false`.
     registerManagedCommand(container, 'vscode-azure/acquireTool', AcquireTool);

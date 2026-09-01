@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IActionContext, ICodeContext, PromptStep } from '@microsoft/vscode-azure-utils';
+import { IActionContext, ICodeContext, PromptStep, showMessage } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { ISwaCliService } from '../../../staticWebApps/SwaCliService';
 import { tryGetStaticWebAppCliOptions, canAzdDeployStaticWebApp, type SWACLIOptions } from '../../../staticWebApps/SwaCliConfig';
@@ -66,10 +66,10 @@ export class DetectStaticWebAppConfigStep extends PromptStep<CreateStaticWebAppC
 
         const deploySupported = canAzdDeployStaticWebApp(outputLocation);
         if (context.job === 'deploy' && !deploySupported) {
-            void this.ctx.code.window.showWarningMessage(this.ctx.code.l10n.t(
+            void showMessage(this.ctx.code, this.ctx.code.l10n.t(
                 'No deployable build output was found for this project, so the Static Web App will be provisioned but its code will not be deployed. Set "outputLocation" in {0} to a build output folder and run the command again to deploy.',
                 'swa-cli.config.json',
-            ));
+            ), { severity: 'warning' });
         }
 
         return {

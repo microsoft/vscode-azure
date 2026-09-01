@@ -3,8 +3,6 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { staticWebAppsDocumentationUrl, staticWebAppsFunctionsDocumentationUrl } from './staticWebAppLinks';
-
 /**
  * Declarative metadata for the Static Web Apps product documentation command.
  *
@@ -15,12 +13,12 @@ import { staticWebAppsDocumentationUrl, staticWebAppsFunctionsDocumentationUrl }
  * the view provider stamps on the node that offers the command.
  */
 export const ShowStaticWebAppsDocumentation = {
-    Url: staticWebAppsDocumentationUrl,
+    Url: 'https://aka.ms/AA92xai',
 } as const;
 
 /** Declarative metadata for the Functions API documentation command. */
 export const ShowFunctionsDocumentation = {
     /** Context value for the no-functions help node. */
     ContextValue: 'showStaticWebAppFunctionsDocumentation',
-    Url: staticWebAppsFunctionsDocumentationUrl,
+    Url: 'https://aka.ms/AAacf3z',
 } as const;

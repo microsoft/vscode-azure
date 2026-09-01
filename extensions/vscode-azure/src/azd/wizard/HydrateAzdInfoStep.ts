@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { PromptStep, fileExists, type AsWritable, IVsCode, showMessage } from '@microsoft/vscode-azure-utils';
+import { PromptStep, fileExists, type AsWritable, IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 import { type AzdEnvironment, IAzdService } from '../AzdService';
@@ -14,9 +14,7 @@ import { InfraFolderName, MainBicepFileName } from './GenerateBicepStep';
  * Silently classifies the existing azd state in {@linkcode AzdWizardContext.iacFolder}
  * (only when {@linkcode AzdWizardContext.job job} is `deploy`) so subsequent
  * prompt and execute steps can skip work that is already done. Never prompts
- * the user, though it may raise a non-blocking warning toast when `azure.yaml`
- * declares no services and the wizard won't add one (see
- * {@linkcode AzdWizardContext.addsServiceEntry addsServiceEntry}).
+ * the user.
  *
  * Detected signals (all best-effort -- failures leave the flag unset):
  * - `hasAzureYaml` / `hasServices` -- derived from `azd show --output json`.
@@ -71,15 +69,6 @@ export class HydrateAzdInfoStep<TContext extends AzdWizardContext> extends Promp
 
             if (serviceNames.length > 0) {
                 result.azdServiceName = serviceNames[0];
-            } else if (!context.addsServiceEntry) {
-                // Surface a non-blocking warning. Provisioning will still
-                // succeed, but `azd deploy` won't be able to target the new
-                // resource until a `services:` entry exists. There is no CLI
-                // command to suggest -- `azd add` only offers App Service and
-                // Container Apps hosts -- so the entry has to be hand-written.
-                void showMessage(this.code, this.code.l10n.t(
-                    'azure.yaml has no `services` entry, so `azd deploy` and `azd up` cannot target this resource. Add a `services:` entry for this project to enable them.',
-                ), { severity: 'warning' });
             }
         }
 
