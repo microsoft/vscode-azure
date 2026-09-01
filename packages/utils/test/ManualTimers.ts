@@ -12,8 +12,8 @@ type MockedClearTimeout = (handle: unknown) => void;
 /**
  * Fake `setTimeout` a test can wait on before advancing.
  *
- * Wraps Node's {@linkcode mock.timers} (`setTimeout`/`clearTimeout` only) and
- * adds {@linkcode whenScheduled}, which resolves once a timer is armed.
+ * Wraps Node's {@linkcode mock.timers} and adds {@linkcode whenScheduled},
+ * which resolves once a timer is armed.
  *
  * Advancing a fake clock only fires timers that already exist. Code that arms
  * its next timer from a promise continuation -- a poll loop, a retry, a
@@ -46,6 +46,15 @@ export class ManualTimers {
     /**
      * Installs the fake timers. Call from `beforeEach`, and pair with
      * {@linkcode reset}.
+     *
+     * Only `setTimeout` is named in `apis`, which is the complete request:
+     * Node mocks a timer API together with its matching cancel function, so
+     * this also replaces `clearTimeout`, and `clearTimeout` is not itself a
+     * legal entry (passing it throws `ERR_INVALID_ARG_VALUE`). Both globals are
+     * then wrapped again here to maintain the pending-timer bookkeeping that
+     * {@linkcode whenScheduled} reads. {@linkcode mock.timers.reset} restores
+     * both originals unconditionally, so the extra wrapper cannot outlive the
+     * test.
      *
      * @throws if the timers are already installed.
      */
