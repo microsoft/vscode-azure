@@ -5,7 +5,7 @@
 
 import { collectPages, delay } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
-import { AppServiceLogicalType, FunctionAppLogicalType, LogicAppLogicalType, ResourceClient } from '../../../src/rest/clients/ResourceClient';
+import { AppServiceLogicalType, FunctionAppLogicalType, LogicAppLogicalType, ResourceClient, StaticWebAppResourceType } from '../../../src/rest/clients/ResourceClient';
 import { makeCredential, makeSubscription } from '../../mockAzure';
 import { makeResponse, MockHttpClient } from '../../mockPipeline';
 
@@ -110,6 +110,31 @@ describe('ResourceClient (unit)', () => {
         expect(resources[0].logicalType).to.equal(FunctionAppLogicalType);
         expect(resources[1].logicalType).to.equal(LogicAppLogicalType);
         expect(resources[2].logicalType).to.equal(AppServiceLogicalType);
+    });
+
+    it('should preserve the Static Web Apps ARM type as its logical type', async () => {
+        const { ctx } = createMockCodeContext();
+        const { executor } = createTestActionExecutor();
+        const subscription = makeSubscription();
+
+        const resourcesBody = JSON.stringify({
+            value: [
+                {
+                    id: '/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.Web/staticSites/swa1',
+                    name: 'swa1',
+                    type: StaticWebAppResourceType,
+                    location: 'eastus2',
+                },
+            ],
+        });
+        const httpClient = new MockHttpClient({
+            handler: (req) => makeResponse(req, 200, resourcesBody),
+        });
+
+        const client = ResourceClient.create(ctx, executor, makeCredential(), subscription, { httpClient });
+        const pages = await collectPages(client.resources.listByResourceGroup('rg1'));
+
+        expect(pages[0].items[0].logicalType).to.equal(StaticWebAppResourceType);
     });
 
     it('should set hasMore based on nextLink presence', async () => {

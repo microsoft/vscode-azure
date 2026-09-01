@@ -50,7 +50,7 @@ describe('SelectIacFolderStep (unit)', () => {
             );
             const step = new SelectIacFolderStep(createActionContext('test'), ctx, new TempDirManager(ctx), createMockAzdService());
 
-            const result = await step.prompt({ job: 'deploy' });
+            const result = await step.prompt({ job: 'deploy', resourceDisplayName: 'Function App' });
 
             expect((result.iacFolder!).path).to.equal('/repo');
         });
@@ -59,8 +59,18 @@ describe('SelectIacFolderStep (unit)', () => {
             const { ctx } = createMockCodeContext();
             const step = new SelectIacFolderStep(createActionContext('test'), ctx, new TempDirManager(ctx), createMockAzdService());
 
-            const error: Error = await expect(step.prompt({ job: 'deploy' })).to.be.rejectedWith(Error, 'Open a folder');
+            const error: Error = await expect(step.prompt({ job: 'deploy', resourceDisplayName: 'Function App' })).to.be.rejectedWith(Error, 'Open a folder');
             expect(CancellationError.test(error)).to.be.false;
+        });
+
+        it('deploy: refuses to guess a product name when the wizard did not supply one', async () => {
+            const { ctx, mock: mockResult } = createMockCodeContext();
+            mockResult.workspaceFolders.push(
+                { uri: MockUri.file('/repo'), name: 'repo', index: 0 },
+            );
+            const step = new SelectIacFolderStep(createActionContext('test'), ctx, new TempDirManager(ctx), createMockAzdService());
+
+            await expect(step.prompt({ job: 'deploy' })).to.be.rejectedWith(Error, 'requires resourceDisplayName');
         });
     });
 });

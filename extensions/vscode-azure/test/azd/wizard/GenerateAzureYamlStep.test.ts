@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { MockUri } from '@microsoft/vscode-azure-utils/testing';
-import type * as vscode from 'vscode';
 import type { AzdWizardContext } from '../../../src/azd/wizard/AzdWizardContext';
 import { GenerateAzureYamlStep } from '../../../src/azd/wizard/GenerateAzureYamlStep';
 import { createMockAzdService } from '../MockAzdService';
@@ -58,7 +57,7 @@ describe('GenerateAzureYamlStep (unit)', () => {
             await step.execute(context);
 
             expect(azd.init.mock.callCount()).to.equal(1);
-            expect((azd.init.mock.calls[0].arguments[0] as vscode.Uri).path).to.equal('/project');
+            expect((azd.init.mock.calls[0].arguments[0]).path).to.equal('/project');
         });
     });
 });

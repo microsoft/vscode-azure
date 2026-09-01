@@ -20,6 +20,7 @@ export * from './rest/azureLoggerSetup';
 export * from './rest/clients/AcrClient';
 export * from './rest/clients/DeploymentClient';
 export * from './rest/clients/ResourceClient';
+export * from './rest/clients/StaticWebAppClient';
 export * from './rest/clients/SubscriptionClient';
 export * from './rest/clients/WebAppClient';
 export * from './rest/createAzureClient';

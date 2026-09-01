@@ -91,7 +91,6 @@ describe('SelectSubscriptions (unit)', () => {
             unreachableTenantIds: [badTenant.tenantId],
         });
         respondToPrompts(mockResult, [
-            'cancel',
             { pickMany: ['Sub One (sub-1)', 'Sub Two (sub-2)'] },
         ]);
 
@@ -137,7 +136,7 @@ describe('SelectSubscriptions (unit)', () => {
             tenants: [tenant, unvisited],
             signedOutTenantIds: [unvisited.tenantId],
         });
-        respondToPrompts(mockResult, ['cancel', { pickMany: ['Sub One (sub-1)'] }]);
+        respondToPrompts(mockResult, [{ pickMany: ['Sub One (sub-1)'] }]);
 
         await command.execute();
 
@@ -156,7 +155,7 @@ describe('SelectSubscriptions (unit)', () => {
             unreachableTenantIds: [broken.tenantId],
             signedOutTenantIds: [unvisited.tenantId],
         });
-        respondToPrompts(mockResult, ['cancel', { pickMany: ['Sub One (sub-1)'] }]);
+        respondToPrompts(mockResult, [{ pickMany: ['Sub One (sub-1)'] }]);
 
         await command.execute();
 

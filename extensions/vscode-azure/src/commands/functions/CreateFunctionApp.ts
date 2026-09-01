@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { bySubscription } from '@microsoft/vscode-azure-azutils';
-import { IOutputChannel, Wizard, type ExecuteStep, Everything } from '@microsoft/vscode-azure-utils';
+import { IOutputChannel, IVsCode, Wizard, type ExecuteStep, Everything } from '@microsoft/vscode-azure-utils';
 import { Container, inject, injectable } from 'inversify';
 import { AzdDeployStep } from '../../azd/wizard/AzdDeployStep';
 import { AzdProvisionStep } from '../../azd/wizard/AzdProvisionStep';
@@ -39,6 +39,7 @@ import { PickRuntimeStep } from './steps/PickRuntimeStep';
 export class CreateFunctionApp implements ManagedCommand {
     public constructor(
         @inject(IOutputChannel) private readonly output: IOutputChannel,
+        @inject(IVsCode) private readonly code: IVsCode,
         @inject(IAzureViewDataTree) private readonly dataTree: IAzureViewDataTree,
         @inject(Container) private readonly container: Container,
     ) { }
@@ -74,6 +75,7 @@ export class CreateFunctionApp implements ManagedCommand {
             this.output,
             {
                 job,
+                resourceDisplayName: this.code.l10n.t('Function App'),
                 provision: true, // Provisioning is assumed unless an environment exists, in which case the user will be prompted to confirm
                 deploy: job === 'deploy', // Only deploy if the deploy job is selected
             },

@@ -5,7 +5,6 @@
 
 import { makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
 import { MockUri } from '@microsoft/vscode-azure-utils/testing';
-import type * as vscode from 'vscode';
 import type { AzdWizardContext } from '../../../src/azd/wizard/AzdWizardContext';
 import { CreateAzdEnvStep } from '../../../src/azd/wizard/CreateAzdEnvStep';
 import { createMockAzdService } from '../MockAzdService';
@@ -62,7 +61,7 @@ describe('CreateAzdEnvStep (unit)', () => {
             expect(name).to.equal('dev');
             expect(location).to.equal('eastus');
             expect(subscriptionId).to.equal('sub-1');
-            expect((cwd as vscode.Uri).path).to.equal('/project');
+            expect((cwd).path).to.equal('/project');
         });
 
         it('skips envNew when an env with the same name already exists in iacFolder', async () => {

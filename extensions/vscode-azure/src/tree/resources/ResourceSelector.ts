@@ -199,15 +199,19 @@ export class ResourceSelector {
 
     /**
      * Waits for background enrichment to complete on a previously
-     * resolved resource. Enrichment populates additional properties
+     * resolved node. Enrichment populates additional properties
      * that require extra API calls (e.g. ACR `loginServer`, `sku`).
      *
-     * @param resource - A resource previously returned by
-     *   {@linkcode selectResource}, {@linkcode resolve}, or {@linkcode tryResolve}.
-     * @returns The same resource object, now with enriched properties
+     * Accepts any node the resolvers return, not just ARM resources: a node
+     * with no enrichment pending resolves immediately, so callers that handle
+     * virtual nodes need not special-case them.
+     *
+     * @param resource - A node previously returned by {@linkcode selectResource},
+     *   {@linkcode selectVirtual}, {@linkcode resolve}, or {@linkcode tryResolve}.
+     * @returns The same node object, now with enriched properties
      *   populated.
      */
-    public async whenEnriched<T extends GenericResource>(resource: GenericResource): Promise<T> {
+    public async whenEnriched<T extends ConcreteAzureNode>(resource: ConcreteAzureNode): Promise<T> {
         return this.cache.whenEnriched<T>(resource);
     }
 

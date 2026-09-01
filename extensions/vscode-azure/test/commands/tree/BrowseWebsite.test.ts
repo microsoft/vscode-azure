@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureNodeId } from '@microsoft/vscode-azure-azutils';
-import { createMockViewItemTree, makeGenericResource } from '@microsoft/vscode-azure-azutils/testing';
+import { createMockViewItemTree, makeGenericResource, makeVirtualResource } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockCodeContext, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { OpenUrl } from '../../../src/commands/OpenUrl';
 import { BrowseWebsite } from '../../../src/commands/tree/BrowseWebsite';
@@ -48,6 +48,23 @@ describe('BrowseWebsite (unit)', () => {
 
         await expect(command.execute(key)).to.be.rejectedWith('The selected resource does not have a website.');
         expect(openExternal.mock.callCount()).to.equal(0);
+    });
+
+    it('should open the website of a virtual node, not just an ARM resource', async () => {
+        // A Static Web Apps environment is a virtual node with a hostname of its own, so
+        // requiring an ARM resource here would force each such product to ship a browse
+        // command of its own. Carrying a URL is the capability, not being an ARM resource.
+        const codeContext = createMockCodeContext();
+        const environment = makeVirtualResource({ virtualType: 'environment', virtualPath: 'environments/pr-42' });
+        setWebsiteUrl(environment, 'preview.azurestaticapps.net');
+        const { selector } = createTestResourceSelector({ nodes: [environment], codeContext });
+        const command = new BrowseWebsite(codeContext.ctx.code, selector, new OpenUrl(codeContext.ctx.code));
+
+        await command.execute(AzureNodeId.from(environment).toString());
+
+        expect(String(codeContext.mock.env.openExternal.mock.calls[0].arguments[0])).to.equal(
+            'https://preview.azurestaticapps.net/',
+        );
     });
 
     it('should reject an invalid tree selection', async () => {

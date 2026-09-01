@@ -13,9 +13,12 @@ import { OpenUrl } from '../OpenUrl';
 /**
  * Opens the website of the selected Azure resource tree node.
  *
- * The URL itself is attached to the resource by its data provider during
- * enrichment, so this only has to read it back; any resource type can become
- * browsable simply by having its provider attach one.
+ * The URL itself is attached to the resource by its data provider, so this only
+ * has to read it back; any node can become browsable simply by having its
+ * provider attach one. That includes virtual nodes -- a Static Web Apps
+ * environment carries its own hostname -- which is why the node is not required
+ * to be an ARM resource: carrying a URL is the capability, and
+ * {@linkcode getWebsiteUrl} is the exact test for it.
  *
  * Unlike {@linkcode OpenInPortal}, this cannot be a bare {@linkcode OpenUrl}
  * resolver: the URL is not derivable from the node key alone, so the resource
@@ -35,22 +38,17 @@ export class BrowseWebsite implements ManagedCommand {
 
     /**
      * @inheritdoc
-     * @throws if the selection is not an Azure resource, or if it has no
-     *   website (either because its type has none, or because it has not been
-     *   deployed yet).
+     * @throws if nothing is selected, or if the selected node has no website
+     *   (either because its type has none, or because it has not been deployed
+     *   yet).
      */
     public async execute(...args: unknown[]): Promise<void> {
         const [key] = args;
         const selectResource = this.code.l10n.t('Select an Azure resource with a website.');
-        const resource = await this.selector.selectResource({
-            key: typeof key === 'string' ? key : undefined,
-            title: selectResource,
-            messages: {
-                missingKey: selectResource,
-                missingNode: selectResource,
-                invalidNode: selectResource,
-            },
-        });
+        const messages = { missingKey: selectResource, missingNode: selectResource, invalidNode: selectResource };
+        const resource = typeof key === 'string'
+            ? this.selector.resolve({ key, messages })
+            : await this.selector.selectResource({ title: selectResource, messages });
 
         // Enrichment attaches the URL in the background, so a node can be acted
         // on before it lands. Awaiting the in-flight enrichment (a no-op when

@@ -94,7 +94,9 @@ describe('SettingsFileSystemProvider (unit)', () => {
 
             const error: Error = await expect(h.provider.stat(h.uri)).to.be.rejectedWith(Error, /no longer available/);
 
-            expect(error).to.have.property('code', 'FileNotFound');
+            // Not FileNotFound: the editor swallows that code's message when it comes from `stat`,
+            // which would hide the 'open them again from the Azure view' instruction.
+            expect(error).to.have.property('code', 'Unavailable');
             expect(h.read.mock.callCount()).to.equal(0);
         });
 
@@ -121,13 +123,18 @@ describe('SettingsFileSystemProvider (unit)', () => {
             expect(stat.permissions).to.equal(harness.code.vscode.FilePermission.Readonly);
         });
 
-        it('translates an adapter failure into FileNotFound, preserving the cause', async () => {
+        it('surfaces an adapter failure under a code that keeps the cause visible', async () => {
+            // The editor calls `stat` first and substitutes its own text for a `FileNotFound`
+            // raised there, so that code would reduce any adapter failure -- an ARM rejection, a
+            // permissions problem -- to 'Unable to resolve nonexistent file'. Every other code
+            // preserves the message, so this assertion is what keeps the cause reaching the user.
             harness.read.mock.mockImplementation(() => Promise.reject(new Error('no such resource')));
 
             const error: Error = await expect(harness.provider.stat(harness.uri))
                 .to.be.rejectedWith(Error, /no such resource/);
 
-            expect(error).to.have.property('code', 'FileNotFound');
+            expect(error).to.have.property('code', 'Unavailable');
+            expect(error).to.not.have.property('code', 'FileNotFound');
         });
     });
 

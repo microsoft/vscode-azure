@@ -18,7 +18,7 @@ const MainParametersFileName = 'main.parameters.json';
  * local Bicep module alongside its `main.bicep` ships both and keeps the module
  * boundary in the generated project.
  */
-export type BicepTemplateName = 'functionApp';
+export type BicepTemplateName = 'functionApp' | 'staticWebApp';
 
 /**
  * Generates infra files: copies the chosen template directory from the

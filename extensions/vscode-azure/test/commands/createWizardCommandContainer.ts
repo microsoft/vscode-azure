@@ -12,6 +12,8 @@ import { createGenerateBicepStepFactory, IGenerateBicepStepFactory } from '../..
 import { IAzureViewDataTree, IAzureViewViewItemTree, ISubscriptionResolver } from '../../src/services';
 import { IArmDeploymentDataProvider } from '../../src/tree/activity/ArmDeploymentDataProvider';
 import { ICodeDeploymentDataProvider } from '../../src/tree/activity/CodeDeploymentDataProvider';
+import { ISwaCliService } from '../../src/staticWebApps/SwaCliService';
+import { createMockSwaCliService } from '../staticWebApps/MockSwaCliService';
 
 /** Mocked services a wizard command (and its steps) may resolve in unit tests. */
 export interface WizardCommandMocks {
@@ -25,6 +27,7 @@ export interface WizardCommandMocks {
     readonly subscriptionClientProvider?: ISubscriptionClientProvider;
     readonly armProvider?: IArmDeploymentDataProvider;
     readonly codeProvider?: ICodeDeploymentDataProvider;
+    readonly swaCli?: ISwaCliService;
     /** Defaults to a resolver that finds nothing, which is the behavior of a subscription no account can reach. */
     readonly subscriptionResolver?: (subscriptionId: string) => Promise<AzureSubscription | undefined>;
 }
@@ -50,6 +53,7 @@ export function createWizardCommandContainer(mocks: WizardCommandMocks): Contain
     container.bind(ITempDirManager).toConstantValue(mocks.tempManager ?? new TempDirManager(mocks.ctx));
     container.bind(IAzureViewDataTree).toConstantValue(mocks.dataTree);
     container.bind(ISubscriptionResolver).toConstantValue(mocks.subscriptionResolver ?? (() => Promise.resolve(undefined)));
+    container.bind(ISwaCliService).toConstantValue(mocks.swaCli ?? createMockSwaCliService());
 
     container.bind(IGenerateBicepStepFactory).toFactory(context => createGenerateBicepStepFactory(context.get(ICodeContext)));
 
