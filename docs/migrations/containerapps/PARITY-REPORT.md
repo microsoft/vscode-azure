@@ -116,7 +116,7 @@ context value that is declared in source and assembled onto the node by `Contain
 |---|---|
 | New `activationEvents` entries | none |
 | New `contributes.configuration` settings | none (all 7 source settings were Drop or Reuse) |
-| `azure.yaml` authored or parsed outside `GenerateAzureYamlStep` | no |
+| `azure.yaml` authored or parsed outside shared azd services | no |
 | Calls into the extension being retired | none |
 | `@azure/*` imports in extension source | one, pre-existing (`@azure/core-lro` in `tree/activity/ArmDeploymentDataProvider.ts`); none added by this migration |
 

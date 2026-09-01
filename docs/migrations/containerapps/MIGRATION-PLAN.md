@@ -258,7 +258,8 @@ Both resource types are handled by **one** data provider and **one** view provid
 > `logAnalyticsWorkspaceResourceId`.
 
 **Status: complete.** The wizard provisions the full topology, deploys an existing image or lets azd build
-one, and verifies the app actually started.
+one, ensures project deployments declare a local Docker Container Apps service in `azure.yaml`, and verifies
+the app actually started.
 
 
 - [x] File the tracking issue for a real AVM container-apps topology pattern module

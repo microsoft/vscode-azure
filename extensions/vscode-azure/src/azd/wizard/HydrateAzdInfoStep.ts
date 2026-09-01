@@ -69,7 +69,7 @@ export class HydrateAzdInfoStep<TContext extends AzdWizardContext> extends Promp
 
             if (serviceNames.length > 0) {
                 result.azdServiceName = serviceNames[0];
-            } else {
+            } else if (!context.willConfigureService) {
                 // Surface a non-blocking warning. Provisioning will still
                 // succeed, but `azd deploy` won't be able to target the new
                 // resource until the user adds a `services:` entry.

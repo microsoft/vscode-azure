@@ -21,6 +21,7 @@ import { ShowEndpointUrlStep } from '../../azd/wizard/ShowEndpointUrlStep';
 import { IAzureViewDataTree } from '../../services';
 import type { ManagedCommand } from '../ManagedCommand';
 import type { CreateContainerAppContext } from './CreateContainerAppContext';
+import { ConfigureContainerAppServiceStep } from './steps/ConfigureContainerAppServiceStep';
 import { DetectTargetPortStep } from './steps/DetectTargetPortStep';
 import { PickImageSourceStep } from './steps/PickImageSourceStep';
 import { VerifyContainerAppStartStep } from './steps/VerifyContainerAppStartStep';
@@ -66,6 +67,7 @@ export class CreateContainerApp implements ManagedCommand {
         const executeSteps: ExecuteStep<CreateContainerAppContext>[] = [
             get(IGenerateBicepStepFactory)<CreateContainerAppContext>('containerApp', ['targetPort', 'imageName', 'azdServiceName']),
             get(GenerateAzureYamlStep),
+            get(ConfigureContainerAppServiceStep),
             get(CreateAzdEnvStep),
             get(AzdProvisionStep),
         ];
@@ -83,6 +85,7 @@ export class CreateContainerApp implements ManagedCommand {
             this.output,
             {
                 job,
+                willConfigureService: job === 'deploy',
                 provision: true, // Provisioning is assumed unless an environment exists, in which case the user will be prompted to confirm
                 deploy: job === 'deploy', // Only deploy if the deploy job is selected
             },

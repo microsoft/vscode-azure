@@ -67,6 +67,9 @@ infra/
   modules/container-app-topology/main.bicep   the topology
 ```
 
+For project deployment, the command also ensures `azure.yaml` declares the selected service as a local Docker
+project hosted by Container Apps. Existing service declarations are preserved.
+
 The topology module provisions a Log Analytics workspace, a managed environment, a container registry, a
 user-assigned identity for the app, the AcrPull role assignment, and the container app. Only the app carries
 the `azd-service-name` tag, because only the app is an `azd deploy` target.

@@ -107,6 +107,14 @@ describe('HydrateAzdInfoStep (unit)', () => {
             expect(asMockFn(window.showWarningMessage).mock.callCount()).to.equal(0);
         });
 
+        it('does not warn when a later step will configure the service', async () => {
+            const { step, context, window } = makeStep({ show: { name: 'my-app' } });
+
+            await step.prompt({ ...context, willConfigureService: true });
+
+            expect(asMockFn(window.showWarningMessage).mock.callCount()).to.equal(0);
+        });
+
         it('does not warn when there is no azure.yaml at all', async () => {
             const { step, context, window } = makeStep();
             await step.prompt(context);

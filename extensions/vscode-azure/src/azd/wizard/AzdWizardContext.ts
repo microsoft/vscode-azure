@@ -42,6 +42,8 @@ export interface AzdWizardContext {
     readonly hasInfra?: boolean;
     /** `true` when an existing `azure.yaml` already declares a `services:` entry. */
     readonly hasServices?: boolean;
+    /** `true` when a later execute step will add a missing `services:` entry. */
+    readonly willConfigureService?: boolean;
     /** Name of the existing default azd environment in {@linkcode iacFolder}, if any. */
     readonly existingDefaultEnvName?: string;
     /**
