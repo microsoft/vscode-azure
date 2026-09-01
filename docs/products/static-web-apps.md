@@ -41,9 +41,9 @@ than silently disappearing.
 
 | Command | Acts on | Notes |
 |---|---|---|
-| Create Static Web App... | palette / workspace | azd+Bicep creation; Free plan by default |
+| Create Static Web App... | palette / Static Web Apps group in Resources | azd+Bicep creation; Free plan by default |
 | Configure CI/CD | palette / `azure.yaml` context menu | Runs `azd pipeline config` |
-| Create Configuration File | workspace | Creates `staticwebapp.config.json` |
+| Create Configuration File | palette | Creates `staticwebapp.config.json` in a selected workspace folder |
 | Delete Environment... | preview environment | Deletes the selected build |
 | Documentation | palette | Opens Static Web Apps documentation |
 | Azure Functions Documentation | Functions help | Opens managed API guidance |
@@ -90,8 +90,9 @@ without asking. A layout the user has already declared in `swa-cli.config.json`
 wins, since that file is what a later `swa build` reads. Otherwise
 `DetectStaticWebAppConfigStep` calls `swa init --yes` through `SwaCliService`,
 which keeps the framework table the CLI's to maintain rather than mirroring it
-here. Creation therefore requires `swa`; when it is missing or too old the step
-fails with the same actionable install toast the rest of the product uses.
+here. Project detection therefore requires `swa` when locations cannot be
+hydrated from existing infrastructure; when it is missing or too old the step
+fails with an actionable install toast.
 
 Detection itself is read-only even though `swa init` is a scaffolding command.
 The CLI scans its working directory but writes to the path given by `--config`,
@@ -174,7 +175,9 @@ and still exits zero.
   [#339](https://github.com/microsoft/vscode-azure/issues/339).
 - GitHub Actions run/job/step browsing and native SWA workflow parsing are not
   part of the product.
-- Repository bootstrap is not implemented and has no linked tracking issue.
+- The create wizard does not bootstrap a Git repository. A later Configure
+  CI/CD run can ask azd to create and push one; adding that behavior directly to
+  creation is deferred without a linked tracking issue.
 
 See [PARITY-REPORT.md](../migrations/swa/PARITY-REPORT.md) for row-by-row
 accounting.

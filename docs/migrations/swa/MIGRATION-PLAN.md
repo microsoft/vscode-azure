@@ -18,8 +18,7 @@ tasks are still open.
 - Slices are ordered by dependency: clients and models before providers,
   commands, creation, and integration.
 - Every task cites the triage IDs it implements or records.
-- Checked tasks mean the branch contains the described implementation, not that
-  unresolved review concerns have been accepted.
+- Checked tasks mean the branch contains the described implementation.
 - Deferred work remains unchecked. Dispositions can only change in
   [TRIAGE.md](TRIAGE.md).
 
@@ -103,17 +102,20 @@ rather than introducing a multi-resource local pattern module. The shared
 generator supplies the resource group and azd environment/service tags. Inputs
 map directly from wizard context to `appLocation`, `apiLocation`,
 `outputLocation`, and `azdServiceName`; the deployment exposes the module's
-Static Site output to the shared endpoint step. The `staticWebApp` azd service
-entry records `project` and `dist` only when the selected artifact is
-deployable.
+Static Site output to the shared endpoint step. For deployable output, the
+`staticWebApp` azd service runs from the workspace root when an SWA CLI
+configuration owns the build; otherwise it records the detected `project` and
+`dist`.
 
-The current implementation edits `azure.yaml` after the shared generation step.
-That is an unresolved ownership concern on PR #237 rather than an accepted
-exception to the migration skill's ownership rule.
+The service entry is added after shared `azure.yaml` generation through
+`AzdService.updateAzureYaml`, which preserves unrelated user YAML. This is the
+shared sanctioned path until azd supports adding Static Web Apps services
+directly; upstream work is tracked by
+[Azure/azure-dev#9718](https://github.com/Azure/azure-dev/issues/9718).
 
 ## Slice 4 -- CI/CD configuration
 
-Mapping: azd owns deployment end to end. Product code contributes only a
+Mapping: azd owns deployment end to end. The extension contributes a shared
 "Configure CI/CD" command that resolves the `azure.yaml` folder via the shared
 `SelectIacFolderStep` and hands over to `azd pipeline config`.
 
@@ -122,9 +124,9 @@ Mapping: azd owns deployment end to end. Product code contributes only a
 - [x] Let `azd pipeline config` own provider selection, repository creation and
   push, provider authentication, and generated CI/CD files, rather than
   reproducing those decisions from Git metadata. <- SWA-010, SWA-065
-- [ ] Resolve the review ownership boundary for product parsing/editing of
-  `azure.yaml`; either move the capability upstream/shared or record an explicit
-  accepted boundary.
+- [x] Route the required Static Web Apps service entry through the shared
+  `AzdService.updateAzureYaml` helper while first-class azd support is tracked
+  upstream.
   <- SWA-012, SWA-053, SWA-061, SWA-064
 
 ## Slice 5 -- Shared tool acquisition
@@ -156,9 +158,9 @@ Mapping: `SwaInstaller` implements the shared `ToolInstaller` contract;
   matcher. Tracked by
   [#339](https://github.com/microsoft/vscode-azure/issues/339).
   <- SWA-056
-- [ ] Decide whether repository bootstrap belongs in a separately confirmed
-  flow, in azd, or outside this extension. No tracking issue is currently
-  linked. <- SWA-063
+- [ ] Decide whether the create wizard should bootstrap a repository before
+  deployment. The current extension leaves repository creation to a later
+  `azd pipeline config` run. No tracking issue is currently linked. <- SWA-063
 
 ## Dropped -- recorded for parity
 
@@ -173,12 +175,7 @@ Mapping: `SwaInstaller` implements the shared `ToolInstaller` contract;
   SWA-022, SWA-029, SWA-032.
 - Advanced creation variants: SWA-013, SWA-062.
 - CLI uninstall and eager warning: SWA-026, SWA-034, SWA-058.
-
-## Open follow-ups
-
-- [ ] Resolve the remaining ownership-boundary review threads on PR #237 before
-  declaring creation/deployment architecture final.
-  <- SWA-012, SWA-061, SWA-064, SWA-065
+- Product-specific Azure Workspace title submenu: SWA-068.
 
 ## Drift record
 
@@ -193,4 +190,4 @@ Sweeps recorded from that audit onward:
 | Merge | Swept result |
 |---|---|
 | `main` (after #338) | Adopted the newly shared primitives it brought in; no product copy remained. |
-| #327, shared View Properties | Replaced the product properties command with `StaticWebAppEnvironmentPropertiesAdapter`. This branch is now based on `alexweininger-shared-view-properties`, so #327 merges first. |
+| #327, shared View Properties | Retained the shared `ViewProperties` command and `StaticWebAppEnvironmentPropertiesAdapter` after #327 merged through `main`. |

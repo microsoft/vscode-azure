@@ -12,10 +12,10 @@ read-only unless this file is edited and reconfirmed with the reviewer.
 | **Inventory** | [INVENTORY.md](INVENTORY.md) |
 | **Target** | `extensions/vscode-azure` plus `packages/azutils` |
 | **Precedents** | `functions` (azd creation), `acr` (resource providers and virtual children), `deploy` (azd services), shared settings and tool services |
-| **Rows** | 67 |
+| **Rows** | 68 |
 | **Signed off by** | Brandon Waterloo (@bwateratmsft) |
 | **Date** | 2026-08-28 |
-| **Revised** | SWA-066 changed from Migrate to Adapt during PR #237 review, when framework detection moved to the Static Web Apps CLI. Awaiting reconfirmation. |
+| **Last confirmed** | 2026-09-01; includes SWA-066 as Adapt and SWA-068 as Drop. |
 
 ## Dispositions
 
@@ -24,9 +24,9 @@ read-only unless this file is edited and reconfirmed with the reviewer.
 | Migrate | 8 | Preserve the source capability using monorepo patterns |
 | Adapt | 14 | Preserve the user goal with intentionally different behavior or UX |
 | Reuse | 9 | Satisfy the feature by wiring an existing shared capability |
-| Drop | 30 | Do not carry the source capability forward |
+| Drop | 31 | Do not carry the source capability forward |
 | Defer | 6 | Retain the goal for later tracked work |
-| **Total** | **67** | |
+| **Total** | **68** | |
 
 The old hybrid inventory vocabulary is not mapped mechanically. In particular,
 file-based settings import/export, value visibility, and source path-default
@@ -68,10 +68,10 @@ behavior are Adapt outcomes.
 | SWA-027 | `staticWebApps.viewProperties` | **Adapt** | The environment scope remains; Actions/job/step scopes disappear with those trees. |
 | SWA-028 | `staticWebApps.showFunctionsDocumentation` | **Migrate** | The Functions help command remains and is now declaratively contributed. |
 | SWA-029 | `staticWebApps.enableOutputTimestamps` | **Drop** | Product-specific output formatting is not retained. |
-| SWA-030 | `staticWebApps.appSubpath` | **Drop** | Creation derives defaults from detection, presets, and SWA CLI configuration instead of extension settings. |
-| SWA-031 | `staticWebApps.apiSubpath` | **Drop** | Creation derives defaults from detection, presets, and SWA CLI configuration instead of extension settings. |
+| SWA-030 | `staticWebApps.appSubpath` | **Drop** | Creation derives locations from SWA CLI detection or an existing SWA CLI configuration instead of extension settings. |
+| SWA-031 | `staticWebApps.apiSubpath` | **Drop** | Creation derives locations from SWA CLI detection or an existing SWA CLI configuration instead of extension settings. |
 | SWA-032 | `staticWebApps.appArtifactSubpath` | **Drop** | The source already deprecated it in favor of `outputSubpath`. |
-| SWA-033 | `staticWebApps.outputSubpath` | **Drop** | Creation derives defaults from detection, presets, and SWA CLI configuration instead of extension settings. |
+| SWA-033 | `staticWebApps.outputSubpath` | **Drop** | Creation derives locations from SWA CLI detection or an existing SWA CLI configuration instead of extension settings. |
 | SWA-034 | `staticWebApps.showStaticWebAppsCliWarning` | **Drop** | The target performs no eager outdated-CLI warning. |
 | SWA-035 | Azure Resources resolver | **Adapt** | Product data/view providers replace the host-extension resolver. |
 | SWA-036 | Static Web App root tree node | **Adapt** | It is a generic ARM resource enriched with product children and shared actions. |
@@ -97,15 +97,16 @@ behavior are Adapt outcomes.
 | SWA-056 | `$swa-watch` problem matcher | **Defer** | Restore only with generated emulator tasks; tracked by [#339](https://github.com/microsoft/vscode-azure/issues/339). |
 | SWA-057 | SWA CLI lifecycle helpers | **Adapt** | `SwaInstaller` plus the shared tool service own discovery, versioning, install, and update; uninstall is separately dropped. |
 | SWA-058 | Activation-time outdated CLI warning | **Drop** | Tool checks happen only when a user invokes acquisition; no product activation work is added. |
-| SWA-059 | GitHub auth and Octokit Actions integration | **Drop** | azd and read-only Git metadata replace product-owned GitHub credentials/Actions APIs. |
+| SWA-059 | GitHub auth and Octokit Actions integration | **Drop** | azd replaces product-owned GitHub credentials and Actions APIs. |
 | SWA-060 | Exported Remote Repositories/Git API and reveal API | **Drop** | No source-extension compatibility API is retained. |
 | SWA-061 | Basic create wizard flow | **Adapt** | One azd wizard provisions and, when supported, deploys a Free-plan site. |
 | SWA-062 | Advanced create wizard flow | **Drop** | The separate advanced mode is not retained. |
-| SWA-063 | Create repository/add remote/push during create | **Defer** | Repository bootstrap requires a separate ownership and consent decision; no tracking issue is currently linked. |
+| SWA-063 | Create repository/add remote/push during create | **Defer** | The create wizard does not mutate Git; repository bootstrap is left to a separately invoked `azd pipeline config` flow. |
 | SWA-064 | Direct ARM creation and native workflow generation | **Adapt** | Generated Bicep provisions the resource and azd owns provisioning/deployment. |
-| SWA-065 | Post-create Actions polling and notification | **Adapt** | Endpoint display and a separate deployment-routing command replace native Actions polling. |
+| SWA-065 | Post-create Actions polling and notification | **Adapt** | Endpoint display and the shared Configure CI/CD command replace native Actions polling. |
 | SWA-066 | Build preset table | **Adapt** | The user goal -- correct locations without asking -- is preserved by consuming the Static Web Apps CLI's own framework table instead of maintaining a copy of it. |
 | SWA-067 | Framework and API detection | **Adapt** | Detection is delegated to `swa init`, run against a scratch config path so it stays read-only, and feeds azd/Bicep parameters. |
+| SWA-068 | Azure Workspace title submenu | **Drop** | Product-specific view-title submenus are not part of the target UX; creation remains available from the Resources tree and command palette. |
 
 ## Cross-cutting directives
 
@@ -118,12 +119,3 @@ behavior are Adapt outcomes.
    Azure Functions extensions.
 5. Debugging, generated emulator tasks, Data API location discovery, lifecycle
    coordination, and `$swa-watch` remain one deferred unit under #339.
-
-## Open ownership decisions
-
-The implementation contains review threads that remain unresolved on PR #237:
-editing/parsing `azure.yaml` and product-owned build preset/scaffolding
-behavior. These concerns do not change the dispositions above, but they prevent
-the corresponding Adapt/Migrate rows from being described as final architecture
-without qualification. They are carried into the plan and parity report as known
-gaps.

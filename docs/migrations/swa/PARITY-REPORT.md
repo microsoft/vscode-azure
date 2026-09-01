@@ -6,8 +6,8 @@ Verification of the current branch against the signed retrospective
 | | |
 |---|---|
 | **Source** | `microsoft/vscode-azurestaticwebapps` at `84d7c8da77e431c3f1c115d88b851a3b3bbb4464` (v0.13.3) |
-| **Triage rows** | 67 |
-| **Accounted for** | 67 (0 unaccounted for) |
+| **Triage rows** | 68 |
+| **Accounted for** | 68 (0 unaccounted for) |
 | **Date** | 2026-09-01 |
 
 Evidence paths are relative to `extensions/vscode-azure/src/` unless another
@@ -20,9 +20,9 @@ root is named.
 | Migrate | 8 | present |
 | Adapt | 14 | present |
 | Reuse | 9 | shared capabilities wired |
-| Drop | 30 | confirmed absent from the SWA product surface |
+| Drop | 31 | confirmed absent from the SWA product surface |
 | Defer | 6 | unchecked in [MIGRATION-PLAN.md](MIGRATION-PLAN.md) |
-| **Total** | **67** | |
+| **Total** | **68** | |
 
 ## Feature accounting
 
@@ -59,7 +59,7 @@ root is named.
 | SWA-029 | Output timestamps setting | Drop | absent | No corresponding target setting. |
 | SWA-030 | App subpath setting | Drop | absent | No corresponding target setting; creation resolves locations from the SWA CLI or `swa-cli.config.json`. |
 | SWA-031 | API subpath setting | Drop | absent | No corresponding target setting; creation resolves locations from the SWA CLI or `swa-cli.config.json`. |
-| SWA-032 | Deprecated artifact subpath setting | Drop | absent | Only `outputSubpath` is contributed. |
+| SWA-032 | Deprecated artifact subpath setting | Drop | absent | No corresponding target setting is contributed. |
 | SWA-033 | Output subpath setting | Drop | absent | No corresponding target setting; creation resolves locations from the SWA CLI or `swa-cli.config.json`. |
 | SWA-034 | CLI warning setting | Drop | absent | No target setting or activation warning. |
 | SWA-035 | Azure Resources resolver | Adapt | landed | `products/registerStaticWebApps.ts` registers product data/view providers. |
@@ -90,11 +90,12 @@ root is named.
 | SWA-060 | Exported Remote Repositories/reveal API | Drop | absent | Product registration exports no compatibility API. |
 | SWA-061 | Basic create flow | Adapt | landed | `CreateStaticWebApp.ts` uses the single Free-plan azd flow. |
 | SWA-062 | Advanced create flow | Drop | absent | No advanced command, mode, or SKU prompt. |
-| SWA-063 | Repository bootstrap | Defer | delegated | `azd pipeline config` creates and pushes a repository when none exists. |
+| SWA-063 | Repository bootstrap during create | Defer | not landed | The create wizard does not mutate Git; a later `azd pipeline config` run can offer repository creation and push. |
 | SWA-064 | ARM creation/native workflow | Adapt | landed | `extensions/vscode-azure/resources/templates/staticWebApp/main.bicep`; shared azd provision/deploy steps. |
 | SWA-065 | Post-create Actions polling | Adapt | landed with changed UX | Shared endpoint display; `ConfigureCicd.ts` delegates CI/CD to `azd pipeline config`. |
 | SWA-066 | Build presets | Adapt | delegated | The Static Web Apps CLI owns the framework table; `DetectStaticWebAppConfigStep.ts` consumes it instead of mirroring 13 presets. |
 | SWA-067 | Framework/API detection | Adapt | delegated | `SwaCliService.detect()` runs `swa init --yes` against a scratch config path, leaving the project untouched. |
+| SWA-068 | Azure Workspace title submenu | Drop | absent | No product-specific submenu is contributed to `view/title`; creation remains available from the Resources tree and command palette. |
 
 ## Artifact status
 
@@ -138,7 +139,7 @@ searched for the source-specific command IDs/types:
 1. **Debugging and generated tasks are not present.** Issue
    [#339](https://github.com/microsoft/vscode-azure/issues/339) tracks the five
    related deferred rows after native Functions debugging.
-2. **Repository bootstrap is delegated to azd.** `azd pipeline config` offers to
-   create and push a repository when the project has no remote, so the extension
-   contributes no bootstrap code of its own.
+2. **Repository bootstrap does not run during creation.** The extension does not
+   mutate Git; a later `azd pipeline config` run can offer to create and push a
+   repository when the project has no remote.
 3. **No live-Azure verification is claimed by this documentation audit.**

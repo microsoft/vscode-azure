@@ -43,11 +43,12 @@ Use `vscode.workspace.fs` and `vscode.Uri` instead of Node's `fs`/`fs/promises` 
 - Use `extensionContext.extensionUri` with `Uri.joinPath()` instead of `extensionContext.asAbsolutePath()`
 - Pass `vscode.Uri` through interfaces instead of `string` file paths
 - `Uri.fsPath` is acceptable when an API requires a string path (e.g. `child_process` `cwd`)
-- Workspace-wide detectors (including SWA CLI/database config detection) should
-  register a `WorkspaceDetector` and query `IWorkspaceIndexService`
+- Workspace-wide detectors should register a `WorkspaceDetector` and query
+  `IWorkspaceIndexService`
   (`extensions/vscode-azure/src/utils/workspaceIndex/WorkspaceIndexService.ts`)
-  rather than walking the workspace themselves. Use `walkDirectory()` only for an
-  explicit, on-demand root outside the open workspace index.
+  rather than walking the workspace themselves. Explicit, on-demand checks
+  rooted at a user-selected folder may use `vscode.workspace.fs` directly. Use
+  `walkDirectory()` only for a root outside the open workspace index.
 
 ## Localization
 

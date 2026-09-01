@@ -19,6 +19,7 @@ committed.
 | Surface | Source facts |
 |---|---|
 | Commands | 27 contributed commands plus one code-only command |
+| Menus | One Static Web Apps submenu in the Azure Workspace view title |
 | Settings | 6 settings |
 | Tree | Azure Resources branch resolver, 10 concrete node classes, shared settings nodes, and invalid placeholders |
 | Local development | One debugger contribution, a shell task provider, task lifecycle coordination, and one problem matcher |
@@ -100,6 +101,7 @@ recorded only in [TRIAGE.md](TRIAGE.md).
 | 65 | Post-create Actions polling and notification | workflow | B+C | Pulls Git state, polls the generated Actions run, and offers browse/actions/workflow follow-ups. |
 | 66 | Build preset table | wizard data | B | Defines 13 framework/static-site-generator presets with app, API, output, port, and start-command defaults. |
 | 67 | Framework and API detection | detector | B | Detects Node frameworks and related project shapes, Functions API locations, and Git metadata. |
+| 68 | Azure Workspace title submenu | menu | A | Contributes an Azure Static Web Apps submenu to the Azure Workspace view title with Create HTTP Function, basic create, and advanced create actions. |
 
 ## Source extension shape
 
@@ -110,6 +112,8 @@ recorded only in [TRIAGE.md](TRIAGE.md).
   `swa-cli.config.json`.
 - The Azure Resources contribution registered the `StaticWebApps` branch and
   activated resolution for `microsoft.web/staticsites`.
+- The Azure Workspace view title contained a product-specific Static Web Apps
+  submenu for HTTP Function creation and both site-creation commands.
 - Virtual workspaces were supported in limited mode. Individual commands also
   used `!isWeb` and `!virtualWorkspace` gates.
 - Four orphan NLS keys were present: `staticWebApps.deleteConfirmation`,
@@ -164,7 +168,7 @@ The source minimum version was `0.8.0`.
 
 ## Verification of this inventory
 
-- 67 independently triageable rows are listed exactly once.
+- 68 independently triageable rows are listed exactly once.
 - All 28 source commands, 6 settings, tree/debug/task/configuration surfaces,
-  creation flows, and external integrations are represented.
+  menu contributions, creation flows, and external integrations are represented.
 - Target-only features and migration outcomes are intentionally excluded.
