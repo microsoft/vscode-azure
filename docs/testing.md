@@ -276,6 +276,25 @@ loop stalls until the test times out. Waiting on an observable side effect --
 a request count, a status change -- doesn't close the gap, because the effect
 lands before the timer is armed. Waiting for the arm itself does.
 
+### Disposing What a Test Creates
+
+A test that constructs something holding an open handle -- a poller's timer, a
+watcher, a server -- must dispose it, or the handle outlives the test. Bind the
+lifetime to the test with `using` and `autoDispose` from
+`@microsoft/vscode-azure-utils/testing`, which adapts the codebase's `dispose()`
+convention to the `Symbol.dispose` protocol:
+
+```typescript
+it('should poll until the deployment finishes', async () => {
+    using provider = autoDispose(new ArmDeploymentDataProvider(...));
+    // disposed when the body exits, however it exits
+});
+```
+
+Prefer this over an `afterEach`: cleanup stays next to creation, so a new test
+can't quietly skip it. When a factory helper builds the object, wrap it once
+inside the factory and every call site just declares `using`.
+
 ### Integration Tests
 
 Integration tests use the real VS Code API and extension infrastructure:
