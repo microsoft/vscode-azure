@@ -75,6 +75,62 @@ A product only needs its own delete command for targets the generic command
 cannot express -- for example a virtual child node that maps to a
 service-specific API rather than an ARM resource ID.
 
+### Viewing resource properties
+
+`ViewProperties` opens a node's live properties as a JSON document. It resolves
+the selected node through `ResourceSelector` and owns telemetry, redaction, and
+document presentation; what differs per resource type is only *where the
+properties come from*, which is supplied by a `PropertiesAdapter`:
+
+```typescript
+export interface PropertiesAdapter<TNode extends ConcreteAzureNode = ConcreteAzureNode> {
+    canHandle(node: ConcreteAzureNode): node is TNode;
+    read(node: TNode): Promise<unknown>;
+    readonly redact?: RedactionPolicy;
+}
+```
+
+Adapters are `@multiInject`ed and dispatched first-match-wins, so a product
+binds its adapter in its own `register*.ts` and gets priority over
+`GenericArmPropertiesAdapter`, which is bound from `registerGenericAzure.ts` —
+registered last — and serializes any resolved ARM resource or resource group
+after dropping metadata attached by this repo.
+
+Most products need no adapter at all. Write one only when the properties worth
+showing are not what an ARM GET returns, for example a virtual child node backed
+by a data-plane API.
+
+Redaction is **declared, not implemented**: an adapter sets `redact` and the
+command applies it through `applyRedaction` from `@microsoft/vscode-azure-utils`.
+It is on by default, so an adapter written without a thought for secrets is safe;
+`redact: false` is the deliberate opt-out and `{ alsoRedact: [...] }` adds names
+specific to that payload. VS Code's telemetry API works the same way — everything
+is cleaned, and `TelemetryTrustedValue` opts a value out.
+
+Three things are withheld. A property whose **name** says it holds a credential
+(`isSecretPropertyName`, which reads the last word of a compound so `keyVaultUri`
+survives while `primaryKey` does not), including a `{ name, value }` entry whose
+`name` names a credential; a **value** that is recognisably a credential on its
+own, screened with the regexes VS Code uses in
+`src/vs/platform/telemetry/common/telemetryUtils.ts`; and the credential-bearing
+**segments** of a signed URL or a `key=value;` connection string, so the endpoint
+stays readable and only the signature goes. That last one uses an allow list of
+query parameters, matching the `Sanitizer` that `@azure/core-rest-pipeline`
+scrubs request URLs with.
+
+Anything withheld on one of those grounds is then withheld everywhere else it
+appears in the payload, so a key that also sits embedded in some URI does not
+survive because only one of its two homes was recognised. Redacted values are
+replaced with a visible marker rather than dropped, so the reader can tell a
+withheld property from an absent one; a value recognised by its shape says what
+it was taken for (`<redacted: JWT>`).
+
+This is a best-effort screen over a payload of unknown shape, not an
+authorization boundary.
+
+The opened JSON document is a readonly snapshot of the current state. Editable
+resource configuration belongs in the settings framework instead.
+
 ### `prefixArgs` Pattern
 
 Both registration functions accept optional trailing `...prefixArgs`, which are prepended to the arguments VS Code passes to `execute()`. This lets one command class be registered several times with different fixed arguments instead of being split into near-identical subclasses:
@@ -189,7 +245,7 @@ if (!node) {
 }
 ```
 
-`canHandle` may be a predicate or a type guard. A type guard narrows the return type to whatever it proves; a plain predicate validates the node at runtime but leaves the return type as `ConcreteAzureNode`. Omit it to accept any cached node.
+`canHandle` may be a predicate or a type guard. A type guard narrows the return type to whatever it proves; a plain predicate validates the node at runtime but leaves the return type as `ConcreteAzureNode`. Omit it to accept any cached node. `ViewProperties` does, because it acts on a subscription or resource group as readily as a resource and leaves the question of what it can serve to its adapters.
 
 Each `messages` entry is a localized string. Omitted entries fall back to a generic localized message.
 

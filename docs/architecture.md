@@ -31,7 +31,7 @@ Framework-level building blocks with no Azure-specific knowledge:
 - **Telemetry & error handling**: `ActionExecutor`, `CommandRegistry`, `IActionContext`
 - **VS Code abstractions**: `CancellationError`, `Disposable`, `EventEmitter`
 - **Process execution**: `ProcessExecutor`, `IProcessExecutor`, and shared shell-task construction
-- **Data utilities**: `InflightMap`, `Limiter`
+- **Data utilities**: `InflightMap`, `Limiter`, `redactSecrets`
 
 ### `packages/azutils` — Azure Utilities
 
