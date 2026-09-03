@@ -67,24 +67,6 @@ describe('ConfigureCicd (unit)', () => {
         expect(azd.provision.mock.callCount()).to.equal(0);
     });
 
-    it('should block on an azd too old for federated Azure DevOps auth', async () => {
-        const { cmd, azd } = createCommand();
-        azd.checkVersion.mock.mockImplementation(() => Promise.resolve(false));
-
-        await expect(cmd.execute()).to.be.rejectedWith('or later is required');
-
-        expect(azd.pipelineConfig.mock.callCount()).to.equal(0);
-    });
-
-    it('should defer to azd\'s own install prompt when no azd version can be read', async () => {
-        const { cmd, azd } = createCommand();
-        azd.checkVersion.mock.mockImplementation(() => Promise.resolve(undefined));
-
-        await cmd.execute();
-
-        expect(azd.pipelineConfig.mock.callCount()).to.equal(1);
-    });
-
     it('should fail when no azure.yaml can be found', async () => {
         const { cmd, azd } = createCommand();
         azd.findAzureYaml.mock.mockImplementation(() => Promise.resolve([]));

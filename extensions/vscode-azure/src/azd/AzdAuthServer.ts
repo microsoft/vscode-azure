@@ -6,11 +6,12 @@
 import { ICredentialFactory, type TokenCredential } from '@microsoft/vscode-azure-azutils';
 import { IOutputChannel, IVsCode, stringifyError, type Disposable } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
-import { generateKeyPair as cryptoGenerateKeyPair, sign as cryptoSign, randomBytes, randomUUID } from 'node:crypto';
-import type { IncomingMessage, ServerResponse } from 'node:http';
-import { createServer, type Server } from 'node:https';
+import { randomUUID } from 'node:crypto';
+import { chmod, mkdtemp, rm } from 'node:fs/promises';
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { text } from 'node:stream/consumers';
-import { promisify } from 'node:util';
 
 export const IAzdAuthServer: ServiceIdentifier<IAzdAuthServer> = Symbol.for('IAzdAuthServer');
 
@@ -25,44 +26,59 @@ export interface IAzdAuthServer {
     getEnv(): Promise<Readonly<Record<string, string>>>;
 }
 
-/** The only API version we support. */
-const apiVersion = '2023-07-12-preview';
+/** The api-version query string value required on `/token` requests. */
+export const AzdAuthApiVersion = '2023-07-12-preview';
 
-/**
- * An HTTPS server that implements the azd external auth protocol.
- *
- * AZD connects to this server via the `AZD_AUTH_ENDPOINT`,
- * `AZD_AUTH_KEY`, and `AZD_AUTH_CERT` environment variables. The
- * server uses the injected {@linkcode ICredentialFactory} to acquire
- * tokens. By default this produces a `VsCodeExtensionCredential`
- * (tokens from the VS Code authentication API), but tests can supply a
- * factory backed by any {@linkcode TokenCredential}
- * (e.g. a service principal) for non-interactive runs.
- *
- * @remarks
- * The protocol is defined by the azd CLI's `RemoteCredential`:
- *
- * - `POST /token?api-version=2023-07-12-preview`
- * - `Authorization: Bearer {AZD_AUTH_KEY}`
- * - Body: `{ "scopes": [...], "tenantId": "..." }`
- * - Response: `{ "status": "success", "token": "...", "expiresOn": "..." }`
- *   or `{ "status": "error", "code": "...", "message": "..." }`
- *
- * A self-signed TLS certificate is generated using Node's built-in
- * `node:crypto` module so that communication between azd and this
- * server is encrypted. The cert is passed to azd as base64-encoded
- * DER via `AZD_AUTH_CERT`.
- */
-interface ServerState {
-    readonly server: Server;
-    readonly port: number;
+interface StartedState {
+    readonly socketPath: string;
     readonly key: string;
-    readonly certBase64Der: string;
 }
 
+/**
+ * An HTTP server that implements the azd external auth protocol.
+ *
+ * AZD connects to this server via the `AZD_AUTH_ENDPOINT` and
+ * `AZD_AUTH_KEY` environment variables. The endpoint is a
+ * platform-local-only transport (Unix Domain Socket on POSIX, Named
+ * Pipe on Windows) so the bytes never leave the machine and TLS is
+ * unnecessary. The injected {@linkcode ICredentialFactory} acquires
+ * tokens. By default this produces a `VsCodeExtensionCredential`
+ * backed by the VS Code authentication API, while tests can supply a
+ * factory backed by another {@linkcode TokenCredential}.
+ *
+ * @remarks
+ * Both transports keep other local users out on their own: the POSIX
+ * socket is mode 0o600 inside a mode 0o700 directory, and the Windows
+ * pipe's default DACL grants non-administrators read access only, so
+ * they cannot write a request. `AZD_AUTH_KEY` is a second layer rather
+ * than the trust boundary, which is why a plain comparison is enough.
+ *
+ * The protocol is defined by the azd CLI's `RemoteCredential`
+ * (see [external-authentication.md](https://github.com/Azure/azure-dev/blob/main/cli/azd/docs/external-authentication.md)).
+ * `RemoteCredential` only decodes the response body when the HTTP
+ * status is 200; non-200 responses surface as a generic transport
+ * error with the body ignored. Protocol-level rejections therefore
+ * return a bare status code with no body, and only the 200 path
+ * emits the documented JSON envelope.
+ */
 @injectable()
 export class AzdAuthServer implements IAzdAuthServer, Disposable {
-    private serverPromise: Promise<ServerState> | undefined;
+    private startPromise: Promise<StartedState> | undefined;
+    private disposed = false;
+    /**
+     * Set once {@linkcode createServer} returns, before {@linkcode listen}
+     * is awaited, so {@linkcode dispose} can tear down even a partially
+     * started server. Calling {@linkcode Server.close} on a server that
+     * never listened still fires the callback, so the cleanup runs either
+     * way.
+     */
+    private server: Server | undefined;
+    /**
+     * Temp directory holding the UDS file on POSIX, to be removed on
+     * {@linkcode dispose}. `undefined` on Windows (named pipes have no
+     * filesystem state) and before {@linkcode createSocketPath} resolves.
+     */
+    private cleanupDir: string | undefined;
 
     public constructor(
         @inject(IVsCode) private readonly code: IVsCode,
@@ -71,50 +87,123 @@ export class AzdAuthServer implements IAzdAuthServer, Disposable {
     ) { }
 
     public async getEnv(): Promise<Readonly<Record<string, string>>> {
-        const { port, key, certBase64Der } = await this.ensureStarted();
+        const { socketPath, key } = await this.ensureStarted();
 
         return {
             /* eslint-disable @typescript-eslint/naming-convention -- azd env var names */
-            AZD_AUTH_ENDPOINT: `https://127.0.0.1:${port}`,
+            AZD_AUTH_ENDPOINT: socketPathToUrl(socketPath),
             AZD_AUTH_KEY: key,
-            AZD_AUTH_CERT: certBase64Der,
+            // The spawn env inherits `process.env`, so a certificate left over
+            // from some other external-auth host would be picked up alongside
+            // this server's endpoint. azd requires an `https` endpoint whenever
+            // a certificate is set, which a socket endpoint can never be, so
+            // the stale value is cleared. azd treats empty as absent.
+            AZD_AUTH_CERT: '',
             /* eslint-enable @typescript-eslint/naming-convention */
         };
     }
 
     public dispose(): void {
-        if (this.serverPromise) {
-            void this.serverPromise.then(({ server }) => server.close());
+        this.disposed = true;
+
+        if (this.startPromise) {
+            // Startup may still be allocating the socket path. Close the server
+            // once startup settles so disposal cannot leak a late-starting server.
+            this.startPromise.then(
+                () => { this.closeServer(); },
+                () => { this.closeServer(); },
+            );
+        } else {
+            this.closeServer();
         }
     }
 
-    private ensureStarted(): Promise<ServerState> {
-        this.serverPromise ??= this.start();
-        return this.serverPromise;
+    private ensureStarted(): Promise<StartedState> {
+        if (this.disposed) {
+            throw new Error(this.code.l10n.t('The AZD authentication server has been disposed.'));
+        }
+
+        if (!this.startPromise) {
+            const attempt: Promise<StartedState> = this.start().catch((err: unknown) => {
+                // A rejected start is not memoized. Startup can fail for
+                // transient reasons (the temp directory could not be created,
+                // the socket could not be bound), and caching the rejection
+                // would leave every later azd command replaying that one error
+                // for the life of the extension host. Once disposed the memo is
+                // left in place so `dispose` still observes a settled start.
+                if (this.startPromise === attempt && !this.disposed) {
+                    this.startPromise = undefined;
+                }
+
+                throw err;
+            });
+            this.startPromise = attempt;
+        }
+
+        return this.startPromise;
     }
 
-    private async start(): Promise<ServerState> {
+    private async start(): Promise<StartedState> {
         const key = randomUUID();
-        const { certPem, keyPem, certDerBase64 } = await generateSelfSignedCert();
 
         const credential = this.credentialFactory();
 
-        const server = createServer(
-            { cert: certPem, key: keyPem },
-            (req, res) => { void this.handleRequest(req, res, key, credential); },
-        );
+        const { socketPath, cleanupDir } = await createSocketPath();
+        this.cleanupDir = cleanupDir;
 
-        // Permanent handler for runtime 'error' events (e.g. TLS handshake failures
-        // during request handling). Without this, an 'error' emitted after listen()
-        // succeeds would have no listeners and crash the extension host.
+        const server = createServer((req, res) => {
+            void this.handleRequest(req, res, key, credential);
+        });
+        this.server = server;
+
+        // Without a permanent handler, an error emitted after listen() succeeds
+        // would have no listeners and crash the extension host.
         server.on('error', (err) => {
             this.output.warn(this.code.l10n.t('[auth] AZD auth server error: {0}', stringifyError(err)));
         });
 
-        const port = await listen(server);
-        this.output.debug(`[auth] AZD auth server listening on port ${port}`);
+        try {
+            await listen(server, socketPath);
+            if (process.platform !== 'win32') {
+                await chmod(socketPath, 0o600);
+            }
+        } catch (err) {
+            this.closeServer();
+            throw err;
+        }
 
-        return { server, port, key, certBase64Der: certDerBase64 };
+        this.output.debug(`[auth] AZD auth server listening at ${socketPathToUrl(socketPath)}`);
+
+        return { socketPath, key };
+    }
+
+    private closeServer(): void {
+        const server = this.server;
+        if (!server) {
+            return;
+        }
+
+        this.server = undefined;
+        // Clean up only after the listening socket closes so its file
+        // descriptor cannot race removal of the containing directory.
+        server.close(() => {
+            const cleanupDir = this.cleanupDir;
+            this.cleanupDir = undefined;
+            this.removeCleanupDir(cleanupDir);
+        });
+        // `close` only stops new connections and waits for existing ones to end
+        // on their own. azd's HTTP client keeps connections alive, so without
+        // this an in-flight client could hold the server open past disposal --
+        // still serving tokens, and deferring the cleanup above with it.
+        server.closeAllConnections();
+    }
+
+    private removeCleanupDir(dir: string | undefined): void {
+        if (dir) {
+            void rm(dir, { recursive: true, force: true }).catch(() => {
+                this.output.warn(this.code.l10n.t('[auth] Failed to clean up the AZD authentication server socket directory.'));
+            });
+        }
     }
 
     private async handleRequest(
@@ -124,27 +213,37 @@ export class AzdAuthServer implements IAzdAuthServer, Disposable {
         credential: TokenCredential,
     ): Promise<void> {
         try {
-            // Only POST /token is supported
+            // A request that arrived just before disposal must not still be
+            // answered with a token; `closeAllConnections` races in-flight
+            // requests rather than cancelling them.
+            if (this.disposed) {
+                res.writeHead(503).end();
+                return;
+            }
+
+            // Only POST /token is supported. Protocol-level rejections return a
+            // bare HTTP status with no body, because azd's `RemoteCredential`
+            // only parses the body when the response status is 200.
             if (req.method !== 'POST') {
-                sendJson(res, 405, { status: 'error', code: 'method_not_allowed', message: this.code.l10n.t('Method not allowed') });
+                res.writeHead(405).end();
                 return;
             }
 
-            const url = new URL(req.url ?? '/', 'https://127.0.0.1');
+            const url = new URL(req.url ?? '/', 'http://localhost');
             if (url.pathname !== '/token') {
-                sendJson(res, 404, { status: 'error', code: 'not_found', message: this.code.l10n.t('Not found') });
+                res.writeHead(404).end();
                 return;
             }
 
-            if (url.searchParams.get('api-version') !== apiVersion) {
-                sendJson(res, 400, { status: 'error', code: 'bad_request', message: this.code.l10n.t('Unsupported api-version. Expected {0}', apiVersion) });
+            if (url.searchParams.get('api-version') !== AzdAuthApiVersion) {
+                res.writeHead(400).end();
                 return;
             }
 
             // Validate bearer token
             const authHeader = req.headers.authorization ?? '';
             if (authHeader !== `Bearer ${expectedKey}`) {
-                sendJson(res, 401, { status: 'error', code: 'unauthorized', message: this.code.l10n.t('Invalid or missing authorization key') });
+                res.writeHead(401).end();
                 return;
             }
 
@@ -153,19 +252,19 @@ export class AzdAuthServer implements IAzdAuthServer, Disposable {
             try {
                 parsed = JSON.parse(await text(req)) as Record<string, unknown>;
             } catch {
-                sendJson(res, 400, { status: 'error', code: 'bad_request', message: this.code.l10n.t('Invalid JSON body') });
+                res.writeHead(400).end();
                 return;
             }
 
             const scopes = parsed.scopes;
             if (!Array.isArray(scopes) || scopes.length === 0 || scopes.some(s => typeof s !== 'string' || s.length === 0)) {
-                sendJson(res, 400, { status: 'error', code: 'bad_request', message: this.code.l10n.t('Missing or empty scopes') });
+                res.writeHead(400).end();
                 return;
             }
 
             const tenantId = parsed.tenantId;
             if (tenantId !== undefined && typeof tenantId !== 'string') {
-                sendJson(res, 400, { status: 'error', code: 'bad_request', message: this.code.l10n.t('Invalid tenant ID') });
+                res.writeHead(400).end();
                 return;
             }
 
@@ -196,237 +295,56 @@ function sendJson(res: ServerResponse, statusCode: number, body: Record<string, 
     res.end(JSON.stringify(body));
 }
 
-function listen(server: Server): Promise<number> {
-    const { promise, resolve, reject } = Promise.withResolvers<number>();
+/** Waits for {@linkcode server} to be listening on {@linkcode socketPath}. */
+function listen(server: Server, socketPath: string): Promise<void> {
+    const { promise, resolve, reject } = Promise.withResolvers<undefined>();
 
     // Use .once so this temporary listener doesn't fire on later runtime errors;
     // the caller installs a permanent 'error' listener before calling listen().
-    server.once('error', reject);
-    server.listen(0, '127.0.0.1', () => {
-        const addr = server.address();
-        if (addr && typeof addr === 'object') {
-            resolve(addr.port);
-        } else {
-            reject(new Error('Failed to get server address'));
-        }
+    const onError = (err: Error): void => { reject(err); };
+    server.once('error', onError);
+    server.listen(socketPath, () => {
+        server.off('error', onError);
+        resolve(undefined);
     });
 
     return promise;
 }
 
 /**
- * Generates a self-signed X.509 certificate and RSA key pair using
- * only Node's built-in `node:crypto` module (no external dependencies).
+ * Allocates a fresh OS-level socket path for the auth server. On POSIX,
+ * creates a per-server temp directory (mode 0o700 via `mkdtemp`) so the
+ * UDS file lives in a user-private location and `cleanupDir` can later
+ * be removed wholesale. On Windows, returns a randomly-named Named Pipe
+ * with no filesystem state.
  *
- * The certificate is valid for 1 year and bound to `127.0.0.1`.
- * RSA key generation uses Node's `crypto.generateKeyPair` to avoid
- * blocking the extension host thread. The X.509 structure is built
- * as raw DER/ASN.1 and signed with `crypto.sign`.
- *
- * @returns PEM-encoded cert and key (for the Node.js HTTPS server),
- *   plus the base64-encoded DER cert (for `AZD_AUTH_CERT`).
+ * @remarks
+ * The random Windows pipe name is not itself an access control -- any
+ * local user can enumerate `\\.\pipe\*`, and Node cannot pass a security
+ * descriptor to the underlying `CreateNamedPipe` call. The default DACL
+ * that results is what restricts the pipe: it grants non-administrators
+ * read access only, so they cannot write a request to it.
  */
-async function generateSelfSignedCert(): Promise<{ certPem: string; keyPem: string; certDerBase64: string }> {
-    const keyResult = await promisify(cryptoGenerateKeyPair)('rsa', {
-        modulusLength: 2048,
-        publicKeyEncoding: { type: 'spki', format: 'der' },
-        privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
-    });
-
-    const publicKeyDer = keyResult.publicKey;
-
-    // Ensure the high bit is clear so the serial is a positive ASN.1 integer
-    const serialBytes = randomBytes(16);
-    serialBytes[0] &= 0x7f;
-
-    const now = new Date();
-    const notAfter = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
-
-    const issuerAndSubject = derSequence([
-        // SET { SEQUENCE { OID commonName, UTF8String "127.0.0.1" } }
-        derSet([derSequence([derOid([2, 5, 4, 3]), derUtf8String('127.0.0.1')])]),
-    ]);
-
-    // Node.js's OpenSSL requires cA:true and keyCertSign to accept a
-    // self-signed cert as a trusted CA (used by the test client's `ca` option).
-    // Go's TLS (used by azd) does not, so we only set these during tests.
-    const isTest = process.env.VSCODE_RUNNING_TESTS === '1';
-
-    const extensions = derSequence([
-        // subjectAltName: IP 127.0.0.1
-        derSequence([derOid([2, 5, 29, 17]), derOctetString(derSequence([
-            derContextTag(7, Buffer.from([127, 0, 0, 1])),
-        ]))]),
-        // basicConstraints: cA = isTest
-        derSequence([derOid([2, 5, 29, 19]), derBoolean(true), derOctetString(derSequence(
-            isTest ? [derBoolean(true)] : [],
-        ))]),
-        // keyUsage: digitalSignature | keyEncipherment | (keyCertSign if test)
-        derSequence([derOid([2, 5, 29, 15]), derBoolean(true), derOctetString(
-            derBitString(Buffer.from([isTest ? 0xa4 : 0xa0]), isTest ? 2 : 5),
-        )]),
-        // extKeyUsage: serverAuth
-        derSequence([derOid([2, 5, 29, 37]), derOctetString(derSequence([
-            derOid([1, 3, 6, 1, 5, 5, 7, 3, 1]),
-        ]))]),
-    ]);
-
-    const tbsCertificate = derSequence([
-        // version: v3 (explicit tag [0])
-        derExplicitTag(0, derInteger(2)),
-        // serial number
-        derInteger(serialBytes),
-        // signature algorithm: sha256WithRSAEncryption
-        derSequence([derOid([1, 2, 840, 113549, 1, 1, 11]), derNull()]),
-        // issuer
-        issuerAndSubject,
-        // validity
-        derSequence([derUtcTime(now), derUtcTime(notAfter)]),
-        // subject
-        issuerAndSubject,
-        // subjectPublicKeyInfo (raw from Node's SPKI export)
-        publicKeyDer,
-        // extensions (explicit tag [3])
-        derExplicitTag(3, extensions),
-    ]);
-
-    // Sign the TBS certificate
-    const signature = cryptoSign('sha256', tbsCertificate, keyResult.privateKey);
-
-    // Construct the full certificate
-    const certDer = derSequence([
-        tbsCertificate,
-        // signature algorithm
-        derSequence([derOid([1, 2, 840, 113549, 1, 1, 11]), derNull()]),
-        // signature value (BIT STRING with 0 unused bits)
-        derBitString(signature, 0),
-    ]);
-
-    const certDerBase64 = certDer.toString('base64');
-    const certPem = certDerToPem(certDerBase64);
-    const keyPem = keyResult.privateKey;
-
-    return { certPem, keyPem, certDerBase64 };
+async function createSocketPath(): Promise<{ socketPath: string; cleanupDir: string | undefined }> {
+    if (process.platform === 'win32') {
+        return { socketPath: `\\\\.\\pipe\\${randomUUID()}`, cleanupDir: undefined };
+    }
+    // `mkdtemp` creates the directory with mode 0o700 on POSIX, restricting
+    // it to the current user. (Mode 0o700, not 0o600, because the owner
+    // still needs the execute/traverse bit to bind a socket file inside.)
+    const dir = await mkdtemp(join(tmpdir(), 'azd-auth-'));
+    return { socketPath: join(dir, 's.sock'), cleanupDir: dir };
 }
 
 /**
- * Converts a base64-encoded DER certificate to PEM format.
- *
- * @internal Exported only for tests -- not part of the public API.
+ * Formats an OS-level socket path (Unix Domain Socket path on POSIX,
+ * `\\.\pipe\<name>` on Windows) as the `unix://` / `npipe://` URL
+ * exposed via `AZD_AUTH_ENDPOINT`.
  */
-export function certDerToPem(base64Der: string): string {
-    const wrapped = base64Der.match(/.{1,64}/g)!.join('\n'); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- base64 is never empty
-    return `-----BEGIN CERTIFICATE-----\n${wrapped}\n-----END CERTIFICATE-----\n`;
-}
-
-// ---------------------------------------------------------------------------
-// Minimal DER / ASN.1 encoding helpers
-// ---------------------------------------------------------------------------
-
-/** Encode a DER tag + length + value. */
-function derTlv(tag: number, value: Buffer): Buffer {
-    const length = value.length;
-    let header: Buffer;
-    if (length < 0x80) {
-        header = Buffer.from([tag, length]);
-    } else if (length < 0x100) {
-        header = Buffer.from([tag, 0x81, length]);
-    } else if (length < 0x10000) {
-        header = Buffer.from([tag, 0x82, (length >> 8) & 0xff, length & 0xff]);
-    } else {
-        header = Buffer.from([tag, 0x83, (length >> 16) & 0xff, (length >> 8) & 0xff, length & 0xff]);
+function socketPathToUrl(socketPath: string): string {
+    if (process.platform === 'win32') {
+        // \\.\pipe\<name> -> npipe://./pipe/<name>
+        return `npipe://${socketPath.replace(/^\\\\/, '').replace(/\\/g, '/')}`;
     }
-    return Buffer.concat([header, value]);
-}
-
-function derSequence(items: Buffer[]): Buffer {
-    return derTlv(0x30, Buffer.concat(items));
-}
-
-function derSet(items: Buffer[]): Buffer {
-    return derTlv(0x31, Buffer.concat(items));
-}
-
-function derInteger(value: number | Buffer): Buffer {
-    if (typeof value === 'number') {
-        if (value < 0x80) {
-            return derTlv(0x02, Buffer.from([value]));
-        }
-        const bytes: number[] = [];
-        let v = value;
-        while (v > 0) {
-            bytes.unshift(v & 0xff);
-            v >>= 8;
-        }
-        if (bytes[0] & 0x80) {
-            bytes.unshift(0);
-        }
-        return derTlv(0x02, Buffer.from(bytes));
-    }
-    // Buffer: canonicalize per DER rules.
-    // 1. Strip unnecessary leading 0x00 bytes (a leading 0x00 is only legal
-    //    when the next byte has its high bit set, to keep the value positive).
-    // 2. If the high bit of the remaining first byte is set, prepend 0x00
-    //    so the value is interpreted as positive.
-    let buf = value;
-    while (buf.length > 1 && buf[0] === 0 && (buf[1] & 0x80) === 0) {
-        buf = buf.subarray(1);
-    }
-    if (buf[0] & 0x80) {
-        buf = Buffer.concat([Buffer.from([0]), buf]);
-    }
-    return derTlv(0x02, buf);
-}
-
-function derBitString(data: Buffer, unusedBits: number): Buffer {
-    return derTlv(0x03, Buffer.concat([Buffer.from([unusedBits]), data]));
-}
-
-function derOctetString(data: Buffer): Buffer {
-    return derTlv(0x04, data);
-}
-
-function derNull(): Buffer {
-    return Buffer.from([0x05, 0x00]);
-}
-
-function derBoolean(value: boolean): Buffer {
-    return derTlv(0x01, Buffer.from([value ? 0xff : 0x00]));
-}
-
-function derOid(components: number[]): Buffer {
-    const bytes: number[] = [40 * components[0] + components[1]];
-    for (let i = 2; i < components.length; i++) {
-        let c = components[i];
-        if (c < 128) {
-            bytes.push(c);
-        } else {
-            const encoded: number[] = [];
-            encoded.push(c & 0x7f);
-            c >>= 7;
-            while (c > 0) {
-                encoded.push((c & 0x7f) | 0x80);
-                c >>= 7;
-            }
-            bytes.push(...encoded.reverse());
-        }
-    }
-    return derTlv(0x06, Buffer.from(bytes));
-}
-
-function derUtf8String(value: string): Buffer {
-    return derTlv(0x0c, Buffer.from(value, 'utf8'));
-}
-
-function derUtcTime(date: Date): Buffer {
-    const s = date.toISOString().replace(/[-:T]/g, '').slice(2, 14) + 'Z';
-    return derTlv(0x17, Buffer.from(s, 'ascii'));
-}
-
-function derExplicitTag(tagNumber: number, value: Buffer): Buffer {
-    return derTlv(0xa0 | tagNumber, value);
-}
-
-function derContextTag(tagNumber: number, value: Buffer): Buffer {
-    return derTlv(0x80 | tagNumber, value);
+    return `unix://${socketPath}`;
 }
