@@ -7,7 +7,7 @@ Phase 6 verification of the Container Apps migration against the signed [TRIAGE.
 | **Source** | `microsoft/vscode-azurecontainerapps` @ `f6c93dcd1a55b6aaf27ed4edca8f6a52b5348e16` (v0.11.2) |
 | **Triage rows** | 140 |
 | **Resolved** | 140 (0 unaccounted for) |
-| **Date** | 2026-08-26 |
+| **Date** | 2026-09-10 |
 
 Evidence paths are relative to `extensions/vscode-azure/src/` unless another package is named.
 
@@ -31,7 +31,6 @@ Evidence paths are relative to `extensions/vscode-azure/src/` unless another pac
 | `MIGRATION-PLAN.md` tracked, every task tagged with an ID | yes |
 | Artifacts landed before any feature code | yes -- `431c4453` is the branch's first commit |
 | No artifact exists only in scratch | yes |
-| Drift log needed | no -- branch has not rebased or merged from `main` |
 
 ## Kept features (Migrate / Adapt / Reuse)
 
@@ -57,11 +56,11 @@ Evidence paths are relative to `extensions/vscode-azure/src/` unless another pac
 | ACA-083 | `logsGroupItem` | Adapt | landed | capability moved onto the app node; no group node |
 | ACA-093 | `logStreamItem` | Adapt | landed | `StartStreamingLogs.ContextValue`, inline + context menu |
 | ACA-094 | `logsItem` | Reuse | wired | `OpenUrl` + `OpenInPortal.bladeUrl('/logs')` |
-| ACA-095 | Quickstart image source | Adapt | landed | Bicep `imageName` default resolves to a placeholder image |
+| ACA-095 | Quickstart image source | Adapt | landed | Explicit quickstart choice in `PickImageSourceStep`; Bicep `imageName` default resolves to a placeholder image |
 | ACA-096 | ACR image source | Migrate | landed | `commands/containerApps/steps/PickImageSourceStep.ts` |
 | ACA-098 | "Other registry" free-text | Migrate | landed | same combo box, `createItemFromValue` |
 | ACA-101 | Registry creds -- managed identity | Adapt | landed | topology module: `identityType: 'UserAssigned'` + AcrPull |
-| ACA-104 | Ingress from Dockerfile `EXPOSE` | Adapt | landed | `steps/DetectTargetPortStep.ts` -> `targetPort` Bicep param |
+| ACA-104 | Ingress from Dockerfile `EXPOSE` | Adapt | landed | `steps/DetectTargetPortStep.ts` -> `targetPort` Bicep param; project-scoped detection or a custom-image port prompt |
 | ACA-105 | Start verification + log fetch | Migrate | landed | `steps/VerifyContainerAppStartStep.ts` |
 | ACA-110 | Overwrite confirm | Adapt | landed (reuse) | `azd/wizard/ConfirmProvisionStep.ts`, wording sharpened |
 | ACA-111 | Container Apps client | Migrate | landed | `packages/azutils/src/rest/clients/ContainerAppsClient.ts` |
@@ -126,8 +125,8 @@ context value that is declared in source and assembled onto the node by `Contain
 |---|---|
 | `pnpm run lint` | clean |
 | `pnpm run build` | succeeds |
-| `pnpm run test` | 901 extension, 500 utils, 366 azutils; 0 failing |
-| `az bicep build` on the consumer template | compiles; all four pinned AVM modules resolve |
+| `pnpm run test` | 1,144 extension, 573 utils, 392 azutils; 0 failing (1 extension and 13 utils tests pending) |
+| `az bicep build` on the consumer template | compiles; all pinned AVM modules resolve |
 
 ## Known gaps
 

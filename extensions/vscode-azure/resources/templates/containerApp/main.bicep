@@ -12,8 +12,14 @@ param location string
 @description('Value applied as the `azd-service-name` tag on the container app so `azd deploy` can target it.')
 param azdServiceName string = 'app'
 
-@description('Container image to deploy. Leave empty to deploy a placeholder image until the first `azd deploy`.')
+@description('Container image for the first provision. Leave empty for a placeholder until `azd deploy`; subsequent provisions preserve the deployed image.')
 param imageName string = ''
+
+@description('Resource ID of an existing Azure Container Registry containing the selected image.')
+param imageRegistryId string = ''
+
+@description('Name saved in AZURE_CONTAINER_APP_NAME by azd. Leave empty for the first deployment; subsequent provisions preserve the deployed image.')
+param containerAppName string = ''
 
 @description('Port the container listens on for ingress traffic.')
 param targetPort int = 80
@@ -39,6 +45,8 @@ module containerAppTopology 'modules/container-app-topology/main.bicep' = {
     tags: tags
     azdServiceName: azdServiceName
     imageName: imageName
+    imageRegistryId: imageRegistryId
+    containerAppName: containerAppName
     targetPort: targetPort
   }
 }

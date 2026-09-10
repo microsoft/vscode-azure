@@ -21,6 +21,7 @@ function makeRegistry(name: string): GenericResource {
 }
 
 describe('PickImageSourceStep (unit)', () => {
+    const baseContext = { resourceDisplayName: 'Container App' };
     afterEach(() => {
         mock.restoreAll();
     });
@@ -55,12 +56,12 @@ describe('PickImageSourceStep (unit)', () => {
     it('only asks on the createNew job', () => {
         const { step } = createStep([], {});
 
-        expect(step.shouldPrompt({ job: 'createNew' })).to.be.true;
+        expect(step.shouldPrompt({ ...baseContext, job: 'createNew' })).to.be.true;
         // On `deploy`, azd builds and pushes the image, so there is no existing
         // image to choose between.
-        expect(step.shouldPrompt({ job: 'deploy' })).to.be.false;
-        expect(step.shouldPrompt({ job: 'createNew', hasInfra: true })).to.be.false;
-        expect(step.shouldPrompt({ job: 'createNew', imageName: 'x:1' })).to.be.false;
+        expect(step.shouldPrompt({ ...baseContext, job: 'deploy' })).to.be.false;
+        expect(step.shouldPrompt({ ...baseContext, job: 'createNew', hasInfra: true })).to.be.false;
+        expect(step.shouldPrompt({ ...baseContext, job: 'createNew', imageName: 'x:1' })).to.be.false;
     });
 
     it('offers each tag as a fully qualified image reference', async () => {
@@ -71,10 +72,12 @@ describe('PickImageSourceStep (unit)', () => {
         );
         const tracker = respondToPrompts(mockResult, [{ pick: 'contoso.azurecr.io/store/api:v2' }]);
 
-        const result = await step.prompt({ job: 'createNew', subscription });
+        const result = await step.prompt({ ...baseContext, job: 'createNew', subscription });
 
         expect(result.imageName).to.equal('contoso.azurecr.io/store/api:v2');
+        expect(result.imageRegistryId).to.equal(makeRegistry('contoso').id);
         expect(mockResult.quickPicks[0].items.map(item => item.label)).to.deep.equal([
+            'Use quickstart image',
             'contoso.azurecr.io/store/api:v2',
             'contoso.azurecr.io/store/api:v1',
         ]);
@@ -86,7 +89,7 @@ describe('PickImageSourceStep (unit)', () => {
         const { step, mockResult, list } = createStep([], {});
         respondToPrompts(mockResult, [{ value: 'nginx:latest' }]);
 
-        await step.prompt({ job: 'createNew', subscription });
+        await step.prompt({ ...baseContext, job: 'createNew', subscription });
 
         const options = list.mock.calls[0].arguments[0];
         expect(options?.filter).to.contain(AcrResourceType);
@@ -97,9 +100,10 @@ describe('PickImageSourceStep (unit)', () => {
         const { step, mockResult } = createStep([], {});
         respondToPrompts(mockResult, [{ value: 'docker.io/library/nginx:latest' }]);
 
-        const result = await step.prompt({ job: 'createNew', subscription });
+        const result = await step.prompt({ ...baseContext, job: 'createNew', subscription });
 
         expect(result.imageName).to.equal('docker.io/library/nginx:latest');
+        expect(result.imageRegistryId).to.be.undefined;
     });
 
     it('still offers the readable registries when one cannot be read', async () => {
@@ -112,9 +116,31 @@ describe('PickImageSourceStep (unit)', () => {
         );
         const tracker = respondToPrompts(mockResult, [{ pick: 'allowed.azurecr.io/api:v1' }]);
 
-        const result = await step.prompt({ job: 'createNew', subscription });
+        const result = await step.prompt({ ...baseContext, job: 'createNew', subscription });
 
         expect(result.imageName).to.equal('allowed.azurecr.io/api:v1');
         tracker.assertAllConsumed();
+    });
+
+    it('selects the default image even with no registry access', async () => {
+        const { step, mockResult } = createStep([], {});
+        const prompts = respondToPrompts(mockResult, [{ pick: 'Use quickstart image' }]);
+
+        const result = await step.prompt({ ...baseContext, job: 'createNew' });
+
+        expect(result.imageName).to.be.undefined;
+        expect(result.imageRegistryId).to.be.undefined;
+        prompts.assertAllConsumed();
+    });
+
+    it('carries registry access for a typed image whose tags could not be listed', async () => {
+        const registry = makeRegistry('contoso');
+        const { step, mockResult } = createStep([registry], {});
+        const prompts = respondToPrompts(mockResult, [{ value: 'CONTOSO.azurecr.io/api:private' }]);
+
+        const result = await step.prompt({ ...baseContext, job: 'createNew', subscription: makeSubscription() });
+
+        expect(result.imageRegistryId).to.equal(registry.id);
+        prompts.assertAllConsumed();
     });
 });

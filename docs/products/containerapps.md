@@ -51,7 +51,12 @@ The Container Apps log stream is **chunked HTTP, not a web socket**:
 
 Redirects are followed **manually**. The fetch specification strips `Authorization` across origins, and
 following a redirect blindly would instead hand an Azure credential to whatever host the response names, so
-the token is only re-attached while the target stays on `*.azurecontainerapps.io` over HTTPS.
+the token is only re-attached over HTTPS to the subscription cloud's Container Apps hosts:
+`*.azurecontainerapps.io` (public), `*.azurecontainerapps.us` (Government), or
+`*.azurecontainerapps.cn` (China). Cross-cloud and unrecognized-cloud redirects are rejected.
+
+Concurrent starts for the same container share initialization and one terminal. Disposing the service
+cancels pending ARM requests and connection attempts as well as established streams.
 
 The revision -> replica -> container picks are each skipped when they have a single candidate, so the common
 single-revision app streams with no prompts.
@@ -72,27 +77,43 @@ project hosted by Container Apps. Existing service declarations are preserved.
 
 The topology module provisions a Log Analytics workspace, a managed environment, a container registry, a
 user-assigned identity for the app, the AcrPull role assignment, and the container app. Only the app carries
-the `azd-service-name` tag, because only the app is an `azd deploy` target.
+the `azd-service-name` tag, because only the app is an `azd deploy` target. Public network access is enabled
+for external ingress. Registry login servers come from ARM, including the active sovereign cloud's suffix.
 
 **Registry authentication is managed identity only.** No admin user, no registry password, and no secret of
 any kind is written to the template, to ARM, or to disk.
 
+When an image is selected from an existing ACR in the chosen subscription, its ARM ID is emitted into the
+template. The app identity receives AcrPull on that registry, even in a different resource group, and the
+app configures it alongside the deployment registry. Typed image references matching a discovered ACR
+receive the same configuration. Provisioning therefore requires permission to assign roles on both
+registries, and those registries must allow the app to reach their data-plane endpoints.
+
+The parameters file references `${AZURE_CONTAINER_APP_NAME}`, the name persisted by azd after provision.
+On first provision, the unset value uses Bicep's empty default and creates the app. On subsequent
+provisions, the template reads the existing app's current image, preserving the image installed by
+`azd deploy` rather than substituting the initial image.
+
 The topology module is a local stand-in that *composes* published Azure Verified Modules
 (`avm/ptn/azd/monitoring`, `avm/ptn/azd/container-apps-stack`,
-`avm/res/managed-identity/user-assigned-identity`, `avm/ptn/azd/container-app-upsert`), each pinned to a
-version. It exists because no published AVM pattern module covers the whole topology; publishing one is
+`avm/res/managed-identity/user-assigned-identity`, `avm/ptn/authorization/resource-role-assignment`, and
+`avm/res/app/container-app`), each pinned to a version. The app resource module supports managed-identity
+authentication to both registries; the single-registry upsert pattern cannot express that configuration.
+No published AVM pattern module covers the whole topology; publishing one is
 tracked by [#329](https://github.com/microsoft/vscode-azure/issues/329). When that lands, the module
 collapses to a single `br/public:` reference and the consumer does not change.
 
-The ingress target port is detected from the project's Dockerfile `EXPOSE` instruction and emitted as a
-Bicep parameter rather than prompted for -- the value is already declared there, and the generated Bicep
-stays editable.
+For project deployment, the ingress target port is detected from an in-project Dockerfile or Containerfile
+`EXPOSE` instruction and emitted as a Bicep parameter. Files in other workspace projects are not candidates.
+If the project declares no port, the default is 80; the generated Bicep stays editable. Creating an app
+from a custom image prompts for its listening TCP port (1-65535), because that image has no local source
+from which to infer it. The quickstart image uses its known port, 80.
 
 The image is chosen through a single combo box that suggests every tag in the user's own container
 registries and accepts anything else typed in -- a Docker Hub image, a third-party registry, a tag that does
-not exist yet. That replaces the source extension's registry-kind -> registry -> repository -> tag chain and
-removes the need for a separate "other registry" surface. It is only asked on `createNew`; the `deploy` job
-has azd build and push the image instead.
+not exist yet. An explicit **Use quickstart image** choice selects the Bicep default without requiring an
+image reference. The picker is only asked on `createNew`; the `deploy` job has azd build and push the image
+instead. Typed non-ACR references must be publicly pullable; the wizard does not collect registry passwords.
 
 **Deploying requires a local container runtime.** azd builds the image locally with Docker or Podman, so one
 must be installed and running. Building in ACR instead would remove that requirement; it is tracked by

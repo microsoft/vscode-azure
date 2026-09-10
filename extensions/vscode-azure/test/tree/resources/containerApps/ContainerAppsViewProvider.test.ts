@@ -10,6 +10,7 @@ import { createMockCodeContext, createTestActionExecutor, MockTreeItemCollapsibl
 import { OpenContainerAppConsole, OpenContainerAppLogs } from '../../../../src/commands/containerApps/portalBlades';
 import { RevealContainerAppEnvironment } from '../../../../src/commands/containerApps/RevealContainerAppEnvironment';
 import { StartStreamingLogs } from '../../../../src/commands/containerApps/StartStreamingLogs';
+import { ContainerAppResourceType } from '../../../../src/tree/resources/containerApps/ContainerApp';
 import { ContainerVirtualType } from '../../../../src/tree/resources/containerApps/ContainerAppsDataProvider';
 import { ContainerAppsViewProvider, shortenImageReference } from '../../../../src/tree/resources/containerApps/ContainerAppsViewProvider';
 import { ManagedEnvironmentResourceType } from '../../../../src/tree/resources/containerApps/ManagedEnvironment';
@@ -122,7 +123,7 @@ describe('ContainerAppsViewProvider (unit)', () => {
     });
 
     it('leaves a container undescribed when the app has not been enriched', () => {
-        const app = makeContainerApp();
+        const app = makeGenericResource({ type: ContainerAppResourceType, logicalType: ContainerAppResourceType });
         const container = { virtualType: ContainerVirtualType, virtualPath: 'api', azureResource: app };
         const provider = createProvider([app, container]);
 

@@ -47,6 +47,16 @@ export type Revision = WithRequired<SdkRevision, 'id' | 'name' | 'type'>;
 export type ManagedEnvironment = WithRequired<SdkManagedEnvironment, 'id' | 'name' | 'type' | 'location'>;
 
 export type { Container, ContainerAppAuthToken, Replica, ReplicaContainer };
+export type {
+    ContainerAppsAPIClientOptionalParams,
+    ContainerAppsGetAuthTokenOptionalParams,
+    ContainerAppsGetOptionalParams,
+    ContainerAppsRevisionReplicasListReplicasOptionalParams,
+    ContainerAppsRevisionsGetRevisionOptionalParams,
+    ContainerAppsRevisionsListRevisionsOptionalParams,
+    ContainerAppsRevisionsRestartRevisionOptionalParams,
+    ManagedEnvironmentsGetOptionalParams,
+};
 
 /** Factory that creates an {@linkcode IContainerAppsClient} for a given subscription. */
 export const IContainerAppsClientProvider: ServiceIdentifier<IContainerAppsClientProvider> = Symbol.for('IContainerAppsClientProvider');

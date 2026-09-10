@@ -1,7 +1,7 @@
 metadata name = 'Container App Topology'
 metadata description = '''Provisions a complete Azure Container Apps topology: a Log Analytics workspace,
-a managed environment, a container registry, a user-assigned managed identity for the app, the AcrPull
-role assignment that lets the app pull from that registry, and the container app itself.
+a managed environment, a container registry, a user-assigned managed identity for the app, AcrPull
+role assignments for the deployment registry and an optional existing image registry, and the app itself.
 
 This module exists because no published Azure Verified Module covers the whole topology -- the closest
 published pattern modules each cover one part of it, and every azd reference template composes them by
@@ -27,8 +27,11 @@ param tags object = {}
 @description('Optional. Value applied as the `azd-service-name` tag on the container app only, so `azd deploy` can target it.')
 param azdServiceName string = ''
 
-@description('Optional. Container image to deploy. When empty, a placeholder image is deployed so the app has something to run until the first `azd deploy`.')
+@description('Optional. Image for the first provision, or a placeholder when empty. An existing app retains its deployed image regardless of this initial value.')
 param imageName string = ''
+
+@description('Optional. Resource ID of an existing Azure Container Registry containing the selected image, including registries in another resource group.')
+param imageRegistryId string = ''
 
 @description('Optional. Whether the container app accepts ingress traffic.')
 param ingressEnabled bool = true
@@ -39,8 +42,8 @@ param ingressExternal bool = true
 @description('Optional. Port the container listens on for ingress traffic.')
 param targetPort int = 80
 
-@description('Optional. Whether the container app already exists, so an `azd provision` over an existing app preserves the image it is currently running instead of resetting it.')
-param containerAppExists bool = false
+@description('Optional. Name of an already deployed container app. When set, provision preserves its current image; otherwise a deterministic name is generated.')
+param containerAppName string = ''
 
 @description('Optional. Enable Azure Verified Modules telemetry for the composed modules.')
 param enableTelemetry bool = true
@@ -49,11 +52,27 @@ param enableTelemetry bool = true
 // unique per environment without asking the user to invent one.
 var resourceToken = uniqueString(subscription().id, resourceGroup().id, environmentName)
 
-var containerAppName = 'ca-${resourceToken}'
+var appName = empty(containerAppName) ? 'ca-${resourceToken}' : containerAppName
+var containerAppExists = !empty(containerAppName)
 var containerRegistryName = 'cr${resourceToken}'
 var managedEnvironmentName = 'cae-${resourceToken}'
 var logAnalyticsWorkspaceName = 'log-${resourceToken}'
 var userAssignedIdentityName = 'id-${resourceToken}'
+var containerRegistryResourceId = resourceId('Microsoft.ContainerRegistry/registries', containerRegistryName)
+var useImageRegistry = !empty(imageRegistryId) && toLower(imageRegistryId) != toLower(containerRegistryResourceId)
+var imageRegistryIdParts = split(imageRegistryId, '/')
+var imageRegistrySubscriptionId = useImageRegistry ? imageRegistryIdParts[2] : subscription().subscriptionId
+var imageRegistryResourceGroupName = useImageRegistry ? imageRegistryIdParts[4] : resourceGroup().name
+var acrPullRole = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d')
+
+resource existingApp 'Microsoft.App/containerApps@2025-01-01' existing = if (containerAppExists) {
+  name: appName
+}
+
+resource imageRegistry 'Microsoft.ContainerRegistry/registries@2025-04-01' existing = if (useImageRegistry) {
+  scope: resourceGroup(imageRegistrySubscriptionId, imageRegistryResourceGroupName)
+  name: last(imageRegistryIdParts)
+}
 
 module monitoring 'br/public:avm/ptn/azd/monitoring:0.1.0' = {
   name: 'monitoring-${resourceToken}'
@@ -74,6 +93,7 @@ module containerAppsStack 'br/public:avm/ptn/azd/container-apps-stack:0.4.0' = {
     containerAppsEnvironmentName: managedEnvironmentName
     containerRegistryName: containerRegistryName
     logAnalyticsWorkspaceName: monitoring.outputs.logAnalyticsWorkspaceName
+    publicNetworkAccess: ingressEnabled && ingressExternal ? 'Enabled' : 'Disabled'
     // The app authenticates to the registry with its managed identity, so the
     // admin account is left disabled.
     acrAdminUserEnabled: false
@@ -91,29 +111,85 @@ module appIdentity 'br/public:avm/res/managed-identity/user-assigned-identity:0.
   }
 }
 
-module containerApp 'br/public:avm/ptn/azd/container-app-upsert:0.4.0' = {
+module deploymentRegistryAccess 'br/public:avm/ptn/authorization/resource-role-assignment:0.1.2' = {
+  name: 'deployment-registry-access-${resourceToken}'
+  params: {
+    resourceId: resourceId('Microsoft.ContainerRegistry/registries', containerAppsStack.outputs.registryName)
+    principalId: appIdentity.outputs.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: acrPullRole
+    enableTelemetry: enableTelemetry
+  }
+}
+
+module imageRegistryAccess 'br/public:avm/ptn/authorization/resource-role-assignment:0.1.2' = if (useImageRegistry) {
+  scope: resourceGroup(imageRegistrySubscriptionId, imageRegistryResourceGroupName)
+  name: 'image-registry-access-${resourceToken}'
+  params: {
+    resourceId: imageRegistry!.id
+    principalId: appIdentity.outputs.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: acrPullRole
+    enableTelemetry: enableTelemetry
+  }
+}
+
+module containerApp 'br/public:avm/res/app/container-app:0.19.0' = {
   name: 'container-app-${resourceToken}'
   params: {
-    name: containerAppName
+    name: appName
     location: location
     // `azd deploy` finds its target by tag, and only the app is a deployment
     // target -- the supporting resources deliberately do not carry it.
     tags: empty(azdServiceName) ? tags : union(tags, { 'azd-service-name': azdServiceName })
-    containerAppsEnvironmentName: containerAppsStack.outputs.environmentName
-    containerRegistryName: containerAppsStack.outputs.registryName
-    identityType: 'UserAssigned'
-    identityName: appIdentity.outputs.name
-    userAssignedIdentityResourceId: appIdentity.outputs.resourceId
-    // Supplying the principal id is what makes the module create the AcrPull
-    // role assignment for this identity on the registry.
-    identityPrincipalId: appIdentity.outputs.principalId
-    imageName: imageName
-    exists: containerAppExists
-    ingressEnabled: ingressEnabled
-    external: ingressExternal
-    targetPort: targetPort
+    environmentResourceId: containerAppsStack.outputs.environmentResourceId
+    managedIdentities: {
+      userAssignedResourceIds: [appIdentity.outputs.resourceId]
+    }
+    // ARM login servers carry the active cloud's suffix. Both registries are
+    // configured so an existing image and a subsequent azd deploy can pull.
+    registries: concat([
+      {
+        server: containerAppsStack.outputs.registryLoginServer
+        identity: appIdentity.outputs.resourceId
+      }
+    ], useImageRegistry ? [
+      {
+        server: imageRegistry!.properties.loginServer
+        identity: appIdentity.outputs.resourceId
+      }
+    ] : [])
+    containers: [
+      {
+        name: 'main'
+        image: containerAppExists
+          ? existingApp!.properties.template.containers[0].image
+          : (!empty(imageName) ? imageName : 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest')
+        resources: {
+          cpu: json('0.5')
+          memory: '1.0Gi'
+        }
+      }
+    ]
+    scaleSettings: {
+      minReplicas: 2
+      maxReplicas: 10
+    }
+    disableIngress: !ingressEnabled
+    ingressExternal: ingressExternal
+    ingressTargetPort: targetPort
+    corsPolicy: {
+      allowedOrigins: [
+        'https://portal.azure.com'
+        'https://ms.portal.azure.com'
+      ]
+    }
     enableTelemetry: enableTelemetry
   }
+  dependsOn: [
+    deploymentRegistryAccess
+    imageRegistryAccess
+  ]
 }
 
 @description('Name of the container app.')
@@ -123,9 +199,9 @@ output containerAppName string = containerApp.outputs.name
 output containerAppResourceId string = containerApp.outputs.resourceId
 
 @description('Public endpoint of the container app, or an empty string when ingress is disabled.')
-output containerAppUri string = containerApp.outputs.uri
+output containerAppUri string = ingressEnabled ? 'https://${containerApp.outputs.fqdn}' : ''
 
-@description('Name of the container registry the app pulls from.')
+@description('Name of the container registry used by azd to push and deploy images.')
 output containerRegistryName string = containerAppsStack.outputs.registryName
 
 @description('Login server of the container registry, for pushing images.')

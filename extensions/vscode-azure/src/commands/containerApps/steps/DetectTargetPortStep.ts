@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IActionExecutor, IVsCode, PromptStep, type AsWritable } from '@microsoft/vscode-azure-utils';
+import { IActionExecutor, ICodeContext, PromptStep, showSmartInputBox } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 import { ContainerfileTag } from '../../../tree/workspace/containerApps/containerAppsDetector';
@@ -16,14 +16,13 @@ const DefaultTargetPort = 80;
 /**
  * Derives the container's ingress port from the project's Containerfile.
  *
- * This never prompts. The port is already declared by `EXPOSE`, so asking for it
- * would be asking the user to repeat themselves, and the generated Bicep remains
- * editable when the guess is wrong.
+ * Custom images have no associated source project, so their listening port is
+ * prompted for. Project deployments use `EXPOSE` or the editable Bicep default.
  */
 @injectable()
 export class DetectTargetPortStep extends PromptStep<CreateContainerAppContext> {
     public constructor(
-        @inject(IVsCode) private readonly code: IVsCode,
+        @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IWorkspaceIndexService) private readonly indexService: IWorkspaceIndexService,
     ) {
@@ -37,10 +36,23 @@ export class DetectTargetPortStep extends PromptStep<CreateContainerAppContext> 
     }
 
     public async prompt(context: Readonly<CreateContainerAppContext>): Promise<Partial<CreateContainerAppContext>> {
-        const result = {} as AsWritable<Partial<CreateContainerAppContext>>;
-        result.targetPort = await this.detectPort(context.iacFolder) ?? DefaultTargetPort;
-        this.executor.setTelProp('detectedTargetPort', String(result.targetPort));
-        return result;
+        if (context.job === 'createNew' && context.imageName) {
+            const port = await showSmartInputBox(this.ctx, {
+                prompt: this.ctx.code.l10n.t('Enter the TCP port your container listens on'),
+                value: String(DefaultTargetPort),
+                showBack: true,
+                validateInput: value => /^\d+$/.test(value) && Number(value) > 0 && Number(value) <= 65535
+                    ? undefined
+                    : this.ctx.code.l10n.t('Enter a port number between 1 and 65535.'),
+            });
+            return { targetPort: Number(port) };
+        }
+
+        const targetPort = context.job === 'createNew'
+            ? DefaultTargetPort
+            : await this.detectPort(context.iacFolder) ?? DefaultTargetPort;
+        this.executor.setTelProp('detectedTargetPort', String(targetPort));
+        return { targetPort };
     }
 
     /** Returns the first port exposed by the most relevant Containerfile, if any. */
@@ -48,13 +60,13 @@ export class DetectTargetPortStep extends PromptStep<CreateContainerAppContext> 
         const index = await this.indexService.getIndex();
         const containerfiles = index.withTag(ContainerfileTag);
 
-        // Prefer a Containerfile inside the folder being generated into; a
-        // monorepo may hold several that have nothing to do with this app.
         const scoped = iacFolder
-            ? containerfiles.filter(uri => uri.path.startsWith(`${iacFolder.path}/`))
+            ? containerfiles.filter(uri => uri.scheme === iacFolder.scheme
+                && uri.authority === iacFolder.authority
+                && uri.path.startsWith(`${iacFolder.path.replace(/\/$/, '')}/`))
             : [];
 
-        for (const uri of (scoped.length > 0 ? scoped : containerfiles)) {
+        for (const uri of scoped) {
             const port = await this.readExposedPort(uri);
             if (port !== undefined) {
                 return port;
@@ -66,12 +78,15 @@ export class DetectTargetPortStep extends PromptStep<CreateContainerAppContext> 
 
     private async readExposedPort(uri: vscode.Uri): Promise<number | undefined> {
         try {
-            const content = Buffer.from(await this.code.workspace.fs.readFile(uri)).toString();
+            const content = Buffer.from(await this.ctx.code.workspace.fs.readFile(uri)).toString();
             return parseExposedPort(content);
-        } catch {
+        } catch (error) {
             // A Containerfile that vanished between indexing and reading is not
             // worth failing the wizard over -- fall back to the default port.
-            return undefined;
+            if (error instanceof this.ctx.code.FileSystemError && error.code === 'FileNotFound') {
+                return undefined;
+            }
+            throw error;
         }
     }
 }

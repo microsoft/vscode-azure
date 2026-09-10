@@ -14,6 +14,7 @@ describe('ConfigureContainerAppServiceStep (unit)', () => {
     it('runs only for a deploy project without an existing service', () => {
         const step = new ConfigureContainerAppServiceStep(createMockAzdService());
         const ready = {
+            resourceDisplayName: 'Container App',
             job: 'deploy' as const,
             iacFolder: MockUri.file('/project'),
             azdServiceName: 'api',
@@ -38,6 +39,7 @@ describe('ConfigureContainerAppServiceStep (unit)', () => {
         const iacFolder = MockUri.file('/project');
 
         await step.execute({
+            resourceDisplayName: 'Container App',
             job: 'deploy',
             iacFolder,
             azdServiceName: 'api',

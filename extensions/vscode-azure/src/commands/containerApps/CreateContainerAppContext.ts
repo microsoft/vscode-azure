@@ -8,12 +8,13 @@ import type { AzdWizardContext } from '../../azd/wizard/AzdWizardContext';
 
 /** Accumulated wizard context for Container App creation. */
 export interface CreateContainerAppContext extends AzdWizardContext, PickContext<string> {
+    /** Localized resource name used by the project folder picker. */
+    readonly resourceDisplayName: string;
     /**
      * Port the container listens on, emitted as a Bicep parameter.
      *
-     * Detected from the project's Dockerfile rather than prompted for: the value
-     * is already declared there, and the generated Bicep is editable if the
-     * guess is wrong.
+     * Detected from the deployment project's Containerfile, or supplied by the
+     * user when creating an app from a custom image.
      */
     readonly targetPort?: number;
     /**
@@ -23,4 +24,8 @@ export interface CreateContainerAppContext extends AzdWizardContext, PickContext
      * from the workspace and the Bicep falls back to a placeholder until it does.
      */
     readonly imageName?: string;
+    /** ARM ID of the existing ACR from which the selected image is pulled. */
+    readonly imageRegistryId?: string;
+    /** azd environment expression emitted to preserve the deployed app's image on subsequent provisions. */
+    readonly containerAppName?: string;
 }

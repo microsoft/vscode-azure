@@ -69,7 +69,7 @@ export class ContainerAppsDataProvider implements DataProvider<ConcreteAzureNode
 
         setWebsiteUrl(resource, app.configuration?.ingress?.fqdn);
 
-        return false;
+        return true;
     }
 
     /**
@@ -85,7 +85,7 @@ export class ContainerAppsDataProvider implements DataProvider<ConcreteAzureNode
 
         this.executor.setTelProp('nodeType', getNodeType(resource));
 
-        return resource.containers.map((container, index) => ({
+        return (resource.containers ?? []).map((container, index) => ({
             virtualType: ContainerVirtualType,
             // Containers are only required to be unique by name within a
             // template, and ARM permits the name to be absent, so the index

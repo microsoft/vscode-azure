@@ -22,6 +22,7 @@ export function createMockResourceClient(
     return {
         resourceGroups: { list: () => pagesOf(resourceGroups) },
         resources: {
+            list: () => pagesOf(Array.isArray(resourcesByRg) ? resourcesByRg : Object.values(resourcesByRg).flat()),
             listByResourceGroup: Array.isArray(resourcesByRg)
                 ? () => pagesOf(resourcesByRg)
                 : (rgName: string) => pagesOf(resourcesByRg[rgName] ?? []),

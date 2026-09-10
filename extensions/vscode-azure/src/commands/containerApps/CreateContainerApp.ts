@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { bySubscription } from '@microsoft/vscode-azure-azutils';
-import { Everything, IOutputChannel, Wizard, type ExecuteStep } from '@microsoft/vscode-azure-utils';
+import { Everything, IOutputChannel, IVsCode, Wizard, type ExecuteStep } from '@microsoft/vscode-azure-utils';
 import { Container, inject, injectable } from 'inversify';
 import { AzdDeployStep } from '../../azd/wizard/AzdDeployStep';
 import { AzdProvisionStep } from '../../azd/wizard/AzdProvisionStep';
@@ -44,6 +44,7 @@ import { VerifyContainerAppStartStep } from './steps/VerifyContainerAppStartStep
 @injectable()
 export class CreateContainerApp implements ManagedCommand {
     public constructor(
+        @inject(IVsCode) private readonly code: IVsCode,
         @inject(IOutputChannel) private readonly output: IOutputChannel,
         @inject(IAzureViewDataTree) private readonly dataTree: IAzureViewDataTree,
         @inject(Container) private readonly container: Container,
@@ -65,7 +66,9 @@ export class CreateContainerApp implements ManagedCommand {
         ];
 
         const executeSteps: ExecuteStep<CreateContainerAppContext>[] = [
-            get(IGenerateBicepStepFactory)<CreateContainerAppContext>('containerApp', ['targetPort', 'imageName', 'azdServiceName']),
+            get(IGenerateBicepStepFactory)<CreateContainerAppContext>('containerApp', [
+                'targetPort', 'imageName', 'imageRegistryId', 'azdServiceName', 'containerAppName',
+            ]),
             get(GenerateAzureYamlStep),
             get(ConfigureContainerAppServiceStep),
             get(CreateAzdEnvStep),
@@ -85,6 +88,8 @@ export class CreateContainerApp implements ManagedCommand {
             this.output,
             {
                 job,
+                resourceDisplayName: this.code.l10n.t('Container App'),
+                containerAppName: '${AZURE_CONTAINER_APP_NAME}', // eslint-disable-line no-template-curly-in-string -- resolved by azd on every provision
                 provision: true, // Provisioning is assumed unless an environment exists, in which case the user will be prompted to confirm
                 deploy: job === 'deploy', // Only deploy if the deploy job is selected
             },

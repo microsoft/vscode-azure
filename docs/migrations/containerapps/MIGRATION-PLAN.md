@@ -270,7 +270,8 @@ the app actually started.
       change so no previously migrated product stays the implicit default case  <- ACA-002
 - [x] Author `templates/containerApp/modules/container-app-topology/main.bicep`: an AVM-shaped pattern
       module composing `avm/ptn/azd/monitoring`, `avm/ptn/azd/container-apps-stack`,
-      `avm/res/managed-identity/user-assigned-identity`, and `avm/ptn/azd/container-app-upsert`, each at a
+      `avm/res/managed-identity/user-assigned-identity`, `avm/ptn/authorization/resource-role-assignment`,
+      and `avm/res/app/container-app`, each at a
       pinned `br/public:...:<version>` reference; every parameter and output described and named for a
       future registry contract  <- ACA-002, ACA-003, ACA-101, ACA-114
 - [x] Author `templates/containerApp/main.bicep`: thin consumer owning `targetScope = 'subscription'`, the
@@ -287,9 +288,10 @@ the app actually started.
       that pick (management-plane ACR is already covered by the existing `AcrClient`)  <- ACA-113, ACA-112
 - [x] **Reuse**, no code: registry creation is a line in the topology module, and everything else about
       registries belongs to the ACR product -- no container-apps-owned "create registry" command  <- ACA-048
-- [x] Quickstart image becomes the Bicep default rather than a prompt -- an empty `imageName` resolves to
+- [x] The image picker offers an explicit quickstart choice -- an empty `imageName` resolves to
       the module's placeholder image  <- ACA-095
-- [x] Dockerfile `EXPOSE` parsing feeds the `targetPort` Bicep **parameter default**; it never prompts.
+- [x] In-project Dockerfile `EXPOSE` parsing feeds the `targetPort` Bicep parameter for project deployment,
+      defaulting to 80 when none is declared. Custom-image creation prompts for its listening TCP port.
       Read the Dockerfile through the workspace index  <- ACA-104
 - [x] Overwrite warning: satisfied by **reusing** the shared `ConfirmProvisionStep`, which already
       interrupts exactly the risky case -- re-provisioning over an existing azd environment. Its wording was
@@ -319,11 +321,11 @@ the app actually started.
 - [x] No `contributes.configuration` entries are added -- all seven source settings are Drop or Reuse
       <- ACA-055 .. ACA-061
 - [x] Product doc `docs/products/containerapps.md`; framework docs get at most a link  <- --
-- [ ] Unit tests for the behavior each slice adds (guards, enrichment, view rendering, the log-stream
+- [x] Unit tests for the behavior each slice adds (guards, enrichment, view rendering, the log-stream
       service's live-set bookkeeping, the image-source pick). No manifest-completeness, DI-registration, or
       `contextValue`-literal tests  <- --
-- [ ] Parity pass: trace every `TRIAGE.md` ID to landed code, a confirmed absence, or a Deferred entry
-      here; report gaps rather than hiding them  <- --
+- [x] Parity pass: trace every `TRIAGE.md` ID to landed code, a confirmed absence, or a Deferred entry
+      here; gaps documented in [PARITY-REPORT.md](PARITY-REPORT.md)  <- --
 
 ---
 

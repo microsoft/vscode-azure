@@ -15,8 +15,8 @@ import { inject, injectable } from 'inversify';
 import { AcrResourceType } from '../../../tree/resources/acr/AcrRegistry';
 import type { CreateContainerAppContext } from '../CreateContainerAppContext';
 
-/** One selectable image: a fully qualified `<loginServer>/<repository>:<tag>` reference. */
-type ImageItem = QuickPickItemWithData<string>;
+/** Image reference and the optional ACR that needs managed-identity pull access. */
+type ImageItem = QuickPickItemWithData<Pick<CreateContainerAppContext, 'imageName' | 'imageRegistryId'>>;
 
 /**
  * Picks the container image to deploy.
@@ -50,40 +50,49 @@ export class PickImageSourceStep extends PromptStep<CreateContainerAppContext> {
     }
 
     public async prompt(context: Readonly<CreateContainerAppContext>): Promise<Partial<CreateContainerAppContext>> {
+        const registries = context.subscription ? await this.listRegistries(context.subscription) : [];
         const suggestions = context.subscription
-            ? await this.loadSuggestions(context.subscription)
+            ? await this.loadSuggestions(context.subscription, registries)
             : [];
 
-        const picked = await showSmartQuickPick<ImageItem>(this.ctx, suggestions, {
+        const quickstart: ImageItem = {
+            label: this.code.l10n.t('Use quickstart image'),
+            description: this.code.l10n.t('Create an app with the default sample image'),
+            data: { imageName: undefined, imageRegistryId: undefined },
+        };
+        const picked = await showSmartQuickPick<ImageItem>(this.ctx, [quickstart, ...suggestions], {
             placeHolder: this.code.l10n.t('Select or enter a container image'),
             // Any registry reference is accepted, so the user is never blocked
             // by a registry this extension cannot enumerate.
             createItemFromValue: (value: string) => value ? {
                 label: value,
                 description: this.code.l10n.t('Use the image you typed'),
-                data: value,
+                data: {
+                    imageName: value,
+                    imageRegistryId: registries.find(registry => context.subscription?.environment
+                        .containerRegistryEndpoint(registry.name)
+                        .replace(/^https:\/\//, '').toLowerCase() === value.split('/')[0].toLowerCase())?.id,
+                },
             } : undefined,
             showBack: true,
         });
 
-        return { imageName: picked.data };
+        return picked.data;
     }
 
     /** Lists the images in the subscription's container registries. */
-    private async loadSuggestions(subscription: AzureSubscription): Promise<ImageItem[]> {
+    private async loadSuggestions(subscription: AzureSubscription, registries: GenericResource[]): Promise<ImageItem[]> {
         return withDelayedProgress(
             this.code,
             {
                 location: this.code.ProgressLocation.Notification,
                 title: this.code.l10n.t('Loading container images...'),
             },
-            this.listImages(subscription),
+            this.listImages(subscription, registries),
         );
     }
 
-    private async listImages(subscription: AzureSubscription): Promise<ImageItem[]> {
-        const registries = await this.listRegistries(subscription);
-
+    private async listImages(subscription: AzureSubscription, registries: GenericResource[]): Promise<ImageItem[]> {
         // One registry failing (no pull permission, a firewall rule) must not
         // hide the images in every other registry, so each is settled
         // independently and failures degrade to no suggestions.
@@ -99,7 +108,7 @@ export class PickImageSourceStep extends PromptStep<CreateContainerAppContext> {
                 return repositories.flatMap(({ repository, tags }) => tags.map(tag => ({
                     label: `${loginServer}/${repository}:${tag}`,
                     description: registry.name,
-                    data: `${loginServer}/${repository}:${tag}`,
+                    data: { imageName: `${loginServer}/${repository}:${tag}`, imageRegistryId: registry.id },
                 } satisfies ImageItem)));
             } catch (error) {
                 this.output.debug(`[containerApps] could not list images in ${registry.name}: ${stringifyError(error)}`);

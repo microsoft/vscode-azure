@@ -12,8 +12,7 @@ import { isGenericResource } from '@microsoft/vscode-azure-azutils';
 export const ContainerAppResourceType = 'Microsoft.App/containerApps';
 
 /**
- * A {@linkcode GenericResource} that has been enriched with the container-app
- * properties the tree and its commands need.
+ * A {@linkcode GenericResource} with lazily enriched container-app properties.
  *
  * Created by `ContainerAppsDataProvider.enrich` via `Object.assign`, so the
  * underlying object remains the same reference stored in the data tree.
@@ -33,8 +32,8 @@ export interface ContainerApp extends GenericResource {
     readonly provisioningState: string | undefined;
     /** Name of the app's most recent revision, used to target revision operations. */
     readonly latestRevisionName: string | undefined;
-    /** Containers declared by the app's current template. */
-    readonly containers: readonly Container[];
+    /** Containers declared by the app's current template; undefined until enrichment finishes. */
+    readonly containers: readonly Container[] | undefined;
 }
 
 /**

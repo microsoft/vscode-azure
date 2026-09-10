@@ -3,8 +3,10 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createMockContainerAppsClient, makeContainerApp } from '@microsoft/vscode-azure-azutils/testing';
-import { createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
+import { AzureNodeId, type ConcreteAzureNode, type ContainerApp } from '@microsoft/vscode-azure-azutils';
+import { createMockContainerAppsClient, makeContainerApp, makeGenericResource } from '@microsoft/vscode-azure-azutils/testing';
+import { DataItemTree } from '@microsoft/vscode-azure-utils';
+import { createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { ContainerAppResourceType } from '../../../../src/tree/resources/containerApps/ContainerApp';
 import { ContainerAppsDataProvider, isContainerNode } from '../../../../src/tree/resources/containerApps/ContainerAppsDataProvider';
 import { ManagedEnvironmentResourceType } from '../../../../src/tree/resources/containerApps/ManagedEnvironment';
@@ -94,6 +96,39 @@ describe('ContainerAppsDataProvider (unit)', () => {
         const paths = provider.getChildren(resource).map(child => isContainerNode(child) && child.virtualPath);
 
         expect(new Set(paths).size).to.equal(2);
+    });
+
+    it('refreshes an early expansion when background enrichment supplies containers', async () => {
+        const app = makeGenericResource({ type: ContainerAppResourceType, logicalType: ContainerAppResourceType });
+        const client = createMockContainerAppsClient();
+        const details = Promise.withResolvers<ContainerApp>();
+        client.containerApps.get.mock.mockImplementation(() => details.promise);
+        const provider = new ContainerAppsDataProvider(executor, () => client);
+        const tree = new DataItemTree<ConcreteAzureNode>(
+            createMockVsCode().vscode, 'container-apps', executor,
+            resource => AzureNodeId.from(resource).toString(), 60_000,
+        );
+        tree.registerProvider(provider);
+        tree.registerProvider({
+            isRoot: true,
+            canHandle: (resource): resource is ConcreteAzureNode => resource === undefined,
+            getChildren: () => [app],
+        });
+
+        try {
+            expect(await tree.getChildren()).to.deep.equal([app]);
+            expect(await tree.getChildren(app)).to.be.empty;
+            details.resolve({
+                id: app.id, name: app.name, type: app.type, location: 'eastus',
+                template: { containers: [{ name: 'api', image: 'api:1' }] },
+            });
+            await tree.whenEnriched(app);
+
+            const children = await tree.getChildren(app);
+            expect(children.map(child => isContainerNode(child) && child.virtualPath)).to.deep.equal(['api']);
+        } finally {
+            tree.dispose();
+        }
     });
 
     it('returns no children for a managed environment', () => {

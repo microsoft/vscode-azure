@@ -69,12 +69,13 @@ function createStep(options: StepOptions = {}) {
     return { step, client, queryWorkspace, azd, mockResult };
 }
 
-const baseContext = {
+const baseContext: CreateContainerAppContext = {
+    resourceDisplayName: 'Container App',
     provision: true,
     subscription: makeSubscription(),
     iacFolder: MockUri.file('/project'),
     environmentName: 'dev',
-} as CreateContainerAppContext;
+};
 
 describe('VerifyContainerAppStartStep (unit)', () => {
     afterEach(() => {

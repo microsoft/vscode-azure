@@ -154,7 +154,7 @@ export class ContainerAppsViewProvider implements ViewProvider<string> {
             return undefined;
         }
 
-        return app.containers.find((container, index) =>
+        return app.containers?.find((container, index) =>
             (container.name ?? `container-${index}`) === resource.virtualPath)?.image;
     }
 }
