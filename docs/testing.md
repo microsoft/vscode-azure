@@ -74,6 +74,18 @@ it('(unit) should invalidate the cache', async () => {
 
 All tracked methods are `mock.fn()` instances from `node:test`. Use `.mock.callCount()` and `.mock.calls[n].arguments` for assertions, and `.mock.mockImplementation()` to change behavior. The namespace objects exposed on the result (`authentication`, `commands`, `env`, `window`, `workspace`, `tasks`) are typed so their methods expose `.mock` directly -- read `mockResult.window.showErrorMessage.mock.callCount()` with no cast. (Note: the namespaces on `mockResult.vscode` are typed as the real `IVsCode` module, so reach for the top-level handles when you need `.mock`.)
 
+Use `mock.method()` for temporary method replacements and `mock.property()`
+(Node.js 24.3+) for property overrides such as `process.platform`. Pair patches
+with restoration in `afterEach`; shared helpers should restore only the mocks
+they own. Existing `mock.fn()` methods already record calls and do not need an
+additional spy.
+
+`mock.restoreAll()` restores implementations while retaining tracker ownership.
+`mock.reset()` also releases that ownership, so subsequent tracker cleanup cannot
+restore a reused mock again. Neither clears function call history; use
+`fn.mock.resetCalls()` when separating setup calls from the behavior under test.
+These operations do not dispose product resources or restore mutable collections.
+
 #### MockFileSystem
 
 `MockFileSystem` is an in-memory implementation of `workspace.fs` with `stat`, `readFile`, `writeFile`, `createDirectory`, `readDirectory`, `copy`, and `delete`. Pre-populate entries with `addFile()`, `addDirectory()`, or `addSymbolicLink()`; parent directories are created implicitly:
@@ -252,6 +264,12 @@ timers directly. Tests inject `ManualDebounceScheduler` from
 (`hasPending`), and then `await scheduler.flush()` to run it to completion.
 This avoids interleaving fake timers with real promise continuations, which is
 a common source of flakiness.
+
+Tests of timer primitives and the production scheduler can use `mock.timers`
+directly, with `mock.timers.reset()` in `afterEach`. Enable `Date` alongside
+`setTimeout` when testing wall-clock comparisons. `tick()` fires timer callbacks
+synchronously; await the resulting work or an explicit completion signal before
+asserting asynchronous effects.
 
 ### Timers You Don't Own
 

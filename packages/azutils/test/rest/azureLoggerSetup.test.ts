@@ -5,14 +5,13 @@
 
 import { AzureLogger, createClientLogger, getLogLevel, setLogLevel } from '@azure/logger';
 import { MockOutputChannel } from '@microsoft/vscode-azure-utils/testing';
+import { mock } from 'node:test';
 import type * as vscode from 'vscode';
 import { setUpAzureSdkLogging } from '../../src/rest/azureLoggerSetup';
 
 describe('setUpAzureSdkLogging (unit)', () => {
-    const originalLog = AzureLogger.log;
-
     afterEach(() => {
-        AzureLogger.log = originalLog;
+        mock.restoreAll();
         setLogLevel(undefined);
     });
 
@@ -118,8 +117,7 @@ describe('setUpAzureSdkLogging (unit)', () => {
     });
 
     it('restores the previous AzureLogger.log on dispose', () => {
-        const sentinel = () => { /* previous sink */ };
-        AzureLogger.log = sentinel;
+        const sentinel = mock.method(AzureLogger, 'log', () => { /* previous sink */ });
 
         const output = new MockOutputChannel('test');
         output.logLevel = 3;

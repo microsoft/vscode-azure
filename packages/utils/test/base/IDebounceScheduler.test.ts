@@ -3,13 +3,22 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { mock } from 'node:test';
 import { DebounceScheduler } from '../../src/base/IDebounceScheduler';
 import { delay } from '../../src/base/delay';
 import { ManualDebounceScheduler } from './ManualDebounceScheduler';
 
 describe('IDebounceScheduler (unit)', () => {
     describe('DebounceScheduler', () => {
-        it('collapses a burst into a single run of the latest callback', async () => {
+        beforeEach(() => {
+            mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1000 });
+        });
+
+        afterEach(() => {
+            mock.timers.reset();
+        });
+
+        it('collapses a burst into a single run of the latest callback', () => {
             const scheduler = new DebounceScheduler(5);
             const ran: string[] = [];
 
@@ -17,58 +26,66 @@ describe('IDebounceScheduler (unit)', () => {
             scheduler.debounce(() => { ran.push('second'); });
             scheduler.debounce(() => { ran.push('third'); });
 
-            await delay(40);
+            mock.timers.tick(4);
+            expect(ran).to.deep.equal([]);
+
+            mock.timers.tick(1);
             expect(ran).to.deep.equal(['third']);
 
             scheduler.dispose();
         });
 
-        it('does not run a pending callback after dispose', async () => {
+        it('does not run a pending callback after dispose', () => {
             const scheduler = new DebounceScheduler(5);
             let ran = false;
 
             scheduler.debounce(() => { ran = true; });
             scheduler.dispose();
 
-            await delay(40);
+            mock.timers.tick(5);
             expect(ran).to.be.false;
         });
 
-        it('contains a synchronous throw and reports it', async () => {
+        it('contains a synchronous throw and reports it', () => {
             const errors: unknown[] = [];
             const scheduler = new DebounceScheduler(5, undefined, error => errors.push(error));
             const boom = new Error('boom');
 
             scheduler.debounce(() => { throw boom; });
 
-            await delay(40);
+            mock.timers.tick(5);
             expect(errors).to.deep.equal([boom]);
 
             scheduler.dispose();
         });
 
         it('contains a rejected promise and reports it', async () => {
-            const errors: unknown[] = [];
-            const scheduler = new DebounceScheduler(5, undefined, error => errors.push(error));
+            const reported = Promise.withResolvers<unknown>();
+            const onError = mock.fn(reported.resolve);
+            const scheduler = new DebounceScheduler(5, undefined, onError);
             const boom = new Error('boom');
 
             scheduler.debounce(() => Promise.reject(boom));
 
-            await delay(40);
-            expect(errors).to.deep.equal([boom]);
+            mock.timers.tick(5);
+            expect(await reported.promise).to.equal(boom);
+            expect(onError.mock.callCount()).to.equal(1);
 
             scheduler.dispose();
         });
 
         it('keeps working after a failed run', async () => {
             const scheduler = new DebounceScheduler(5);
+            const boom = new Error('boom');
+            const failed = Promise.reject(boom);
             let ran = false;
 
-            scheduler.debounce(() => Promise.reject(new Error('boom')));
-            await delay(40);
+            scheduler.debounce(() => failed);
+            mock.timers.tick(5);
+            await expect(failed).to.be.rejectedWith(boom);
 
             scheduler.debounce(() => { ran = true; });
-            await delay(40);
+            mock.timers.tick(5);
 
             expect(ran).to.be.true;
 
@@ -77,10 +94,10 @@ describe('IDebounceScheduler (unit)', () => {
 
         it('reports wall-clock time', () => {
             const scheduler = new DebounceScheduler(5);
-            const before = Date.now();
 
-            expect(scheduler.now()).to.be.at.least(before);
-            expect(scheduler.now()).to.be.at.most(Date.now());
+            expect(scheduler.now()).to.equal(1000);
+            mock.timers.tick(25);
+            expect(scheduler.now()).to.equal(1025);
 
             scheduler.dispose();
         });
