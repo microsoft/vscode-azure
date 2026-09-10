@@ -5,7 +5,6 @@
 
 import { AzureNodeId, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
 import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
-import * as vscode from 'vscode';
 import { DeleteAzureResource } from '../../../../src/commands/tree/DeleteAzureResource';
 import { OpenInPortal } from '../../../../src/commands/tree/OpenInPortal';
 import {
@@ -30,12 +29,12 @@ describe('StaticWebAppViewProvider (unit)', () => {
     }
 
     it('should render the site root with stable compatibility and portal contexts', () => {
-        const { item } = render(makeStaticWebApp());
+        const { item, ctx } = render(makeStaticWebApp());
         expect(item.label).to.equal('mySwa');
         expect(item.description).to.be.undefined;
         expect(item.contextValue).to.include(StaticWebAppViewProvider.ContextValue);
         expect(item.contextValue).to.include(OpenInPortal.ContextValue);
-        expect(item.collapsibleState).to.equal(vscode.TreeItemCollapsibleState.Collapsed);
+        expect(item.collapsibleState).to.equal(ctx.code.TreeItemCollapsibleState.Collapsed);
     });
 
     it('should offer the generic delete on the site rather than a product-specific one', () => {

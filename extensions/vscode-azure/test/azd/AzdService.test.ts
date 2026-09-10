@@ -42,7 +42,10 @@ function createService(spawnFn?: SpawnMethod, acquiredPath?: string) {
     const mockResult = createMockVsCode();
     const spawnMock = spawnFn ?? mock.fn(() => Promise.resolve({ stdout: '', stderr: '' }));
     const processExecutor = { spawn: spawnMock } as unknown as IProcessExecutor;
-    const authServer: IAzdAuthServer = { getEnv: mock.fn(() => Promise.resolve({})) };
+    const authServer: IAzdAuthServer = {
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        getEnv: mock.fn(() => Promise.resolve({ AZD_AUTH_ENDPOINT: '', AZD_AUTH_KEY: '' })),
+    };
     const toolService: IToolService = {
         acquire: mock.fn(),
         getResolvedPath: mock.fn(() => acquiredPath),
@@ -501,7 +504,7 @@ describe('AzdService (unit)', () => {
         it('should reject on non-zero exit code', async () => {
             const spawnFn = mock.fn((opts: SpawnOpts) =>
                 argsToStrings(opts.command).includes('version')
-                    ? Promise.resolve({ json: { azd: { version: '1.25.0', commit: 'abc' } } })
+                    ? Promise.resolve({ json: { azd: { version: MinAzdVersion, commit: 'abc' } } })
                     : Promise.reject(new Error('Process exited with code 1')),
             );
             const { service, fs } = createService(spawnFn);
@@ -530,7 +533,7 @@ describe('AzdService (unit)', () => {
         it('should reject on non-zero exit code', async () => {
             const spawnFn = mock.fn((opts: SpawnOpts) =>
                 argsToStrings(opts.command).includes('version')
-                    ? Promise.resolve({ json: { azd: { version: '1.25.0', commit: 'abc' } } })
+                    ? Promise.resolve({ json: { azd: { version: MinAzdVersion, commit: 'abc' } } })
                     : Promise.reject(new Error('Process exited with code 2')),
             );
             const { service, fs } = createService(spawnFn);
@@ -583,7 +586,7 @@ describe('AzdService (unit)', () => {
         it('should reject on non-zero exit code', async () => {
             const spawnFn = mock.fn((opts: SpawnOpts) =>
                 argsToStrings(opts.command).includes('version')
-                    ? Promise.resolve({ json: { azd: { version: '1.30.0', commit: 'abc' } } })
+                    ? Promise.resolve({ json: { azd: { version: MinAzdVersion, commit: 'abc' } } })
                     : Promise.reject(new Error('Process exited with code 3')),
             );
             const { service, fs } = createService(spawnFn);
@@ -640,7 +643,7 @@ describe('AzdService (unit)', () => {
         it('should reject on non-zero exit code', async () => {
             const spawnFn = mock.fn((opts: SpawnOpts) =>
                 argsToStrings(opts.command).includes('version')
-                    ? Promise.resolve({ json: { azd: { version: '1.25.0', commit: 'abc' } } })
+                    ? Promise.resolve({ json: { azd: { version: MinAzdVersion, commit: 'abc' } } })
                     : Promise.reject(new Error('Process exited with code 3')),
             );
             const { service } = createService(spawnFn);

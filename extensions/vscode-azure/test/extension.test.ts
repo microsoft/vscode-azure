@@ -5,10 +5,15 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import * as vscode from 'vscode';
 import { ExtensionId } from '../src/constants';
 
-describe('extension', () => {
+let vscode: typeof import('vscode');
+
+describe('extension (vscode integration)', () => {
+    before(async () => {
+        vscode = await import('vscode');
+    });
+
     it('should activate', async () => {
         const extension = vscode.extensions.getExtension(ExtensionId);
         if (!extension) {
@@ -19,7 +24,11 @@ describe('extension', () => {
     });
 });
 
-describe('command contributions (integration)', () => {
+describe('command contributions (vscode integration)', () => {
+    before(async () => {
+        vscode = await import('vscode');
+    });
+
     // `package.json` and the DI registration are independent sources that can drift:
     // deleting a command class does not delete its manifest entry, which leaves a
     // Command Palette item that throws "command not found" when invoked.
@@ -43,7 +52,11 @@ describe('command contributions (integration)', () => {
     });
 });
 
-describe('bundle size guardrail (integration)', () => {
+describe('bundle size guardrail (vscode integration)', () => {
+    before(async () => {
+        vscode = await import('vscode');
+    });
+
     // Baseline size (in bytes) of the packaged VSIX.
     //
     // This is a guardrail, NOT a target. The intent is to notice when the extension

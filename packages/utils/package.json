@@ -46,7 +46,7 @@
     },
     "dependencies": {
         "@azure/core-process": "^1.0.0",
-        "vscode-uri": "^3.1.0"
+        "vscode-uri": "catalog:"
     },
     "devDependencies": {
         "@vscode/extension-telemetry": "catalog:",

@@ -149,8 +149,6 @@ describe('ActionExecutor (unit)', () => {
 
         it('should log command lifecycle for success and failure', async () => {
             const output = new MockOutputChannel('test');
-            const debugSpy = mock.method(output, 'debug');
-            const errorSpy = mock.method(output, 'error');
             const { executor } = createExecutor(undefined, output);
 
             await executor.callWithTelemetryAndErrorHandling('successCallback', () => 42);
@@ -158,9 +156,9 @@ describe('ActionExecutor (unit)', () => {
                 throw new Error('boom');
             });
 
-            expect(debugSpy.mock.calls.some(call => call.arguments[0] === '[cmd] successCallback start')).to.be.true;
-            expect(debugSpy.mock.calls.some(call => call.arguments[0] === '[cmd] successCallback done')).to.be.true;
-            expect(errorSpy.mock.calls.some(call =>
+            expect(output.debug.mock.calls.some(call => call.arguments[0] === '[cmd] successCallback start')).to.be.true;
+            expect(output.debug.mock.calls.some(call => call.arguments[0] === '[cmd] successCallback done')).to.be.true;
+            expect(output.error.mock.calls.some(call =>
                 call.arguments[0] instanceof Error &&
                 call.arguments[0].message === 'boom')).to.be.true;
         });

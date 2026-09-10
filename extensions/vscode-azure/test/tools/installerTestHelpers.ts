@@ -5,7 +5,7 @@
 
 import { argsToStrings, type IOutputChannel, type IProcessExecutor, type IVsCode } from '@microsoft/vscode-azure-utils';
 import { MockOutputChannel, createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
-import { mock } from 'node:test';
+import { mock, type MockPropertyContext } from 'node:test';
 import type { ToolInstallOptions, ToolInstaller } from '../../src/tools/ToolInstaller';
 
 /** A permissive view of a captured `spawn` call. */
@@ -71,13 +71,15 @@ export function installedWith(spawn: ReturnType<typeof mock.fn>): string[] {
  * exercise all three.
  */
 export function usePlatform(): (value: NodeJS.Platform) => void {
-    const original = process.platform;
+    let platform: MockPropertyContext<NodeJS.Platform> | undefined;
 
     afterEach(() => {
-        Object.defineProperty(process, 'platform', { value: original, configurable: true });
+        platform?.restore();
+        platform = undefined;
     });
 
     return (value: NodeJS.Platform) => {
-        Object.defineProperty(process, 'platform', { value, configurable: true });
+        platform?.restore();
+        platform = mock.property(process, 'platform', value).mock;
     };
 }

@@ -12,7 +12,7 @@ extensions/vscode-azure/test/
 
 ## Test Labels
 
-Label tests with `(unit)`, `(integration)`, or `(e2e)` **after** the name in the root `describe` description:
+Label tests with `(unit)`, `(integration)`, or `(e2e)` **after** the name in the root `describe` description. Add `(vscode integration)` when the suite requires the real VS Code extension host:
 
 ```typescript
 describe('AzureNodeId (unit)', () => {
@@ -21,6 +21,10 @@ describe('AzureNodeId (unit)', () => {
 
 describe('RefreshResourcesView (integration)', () => {
     it('should execute without error', async () => { ... });
+});
+
+describe('azd up (e2e) (vscode integration)', () => {
+    it('should provision the application', async () => { ... });
 });
 ```
 
@@ -69,6 +73,18 @@ it('(unit) should invalidate the cache', async () => {
 - `configChangeEmitter`, `sessionsChangeEmitter`, `workspaceFoldersChangeEmitter`, `taskProcessEndEmitter` — fire these to simulate configuration changes, sign-in/sign-out, workspace folder changes, and task completion
 
 All tracked methods are `mock.fn()` instances from `node:test`. Use `.mock.callCount()` and `.mock.calls[n].arguments` for assertions, and `.mock.mockImplementation()` to change behavior. The namespace objects exposed on the result (`authentication`, `commands`, `env`, `window`, `workspace`, `tasks`) are typed so their methods expose `.mock` directly -- read `mockResult.window.showErrorMessage.mock.callCount()` with no cast. (Note: the namespaces on `mockResult.vscode` are typed as the real `IVsCode` module, so reach for the top-level handles when you need `.mock`.)
+
+Use `mock.method()` for temporary method replacements and `mock.property()`
+(Node.js 24.3+) for property overrides such as `process.platform`. Pair patches
+with restoration in `afterEach`; shared helpers should restore only the mocks
+they own. Existing `mock.fn()` methods already record calls and do not need an
+additional spy.
+
+`mock.restoreAll()` restores implementations while retaining tracker ownership.
+`mock.reset()` also releases that ownership, so subsequent tracker cleanup cannot
+restore a reused mock again. Neither clears function call history; use
+`fn.mock.resetCalls()` when separating setup calls from the behavior under test.
+These operations do not dispose product resources or restore mutable collections.
 
 #### MockFileSystem
 
@@ -249,6 +265,12 @@ timers directly. Tests inject `ManualDebounceScheduler` from
 This avoids interleaving fake timers with real promise continuations, which is
 a common source of flakiness.
 
+Tests of timer primitives and the production scheduler can use `mock.timers`
+directly, with `mock.timers.reset()` in `afterEach`. Enable `Date` alongside
+`setTimeout` when testing wall-clock comparisons. `tick()` fires timer callbacks
+synchronously; await the resulting work or an explicit completion signal before
+asserting asynchronous effects.
+
 ### Timers You Don't Own
 
 Third-party code that arms its own timers -- the Azure SDK's LRO poller, for
@@ -275,6 +297,25 @@ awaited work resolves, so a tick issued at that moment fires nothing and the
 loop stalls until the test times out. Waiting on an observable side effect --
 a request count, a status change -- doesn't close the gap, because the effect
 lands before the timer is armed. Waiting for the arm itself does.
+
+### Disposing What a Test Creates
+
+A test that constructs something holding an open handle -- a poller's timer, a
+watcher, a server -- must dispose it, or the handle outlives the test. Bind the
+lifetime to the test with `using` and `autoDispose` from
+`@microsoft/vscode-azure-utils/testing`, which adapts the codebase's `dispose()`
+convention to the `Symbol.dispose` protocol:
+
+```typescript
+it('should poll until the deployment finishes', async () => {
+    using provider = autoDispose(new ArmDeploymentDataProvider(...));
+    // disposed when the body exits, however it exits
+});
+```
+
+Prefer this over an `afterEach`: cleanup stays next to creation, so a new test
+can't quietly skip it. When a factory helper builds the object, wrap it once
+inside the factory and every call site just declares `using`.
 
 ### Integration Tests
 
