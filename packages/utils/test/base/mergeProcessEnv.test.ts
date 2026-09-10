@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { mock } from 'node:test';
 import { mergeProcessEnv } from '../../src/base/mergeProcessEnv';
 
 /**
@@ -14,12 +15,26 @@ function spellingsOf(env: NodeJS.ProcessEnv, name: string): string[] {
 }
 
 describe('mergeProcessEnv (unit)', () => {
+    beforeEach(() => {
+        mock.property(process, 'env', { ContosoInheritedVar: 'inherited' });
+    });
+
+    afterEach(() => {
+        mock.restoreAll();
+    });
+
+    it('copies the inherited environment when no overrides are supplied', () => {
+        const merged = mergeProcessEnv();
+
+        expect(merged).to.deep.equal(process.env);
+        expect(merged).to.not.equal(process.env);
+    });
+
     it('layers overrides onto the process environment', () => {
         const merged = mergeProcessEnv({ ContosoTestVar: 'set-by-caller' });
 
         expect(merged.ContosoTestVar).to.equal('set-by-caller');
-        // Inherited entries survive; a replacement environment would break PATH lookup.
-        expect(merged.PATH ?? merged.Path).to.equal(process.env.PATH);
+        expect(merged.ContosoInheritedVar).to.equal('inherited');
     });
 
     it('does not mutate the process environment', () => {
@@ -28,11 +43,8 @@ describe('mergeProcessEnv (unit)', () => {
         expect(process.env.ContosoTestVar).to.be.undefined;
     });
 
-    it('collapses several spellings of one override to a single key', function () {
-        if (process.platform !== 'win32') {
-            // Names are genuinely distinct off Windows, so there is nothing to collapse.
-            this.skip();
-        }
+    it('collapses several spellings of one override to a single key on Windows', () => {
+        mock.property(process, 'platform', 'win32');
 
         const merged = mergeProcessEnv({ ContosoTestVar: 'first', contosotestvar: 'second' });
 
@@ -40,21 +52,26 @@ describe('mergeProcessEnv (unit)', () => {
         expect(merged.ContosoTestVar).to.equal('second');
     });
 
-    it('replaces an inherited name spelled differently by the caller', function () {
-        if (process.platform !== 'win32') {
-            this.skip();
-        }
+    for (const inheritedName of ['PATH', 'Path', 'pAtH']) {
+        it(`replaces inherited ${inheritedName} with a differently-cased override on Windows`, () => {
+            mock.property(process, 'platform', 'win32');
+            process.env[inheritedName] = 'C:\\inherited';
+            const overrideName = inheritedName === 'PATH' ? 'Path' : 'PATH';
+            const overrides = { [overrideName]: 'C:\\only-this' };
+            const inherited = { ...process.env };
 
-        const merged = mergeProcessEnv({ Path: 'C:\\only-this' });
+            const merged = mergeProcessEnv(overrides);
 
-        expect(spellingsOf(merged, 'PATH')).to.deep.equal(['PATH']);
-        expect(merged.PATH).to.equal('C:\\only-this');
-    });
+            expect(spellingsOf(merged, 'PATH')).to.deep.equal([inheritedName]);
+            expect(merged[inheritedName]).to.equal('C:\\only-this');
+            expect(merged.ContosoInheritedVar).to.equal('inherited');
+            expect(process.env).to.deep.equal(inherited);
+            expect(overrides).to.deep.equal({ [overrideName]: 'C:\\only-this' });
+        });
+    }
 
-    it('keeps distinct casings apart off Windows', function () {
-        if (process.platform === 'win32') {
-            this.skip();
-        }
+    it('keeps distinct casings apart off Windows', () => {
+        mock.property(process, 'platform', 'linux');
 
         const merged = mergeProcessEnv({ ContosoTestVar: 'upper', contosotestvar: 'lower' });
 
