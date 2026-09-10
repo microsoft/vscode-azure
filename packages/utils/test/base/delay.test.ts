@@ -3,15 +3,31 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { mock } from 'node:test';
 import { delay } from '../../src/base/delay';
 import { CancellationError } from '../../src/vscode/CancellationError';
 import { EventEmitter } from '../../src/vscode/EventEmitter';
 
 describe('delay (unit)', () => {
+    beforeEach(() => {
+        mock.timers.enable({ apis: ['setTimeout'] });
+    });
+
+    afterEach(() => {
+        mock.timers.reset();
+    });
+
     it('should resolve after the specified time', async () => {
-        const start = Date.now();
-        await delay(50);
-        expect(Date.now() - start).to.be.at.least(40);
+        const resolved = mock.fn();
+        const promise = delay(50).then(resolved);
+
+        mock.timers.tick(49);
+        await Promise.resolve();
+        expect(resolved.mock.callCount()).to.equal(0);
+
+        mock.timers.tick(1);
+        await promise;
+        expect(resolved.mock.callCount()).to.equal(1);
     });
 
     it('should reject with CancellationError when AbortSignal is already aborted', async () => {
@@ -25,9 +41,12 @@ describe('delay (unit)', () => {
         const controller = new AbortController();
 
         const promise = delay(5000, controller.signal);
-        setTimeout(() => { controller.abort(); }, 30);
+        const rejected = expect(promise).to.be.rejectedWith(CancellationError);
 
-        await expect(promise).to.be.rejectedWith(CancellationError);
+        mock.timers.tick(30);
+        controller.abort();
+
+        await rejected;
     });
 
     it('should reject with CancellationError when cancellationToken is already cancelled', async () => {
@@ -47,14 +66,11 @@ describe('delay (unit)', () => {
         };
 
         const promise = delay(5000, token);
-        setTimeout(() => { emitter.fire(); }, 30);
+        const rejected = expect(promise).to.be.rejectedWith(CancellationError);
 
-        await expect(promise).to.be.rejectedWith(CancellationError);
-    });
+        mock.timers.tick(30);
+        emitter.fire();
 
-    it('should resolve without options', async () => {
-        const start = Date.now();
-        await delay(30);
-        expect(Date.now() - start).to.be.at.least(20);
+        await rejected;
     });
 });
