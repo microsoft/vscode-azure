@@ -22,9 +22,7 @@ import { IWorkspaceDetector } from '../utils/workspaceIndex/WorkspaceDetector';
 
 /** Contribute all Azure Container Apps services and UI integrations. */
 export function registerContainerApps(registrar: ProductRegistrar): void {
-    registrar.registerAzureClientProvider(IContainerAppsClientProvider, (context, executor, credential, subscription) => {
-        return ContainerAppsClient.create(context, executor, credential, subscription);
-    });
+    registrar.registerAzureClientProvider(IContainerAppsClientProvider, ContainerAppsClient.create.bind(ContainerAppsClient));
 
     registrar.registerAzureClientProvider(ILogsQueryClientProvider, (context, executor, credential, subscription) => {
         return LogsQueryClient.create(context, executor, credential, subscription.environment);

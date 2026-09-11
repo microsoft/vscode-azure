@@ -11,9 +11,7 @@ import { AcrViewProvider } from '../tree/resources/acr/AcrViewProvider';
 
 /** Contribute all Azure Container Registry services and UI integrations. */
 export function registerAcr(registrar: ProductRegistrar): void {
-    registrar.registerAzureClientProvider(IAcrClientProvider, (context, executor, credential, subscription) => {
-        return AcrClient.create(context, executor, credential, subscription);
-    });
+    registrar.registerAzureClientProvider(IAcrClientProvider, AcrClient.create.bind(AcrClient));
     registrar.registerCommand('vscode-azure/acr/disableAdminUser', DisableAcrAdminUser);
     registrar.registerResourceDataProvider(AcrDataProvider);
     registrar.registerResourceViewProvider(AcrViewProvider);
