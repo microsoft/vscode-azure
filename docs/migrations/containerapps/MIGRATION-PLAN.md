@@ -8,7 +8,7 @@ audited against the signed decision record.
 |---|---|
 | **Source** | `microsoft/vscode-azurecontainerapps` @ `f6c93dcd1a55b6aaf27ed4edca8f6a52b5348e16` (v0.11.2) |
 | **Inventory** | [INVENTORY.md](INVENTORY.md) |
-| **Triage (signed)** | [TRIAGE.md](TRIAGE.md) -- Brandon Waterloo (@bwateratmsft), 2026-08-21 |
+| **Triage (signed)** | [TRIAGE.md](TRIAGE.md) -- Brandon Waterloo (@bwateratmsft), 2026-09-11 |
 | **Target** | `extensions/vscode-azure` (+ `packages/azutils`) |
 | **Precedents** | `functions` (azd create/deploy wizard, AVM module, `WebApp*` providers), `acr` (product registrar, virtual children), `deploy` (azd job wiring) |
 | **Monorepo phase** | Phase 0/1 (internal/beta) -- parity gaps acceptable, non-core features may Defer |
@@ -50,7 +50,7 @@ Resource group (or resource-type group)
 | 2 | `Microsoft.OperationalInsights/workspaces` | app logs destination for the environment |
 | 3 | `Microsoft.App/managedEnvironments` | `appLogsConfiguration` -> #2 |
 | 4 | `Microsoft.ManagedIdentity/userAssignedIdentities` | app identity; replaces every secret-based path |
-| 5 | `Microsoft.ContainerRegistry/registries` | target for azd's remote ACR build |
+| 5 | `Microsoft.ContainerRegistry/registries` | destination for the project image built and pushed by azd |
 | 6 | `Microsoft.Authorization/roleAssignments` | AcrPull for #4 on #5 |
 | 7 | `Microsoft.App/containerApps` | **primary**; `azd-service-name` tag, ingress, MSI registry auth |
 
@@ -99,7 +99,8 @@ one-line change.
 | azd env name | `environmentName` | `AZURE_ENV_NAME` placeholder | -- |
 | location | `location` | `AZURE_LOCATION` placeholder | -- |
 | azd service name | `azdServiceName` -> `tags['azd-service-name']` on the app only | `ProjectNameStep` / hydration | -- |
-| image | `imageName` (empty -> module's quickstart placeholder) | image-source pick | ACA-095, ACA-096, ACA-098 |
+| image | upsert pattern's quickstart default; existing image retained on repeat provision | automatic; azd builds the project image on deploy | ACA-095 |
+| existing app name | `containerAppName` -> upsert `exists` | `${AZURE_CONTAINER_APP_NAME}` persisted by azd | ACA-002, ACA-005 |
 | ingress + target port | `ingressEnabled`, `targetPort` (default from Dockerfile `EXPOSE`) | detector default, not a prompt | ACA-104 |
 | -- | `identityType: 'UserAssigned'` + AcrPull | always; no secrets, no admin user | ACA-101, ACA-114 |
 
@@ -107,7 +108,7 @@ one-line change.
 |---|---|
 | `uri` | `ShowEndpointUrlStep` / browse affordance |
 | `resourceId`, `name`, `resourceGroupName` | tree invalidation + start verification (ACA-105) |
-| `containerRegistryName` | azd remote build target |
+| `containerRegistryName` | azd image push target |
 
 **Resource-provider registration** (ACA-134): `Microsoft.App`, `Microsoft.OperationalInsights`,
 `Microsoft.ContainerRegistry` are registered by ARM as a side effect of the deployment; azd/Bicep owns
@@ -257,7 +258,7 @@ Both resource types are handled by **one** data provider and **one** view provid
 > one error in the research: `container-apps-stack:0.4.0` takes `logAnalyticsWorkspaceName`, not
 > `logAnalyticsWorkspaceResourceId`.
 
-**Status: complete.** The wizard provisions the full topology, deploys an existing image or lets azd build
+**Status: complete.** The wizard provisions the full topology, uses quickstart for creation or lets azd build
 one, ensures project deployments declare a local Docker Container Apps service in `azure.yaml`, and verifies
 the app actually started.
 
@@ -270,28 +271,23 @@ the app actually started.
       change so no previously migrated product stays the implicit default case  <- ACA-002
 - [x] Author `templates/containerApp/modules/container-app-topology/main.bicep`: an AVM-shaped pattern
       module composing `avm/ptn/azd/monitoring`, `avm/ptn/azd/container-apps-stack`,
-      `avm/res/managed-identity/user-assigned-identity`, `avm/ptn/authorization/resource-role-assignment`,
-      and `avm/res/app/container-app`, each at a
+      `avm/res/managed-identity/user-assigned-identity`, and `avm/ptn/azd/container-app-upsert`, each at a
       pinned `br/public:...:<version>` reference; every parameter and output described and named for a
       future registry contract  <- ACA-002, ACA-003, ACA-101, ACA-114
 - [x] Author `templates/containerApp/main.bicep`: thin consumer owning `targetScope = 'subscription'`, the
       resource group, and the azd placeholders  <- ACA-002
 - [x] Validate the consumer with the repo's Bicep validation so the remote modules actually resolve, and
       confirm Post-clone / Bootstrapped still skip generation when `infra/main.bicep` exists  <- ACA-002
-- [x] `CreateContainerAppContext` extending `AzdWizardContext` with the image, ingress and registry inputs
+- [x] `CreateContainerAppContext` extending `AzdWizardContext` with the target port, localized resource
+      display name, and persisted app-name expression for repeat provisioning
       <- ACA-002
-- [x] `PickImageSourceStep` -- one combobox over the user's ACR repositories/tags **plus** free-text entry,
-      instead of the source's registry-kind -> registry -> repository -> tag chain. Ships the "other
-      registry" path as free-text input in the same pick, not a separate surface. Only asks on the
-      `createNew` job: on `deploy`, azd builds and pushes the image  <- ACA-096, ACA-098
-- [x] Add `@azure/container-registry` and an `AcrRepositoryClient` data-plane wrapper in azutils to back
-      that pick (management-plane ACR is already covered by the existing `AcrClient`)  <- ACA-113, ACA-112
 - [x] **Reuse**, no code: registry creation is a line in the topology module, and everything else about
-      registries belongs to the ACR product -- no container-apps-owned "create registry" command  <- ACA-048
-- [x] The image picker offers an explicit quickstart choice -- an empty `imageName` resolves to
-      the module's placeholder image  <- ACA-095
+      registries belongs to the ACR product -- no container-apps-owned "create registry" command  <- ACA-048, ACA-112
+- [x] Creation uses the upsert pattern's quickstart image on port 80 without an image prompt.
+      Project deployment builds and pushes through azd. The pattern receives the registry's
+      cloud-specific suffix and the persisted app name controls its `exists` flag  <- ACA-095, ACA-101
 - [x] In-project Dockerfile `EXPOSE` parsing feeds the `targetPort` Bicep parameter for project deployment,
-      defaulting to 80 when none is declared. Custom-image creation prompts for its listening TCP port.
+      defaulting to 80 when none is declared. Quickstart creation uses its known port, 80.
       Read the Dockerfile through the workspace index  <- ACA-104
 - [x] Overwrite warning: satisfied by **reusing** the shared `ConfirmProvisionStep`, which already
       interrupts exactly the risky case -- re-provisioning over an existing azd environment. Its wording was
@@ -322,7 +318,8 @@ the app actually started.
       <- ACA-055 .. ACA-061
 - [x] Product doc `docs/products/containerapps.md`; framework docs get at most a link  <- --
 - [x] Unit tests for the behavior each slice adds (guards, enrichment, view rendering, the log-stream
-      service's live-set bookkeeping, the image-source pick). No manifest-completeness, DI-registration, or
+      service's live-set bookkeeping, quickstart creation and project deployment). No manifest-completeness,
+      DI-registration, or
       `contextValue`-literal tests  <- --
 - [x] Parity pass: trace every `TRIAGE.md` ID to landed code, a confirmed absence, or a Deferred entry
       here; gaps documented in [PARITY-REPORT.md](PARITY-REPORT.md)  <- --
@@ -358,6 +355,7 @@ verbatim reasoning.
 | Env vars + secrets -> Bicep / managed identity + Key Vault (JC2) | ACA-020, ACA-021, ACA-022, ACA-023, ACA-024, ACA-025, ACA-026, ACA-031, ACA-032, ACA-033, ACA-071, ACA-072, ACA-079, ACA-080 |
 | Ingress + scaling -> Bicep (JC3) | ACA-027, ACA-028, ACA-029, ACA-030, ACA-042, ACA-043, ACA-044, ACA-073, ACA-074, ACA-075, ACA-077, ACA-078, ACA-086, ACA-087, ACA-088 |
 | Remote ACR build -> azd `docker.remoteBuild` (JC4) | ACA-049, ACA-099, ACA-100, ACA-116 |
+| Existing-image selection and dedicated ACR data-plane client | ACA-096, ACA-098, ACA-113 |
 | GitHub connect/disconnect -> `azd pipeline config` (JC5) | ACA-045, ACA-046, ACA-047, ACA-081 |
 | Webviews (JC6) | ACA-120, ACA-121 |
 | Copilot deploy (JC7) | ACA-009, ACA-122 |
