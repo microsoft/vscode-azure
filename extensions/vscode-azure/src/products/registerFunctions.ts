@@ -14,9 +14,7 @@ import { IWorkspaceDetector } from '../utils/workspaceIndex/WorkspaceDetector';
 
 /** Contribute all Azure Functions services and UI integrations. */
 export function registerFunctions(registrar: ProductRegistrar): void {
-    registrar.registerAzureClientProvider(IWebAppClientProvider, (context, executor, credential, subscription) => {
-        return WebAppClient.create(context, executor, credential, subscription);
-    });
+    registrar.registerAzureClientProvider(IWebAppClientProvider, WebAppClient.create.bind(WebAppClient));
 
     // Registered once here for every Microsoft.Web/sites flavor; App Service and Logic Apps reuse
     // this shared ownership rather than registering duplicate providers.

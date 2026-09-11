@@ -101,12 +101,8 @@ export function registerGenericAzure(registrar: ProductRegistrar): void {
         pushDisposable(container, code.workspace.registerTextDocumentContentProvider(PropertiesScheme, provider));
     });
 
-    registrar.registerAzureClientProvider(IResourceClientProvider, (context, executor, credential, subscription) => {
-        return ResourceClient.create(context, executor, credential, subscription);
-    });
-    registrar.registerAzureClientProvider(IDeploymentClientProvider, (context, executor, credential, subscription) => {
-        return DeploymentClient.create(context, executor, credential, subscription);
-    });
+    registrar.registerAzureClientProvider(IResourceClientProvider, ResourceClient.create.bind(ResourceClient));
+    registrar.registerAzureClientProvider(IDeploymentClientProvider, DeploymentClient.create.bind(DeploymentClient));
     registrar.registerAzureClientProvider(ISubscriptionClientProvider, (context, executor, credential, subscription) => {
         return SubscriptionClient.create(context, executor, credential, subscription.environment, undefined, subscription);
     });
