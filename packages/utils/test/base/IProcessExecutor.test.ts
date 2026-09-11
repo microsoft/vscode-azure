@@ -69,6 +69,10 @@ function createMockSpawn(options?: {
 
 describe('ProcessExecutor (unit)', () => {
     describe('background execution', () => {
+        afterEach(() => {
+            mock.restoreAll();
+        });
+
         it('should capture stdout and stderr', async () => {
             const { vscode: code } = createMockVsCode();
             const spawnFn = createMockSpawn({ stdout: 'out', stderr: 'err' });
@@ -190,23 +194,26 @@ describe('ProcessExecutor (unit)', () => {
             expect(args).to.deep.equal(['sub', '--name', 'value', '--force']);
         });
 
-        it('should layer the caller env over the inherited environment', async () => {
-            const { vscode: code } = createMockVsCode();
-            const spawnFn = createMockSpawn({ stdout: 'ok' });
-            const executor = new ProcessExecutor(code, spawnFn);
+        for (const pathName of ['PATH', 'Path', 'pAtH']) {
+            it(`should inherit ${pathName} when layering the caller env`, async () => {
+                mock.property(process, 'env', { [pathName]: 'inherited-path' });
+                const { vscode: code } = createMockVsCode();
+                const spawnFn = createMockSpawn({ stdout: 'ok' });
+                const executor = new ProcessExecutor(code, spawnFn);
 
-            await executor.spawn({
-                execution: 'background',
-                command: ['test-cmd'],
-                env: { CUSTOM_VALUE: 'set-by-caller' }, // eslint-disable-line @typescript-eslint/naming-convention
+                await executor.spawn({
+                    execution: 'background',
+                    command: ['test-cmd'],
+                    env: { CUSTOM_VALUE: 'set-by-caller' }, // eslint-disable-line @typescript-eslint/naming-convention
+                });
+
+                // The child environment replaces `process.env` rather than layering
+                // onto it, so the executor must merge before spawning.
+                const spawnOptions = spawnFn.mock.calls[0].arguments[2]!;
+                expect(spawnOptions.env).to.have.property('CUSTOM_VALUE', 'set-by-caller');
+                expect(spawnOptions.env).to.have.property(pathName, 'inherited-path');
             });
-
-            // The child environment replaces `process.env` rather than layering
-            // onto it, so the executor must merge before spawning.
-            const spawnOptions = spawnFn.mock.calls[0].arguments[2]!;
-            expect(spawnOptions.env).to.have.property('CUSTOM_VALUE', 'set-by-caller');
-            expect(spawnOptions.env).to.have.property('PATH', process.env.PATH);
-        });
+        }
 
         it('should replace a differently-cased env override rather than duplicating it', async function () {
             // Windows environment names are case-insensitive, and a spawn whose

@@ -11,8 +11,8 @@ import { CaselessMap } from '../data/CaselessMap';
  *
  * @remarks
  * Windows environment variable names are case-insensitive, so an override
- * spelled differently than the existing entry (`Path` against Node's
- * canonical `PATH`) must replace it rather than sit alongside it. A merge that
+ * spelled differently than the existing entry (`PATH` against an inherited
+ * `Path`, for example) must replace it rather than sit alongside it. A merge that
  * produced both spellings would be rejected with `ERR_INVALID_ENVIRONMENT`,
  * and the child would otherwise inherit an ambiguous environment.
  * {@linkcode CaselessMap} supplies that folding, keeping the casing each name
