@@ -86,22 +86,6 @@ export function registerGenericAzure(registrar: ProductRegistrar): void {
             return (subscriptionId: string) => findSubscriptionById(cache, subscriptionId);
         }).inSingletonScope();
 
-        container.bind(ISubscriptionClientProvider).toFactory(context => {
-            const codeContext = context.get(ICodeContext);
-            const executor = context.get(IActionExecutor);
-            const credentialFactory = context.get(ICredentialFactory);
-            return (subscription) => {
-                return SubscriptionClient.create(
-                    codeContext,
-                    executor,
-                    credentialFactory(subscription),
-                    subscription.environment,
-                    undefined,
-                    subscription,
-                );
-            };
-        });
-
         container.bind(IResourceSelector).to(ResourceSelector).inSingletonScope();
         container.bind(IPropertiesContentProvider).to(PropertiesContentProvider).inSingletonScope();
 
@@ -122,6 +106,9 @@ export function registerGenericAzure(registrar: ProductRegistrar): void {
     });
     registrar.registerAzureClientProvider(IDeploymentClientProvider, (context, executor, credential, subscription) => {
         return DeploymentClient.create(context, executor, credential, subscription);
+    });
+    registrar.registerAzureClientProvider(ISubscriptionClientProvider, (context, executor, credential, subscription) => {
+        return SubscriptionClient.create(context, executor, credential, subscription.environment, undefined, subscription);
     });
 
     registrar.registerCommand('vscode-azure/resources/refresh', RefreshResourcesView);
