@@ -19,9 +19,7 @@ import { StaticWebAppViewProvider } from '../tree/resources/staticWebApps/Static
 
 /** Contribute all Azure Static Web Apps services and UI integrations. */
 export function registerStaticWebApps(registrar: ProductRegistrar): void {
-    registrar.registerAzureClientProvider(IStaticWebAppClientProvider, (context, executor, credential, subscription) => {
-        return StaticWebAppClient.create(context, executor, credential, subscription);
-    });
+    registrar.registerAzureClientProvider(IStaticWebAppClientProvider, StaticWebAppClient.create.bind(StaticWebAppClient));
 
     registrar.registerBinding(container => {
         container.bind(StaticWebAppSettingsAdapter).toSelf().inSingletonScope();

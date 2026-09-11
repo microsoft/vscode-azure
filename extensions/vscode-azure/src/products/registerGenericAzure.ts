@@ -86,22 +86,6 @@ export function registerGenericAzure(registrar: ProductRegistrar): void {
             return (subscriptionId: string) => findSubscriptionById(cache, subscriptionId);
         }).inSingletonScope();
 
-        container.bind(ISubscriptionClientProvider).toFactory(context => {
-            const codeContext = context.get(ICodeContext);
-            const executor = context.get(IActionExecutor);
-            const credentialFactory = context.get(ICredentialFactory);
-            return (subscription) => {
-                return SubscriptionClient.create(
-                    codeContext,
-                    executor,
-                    credentialFactory(subscription),
-                    subscription.environment,
-                    undefined,
-                    subscription,
-                );
-            };
-        });
-
         container.bind(IResourceSelector).to(ResourceSelector).inSingletonScope();
         container.bind(IPropertiesContentProvider).to(PropertiesContentProvider).inSingletonScope();
 
@@ -117,11 +101,10 @@ export function registerGenericAzure(registrar: ProductRegistrar): void {
         pushDisposable(container, code.workspace.registerTextDocumentContentProvider(PropertiesScheme, provider));
     });
 
-    registrar.registerAzureClientProvider(IResourceClientProvider, (context, executor, credential, subscription) => {
-        return ResourceClient.create(context, executor, credential, subscription);
-    });
-    registrar.registerAzureClientProvider(IDeploymentClientProvider, (context, executor, credential, subscription) => {
-        return DeploymentClient.create(context, executor, credential, subscription);
+    registrar.registerAzureClientProvider(IResourceClientProvider, ResourceClient.create.bind(ResourceClient));
+    registrar.registerAzureClientProvider(IDeploymentClientProvider, DeploymentClient.create.bind(DeploymentClient));
+    registrar.registerAzureClientProvider(ISubscriptionClientProvider, (context, executor, credential, subscription) => {
+        return SubscriptionClient.create(context, executor, credential, subscription.environment, undefined, subscription);
     });
 
     registrar.registerCommand('vscode-azure/resources/refresh', RefreshResourcesView);
