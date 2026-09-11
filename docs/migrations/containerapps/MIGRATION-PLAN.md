@@ -328,6 +328,12 @@ the app actually started.
 
 ## Deferred (tracked, not built now)
 
+Existing-image deployment is independent of quickstart creation and source-project deployment.
+[#347](https://github.com/microsoft/vscode-azure/issues/347) tracks an azd image-backed service using
+`image` with `docker.imagePassthrough: true`, explicit target selection, and registry-access prerequisites.
+The existing-image branch of ACA-008 depends on this work; its source-project branch uses the current
+azd deploy job. The AVM quickstart topology does not need an additional registry for this scenario.
+
 | ID | Feature | Blocker |
 |---|---|---|
 | ACA-007 | `deployImageApi` compat shim | Serves ACA-127 only; moves with it |
@@ -340,7 +346,10 @@ the app actually started.
 | ACA-090 | `daprAppIdItem` | Same |
 | ACA-091 | `daprAppPortItem` | Same |
 | ACA-092 | `daprAppProtocol` | Same; fix the description/contextValue swap if ever built |
+| ACA-096 | ACR image selection for existing-app deployment | [#347](https://github.com/microsoft/vscode-azure/issues/347) -- azd image-backed service workflow and registry-access contract |
 | ACA-097 | Docker Hub image source | Non-ACR registry support; revisit on demand |
+| ACA-098 | Free-text prebuilt-image reference | [#347](https://github.com/microsoft/vscode-azure/issues/347) -- same deployment workflow as ACA-096 |
+| ACA-113 | ACR data-plane discovery support | [#347](https://github.com/microsoft/vscode-azure/issues/347) -- only as required by the image-selection UX; prefer shared facilities |
 | ACA-117 | Docker Hub v2 REST client | Client for ACA-097; deferred with it |
 | ACA-127 | Exported `deployImage` API | Live external contract with the Containers/Docker extension; needs an owner-level decision |
 
@@ -355,7 +364,6 @@ verbatim reasoning.
 | Env vars + secrets -> Bicep / managed identity + Key Vault (JC2) | ACA-020, ACA-021, ACA-022, ACA-023, ACA-024, ACA-025, ACA-026, ACA-031, ACA-032, ACA-033, ACA-071, ACA-072, ACA-079, ACA-080 |
 | Ingress + scaling -> Bicep (JC3) | ACA-027, ACA-028, ACA-029, ACA-030, ACA-042, ACA-043, ACA-044, ACA-073, ACA-074, ACA-075, ACA-077, ACA-078, ACA-086, ACA-087, ACA-088 |
 | Remote ACR build -> azd `docker.remoteBuild` (JC4) | ACA-049, ACA-099, ACA-100, ACA-116 |
-| Existing-image selection and dedicated ACR data-plane client | ACA-096, ACA-098, ACA-113 |
 | GitHub connect/disconnect -> `azd pipeline config` (JC5) | ACA-045, ACA-046, ACA-047, ACA-081 |
 | Webviews (JC6) | ACA-120, ACA-121 |
 | Copilot deploy (JC7) | ACA-009, ACA-122 |

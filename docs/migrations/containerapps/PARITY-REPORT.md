@@ -16,10 +16,10 @@ Evidence paths are relative to `extensions/vscode-azure/src/` unless another pac
 | Disposition | Rows | Outcome |
 |---|---|---|
 | Migrate | 7 | all landed |
-| Adapt | 18 | all landed |
+| Adapt | 18 | adapted scope landed; ACA-008's existing-image branch is deferred with ACA-096 / ACA-098 |
 | Reuse | 11 | all wired (verified against source, not assumed) |
-| Defer | 13 | all tracked in [MIGRATION-PLAN.md](MIGRATION-PLAN.md#deferred-tracked-not-built-now) |
-| Drop | 91 | all confirmed absent from the codebase |
+| Defer | 16 | all tracked in [MIGRATION-PLAN.md](MIGRATION-PLAN.md#deferred-tracked-not-built-now) |
+| Drop | 88 | all confirmed absent from the codebase |
 | **Total** | **140** | |
 
 ## Artifact check
@@ -40,7 +40,7 @@ Evidence paths are relative to `extensions/vscode-azure/src/` unless another pac
 | ACA-003 | `createManagedEnvironment` | Adapt | landed | topology module provisions the environment as supporting infra; no standalone command, as the triage anticipated |
 | ACA-004 | `deleteManagedEnvironment` | Reuse | wired | `resourceContextValue()` adds `DeleteAzureResource.ResourceContextValue` |
 | ACA-005 | `deployWorkspaceProject` | Adapt | landed | `CreateContainerApp.ts` (`deploy` job) |
-| ACA-008 | `deployContainerApp` | Adapt | landed | `CreateContainerApp.ts` (`deploy` job) |
+| ACA-008 | `deployContainerApp` | Adapt | source-project branch landed | `CreateContainerApp.ts` (`deploy` job); existing-image branch deferred in [#347](https://github.com/microsoft/vscode-azure/issues/347) |
 | ACA-011 | `deleteContainerApp` | Reuse | wired | `resourceContextValue()` |
 | ACA-013 | `browse` | Reuse | wired | `BrowseWebsite.ContextValue`, once `enrich` calls `setWebsiteUrl(fqdn)` |
 | ACA-014 | `revealInEnvironment` | Adapt | landed | `commands/containerApps/RevealContainerAppEnvironment.ts` + `AzureNodeId.forRelatedResource` |
@@ -74,10 +74,6 @@ Evidence paths are relative to `extensions/vscode-azure/src/` unless another pac
 | ACA-137 | Output channel | Reuse | wired | no product-specific channel registration |
 
 ## Dropped features -- confirmed absent
-
-ACA-096 (existing ACR image selection), ACA-098 (free-text image selection), and ACA-113 (the dedicated
-ACR data-plane client) are out of scope by signed decision. Creation uses quickstart; project deployment
-builds and pushes through azd. Registry browsing remains owned by the ACR product.
 
 Each judgment-call group was grepped across all 205 tracked source, manifest, and template files.
 
@@ -145,11 +141,12 @@ Honest remainder. None is a silent omission -- each is tracked.
 3. **Deploying requires a local container runtime.** The source extension always built in ACR, so it did
    not. Accepted for now; restoring remote build is tracked by
    [#334](https://github.com/microsoft/vscode-azure/issues/334).
-4. **13 Defer rows are not built**, by signed decision:
+4. **16 Defer rows are not built**, by signed decision:
 
    | Theme | IDs | Status |
    |---|---|---|
    | Exported `deployImage` contract | ACA-007, ACA-127 | [#332](https://github.com/microsoft/vscode-azure/issues/332) -- live contract with the Containers extension; needs an owner decision |
+   | Deploy a prebuilt image to an existing app | ACA-096, ACA-098, ACA-113 | [#347](https://github.com/microsoft/vscode-azure/issues/347) -- azd image-backed service with passthrough; also covers the existing-image branch of ACA-008 |
    | Dapr surface | ACA-082, ACA-089-092 | [#333](https://github.com/microsoft/vscode-azure/issues/333) |
    | Revision activate/deactivate + nodes | ACA-039, ACA-040, ACA-065, ACA-067 | on demand -- no successful uses in the telemetry window |
-   | Docker Hub browsing | ACA-097, ACA-117 | on demand -- a typed Docker Hub reference already works |
+   | Docker Hub browsing | ACA-097, ACA-117 | on demand -- registry browsing is separate from accepting a fully qualified image reference |

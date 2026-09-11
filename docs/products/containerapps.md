@@ -122,7 +122,8 @@ environment variables, secrets, ingress, scaling, and revision mode. Secrets are
 of managed identity and Key Vault references. Revision drafts, the confirmation webviews, and the GitHub
 connect/disconnect flow are not migrated; `azd pipeline config` owns CI/CD.
 
-Deferred, tracked separately: the exported `deployImage` contract with the Containers extension
+Deferred, tracked separately: deploying a prebuilt image to an existing app through an azd image-backed
+service ([#347](https://github.com/microsoft/vscode-azure/issues/347)), the exported `deployImage` contract with the Containers extension
 ([#332](https://github.com/microsoft/vscode-azure/issues/332)), the Dapr surface
 ([#333](https://github.com/microsoft/vscode-azure/issues/333)), revision activate/deactivate, and Docker Hub
 browsing. See [PARITY-REPORT.md](../migrations/containerapps/PARITY-REPORT.md) for the full accounting.
