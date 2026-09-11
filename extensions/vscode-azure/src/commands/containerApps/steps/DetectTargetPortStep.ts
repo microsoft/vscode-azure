@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IActionExecutor, ICodeContext, PromptStep, showSmartInputBox } from '@microsoft/vscode-azure-utils';
+import { IActionExecutor, IVsCode, PromptStep } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 import { ContainerfileTag } from '../../../tree/workspace/containerApps/containerAppsDetector';
@@ -16,13 +16,13 @@ const DefaultTargetPort = 80;
 /**
  * Derives the container's ingress port from the project's Containerfile.
  *
- * Custom images have no associated source project, so their listening port is
- * prompted for. Project deployments use `EXPOSE` or the editable Bicep default.
+ * Project deployments use `EXPOSE` or the editable Bicep default.
+ * App creation uses the quickstart image's known port.
  */
 @injectable()
 export class DetectTargetPortStep extends PromptStep<CreateContainerAppContext> {
     public constructor(
-        @inject(ICodeContext) private readonly ctx: ICodeContext,
+        @inject(IVsCode) private readonly code: IVsCode,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IWorkspaceIndexService) private readonly indexService: IWorkspaceIndexService,
     ) {
@@ -36,18 +36,6 @@ export class DetectTargetPortStep extends PromptStep<CreateContainerAppContext> 
     }
 
     public async prompt(context: Readonly<CreateContainerAppContext>): Promise<Partial<CreateContainerAppContext>> {
-        if (context.job === 'createNew' && context.imageName) {
-            const port = await showSmartInputBox(this.ctx, {
-                prompt: this.ctx.code.l10n.t('Enter the TCP port your container listens on'),
-                value: String(DefaultTargetPort),
-                showBack: true,
-                validateInput: value => /^\d+$/.test(value) && Number(value) > 0 && Number(value) <= 65535
-                    ? undefined
-                    : this.ctx.code.l10n.t('Enter a port number between 1 and 65535.'),
-            });
-            return { targetPort: Number(port) };
-        }
-
         const targetPort = context.job === 'createNew'
             ? DefaultTargetPort
             : await this.detectPort(context.iacFolder) ?? DefaultTargetPort;
@@ -78,12 +66,12 @@ export class DetectTargetPortStep extends PromptStep<CreateContainerAppContext> 
 
     private async readExposedPort(uri: vscode.Uri): Promise<number | undefined> {
         try {
-            const content = Buffer.from(await this.ctx.code.workspace.fs.readFile(uri)).toString();
+            const content = Buffer.from(await this.code.workspace.fs.readFile(uri)).toString();
             return parseExposedPort(content);
         } catch (error) {
             // A Containerfile that vanished between indexing and reading is not
             // worth failing the wizard over -- fall back to the default port.
-            if (error instanceof this.ctx.code.FileSystemError && error.code === 'FileNotFound') {
+            if (error instanceof this.code.FileSystemError && error.code === 'FileNotFound') {
                 return undefined;
             }
             throw error;

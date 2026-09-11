@@ -23,7 +23,6 @@ import type { ManagedCommand } from '../ManagedCommand';
 import type { CreateContainerAppContext } from './CreateContainerAppContext';
 import { ConfigureContainerAppServiceStep } from './steps/ConfigureContainerAppServiceStep';
 import { DetectTargetPortStep } from './steps/DetectTargetPortStep';
-import { PickImageSourceStep } from './steps/PickImageSourceStep';
 import { VerifyContainerAppStartStep } from './steps/VerifyContainerAppStartStep';
 
 /**
@@ -32,7 +31,7 @@ import { VerifyContainerAppStartStep } from './steps/VerifyContainerAppStartStep
  * via the command registration's prefix args:
  *
  * - **`createNew`**: emits IaC into a temp directory managed by
- *   `ITempDirManager`; the workspace is never modified.
+ *   `ITempDirManager` and provisions the quickstart image; the workspace is never modified.
  * - **`deploy`**: emits IaC into the user's workspace folder so subsequent
  *   `azd deploy` / `azd provision` operate on the same project.
  *   After provisioning, also runs `azd deploy` and shows endpoint URLs.
@@ -60,14 +59,13 @@ export class CreateContainerApp implements ManagedCommand {
             get(HydratableChooseSubscriptionStep),
             get(HydratableChooseLocationStep),
             get(ProjectNameStep),
-            get(PickImageSourceStep),
             get(DetectTargetPortStep),
             get(ConfirmProvisionStep),
         ];
 
         const executeSteps: ExecuteStep<CreateContainerAppContext>[] = [
             get(IGenerateBicepStepFactory)<CreateContainerAppContext>('containerApp', [
-                'targetPort', 'imageName', 'imageRegistryId', 'azdServiceName', 'containerAppName',
+                'targetPort', 'azdServiceName', 'containerAppName',
             ]),
             get(GenerateAzureYamlStep),
             get(ConfigureContainerAppServiceStep),

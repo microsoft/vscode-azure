@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createMockCodeContext, createTestActionExecutor, MockUri, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, createTestActionExecutor, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import type * as vscode from 'vscode';
 import { DetectTargetPortStep, parseExposedPort } from '../../../src/commands/containerApps/steps/DetectTargetPortStep';
 import { ContainerfileTag } from '../../../src/tree/workspace/containerApps/containerAppsDetector';
@@ -19,7 +19,7 @@ function createStep(files: Record<string, string>) {
         mockResult.fs.addFile(uri, content);
     }
     const { executor } = createTestActionExecutor();
-    return { step: new DetectTargetPortStep(ctx, executor, createMockWorkspaceIndexService({ [ContainerfileTag]: uris })), mockResult };
+    return { step: new DetectTargetPortStep(ctx.code, executor, createMockWorkspaceIndexService({ [ContainerfileTag]: uris })), mockResult };
 }
 
 describe('DetectTargetPortStep (unit)', () => {
@@ -102,18 +102,6 @@ describe('DetectTargetPortStep (unit)', () => {
         expect((await step.prompt({ ...baseContext, iacFolder: MockUri.file('/project') })).targetPort).to.equal(80);
     });
 
-    it('asks for the listening port of a custom image', async () => {
-        const { step, mockResult } = createStep({ '/workspace/Dockerfile': 'EXPOSE 9999\n' });
-        const prompts = respondToPrompts(mockResult, [{ input: '8080' }]);
-
-        const result = await step.prompt({
-            ...baseContext, job: 'createNew', imageName: 'myapp:latest', iacFolder: MockUri.file('/temp'),
-        });
-
-        expect(result.targetPort).to.equal(8080);
-        prompts.assertAllConsumed();
-    });
-
     it('uses the known quickstart port without a prompt', async () => {
         const { step, mockResult } = createStep({ '/workspace/Dockerfile': 'EXPOSE 9999\n' });
 
@@ -121,23 +109,6 @@ describe('DetectTargetPortStep (unit)', () => {
 
         expect(result.targetPort).to.equal(80);
         expect(mockResult.inputBoxes).to.have.length(0);
-    });
-
-    it('validates the listening port before accepting it', async () => {
-        const { step, mockResult } = createStep({});
-        const pending = step.prompt({ ...baseContext, job: 'createNew', imageName: 'myapp:latest' });
-        const input = mockResult.inputBoxes[0];
-
-        for (const value of ['0', '65536', '-1', '1.5', '8080x', '']) {
-            input.changeValue(value);
-            expect(input.validationMessage).to.not.be.undefined;
-            input.accept();
-            expect(input.hide.mock.callCount()).to.equal(0);
-        }
-        input.changeValue('443');
-        expect(input.validationMessage).to.be.undefined;
-        input.accept();
-        expect((await pending).targetPort).to.equal(443);
     });
 
     it('propagates Containerfile read failures other than a vanished file', async () => {

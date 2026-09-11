@@ -13,19 +13,10 @@ export interface CreateContainerAppContext extends AzdWizardContext, PickContext
     /**
      * Port the container listens on, emitted as a Bicep parameter.
      *
-     * Detected from the deployment project's Containerfile, or supplied by the
-     * user when creating an app from a custom image.
+     * Detected from the deployment project's Containerfile, or set to the
+     * quickstart image's known port for app creation.
      */
     readonly targetPort?: number;
-    /**
-     * Image to deploy, when the user is deploying an image that already exists.
-     *
-     * Left unset for the `deploy` job, where azd builds and pushes the image
-     * from the workspace and the Bicep falls back to a placeholder until it does.
-     */
-    readonly imageName?: string;
-    /** ARM ID of the existing ACR from which the selected image is pulled. */
-    readonly imageRegistryId?: string;
     /** azd environment expression emitted to preserve the deployed app's image on subsequent provisions. */
     readonly containerAppName?: string;
 }

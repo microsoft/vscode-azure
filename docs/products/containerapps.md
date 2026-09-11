@@ -31,7 +31,7 @@ product.
 
 | Command | Acts on | Notes |
 |---|---|---|
-| Create Empty Container App in Azure... | palette | azd + Bicep, `createNew` job |
+| Create Empty Container App in Azure... | palette | azd + Bicep, `createNew` job; quickstart image on port 80 |
 | Deploy Project as Container App... | palette | azd + Bicep, `deploy` job |
 | Restart Container App | app node | Restarts the latest revision |
 | Reveal Environment | app node | Jumps to the hosting managed environment |
@@ -83,37 +83,28 @@ for external ingress. Registry login servers come from ARM, including the active
 **Registry authentication is managed identity only.** No admin user, no registry password, and no secret of
 any kind is written to the template, to ARM, or to disk.
 
-When an image is selected from an existing ACR in the chosen subscription, its ARM ID is emitted into the
-template. The app identity receives AcrPull on that registry, even in a different resource group, and the
-app configures it alongside the deployment registry. Typed image references matching a discovered ACR
-receive the same configuration. Provisioning therefore requires permission to assign roles on both
-registries, and those registries must allow the app to reach their data-plane endpoints.
+The `createNew` job provisions the quickstart sample image with external ingress on port 80. Its IaC lives
+in a temporary directory; it does not build local source or run `azd deploy`. The `deploy` job provisions
+the topology and then has azd build the local project, push its image to the generated ACR, and deploy it.
+Both jobs configure the app identity with AcrPull on that generated registry.
 
 The parameters file references `${AZURE_CONTAINER_APP_NAME}`, the name persisted by azd after provision.
 On first provision, the unset value uses Bicep's empty default and creates the app. On subsequent
-provisions, the template reads the existing app's current image, preserving the image installed by
+provisions, the upsert pattern reads the existing app's current image, preserving the image installed by
 `azd deploy` rather than substituting the initial image.
 
 The topology module is a local stand-in that *composes* published Azure Verified Modules
 (`avm/ptn/azd/monitoring`, `avm/ptn/azd/container-apps-stack`,
-`avm/res/managed-identity/user-assigned-identity`, `avm/ptn/authorization/resource-role-assignment`, and
-`avm/res/app/container-app`), each pinned to a version. The app resource module supports managed-identity
-authentication to both registries; the single-registry upsert pattern cannot express that configuration.
+`avm/res/managed-identity/user-assigned-identity`, and `avm/ptn/azd/container-app-upsert:0.4.0`),
+each pinned to a version. The upsert pattern owns the app, registry authentication, and AcrPull assignment.
 No published AVM pattern module covers the whole topology; publishing one is
 tracked by [#329](https://github.com/microsoft/vscode-azure/issues/329). When that lands, the module
 collapses to a single `br/public:` reference and the consumer does not change.
 
 For project deployment, the ingress target port is detected from an in-project Dockerfile or Containerfile
 `EXPOSE` instruction and emitted as a Bicep parameter. Files in other workspace projects are not candidates.
-If the project declares no port, the default is 80; the generated Bicep stays editable. Creating an app
-from a custom image prompts for its listening TCP port (1-65535), because that image has no local source
-from which to infer it. The quickstart image uses its known port, 80.
-
-The image is chosen through a single combo box that suggests every tag in the user's own container
-registries and accepts anything else typed in -- a Docker Hub image, a third-party registry, a tag that does
-not exist yet. An explicit **Use quickstart image** choice selects the Bicep default without requiring an
-image reference. The picker is only asked on `createNew`; the `deploy` job has azd build and push the image
-instead. Typed non-ACR references must be publicly pullable; the wizard does not collect registry passwords.
+If the project declares no port, the default is 80; the generated Bicep stays editable. Quickstart creation
+uses port 80 independently of any workspace Containerfile. Neither job asks for an image reference.
 
 **Deploying requires a local container runtime.** azd builds the image locally with Docker or Podman, so one
 must be installed and running. Building in ACR instead would remove that requirement; it is tracked by

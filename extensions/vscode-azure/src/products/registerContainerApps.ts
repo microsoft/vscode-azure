@@ -4,8 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    AcrRepositoryClient, ContainerAppsClient, IAcrRepositoryClientProvider,
-    IContainerAppsClientProvider, ILogsQueryClientProvider, LogsQueryClient,
+    ContainerAppsClient, IContainerAppsClientProvider, ILogsQueryClientProvider, LogsQueryClient,
 } from '@microsoft/vscode-azure-azutils';
 import { CreateContainerApp } from '../commands/containerApps/CreateContainerApp';
 import { OpenContainerAppConsole, OpenContainerAppLogs } from '../commands/containerApps/portalBlades';
@@ -27,11 +26,6 @@ export function registerContainerApps(registrar: ProductRegistrar): void {
         return ContainerAppsClient.create(context, executor, credential, subscription);
     });
 
-    // Both are data-plane clients addressed by a service endpoint -- a registry
-    // login server, a cloud's Log Analytics endpoint -- rather than by ARM.
-    registrar.registerAzureClientProvider(IAcrRepositoryClientProvider, (context, executor, credential, subscription, loginServer) => {
-        return AcrRepositoryClient.create(context, executor, credential, loginServer, subscription.environment);
-    });
     registrar.registerAzureClientProvider(ILogsQueryClientProvider, (context, executor, credential, subscription) => {
         return LogsQueryClient.create(context, executor, credential, subscription.environment);
     });

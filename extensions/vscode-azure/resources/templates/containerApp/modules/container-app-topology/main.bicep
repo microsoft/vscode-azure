@@ -1,7 +1,7 @@
 metadata name = 'Container App Topology'
 metadata description = '''Provisions a complete Azure Container Apps topology: a Log Analytics workspace,
-a managed environment, a container registry, a user-assigned managed identity for the app, AcrPull
-role assignments for the deployment registry and an optional existing image registry, and the app itself.
+a managed environment, a container registry, a user-assigned managed identity for the app, the AcrPull
+role assignment for the deployment registry, and the app itself.
 
 This module exists because no published Azure Verified Module covers the whole topology -- the closest
 published pattern modules each cover one part of it, and every azd reference template composes them by
@@ -26,12 +26,6 @@ param tags object = {}
 
 @description('Optional. Value applied as the `azd-service-name` tag on the container app only, so `azd deploy` can target it.')
 param azdServiceName string = ''
-
-@description('Optional. Image for the first provision, or a placeholder when empty. An existing app retains its deployed image regardless of this initial value.')
-param imageName string = ''
-
-@description('Optional. Resource ID of an existing Azure Container Registry containing the selected image, including registries in another resource group.')
-param imageRegistryId string = ''
 
 @description('Optional. Whether the container app accepts ingress traffic.')
 param ingressEnabled bool = true
@@ -58,21 +52,6 @@ var containerRegistryName = 'cr${resourceToken}'
 var managedEnvironmentName = 'cae-${resourceToken}'
 var logAnalyticsWorkspaceName = 'log-${resourceToken}'
 var userAssignedIdentityName = 'id-${resourceToken}'
-var containerRegistryResourceId = resourceId('Microsoft.ContainerRegistry/registries', containerRegistryName)
-var useImageRegistry = !empty(imageRegistryId) && toLower(imageRegistryId) != toLower(containerRegistryResourceId)
-var imageRegistryIdParts = split(imageRegistryId, '/')
-var imageRegistrySubscriptionId = useImageRegistry ? imageRegistryIdParts[2] : subscription().subscriptionId
-var imageRegistryResourceGroupName = useImageRegistry ? imageRegistryIdParts[4] : resourceGroup().name
-var acrPullRole = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d')
-
-resource existingApp 'Microsoft.App/containerApps@2025-01-01' existing = if (containerAppExists) {
-  name: appName
-}
-
-resource imageRegistry 'Microsoft.ContainerRegistry/registries@2025-04-01' existing = if (useImageRegistry) {
-  scope: resourceGroup(imageRegistrySubscriptionId, imageRegistryResourceGroupName)
-  name: last(imageRegistryIdParts)
-}
 
 module monitoring 'br/public:avm/ptn/azd/monitoring:0.1.0' = {
   name: 'monitoring-${resourceToken}'
@@ -111,30 +90,7 @@ module appIdentity 'br/public:avm/res/managed-identity/user-assigned-identity:0.
   }
 }
 
-module deploymentRegistryAccess 'br/public:avm/ptn/authorization/resource-role-assignment:0.1.2' = {
-  name: 'deployment-registry-access-${resourceToken}'
-  params: {
-    resourceId: resourceId('Microsoft.ContainerRegistry/registries', containerAppsStack.outputs.registryName)
-    principalId: appIdentity.outputs.principalId
-    principalType: 'ServicePrincipal'
-    roleDefinitionId: acrPullRole
-    enableTelemetry: enableTelemetry
-  }
-}
-
-module imageRegistryAccess 'br/public:avm/ptn/authorization/resource-role-assignment:0.1.2' = if (useImageRegistry) {
-  scope: resourceGroup(imageRegistrySubscriptionId, imageRegistryResourceGroupName)
-  name: 'image-registry-access-${resourceToken}'
-  params: {
-    resourceId: imageRegistry!.id
-    principalId: appIdentity.outputs.principalId
-    principalType: 'ServicePrincipal'
-    roleDefinitionId: acrPullRole
-    enableTelemetry: enableTelemetry
-  }
-}
-
-module containerApp 'br/public:avm/res/app/container-app:0.19.0' = {
+module containerApp 'br/public:avm/ptn/azd/container-app-upsert:0.4.0' = {
   name: 'container-app-${resourceToken}'
   params: {
     name: appName
@@ -142,54 +98,22 @@ module containerApp 'br/public:avm/res/app/container-app:0.19.0' = {
     // `azd deploy` finds its target by tag, and only the app is a deployment
     // target -- the supporting resources deliberately do not carry it.
     tags: empty(azdServiceName) ? tags : union(tags, { 'azd-service-name': azdServiceName })
-    environmentResourceId: containerAppsStack.outputs.environmentResourceId
-    managedIdentities: {
-      userAssignedResourceIds: [appIdentity.outputs.resourceId]
-    }
-    // ARM login servers carry the active cloud's suffix. Both registries are
-    // configured so an existing image and a subsequent azd deploy can pull.
-    registries: concat([
-      {
-        server: containerAppsStack.outputs.registryLoginServer
-        identity: appIdentity.outputs.resourceId
-      }
-    ], useImageRegistry ? [
-      {
-        server: imageRegistry!.properties.loginServer
-        identity: appIdentity.outputs.resourceId
-      }
-    ] : [])
-    containers: [
-      {
-        name: 'main'
-        image: containerAppExists
-          ? existingApp!.properties.template.containers[0].image
-          : (!empty(imageName) ? imageName : 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest')
-        resources: {
-          cpu: json('0.5')
-          memory: '1.0Gi'
-        }
-      }
-    ]
-    scaleSettings: {
-      minReplicas: 2
-      maxReplicas: 10
-    }
-    disableIngress: !ingressEnabled
-    ingressExternal: ingressExternal
-    ingressTargetPort: targetPort
-    corsPolicy: {
-      allowedOrigins: [
-        'https://portal.azure.com'
-        'https://ms.portal.azure.com'
-      ]
-    }
+    containerAppsEnvironmentName: containerAppsStack.outputs.environmentName
+    containerRegistryName: containerAppsStack.outputs.registryName
+    // The ARM login server supplies the suffix for the deployment's Azure cloud.
+    containerRegistryHostSuffix: join(skip(split(containerAppsStack.outputs.registryLoginServer, '.'), 1), '.')
+    identityType: 'UserAssigned'
+    identityName: appIdentity.outputs.name
+    userAssignedIdentityResourceId: appIdentity.outputs.resourceId
+    identityPrincipalId: appIdentity.outputs.principalId
+    // An empty image selects quickstart on creation and preserves the live image on updates.
+    imageName: ''
+    exists: containerAppExists
+    ingressEnabled: ingressEnabled
+    external: ingressExternal
+    targetPort: targetPort
     enableTelemetry: enableTelemetry
   }
-  dependsOn: [
-    deploymentRegistryAccess
-    imageRegistryAccess
-  ]
 }
 
 @description('Name of the container app.')
@@ -199,7 +123,7 @@ output containerAppName string = containerApp.outputs.name
 output containerAppResourceId string = containerApp.outputs.resourceId
 
 @description('Public endpoint of the container app, or an empty string when ingress is disabled.')
-output containerAppUri string = ingressEnabled ? 'https://${containerApp.outputs.fqdn}' : ''
+output containerAppUri string = containerApp.outputs.uri
 
 @description('Name of the container registry used by azd to push and deploy images.')
 output containerRegistryName string = containerAppsStack.outputs.registryName

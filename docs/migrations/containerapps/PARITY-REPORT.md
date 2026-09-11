@@ -7,7 +7,7 @@ Phase 6 verification of the Container Apps migration against the signed [TRIAGE.
 | **Source** | `microsoft/vscode-azurecontainerapps` @ `f6c93dcd1a55b6aaf27ed4edca8f6a52b5348e16` (v0.11.2) |
 | **Triage rows** | 140 |
 | **Resolved** | 140 (0 unaccounted for) |
-| **Date** | 2026-09-10 |
+| **Date** | 2026-09-11 |
 
 Evidence paths are relative to `extensions/vscode-azure/src/` unless another package is named.
 
@@ -15,11 +15,11 @@ Evidence paths are relative to `extensions/vscode-azure/src/` unless another pac
 
 | Disposition | Rows | Outcome |
 |---|---|---|
-| Migrate | 10 | all landed |
+| Migrate | 7 | all landed |
 | Adapt | 18 | all landed |
 | Reuse | 11 | all wired (verified against source, not assumed) |
 | Defer | 13 | all tracked in [MIGRATION-PLAN.md](MIGRATION-PLAN.md#deferred-tracked-not-built-now) |
-| Drop | 88 | all confirmed absent from the codebase |
+| Drop | 91 | all confirmed absent from the codebase |
 | **Total** | **140** | |
 
 ## Artifact check
@@ -27,7 +27,7 @@ Evidence paths are relative to `extensions/vscode-azure/src/` unless another pac
 | Check | Result |
 |---|---|
 | `INVENTORY.md` tracked | yes |
-| `TRIAGE.md` tracked, signed | yes -- Brandon Waterloo (@bwateratmsft), 2026-08-21 |
+| `TRIAGE.md` tracked, signed | yes -- Brandon Waterloo (@bwateratmsft), 2026-09-11 |
 | `MIGRATION-PLAN.md` tracked, every task tagged with an ID | yes |
 | Artifacts landed before any feature code | yes -- `431c4453` is the branch's first commit |
 | No artifact exists only in scratch | yes |
@@ -56,16 +56,13 @@ Evidence paths are relative to `extensions/vscode-azure/src/` unless another pac
 | ACA-083 | `logsGroupItem` | Adapt | landed | capability moved onto the app node; no group node |
 | ACA-093 | `logStreamItem` | Adapt | landed | `StartStreamingLogs.ContextValue`, inline + context menu |
 | ACA-094 | `logsItem` | Reuse | wired | `OpenUrl` + `OpenInPortal.bladeUrl('/logs')` |
-| ACA-095 | Quickstart image source | Adapt | landed | Explicit quickstart choice in `PickImageSourceStep`; Bicep `imageName` default resolves to a placeholder image |
-| ACA-096 | ACR image source | Migrate | landed | `commands/containerApps/steps/PickImageSourceStep.ts` |
-| ACA-098 | "Other registry" free-text | Migrate | landed | same combo box, `createItemFromValue` |
+| ACA-095 | Quickstart image source | Adapt | landed | `CreateContainerApp.ts` provisions the upsert pattern's quickstart image automatically; `DetectTargetPortStep` uses port 80 |
 | ACA-101 | Registry creds -- managed identity | Adapt | landed | topology module: `identityType: 'UserAssigned'` + AcrPull |
-| ACA-104 | Ingress from Dockerfile `EXPOSE` | Adapt | landed | `steps/DetectTargetPortStep.ts` -> `targetPort` Bicep param; project-scoped detection or a custom-image port prompt |
+| ACA-104 | Ingress from Dockerfile `EXPOSE` | Adapt | landed | `steps/DetectTargetPortStep.ts` -> `targetPort` Bicep param; project-scoped detection with a port 80 default |
 | ACA-105 | Start verification + log fetch | Migrate | landed | `steps/VerifyContainerAppStartStep.ts` |
 | ACA-110 | Overwrite confirm | Adapt | landed (reuse) | `azd/wizard/ConfirmProvisionStep.ts`, wording sharpened |
 | ACA-111 | Container Apps client | Migrate | landed | `packages/azutils/src/rest/clients/ContainerAppsClient.ts` |
 | ACA-112 | ACR management client | Reuse | wired | existing `AcrClient`; no `arm-containerregistry` import in this product |
-| ACA-113 | ACR data-plane client | Migrate | landed | `packages/azutils/src/rest/clients/AcrRepositoryClient.ts` |
 | ACA-114 | Authorization client | Adapt | landed | role assignment expressed in Bicep, not an ARM call |
 | ACA-115 | Logs query client | Migrate | landed | `packages/azutils/src/rest/clients/LogsQueryClient.ts` |
 | ACA-118 | Log-stream transport | Migrate | landed | `tree/resources/containerApps/ContainerAppLogStream.ts` |
@@ -77,6 +74,10 @@ Evidence paths are relative to `extensions/vscode-azure/src/` unless another pac
 | ACA-137 | Output channel | Reuse | wired | no product-specific channel registration |
 
 ## Dropped features -- confirmed absent
+
+ACA-096 (existing ACR image selection), ACA-098 (free-text image selection), and ACA-113 (the dedicated
+ACR data-plane client) are out of scope by signed decision. Creation uses quickstart; project deployment
+builds and pushes through azd. Registry browsing remains owned by the ACR product.
 
 Each judgment-call group was grepped across all 205 tracked source, manifest, and template files.
 
@@ -123,10 +124,12 @@ context value that is declared in source and assembled onto the node by `Contain
 
 | Gate | Result |
 |---|---|
-| `pnpm run lint` | clean |
-| `pnpm run build` | succeeds |
-| `pnpm run test` | 1,144 extension, 573 utils, 392 azutils; 0 failing (1 extension and 13 utils tests pending) |
-| `az bicep build` on the consumer template | compiles; all pinned AVM modules resolve |
+| `pnpm --filter @microsoft/vscode-azure-azutils --filter vscode-azure run lint` | clean |
+| `pnpm --filter @microsoft/vscode-azure-azutils --filter vscode-azure run build` | succeeds |
+| `pnpm --filter @microsoft/vscode-azure-azutils --filter vscode-azure run test` | 1,135 extension and 375 azutils passing; 0 failing (4 extension tests pending) |
+| `bicep build` on the consumer template | compiles; all pinned AVM modules resolve |
+
+Validation covers the affected azutils and extension workspaces. The utils workspace is unchanged.
 
 ## Known gaps
 
