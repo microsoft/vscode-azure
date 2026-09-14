@@ -58,7 +58,7 @@ Evidence paths are relative to `extensions/vscode-azure/src/` unless another pac
 | ACA-094 | `logsItem` | Reuse | wired | `OpenUrl` + `OpenInPortal.bladeUrl('/logs')` |
 | ACA-095 | Quickstart image source | Adapt | landed | `CreateContainerApp.ts` provisions the upsert pattern's quickstart image automatically; `DetectTargetPortStep` uses port 80 |
 | ACA-101 | Registry creds -- managed identity | Adapt | landed | topology module: `identityType: 'UserAssigned'` + AcrPull |
-| ACA-104 | Ingress from Dockerfile `EXPOSE` | Adapt | landed | `steps/DetectTargetPortStep.ts` -> `targetPort` Bicep param; project-scoped detection with a port 80 default |
+| ACA-104 | Ingress from Dockerfile `EXPOSE` | Adapt | landed | `steps/DetectTargetPortStep.ts` -> `targetPort` Bicep param; nearest ancestor Dockerfile from the single service directory through the azd root, with a port 80 default |
 | ACA-105 | Start verification + log fetch | Adapt | landed | `steps/VerifyContainerAppStartStep.ts` launches hidden `VerifyContainerAppStart.ts`; independent activity after application-image deployment, fixed-revision health polling, separate clickable system/app log-stream shortcuts |
 | ACA-110 | Overwrite confirm | Adapt | landed (reuse) | `azd/wizard/ConfirmProvisionStep.ts`, wording sharpened |
 | ACA-111 | Container Apps client | Migrate | landed | `packages/azutils/src/rest/clients/ContainerAppsClient.ts` |

@@ -13,11 +13,8 @@ import { createMockCodeContext, createTestActionExecutor, MockUri, respondToProm
 import { mock } from 'node:test';
 import { CreateContainerApp } from '../../../src/commands/containerApps/CreateContainerApp';
 import { VerifyContainerAppStart } from '../../../src/commands/containerApps/VerifyContainerAppStart';
-import { ContainerfileTag } from '../../../src/tree/workspace/containerApps/containerAppsDetector';
-import { IWorkspaceIndexService } from '../../../src/utils/workspaceIndex/WorkspaceIndexService';
 import { createMockAzdService } from '../../azd/MockAzdService';
 import { createMockArmProvider, createMockCodeProvider } from '../../tree/activity/MockActivityProviders';
-import { createMockWorkspaceIndexService } from '../../utils/workspaceIndex/mockWorkspaceIndexService';
 import { createWizardCommandContainer } from '../createWizardCommandContainer';
 
 describe('CreateContainerApp (unit)', () => {
@@ -60,7 +57,6 @@ describe('CreateContainerApp (unit)', () => {
             codeProvider: createMockCodeProvider(),
         });
         container.bind(IActionExecutor).toConstantValue(executor);
-        container.bind(IWorkspaceIndexService).toConstantValue(createMockWorkspaceIndexService({ [ContainerfileTag]: [dockerfile] }));
         const dispatch = mock.method(ctx.code.commands, 'executeCommand', () => Promise.resolve());
         return { command: container.get(CreateContainerApp), code, azd, folder, dispatch };
     }
@@ -97,6 +93,41 @@ describe('CreateContainerApp (unit)', () => {
         expect(azd.show.mock.callCount()).to.equal(0);
         const folder = azd.provision.mock.calls[0].arguments[0];
         expect(folder.toString()).not.to.equal(workspaceFolder.toString());
+        const parameters = JSON.parse(Buffer.from(await code.fs.readFile(MockUri.joinPath(folder, 'infra', 'main.parameters.json'))).toString());
+        expect(parameters.parameters.targetPort.value).to.equal(80);
+        prompts.assertAllConsumed();
+    });
+
+    it('uses the hydrated service directory to generate the ingress parameter', async () => {
+        const { command, code, azd, folder } = createCommand();
+        const source = MockUri.joinPath(folder, 'src', 'api');
+        code.fs.addFile(MockUri.joinPath(source, 'Dockerfile'), 'EXPOSE 8080\n');
+        code.fs.addFile(MockUri.joinPath(folder, 'azure.yaml'), 'name: my-app\n');
+        azd.show.mock.mockImplementation(() => Promise.resolve({
+            name: 'my-app', services: { api: { project: { path: source.fsPath, language: 'docker' } } },
+        }));
+        const prompts = respondToPrompts(code, [{ pick: 'sub-1' }, { pick: 'East US' }, { input: 'my-app' }]);
+
+        await command.execute('deploy');
+
+        const parameters = JSON.parse(Buffer.from(await code.fs.readFile(MockUri.joinPath(folder, 'infra', 'main.parameters.json'))).toString());
+        expect(parameters.parameters.targetPort.value).to.equal(8080);
+        prompts.assertAllConsumed();
+    });
+
+    it('generates the default ingress parameter for a multi-service project without a prompt', async () => {
+        const { command, code, azd, folder } = createCommand();
+        code.fs.addFile(MockUri.joinPath(folder, 'azure.yaml'), 'name: my-app\n');
+        azd.show.mock.mockImplementation(() => Promise.resolve({
+            name: 'my-app', services: {
+                api: { project: { path: folder.fsPath, language: 'docker' } },
+                web: { project: { path: folder.fsPath, language: 'docker' } },
+            },
+        }));
+        const prompts = respondToPrompts(code, [{ pick: 'sub-1' }, { pick: 'East US' }, { input: 'my-app' }]);
+
+        await command.execute('deploy');
+
         const parameters = JSON.parse(Buffer.from(await code.fs.readFile(MockUri.joinPath(folder, 'infra', 'main.parameters.json'))).toString());
         expect(parameters.parameters.targetPort.value).to.equal(80);
         prompts.assertAllConsumed();

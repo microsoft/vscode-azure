@@ -3,18 +3,17 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IActionExecutor, IVsCode, PromptStep, readText } from '@microsoft/vscode-azure-utils';
+import { dirname, IActionExecutor, isFileNotFoundError, IVsCode, PromptStep, readText, relativePath } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
-import { ContainerfileTag } from '../../../tree/workspace/containerApps/containerAppsDetector';
-import { IWorkspaceIndexService } from '../../../utils/workspaceIndex/WorkspaceIndexService';
 import type { CreateContainerAppContext } from '../CreateContainerAppContext';
 
 /** Port used when the project declares none, matching the Container Apps default. */
 const DefaultTargetPort = 80;
 
 /**
- * Derives the container's ingress port from the project's Containerfile.
+ * Derives the container's ingress port from the nearest ancestor Dockerfile,
+ * starting at the service directory and stopping at the azd project root.
  *
  * Project deployments use `EXPOSE` or the editable Bicep default.
  * App creation uses the quickstart image's known port.
@@ -24,7 +23,6 @@ export class DetectTargetPortStep extends PromptStep<CreateContainerAppContext> 
     public constructor(
         @inject(IVsCode) private readonly code: IVsCode,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
-        @inject(IWorkspaceIndexService) private readonly indexService: IWorkspaceIndexService,
     ) {
         super();
     }
@@ -38,31 +36,49 @@ export class DetectTargetPortStep extends PromptStep<CreateContainerAppContext> 
     public async prompt(context: Readonly<CreateContainerAppContext>): Promise<Partial<CreateContainerAppContext>> {
         const targetPort = context.job === 'createNew'
             ? DefaultTargetPort
-            : await this.detectPort(context.iacFolder) ?? DefaultTargetPort;
+            : await this.detectPort(context) ?? DefaultTargetPort;
         this.executor.setTelProp('detectedTargetPort', String(targetPort));
         return { targetPort };
     }
 
-    /** Returns the first port exposed by the most relevant Containerfile, if any. */
-    private async detectPort(iacFolder: vscode.Uri | undefined): Promise<number | undefined> {
-        const index = await this.indexService.getIndex();
-        const containerfiles = index.withTag(ContainerfileTag);
+    private async detectPort(context: Readonly<CreateContainerAppContext>): Promise<number | undefined> {
+        if (!context.iacFolder) {
+            return undefined;
+        }
+        const root = this.code.Uri.joinPath(context.iacFolder, '.');
+        let directory = context.hasServices ? await this.serviceDirectory(context, root) : root;
 
-        const scoped = iacFolder
-            ? containerfiles.filter(uri => uri.scheme === iacFolder.scheme
-                && uri.authority === iacFolder.authority
-                && uri.path.startsWith(`${iacFolder.path.replace(/\/$/, '')}/`))
-            : [];
-
-        for (const uri of scoped) {
-            const content = await readText(this.code, uri);
-            const port = content === undefined ? undefined : parseExposedPort(content);
-            if (port !== undefined) {
-                return port;
+        while (directory && relativePath(root, directory) !== undefined) {
+            const content = await readText(this.code, this.code.Uri.joinPath(directory, 'Dockerfile'));
+            if (content !== undefined) {
+                return parseExposedPort(content);
             }
+            if (relativePath(root, directory) === '') {
+                break;
+            }
+            directory = dirname(directory);
         }
 
         return undefined;
+    }
+
+    private async serviceDirectory(context: Readonly<CreateContainerAppContext>, root: vscode.Uri): Promise<vscode.Uri | undefined> {
+        if (!context.hydratedServiceProjectPath) {
+            return undefined;
+        }
+        const project = root.with({ path: this.code.Uri.file(context.hydratedServiceProjectPath).path });
+        if (relativePath(root, project) === undefined) {
+            return undefined;
+        }
+        try {
+            const stat = await this.code.workspace.fs.stat(project);
+            return stat.type & this.code.FileType.Directory ? project : dirname(project);
+        } catch (error) {
+            if (isFileNotFoundError(error)) {
+                return undefined;
+            }
+            throw error;
+        }
     }
 }
 

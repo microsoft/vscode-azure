@@ -111,10 +111,17 @@ No published AVM pattern module covers the whole topology; publishing one is
 tracked by [#329](https://github.com/microsoft/vscode-azure/issues/329). When that lands, the module
 collapses to a single `br/public:` reference and the consumer does not change.
 
-For project deployment, the ingress target port is detected from an in-project Dockerfile or Containerfile
-`EXPOSE` instruction and emitted as a Bicep parameter. Files in other workspace projects are not candidates.
-If the project declares no port, the default is 80; the generated Bicep stays editable. Quickstart creation
-uses port 80 independently of any workspace Containerfile. Neither job asks for an image reference.
+For project deployment, ingress port detection checks `Dockerfile` in the single existing service's
+project directory reported by `azd show`, then each parent up to the azd project root. A project-file path
+such as a `.csproj` uses its containing directory. A newly configured service uses the workspace root.
+Only the nearest Dockerfile is inspected; descendants and sibling services are not searched.
+Its first usable TCP `EXPOSE` supplies `targetPort` in `infra/main.parameters.json`.
+
+Detection is best-effort: multiple services, an unavailable or out-of-root service path, or no usable
+port in the nearest Dockerfile result in port 80 without a prompt. Custom Dockerfile paths/names and
+build-stage selection are not interpreted. Users can correct the generated parameter; existing
+infrastructure is left untouched. Quickstart creation always uses port 80.
+Neither job asks for an image reference.
 
 **Deploying requires a local container runtime.** azd builds the image locally with Docker or Podman, so one
 must be installed and running. Building in ACR instead would remove that requirement; it is tracked by

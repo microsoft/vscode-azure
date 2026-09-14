@@ -4,22 +4,17 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createMockCodeContext, createTestActionExecutor, MockUri } from '@microsoft/vscode-azure-utils/testing';
-import type * as vscode from 'vscode';
 import { DetectTargetPortStep, parseExposedPort } from '../../../src/commands/containerApps/steps/DetectTargetPortStep';
-import { ContainerfileTag } from '../../../src/tree/workspace/containerApps/containerAppsDetector';
-import { createMockWorkspaceIndexService } from '../../utils/workspaceIndex/mockWorkspaceIndexService';
 
 /** Builds a step over a workspace containing exactly the supplied Containerfiles. */
 function createStep(files: Record<string, string>) {
     const { ctx, mock: mockResult } = createMockCodeContext();
-    const uris: vscode.Uri[] = [];
     for (const [path, content] of Object.entries(files)) {
         const uri = MockUri.file(path);
-        uris.push(uri);
         mockResult.fs.addFile(uri, content);
     }
     const { executor } = createTestActionExecutor();
-    return { step: new DetectTargetPortStep(ctx.code, executor, createMockWorkspaceIndexService({ [ContainerfileTag]: uris })), mockResult };
+    return { step: new DetectTargetPortStep(ctx.code, executor), mockResult };
 }
 
 describe('DetectTargetPortStep (unit)', () => {
@@ -41,17 +36,100 @@ describe('DetectTargetPortStep (unit)', () => {
         expect(result.targetPort).to.equal(80);
     });
 
-    it('prefers a Dockerfile inside the folder being generated into', async () => {
-        // A monorepo holds Dockerfiles that have nothing to do with this app;
-        // picking the wrong one would silently expose the wrong port.
+    it('prefers the service Dockerfile over ancestor and sibling Dockerfiles', async () => {
         const { step } = createStep({
+            '/repo/Dockerfile': 'EXPOSE 80\n',
             '/repo/other/Dockerfile': 'EXPOSE 9999\n',
             '/repo/api/Dockerfile': 'EXPOSE 8080\n',
         });
 
-        const result = await step.prompt({ ...baseContext, iacFolder: MockUri.file('/repo/api') });
+        const result = await step.prompt({
+            ...baseContext, iacFolder: MockUri.file('/repo'),
+            hasServices: true, hydratedServiceProjectPath: '/repo/api',
+        });
 
         expect(result.targetPort).to.equal(8080);
+    });
+
+    it('uses the nearest ancestor Dockerfile for a service project file', async () => {
+        const { step } = createStep({
+            '/repo/Dockerfile': 'EXPOSE 9999\n',
+            '/repo/app/Dockerfile': 'EXPOSE 8080\n',
+            '/repo/app/backend/Api.csproj': '<Project />',
+        });
+
+        const result = await step.prompt({
+            ...baseContext, iacFolder: MockUri.file('/repo'), hasServices: true,
+            hydratedServiceProjectPath: '/repo/app/backend/Api.csproj',
+        });
+
+        expect(result.targetPort).to.equal(8080);
+    });
+
+    it('includes the azd project root in the ancestor search', async () => {
+        const { step } = createStep({
+            '/repo/Dockerfile': 'EXPOSE 8080\n',
+            '/repo/src/api/index.js': '',
+        });
+
+        expect((await step.prompt({
+            ...baseContext, iacFolder: MockUri.file('/repo'), hasServices: true,
+            hydratedServiceProjectPath: '/repo/src/api',
+        })).targetPort).to.equal(8080);
+    });
+
+    it('defaults when the nearest Dockerfile has no usable port', async () => {
+        const { step } = createStep({
+            '/repo/Dockerfile': 'EXPOSE 8080\n',
+            '/repo/api/Dockerfile': 'FROM node:20\n',
+        });
+
+        expect((await step.prompt({
+            ...baseContext, iacFolder: MockUri.file('/repo'), hasServices: true,
+            hydratedServiceProjectPath: '/repo/api',
+        })).targetPort).to.equal(80);
+    });
+
+    it('defaults when existing services have no unambiguous project path', async () => {
+        const { step, mockResult } = createStep({ '/repo/Dockerfile': 'EXPOSE 9999\n' });
+
+        expect((await step.prompt({
+            ...baseContext, iacFolder: MockUri.file('/repo'), hasServices: true,
+        })).targetPort).to.equal(80);
+        expect(mockResult.fs.readFile.mock.callCount()).to.equal(0);
+    });
+
+    it('defaults when the service project is missing', async () => {
+        const { step } = createStep({ '/repo/Dockerfile': 'EXPOSE 9999\n' });
+
+        expect((await step.prompt({
+            ...baseContext, iacFolder: MockUri.file('/repo'), hasServices: true,
+            hydratedServiceProjectPath: '/repo/missing',
+        })).targetPort).to.equal(80);
+    });
+
+    it('keeps the search inside the azd project root', async () => {
+        const { step } = createStep({
+            '/Dockerfile': 'EXPOSE 9999\n',
+            '/repo/api/index.js': '',
+            '/repo/api/nested/Dockerfile': 'EXPOSE 9999\n',
+            '/repo/sibling/Dockerfile': 'EXPOSE 9999\n',
+        });
+
+        expect((await step.prompt({
+            ...baseContext, iacFolder: MockUri.file('/repo'), hasServices: true,
+            hydratedServiceProjectPath: '/repo/api',
+        })).targetPort).to.equal(80);
+    });
+
+    it('defaults when the service is outside the azd project root', async () => {
+        const { step, mockResult } = createStep({ '/repo-other/Dockerfile': 'EXPOSE 9999\n' });
+
+        expect((await step.prompt({
+            ...baseContext, iacFolder: MockUri.file('/repo'), hasServices: true,
+            hydratedServiceProjectPath: '/repo-other',
+        })).targetPort).to.equal(80);
+        expect(mockResult.fs.readFile.mock.callCount()).to.equal(0);
     });
 
     it('does not overwrite a port the user already has infrastructure for', () => {
@@ -82,11 +160,15 @@ describe('DetectTargetPortStep (unit)', () => {
         expect((await step.prompt({ ...baseContext, iacFolder: MockUri.file('/repo/api') })).targetPort).to.equal(80);
     });
 
-    it('scopes files to the same URI scheme and authority', async () => {
-        const { step } = createStep({ '/repo/api/Dockerfile': 'EXPOSE 9999\n' });
+    it('preserves the project URI scheme and authority for service files', async () => {
+        const { step, mockResult } = createStep({ '/repo/api/Dockerfile': 'EXPOSE 8080\n' });
 
-        const iacFolder = MockUri.parse('vscode-remote://ssh-remote+host/repo/api');
-        expect((await step.prompt({ ...baseContext, iacFolder })).targetPort).to.equal(80);
+        const iacFolder = MockUri.parse('vscode-remote://ssh-remote+host/repo');
+        expect((await step.prompt({
+            ...baseContext, iacFolder, hasServices: true, hydratedServiceProjectPath: '/repo/api',
+        })).targetPort).to.equal(8080);
+        expect(mockResult.fs.readFile.mock.calls[0].arguments[0].toString())
+            .to.equal(MockUri.joinPath(iacFolder, 'api', 'Dockerfile').toString());
     });
 
     it('accepts a project URI with a trailing slash', async () => {
@@ -95,7 +177,7 @@ describe('DetectTargetPortStep (unit)', () => {
         expect((await step.prompt({ ...baseContext, iacFolder: MockUri.file('/repo/api/') })).targetPort).to.equal(3000);
     });
 
-    it('uses the default if an indexed Containerfile has vanished', async () => {
+    it('uses the default if the Dockerfile is missing', async () => {
         const { step, mockResult } = createStep({ '/project/Dockerfile': 'EXPOSE 3000\n' });
         mockResult.fs.readFile.mock.mockImplementation(() => Promise.reject(mockResult.vscode.FileSystemError.FileNotFound()));
 
@@ -117,6 +199,25 @@ describe('DetectTargetPortStep (unit)', () => {
 
         await expect(step.prompt({ ...baseContext, iacFolder: MockUri.file('/project') }))
             .to.be.rejectedWith('permission denied');
+    });
+
+    it('propagates service stat failures other than a missing project', async () => {
+        const { step, mockResult } = createStep({});
+        mockResult.fs.stat.mock.mockImplementation(() => Promise.reject(new Error('permission denied')));
+
+        await expect(step.prompt({
+            ...baseContext, iacFolder: MockUri.file('/repo'), hasServices: true,
+            hydratedServiceProjectPath: '/repo/api',
+        })).to.be.rejectedWith('permission denied');
+    });
+
+    it('resolves a Windows service project path', async () => {
+        const { step } = createStep({ 'C:\\repo\\src\\api\\Dockerfile': 'EXPOSE 8080\n' });
+
+        expect((await step.prompt({
+            ...baseContext, iacFolder: MockUri.file('C:\\repo'), hasServices: true,
+            hydratedServiceProjectPath: 'C:\\repo\\src\\api',
+        })).targetPort).to.equal(8080);
     });
 });
 

@@ -56,6 +56,11 @@ export interface AzdWizardContext {
     readonly hasInfra?: boolean;
     /** `true` when an existing `azure.yaml` already declares a `services:` entry. */
     readonly hasServices?: boolean;
+    /**
+     * Absolute project path from `azd show`, only when exactly one service exists.
+     * May identify a project file (for example, a `.csproj`) rather than a directory.
+     */
+    readonly hydratedServiceProjectPath?: string;
     /** Name of the existing default azd environment in {@linkcode iacFolder}, if any. */
     readonly existingDefaultEnvName?: string;
     /**
