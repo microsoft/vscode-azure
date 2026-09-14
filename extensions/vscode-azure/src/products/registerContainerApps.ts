@@ -18,8 +18,6 @@ import { pushDisposable } from '../services';
 import { ContainerAppLogStreamService, IContainerAppLogStreamService } from '../tree/resources/containerApps/ContainerAppLogStream';
 import { ContainerAppsDataProvider } from '../tree/resources/containerApps/ContainerAppsDataProvider';
 import { ContainerAppsViewProvider } from '../tree/resources/containerApps/ContainerAppsViewProvider';
-import { containerAppsDetector } from '../tree/workspace/containerApps/containerAppsDetector';
-import { IWorkspaceDetector } from '../utils/workspaceIndex/WorkspaceDetector';
 
 /** Contribute all Azure Container Apps services and UI integrations. */
 export function registerContainerApps(registrar: ProductRegistrar): void {
@@ -27,7 +25,6 @@ export function registerContainerApps(registrar: ProductRegistrar): void {
 
     registrar.registerBinding(container => {
         container.bind(IContainerAppLogStreamService).to(ContainerAppLogStreamService).inSingletonScope().onActivation(pushDisposable);
-        container.bind(IWorkspaceDetector).toConstantValue(containerAppsDetector);
     });
 
     registrar.registerResourceDataProvider(ContainerAppsDataProvider);
