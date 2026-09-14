@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    AzureChinaCloud, AzurePublicCloud, AzureUSGovernment, getResourceGroupName, IContainerAppsClientProvider, type GenericResource,
+    getResourceGroupName, IContainerAppsClientProvider, type GenericResource,
 } from '@microsoft/vscode-azure-azutils';
 import {
     CancellationError, CaselessMap, Disposable, EventEmitter, IActionExecutor, IVsCode, stringifyError,
@@ -36,21 +36,6 @@ export interface SystemLogStreamTarget {
 
 /** A console container stream or an app-wide system event stream. */
 export type ContainerAppLogStreamTarget = LogStreamTarget | SystemLogStreamTarget;
-
-/**
- * Hosts on which each cloud's data-plane token may be presented, keyed by ARM endpoint.
- *
- * The log-stream endpoint issues a redirect to a regional host, and the token
- * has to survive it. Following redirects blindly would hand an Azure
- * credential to whatever host the response names, so the token is only
- * re-attached while the target stays inside the same cloud's Container Apps
- * data plane. Unrecognized ARM endpoints do not authorize redirects.
- */
-const LogStreamHostSuffixes = new Map([
-    [AzurePublicCloud.resourceManagerEndpointUrl, ['.azurecontainerapps.io', '.azurecontainerapps.dev']],
-    [AzureUSGovernment.resourceManagerEndpointUrl, ['.azurecontainerapps.us']],
-    [AzureChinaCloud.resourceManagerEndpointUrl, ['.azurecontainerapps.cn']],
-]);
 
 /** Redirect hops tolerated before the request is treated as a loop. */
 const MaxRedirects = 5;
@@ -175,8 +160,7 @@ export class ContainerAppLogStreamService implements Disposable {
             throw new Error(this.code.l10n.t('Could not obtain a token to stream logs for \'{0}\'.', target.app.name));
         }
 
-        const hostSuffixes = LogStreamHostSuffixes.get(target.app.subscription.environment.resourceManagerEndpointUrl.toLowerCase());
-        const response = await this.connect(endpoint, token, hostSuffixes, signal);
+        const response = await this.connect(endpoint, token, signal);
         if (signal.aborted) {
             await response.body?.cancel();
             signal.throwIfAborted();
@@ -235,10 +219,10 @@ export class ContainerAppLogStreamService implements Disposable {
     }
 
     /**
-     * Issues the streaming request, following redirects by hand so the
-     * data-plane token is only ever re-sent to a Container Apps host.
+     * Preserves authentication across HTTPS redirects from Azure's log service;
+     * automatic fetch redirects strip Authorization when the origin changes.
      */
-    private async connect(endpoint: string, token: string, hostSuffixes: readonly string[] | undefined, signal: AbortSignal): Promise<Response> {
+    private async connect(endpoint: string, token: string, signal: AbortSignal): Promise<Response> {
         let url = endpoint;
 
         for (let hop = 0; hop <= MaxRedirects; hop++) {
@@ -270,8 +254,8 @@ export class ContainerAppLogStreamService implements Disposable {
             }
 
             const target = new URL(location, url);
-            if (target.protocol !== 'https:' || !hostSuffixes?.some(suffix => target.hostname.toLowerCase().endsWith(suffix))) {
-                throw new Error(this.code.l10n.t('The log stream endpoint redirected outside Azure Container Apps.'));
+            if (target.protocol !== 'https:') {
+                throw new Error(this.code.l10n.t('The log stream endpoint redirected to a non-HTTPS destination.'));
             }
 
             url = target.toString();

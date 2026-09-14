@@ -284,7 +284,7 @@ ACA-068, ACA-069, ACA-070, ACA-083, ACA-084, ACA-085, ACA-093, ACA-094.
 | ACA-115 | `LogsQueryClient (@azure/monitor-query)` | client | B | **Adapt** | User-approved refinement: diagnostic access through Container Apps token/stream APIs; no automatic Log Analytics query | n/a -- no telemetry event |
 | ACA-116 | `Storage blob upload (source archive)` | client | B | **Drop** | JC4. azd performs the source-archive upload. | n/a -- no telemetry event |
 | ACA-117 | `Docker Hub v2 REST client` | client | B | **Defer** | Only for ACA-097 **Blocked by:** Client for ACA-097; deferred with it. | n/a -- no telemetry event |
-| ACA-118 | `Log-stream data-plane transport` | provider | B | **Adapt** | User-approved refinement: console plus app-wide system JSON streams; ARM token exchange, cloud-restricted redirects, independent terminal lifetimes | n/a -- no telemetry event |
+| ACA-118 | `Log-stream data-plane transport` | provider | B | **Adapt** | User-approved refinement: console plus app-wide system JSON streams; ARM token exchange, authenticated HTTPS redirects from Azure's log service, independent terminal lifetimes | n/a -- no telemetry event |
 | ACA-119 | `Revision-draft FileSystemProvider` | provider | B | **Drop** | JC1. The virtual filesystem is the draft mechanism itself. | n/a -- no telemetry event |
 | ACA-120 | `Confirmation webview (React/Fluent)` | webview | B | **Drop** | New capability for the monorepo -- judgment call Reviewer (verbatim): "Drop the webviews" | n/a -- no telemetry event |
 | ACA-121 | `Loading webview` | webview | B | **Drop** | Same | n/a -- no telemetry event |

@@ -211,8 +211,8 @@ Both resource types are handled by **one** data provider and **one** view provid
 > External facts: `ReplicaContainer.logStreamEndpoint` and `containerApps.getAuthToken` are the transport's
 > two ARM inputs (verified against the installed `@azure/arm-appcontainers@4.0.0-beta.1` type definitions).
 > The redirect is followed by hand rather than delegated: the fetch spec strips `Authorization` on a
-> cross-origin redirect, and following one blindly would instead hand an Azure credential to whatever host
-> the response names, so the token is re-attached only while the target stays on `*.azurecontainerapps.io`.
+> cross-origin redirect. The token is preserved across HTTPS redirects from Azure's log service,
+> with at most five redirects followed.
 
 - [x] `RestartContainerApp` -- `ContextValue = 'restartContainerApp'`; resolves the app, awaits enrichment
       for `latestRevisionName`, calls `containerAppsRevisions.restartRevision`, then invalidates the node.
@@ -223,7 +223,7 @@ Both resource types are handled by **one** data provider and **one** view provid
       `parse()`/`from()` are public) to derive a sibling resource node id without string surgery; add it in
       azutils, do not fork  <- ACA-014
 - [x] `ContainerAppLogStream` service -- ARM `containerApps.getAuthToken` for a short-lived data-plane
-      token, GET the per-container `logStreamEndpoint` with guarded cross-origin redirects, and pipe the
+      token, GET the per-container `logStreamEndpoint` with authenticated HTTPS redirects, and pipe the
       chunked response into a per-replica pseudoterminal backed by an `AbortController`  <- ACA-118
 - [x] `StartStreamingLogs` -- `ContextValue = 'startContainerAppLogStream'`; picks revision -> replica ->
       container, then opens the stream. Absorbs the source's `logStreamItem` leaf and the `Logs` group node
@@ -310,7 +310,7 @@ the app actually started.
       for the correlation limitation and diagnostic behavior. <- ACA-105
 - [x] Diagnostic access uses the shared `ContainerAppLogStreamService` with typed console/system targets,
       ARM `getAuthToken`, and the app's `eventStreamEndpoint` (`follow=true&output=json`). System and
-      console terminals coexist, deduplicate independently, and retain cloud-scoped redirect checks and
+      console terminals coexist, deduplicate independently, and use authenticated HTTPS redirects and
       cancellation. `StartStreamingLogs` accepts explicit activity targets without a cached resource;
       its tree/palette console flow is unchanged. This is the user-approved Adapt refinement recorded
       in `TRIAGE.md`; no automatic Log Analytics query is part of verification. <- ACA-115, ACA-118

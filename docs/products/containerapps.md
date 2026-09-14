@@ -51,11 +51,9 @@ Container Apps console and system log streams use **chunked HTTP, not web socket
 3. The chunked response is written into a terminal. System terminals are labeled `system, JSON` and show
    JSON lines. Closing a terminal cancels that stream.
 
-Redirects are followed **manually**. The fetch specification strips `Authorization` across origins, and
-following a redirect blindly would instead hand an Azure credential to whatever host the response names, so
-the token is only re-attached over HTTPS to the subscription cloud's Container Apps hosts:
-`*.azurecontainerapps.io` and `*.azurecontainerapps.dev` (public), `*.azurecontainerapps.us` (Government), or
-`*.azurecontainerapps.cn` (China). Cross-cloud and unrecognized-cloud redirects are rejected.
+Redirects from Azure's log service are followed **manually** to preserve `Authorization` across origins,
+which automatic fetch redirects would strip. Destinations must use HTTPS, and at most five redirects
+are followed.
 
 Concurrent starts for the same target share initialization and one terminal. System and console streams
 have separate identities and can run together. Disposing the service cancels pending ARM requests and

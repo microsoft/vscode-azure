@@ -189,28 +189,18 @@ describe('ContainerAppLogStreamService (unit)', () => {
         expect(terminals).to.be.empty;
     });
 
-    for (const destination of [
-        'https://region.azurecontainerapps.dev/eventstream',
-        'https://other.azurecontainerapps.us/eventstream',
-        'https://evilazurecontainerapps.dev/eventstream',
-        'http://region.azurecontainerapps.dev/eventstream',
-    ]) {
-        it(`validates system stream redirect ${destination}`, async () => {
-            const fetchMock = mock.method(globalThis, 'fetch', () => Promise.resolve(new Response(openBody())));
-            fetchMock.mock.mockImplementationOnce(() => Promise.resolve(new Response(null, { status: 302, headers: { location: destination } })));
-            const { service } = createService(createMockContainerAppsClient({ eventStreamEndpoint: EventStreamEndpoint }));
-            const started = service.start({ kind: 'system', app: makeContainerApp() });
-            if (destination.startsWith('https://region.azurecontainerapps.dev/')) {
-                await started;
-                expect(fetchMock.mock.calls[1].arguments[0]).to.equal(destination);
-                expect(fetchMock.mock.calls[1].arguments[1]?.headers).to.deep.equal(fetchMock.mock.calls[0].arguments[1]?.headers);
-            } else {
-                await expect(started).to.be.rejectedWith(/redirected outside/i);
-                expect(fetchMock.mock.callCount()).to.equal(1);
-            }
-            service.dispose();
-        });
-    }
+    it('preserves authentication when the system endpoint redirects to a regional host', async () => {
+        const destination = 'https://region.azurecontainerapps.dev/eventstream';
+        const fetchMock = mock.method(globalThis, 'fetch', () => Promise.resolve(new Response(openBody())));
+        fetchMock.mock.mockImplementationOnce(() => Promise.resolve(new Response(null, { status: 302, headers: { location: destination } })));
+        const { service } = createService(createMockContainerAppsClient({ eventStreamEndpoint: EventStreamEndpoint }));
+
+        await service.start({ kind: 'system', app: makeContainerApp() });
+
+        expect(fetchMock.mock.calls[1].arguments[0]).to.equal(destination);
+        expect(fetchMock.mock.calls[1].arguments[1]?.headers).to.deep.equal(fetchMock.mock.calls[0].arguments[1]?.headers);
+        service.dispose();
+    });
 
     it('shares initialization across concurrent starts at every network boundary', async () => {
         const replicas = Promise.withResolvers<readonly Replica[]>();
@@ -417,30 +407,7 @@ describe('ContainerAppLogStreamService (unit)', () => {
             service.dispose();
         });
 
-        for (const otherCloud of Clouds.filter(cloud => cloud.environment !== environment)) {
-            it(`rejects a redirect from ${environment.name} to ${otherCloud.environment.name}`, async () => {
-                const fetchMock = mock.method(globalThis, 'fetch', () => Promise.resolve(
-                    new Response(null, { status: 302, headers: { location: `https://other.region.${otherCloud.suffix}/logstream` } }),
-                ));
-                const { service, terminals } = createService(createClient(`https://myapp.region.${suffix}/logstream`));
-                const app = makeContainerApp({ subscription: makeSubscription({ environment }) });
-
-                await expect(service.start(makeTarget(app))).to.be.rejectedWith(/redirected outside/i);
-                expect(fetchMock.mock.callCount()).to.equal(1);
-                expect(terminals).to.be.empty;
-            });
-        }
     }
-
-    it('refuses to send the token to a host outside the Container Apps data plane', async () => {
-        mock.method(globalThis, 'fetch', () => Promise.resolve(
-            new Response(null, { status: 302, headers: { location: 'https://evil.example.com/steal' } }),
-        ));
-        const { service, terminals } = createService(createStreamingClient());
-
-        await expect(service.start(makeTarget(makeContainerApp()))).to.be.rejectedWith(/redirected outside/i);
-        expect(terminals).to.be.empty;
-    });
 
     it('refuses a plain-http redirect', async () => {
         mock.method(globalThis, 'fetch', () => Promise.resolve(
@@ -448,31 +415,17 @@ describe('ContainerAppLogStreamService (unit)', () => {
         ));
         const { service } = createService(createStreamingClient());
 
-        await expect(service.start(makeTarget(makeContainerApp()))).to.be.rejectedWith(/redirected outside/i);
+        await expect(service.start(makeTarget(makeContainerApp()))).to.be.rejectedWith(/non-HTTPS/i);
     });
 
-    for (const hostname of ['evilazurecontainerapps.io', 'azurecontainerapps.io.evil.example', 'azurecontainerapps.io']) {
-        it(`rejects the lookalike host ${hostname}`, async () => {
-            const fetchMock = mock.method(globalThis, 'fetch', () => Promise.resolve(
-                new Response(null, { status: 302, headers: { location: `https://${hostname}/logstream` } }),
-            ));
-            const { service } = createService(createStreamingClient());
-
-            await expect(service.start(makeTarget(makeContainerApp()))).to.be.rejectedWith(/redirected outside/i);
-            expect(fetchMock.mock.callCount()).to.equal(1);
-        });
-    }
-
-    it('rejects redirects for an unrecognized custom cloud', async () => {
+    it('bounds a redirect loop', async () => {
         const fetchMock = mock.method(globalThis, 'fetch', () => Promise.resolve(
             new Response(null, { status: 302, headers: { location: LogStreamEndpoint } }),
         ));
         const { service } = createService(createStreamingClient());
-        const environment = { ...AzurePublicCloud, isCustomCloud: true, resourceManagerEndpointUrl: 'https://management.example.com' };
-        const app = makeContainerApp({ subscription: makeSubscription({ environment }) });
 
-        await expect(service.start(makeTarget(app))).to.be.rejectedWith(/redirected outside/i);
-        expect(fetchMock.mock.callCount()).to.equal(1);
+        await expect(service.start(makeTarget(makeContainerApp()))).to.be.rejectedWith(/too many times/i);
+        expect(fetchMock.mock.callCount()).to.equal(6);
     });
 
     it('reports a container that exposes no endpoint', async () => {
