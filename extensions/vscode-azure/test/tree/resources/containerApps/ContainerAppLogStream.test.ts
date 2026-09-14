@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureChinaCloud, AzurePublicCloud, AzureUSGovernment, type ContainerApp, type ContainerAppAuthToken, type GenericResource, type Replica } from '@microsoft/vscode-azure-azutils';
+import { AzureChinaCloud, AzurePublicCloud, AzureUSGovernment, type ContainerApp, type ContainerAppAuthToken, type GenericResource } from '@microsoft/vscode-azure-azutils';
 import { createMockContainerAppsClient, makeContainerApp, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
 import { CancellationError } from '@microsoft/vscode-azure-utils';
 import { createMockVsCode, createTestActionExecutor, waitFor } from '@microsoft/vscode-azure-utils/testing';
@@ -27,27 +27,12 @@ interface TestTerminal {
     readonly dispose: Mock<() => void>;
 }
 
-function makeTarget(app: GenericResource): LogStreamTarget {
-    return { app, revisionName: 'rev1', replicaName: 'replica1', containerName: 'api' };
-}
-
-/** A client whose replica exposes a log-stream endpoint for container `api`. */
-function createClient(logStreamEndpoint: string | undefined) {
-    return createMockContainerAppsClient({
-        replicas: [{
-            name: 'replica1',
-            containers: [{ name: 'api', logStreamEndpoint }],
-        }],
-    });
-}
-
-/** The common case: a replica whose container streams from the usual endpoint. */
-function createStreamingClient() {
-    return createClient(LogStreamEndpoint);
+function makeTarget(app: GenericResource, logStreamEndpoint = LogStreamEndpoint): LogStreamTarget {
+    return { app, revisionName: 'rev1', replicaName: 'replica1', containerName: 'api', logStreamEndpoint };
 }
 
 /** Builds a service with test terminals that expose their pseudoterminal lifecycle. */
-function createService(client: ReturnType<typeof createClient>) {
+function createService(client = createMockContainerAppsClient()) {
     const terminals: TestTerminal[] = [];
     const createTerminal = mock.fn((options: vscode.ExtensionTerminalOptions): vscode.Terminal => {
         const writes: string[] = [];
@@ -95,7 +80,7 @@ describe('ContainerAppLogStreamService (unit)', () => {
     it('writes streamed chunks to a named terminal', async () => {
         mock.method(globalThis, 'fetch', () => Promise.resolve(new Response(openBody(), { status: 200 })));
         const app = makeContainerApp();
-        const { service, terminals } = createService(createStreamingClient());
+        const { service, terminals } = createService();
 
         await service.start(makeTarget(app));
         await waitFor(() => terminals[0].writes.length > 0);
@@ -111,7 +96,7 @@ describe('ContainerAppLogStreamService (unit)', () => {
     it('reuses the existing terminal when the same container is started twice', async () => {
         const fetchMock = mock.method(globalThis, 'fetch', () => Promise.resolve(new Response(openBody(), { status: 200 })));
         const app = makeContainerApp();
-        const { service, terminals } = createService(createStreamingClient());
+        const { service, terminals } = createService();
 
         await service.start(makeTarget(app));
         await service.start(makeTarget(app));
@@ -126,7 +111,7 @@ describe('ContainerAppLogStreamService (unit)', () => {
     it('streams app-wide JSON events and independently reuses console and system terminals', async () => {
         const cancel = mock.fn();
         const fetchMock = mock.method(globalThis, 'fetch', () => Promise.resolve(new Response(openBody(cancel))));
-        const client = createStreamingClient();
+        const client = createMockContainerAppsClient();
         const app = makeContainerApp();
         const details = await client.containerApps.get('rg', app.name);
         client.containerApps.get.mock.resetCalls();
@@ -203,18 +188,15 @@ describe('ContainerAppLogStreamService (unit)', () => {
     });
 
     it('shares initialization across concurrent starts at every network boundary', async () => {
-        const replicas = Promise.withResolvers<readonly Replica[]>();
         const auth = Promise.withResolvers<ContainerAppAuthToken>();
         const response = Promise.withResolvers<Response>();
-        const client = createStreamingClient();
-        client.containerAppsRevisionReplicas.listReplicas.mock.mockImplementation(() => replicas.promise);
+        const client = createMockContainerAppsClient();
         client.containerApps.getAuthToken.mock.mockImplementation(() => auth.promise);
         const fetchMock = mock.method(globalThis, 'fetch', () => response.promise);
         const target = makeTarget(makeContainerApp());
         const { service, terminals } = createService(client);
 
         const starts = [service.start(target), service.start(target)];
-        replicas.resolve([{ name: target.replicaName, containers: [{ name: target.containerName, logStreamEndpoint: LogStreamEndpoint }] }]);
         await waitFor(() => client.containerApps.getAuthToken.mock.callCount() > 0);
         starts.push(service.start(target));
         auth.resolve({ token: 'test-token', location: 'eastus' });
@@ -223,7 +205,6 @@ describe('ContainerAppLogStreamService (unit)', () => {
         response.resolve(new Response(openBody(), { status: 200 }));
         await Promise.all(starts);
 
-        expect(client.containerAppsRevisionReplicas.listReplicas.mock.callCount()).to.equal(1);
         expect(client.containerApps.getAuthToken.mock.callCount()).to.equal(1);
         expect(fetchMock.mock.callCount()).to.equal(1);
         expect(terminals).to.have.lengthOf(1);
@@ -232,66 +213,61 @@ describe('ContainerAppLogStreamService (unit)', () => {
         service.dispose();
     });
 
-    for (const operation of ['listReplicas', 'getAuthToken'] as const) {
-        it(`cancels initialization while ${operation} is pending`, async () => {
-            const replicas = Promise.withResolvers<readonly Replica[]>();
-            const auth = Promise.withResolvers<ContainerAppAuthToken>();
-            const client = createStreamingClient();
-            if (operation === 'listReplicas') {
-                client.containerAppsRevisionReplicas.listReplicas.mock.mockImplementation(() => replicas.promise);
-            } else {
-                client.containerApps.getAuthToken.mock.mockImplementation(() => auth.promise);
-            }
-            const pendingOperation = operation === 'listReplicas'
-                ? client.containerAppsRevisionReplicas.listReplicas.mock
-                : client.containerApps.getAuthToken.mock;
-            const fetchMock = mock.method(globalThis, 'fetch', () => Promise.resolve(new Response(null, { status: 403 })));
-            const { service, terminals } = createService(client);
-            const started = expect(service.start(makeTarget(makeContainerApp()))).to.be.rejectedWith(CancellationError);
-            await waitFor(() => pendingOperation.callCount() > 0);
-            const args = pendingOperation.calls[0].arguments;
-            const options = args[args.length - 1] as { abortSignal: AbortSignal };
+    it('cancels initialization while token acquisition is pending', async () => {
+        const auth = Promise.withResolvers<ContainerAppAuthToken>();
+        const client = createMockContainerAppsClient();
+        client.containerApps.getAuthToken.mock.mockImplementation(() => auth.promise);
+        const pendingOperation = client.containerApps.getAuthToken.mock;
+        const fetchMock = mock.method(globalThis, 'fetch', () => Promise.resolve(new Response(null, { status: 403 })));
+        const { service, terminals } = createService(client);
+        const started = expect(service.start(makeTarget(makeContainerApp()))).to.be.rejectedWith(CancellationError);
+        await waitFor(() => pendingOperation.callCount() > 0);
+        const options = pendingOperation.calls[0].arguments[2];
 
-            service.dispose();
-            expect(options.abortSignal.aborted).to.be.true;
-            replicas.resolve([]);
-            auth.resolve({ token: 'test-token', location: 'eastus' });
-            await started;
+        service.dispose();
+        expect(options?.abortSignal?.aborted).to.be.true;
+        auth.resolve({ token: 'test-token', location: 'eastus' });
+        await started;
 
-            expect(terminals).to.be.empty;
-            expect(fetchMock.mock.callCount()).to.equal(0);
-            if (operation === 'listReplicas') {
-                expect(client.containerApps.getAuthToken.mock.callCount()).to.equal(0);
-            }
-        });
+        expect(terminals).to.be.empty;
+        expect(fetchMock.mock.callCount()).to.equal(0);
+    });
 
-        it(`allows a retry after ${operation} fails`, async () => {
-            const client = createStreamingClient();
-            const failure = new Error('ARM request failed');
-            if (operation === 'listReplicas') {
-                client.containerAppsRevisionReplicas.listReplicas.mock.mockImplementationOnce(() => Promise.reject(failure));
-            } else {
-                client.containerApps.getAuthToken.mock.mockImplementationOnce(() => Promise.reject(failure));
-            }
-            const fetchMock = mock.method(globalThis, 'fetch', () => Promise.resolve(new Response(openBody(), { status: 200 })));
-            const { service, terminals } = createService(client);
-            const target = makeTarget(makeContainerApp());
+    it('allows a retry after token acquisition fails', async () => {
+        const client = createMockContainerAppsClient();
+        const failure = new Error('ARM request failed');
+        client.containerApps.getAuthToken.mock.mockImplementationOnce(() => Promise.reject(failure));
+        const fetchMock = mock.method(globalThis, 'fetch', () => Promise.resolve(new Response(openBody(), { status: 200 })));
+        const { service, terminals } = createService(client);
+        const target = makeTarget(makeContainerApp());
 
-            await expect(service.start(target)).to.be.rejectedWith(failure);
-            await service.start(target);
+        await expect(service.start(target)).to.be.rejectedWith(failure);
+        await service.start(target);
 
-            expect(terminals).to.have.lengthOf(1);
-            expect(fetchMock.mock.callCount()).to.equal(1);
-            service.dispose();
-        });
-    }
+        expect(terminals).to.have.lengthOf(1);
+        expect(fetchMock.mock.callCount()).to.equal(1);
+        service.dispose();
+    });
+
+    it('cancels concurrent starts when disposed before initialization runs', async () => {
+        const client = createMockContainerAppsClient();
+        const { service, terminals } = createService(client);
+        const target = makeTarget(makeContainerApp());
+        const starts = [service.start(target), service.start(target)];
+
+        service.dispose();
+
+        await Promise.all(starts.map(start => expect(start).to.be.rejectedWith(CancellationError)));
+        expect(client.containerApps.getAuthToken.mock.callCount()).to.equal(0);
+        expect(terminals).to.be.empty;
+    });
 
     for (const aborted of [true, false]) {
         it(`${aborted ? 'reports cancellation' : 'preserves the original failure'} when a disposed request rejects`, async () => {
             const response = Promise.withResolvers<Response>();
             const fetchMock = mock.method(globalThis, 'fetch', () => response.promise);
             const failure = aborted ? new DOMException('Aborted', 'AbortError') : new Error('Connection failed');
-            const { service, terminals } = createService(createStreamingClient());
+            const { service, terminals } = createService();
             const started = expect(service.start(makeTarget(makeContainerApp()))).to.be.rejectedWith(aborted ? CancellationError : failure);
             await waitFor(() => fetchMock.mock.callCount() > 0);
 
@@ -307,7 +283,7 @@ describe('ContainerAppLogStreamService (unit)', () => {
         const response = Promise.withResolvers<Response>();
         const fetchMock = mock.method(globalThis, 'fetch', () => response.promise);
         const cancel = mock.fn();
-        const { service, terminals } = createService(createStreamingClient());
+        const { service, terminals } = createService();
         const started = expect(service.start(makeTarget(makeContainerApp()))).to.be.rejectedWith(CancellationError);
         await waitFor(() => fetchMock.mock.callCount() > 0);
         const signal = fetchMock.mock.calls[0].arguments[1]?.signal;
@@ -324,7 +300,7 @@ describe('ContainerAppLogStreamService (unit)', () => {
     it('does not follow a redirect received after disposal', async () => {
         const response = Promise.withResolvers<Response>();
         const fetchMock = mock.method(globalThis, 'fetch', () => response.promise);
-        const { service, terminals } = createService(createStreamingClient());
+        const { service, terminals } = createService();
         const started = expect(service.start(makeTarget(makeContainerApp()))).to.be.rejectedWith(CancellationError);
         await waitFor(() => fetchMock.mock.callCount() > 0);
 
@@ -337,7 +313,7 @@ describe('ContainerAppLogStreamService (unit)', () => {
     });
 
     it('rejects starts after the service is disposed without making requests', async () => {
-        const client = createStreamingClient();
+        const client = createMockContainerAppsClient();
         const { service, terminals } = createService(client);
         service.dispose();
 
@@ -351,7 +327,7 @@ describe('ContainerAppLogStreamService (unit)', () => {
         const response = Promise.withResolvers<Response>();
         const fetchMock = mock.method(globalThis, 'fetch', () => response.promise);
         const failure = new Error('Connection failed');
-        const { service, terminals } = createService(createStreamingClient());
+        const { service, terminals } = createService();
         const target = makeTarget(makeContainerApp());
         const starts = [service.start(target), service.start(target)];
         const failed = Promise.all(starts.map(start => expect(start).to.be.rejectedWith(failure)));
@@ -373,7 +349,7 @@ describe('ContainerAppLogStreamService (unit)', () => {
         const cancel = mock.fn();
         const fetchMock = mock.method(globalThis, 'fetch', () => Promise.resolve(new Response(openBody(cancel), { status: 200 })));
         const app = makeContainerApp();
-        const { service, terminals } = createService(createStreamingClient());
+        const { service, terminals } = createService();
         await service.start(makeTarget(app));
 
         terminals[0].pty.close();
@@ -394,9 +370,9 @@ describe('ContainerAppLogStreamService (unit)', () => {
             fetchMock.mock.mockImplementationOnce(() => Promise.resolve(
                 new Response(null, { status: 302, headers: { location: destination } }),
             ));
-            const { service } = createService(createClient(endpoint));
+            const { service } = createService();
 
-            await service.start(makeTarget(makeContainerApp({ subscription: makeSubscription({ environment }) })));
+            await service.start(makeTarget(makeContainerApp({ subscription: makeSubscription({ environment }) }), endpoint));
 
             expect(fetchMock.mock.calls.map(call => call.arguments[0])).to.deep.equal([endpoint, destination]);
             const requests = fetchMock.mock.calls.map(call => call.arguments[1]);
@@ -413,7 +389,7 @@ describe('ContainerAppLogStreamService (unit)', () => {
         mock.method(globalThis, 'fetch', () => Promise.resolve(
             new Response(null, { status: 302, headers: { location: 'http://myapp.eastus.azurecontainerapps.io/logstream' } }),
         ));
-        const { service } = createService(createStreamingClient());
+        const { service } = createService();
 
         await expect(service.start(makeTarget(makeContainerApp()))).to.be.rejectedWith(/non-HTTPS/i);
     });
@@ -422,21 +398,15 @@ describe('ContainerAppLogStreamService (unit)', () => {
         const fetchMock = mock.method(globalThis, 'fetch', () => Promise.resolve(
             new Response(null, { status: 302, headers: { location: LogStreamEndpoint } }),
         ));
-        const { service } = createService(createStreamingClient());
+        const { service } = createService();
 
         await expect(service.start(makeTarget(makeContainerApp()))).to.be.rejectedWith(/too many times/i);
         expect(fetchMock.mock.callCount()).to.equal(6);
     });
 
-    it('reports a container that exposes no endpoint', async () => {
-        const { service } = createService(createClient(undefined));
-
-        await expect(service.start(makeTarget(makeContainerApp()))).to.be.rejectedWith(/No log stream is available/i);
-    });
-
     it('surfaces a rejection from the endpoint', async () => {
         mock.method(globalThis, 'fetch', () => Promise.resolve(new Response(null, { status: 403 })));
-        const { service } = createService(createStreamingClient());
+        const { service } = createService();
 
         await expect(service.start(makeTarget(makeContainerApp()))).to.be.rejectedWith(/returned 403/i);
     });
@@ -444,7 +414,7 @@ describe('ContainerAppLogStreamService (unit)', () => {
     it('closes every terminal on dispose', async () => {
         mock.method(globalThis, 'fetch', () => Promise.resolve(new Response(openBody(), { status: 200 })));
         const app = makeContainerApp();
-        const { service, terminals } = createService(createStreamingClient());
+        const { service, terminals } = createService();
         await service.start(makeTarget(app));
 
         service.dispose();

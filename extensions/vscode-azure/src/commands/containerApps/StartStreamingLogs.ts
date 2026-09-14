@@ -3,11 +3,12 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { getResourceGroupName, IContainerAppsClientProvider, type Replica, type ReplicaContainer, type Revision } from '@microsoft/vscode-azure-azutils';
+import { getResourceGroupName, IContainerAppsClientProvider, type IContainerAppsClient, type Replica, type ReplicaContainer, type Revision } from '@microsoft/vscode-azure-azutils';
 import {
-    collectAsync, ICodeContext, IVsCode, showSmartQuickPick, withDelayedProgress,
+    collectAsync, ICodeContext, showSmartQuickPick, withDelayedProgress,
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
+import type * as vscode from 'vscode';
 import { IContainerAppLogStreamService, type LogStreamApp } from '../../tree/resources/containerApps/ContainerAppLogStream';
 import type { ContainerApp } from '../../tree/resources/containerApps/ContainerApp';
 import { ContainerAppResourceType, isContainerApp } from '../../tree/resources/containerApps/ContainerApp';
@@ -34,7 +35,6 @@ export class StartStreamingLogs implements ManagedCommand {
     public static ContextValue = 'startContainerAppLogStream';
 
     public constructor(
-        @inject(IVsCode) private readonly code: IVsCode,
         @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IResourceSelector) private readonly selector: IResourceSelector,
         @inject(IContainerAppsClientProvider) private readonly createClient: IContainerAppsClientProvider,
@@ -59,112 +59,107 @@ export class StartStreamingLogs implements ManagedCommand {
             app = await this.selector.whenEnriched<ContainerApp>(resource);
         }
         const resourceGroupName = getResourceGroupName(app.id);
-
-        const revisionName = (typeof target === 'object' ? target.revisionName : undefined)
-            ?? await this.pickRevision(app, resourceGroupName);
-        const replica = await this.pickReplica(app, resourceGroupName, revisionName);
-        const containerName = await this.pickContainer(replica);
-
-        await this.streams.start({ app, revisionName, replicaName: replica.name, containerName });
-    }
-
-    private async pickRevision(app: LogStreamApp, resourceGroupName: string): Promise<string> {
         const client = this.createClient(app.subscription);
 
+        const revisionName = (typeof target === 'object' ? target.revisionName : undefined)
+            ?? await this.pickRevision(client, app.name, resourceGroupName);
+        const replica = await this.pickReplica(client, app.name, resourceGroupName, revisionName);
+        const container = await this.pickContainer(replica);
+        if (!container.logStreamEndpoint) {
+            throw new Error(this.ctx.code.l10n.t(
+                'No log stream is available for container \'{0}\'. It may not be running yet.',
+                container.name,
+            ));
+        }
+
+        await this.streams.start({
+            app, revisionName, replicaName: replica.name,
+            containerName: container.name, logStreamEndpoint: container.logStreamEndpoint,
+        });
+    }
+
+    private async pickRevision(client: IContainerAppsClient, appName: string, resourceGroupName: string): Promise<string> {
         const revisions = await withDelayedProgress(
-            this.code,
+            this.ctx.code,
             {
-                location: this.code.ProgressLocation.Notification,
-                title: this.code.l10n.t('Loading revisions for \'{0}\'...', app.name),
+                location: this.ctx.code.ProgressLocation.Notification,
+                title: this.ctx.code.l10n.t('Loading revisions for \'{0}\'...', appName),
             },
-            collectAsync(client.containerAppsRevisions.listRevisions(resourceGroupName, app.name)),
+            collectAsync(client.containerAppsRevisions.listRevisions(resourceGroupName, appName)),
         );
 
         // An inactive revision runs nothing, so it has no logs to stream.
         const active = revisions.filter(revision => revision.active !== false);
         if (active.length === 0) {
-            throw new Error(this.code.l10n.t('\'{0}\' has no active revisions to stream logs from.', app.name));
+            throw new Error(this.ctx.code.l10n.t('\'{0}\' has no active revisions to stream logs from.', appName));
         }
 
-        if (active.length === 1) {
-            return active[0].name;
-        }
-
-        const picked = await showSmartQuickPick(
-            this.ctx,
+        const picked = await this.pick(
             active.map(revision => ({
                 label: revision.name,
                 description: describeRevision(revision),
                 data: revision,
             })),
-            { placeHolder: this.code.l10n.t('Select a revision'), showBack: true },
+            this.ctx.code.l10n.t('Select a revision'),
         );
 
         return picked.data.name;
     }
 
-    private async pickReplica(app: LogStreamApp, resourceGroupName: string, revisionName: string): Promise<Replica & { name: string }> {
-        const client = this.createClient(app.subscription);
-
+    private async pickReplica(client: IContainerAppsClient, appName: string, resourceGroupName: string, revisionName: string): Promise<Replica & { name: string }> {
         const replicas = await withDelayedProgress(
-            this.code,
+            this.ctx.code,
             {
-                location: this.code.ProgressLocation.Notification,
-                title: this.code.l10n.t('Loading replicas for \'{0}\'...', revisionName),
+                location: this.ctx.code.ProgressLocation.Notification,
+                title: this.ctx.code.l10n.t('Loading replicas for \'{0}\'...', revisionName),
             },
-            client.containerAppsRevisionReplicas.listReplicas(resourceGroupName, app.name, revisionName),
+            client.containerAppsRevisionReplicas.listReplicas(resourceGroupName, appName, revisionName),
         );
 
         const named = replicas.filter((replica): replica is Replica & { name: string } => !!replica.name);
         if (named.length === 0) {
             // A revision scaled to zero has no replicas, and therefore nothing
             // to stream -- this is ordinary, not an error in the request.
-            throw new Error(this.code.l10n.t(
+            throw new Error(this.ctx.code.l10n.t(
                 'Revision \'{0}\' has no running replicas. It may be scaled to zero.',
                 revisionName,
             ));
         }
 
-        if (named.length === 1) {
-            return named[0];
-        }
-
-        const picked = await showSmartQuickPick(
-            this.ctx,
+        const picked = await this.pick(
             named.map(replica => ({
                 label: replica.name,
                 description: replica.runningState,
                 data: replica,
             })),
-            { placeHolder: this.code.l10n.t('Select a replica'), showBack: true },
+            this.ctx.code.l10n.t('Select a replica'),
         );
 
         return picked.data;
     }
 
-    private async pickContainer(replica: Replica): Promise<string> {
+    private async pickContainer(replica: Replica): Promise<ReplicaContainer & { name: string }> {
         const containers = (replica.containers ?? [])
             .filter((container): container is ReplicaContainer & { name: string } => !!container.name);
 
         if (containers.length === 0) {
-            throw new Error(this.code.l10n.t('Replica \'{0}\' reports no containers.', replica.name ?? ''));
+            throw new Error(this.ctx.code.l10n.t('Replica \'{0}\' reports no containers.', replica.name ?? ''));
         }
 
-        if (containers.length === 1) {
-            return containers[0].name;
-        }
-
-        const picked = await showSmartQuickPick(
-            this.ctx,
+        const picked = await this.pick(
             containers.map(container => ({
                 label: container.name,
                 description: container.runningState,
                 data: container,
             })),
-            { placeHolder: this.code.l10n.t('Select a container'), showBack: true },
+            this.ctx.code.l10n.t('Select a container'),
         );
 
-        return picked.data.name;
+        return picked.data;
+    }
+
+    private async pick<T extends vscode.QuickPickItem>(items: T[], placeHolder: string): Promise<T> {
+        return items.length === 1 ? items[0] : showSmartQuickPick(this.ctx, items, { placeHolder, showBack: true });
     }
 }
 

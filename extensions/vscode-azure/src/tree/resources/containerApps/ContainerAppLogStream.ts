@@ -26,6 +26,8 @@ export interface LogStreamTarget {
     readonly revisionName: string;
     readonly replicaName: string;
     readonly containerName: string;
+    /** Endpoint returned by ARM for the selected replica container. */
+    readonly logStreamEndpoint: string;
 }
 
 /** App-wide system events do not require a running revision or replica. */
@@ -96,11 +98,13 @@ export class ContainerAppLogStreamService implements Disposable {
             return;
         }
 
-        const { promise, resolve, reject } = Promise.withResolvers<undefined>();
-        const stream: Stream = { abort: new AbortController(), ready: promise };
+        const stream: Stream = {
+            abort: new AbortController(),
+            // Defer initialization until the entry is registered for concurrent starts and disposal.
+            ready: Promise.resolve().then(() => this.open(id, target, stream)),
+        };
         this.streams.set(id, stream);
-        this.open(id, target, stream).then(() => { resolve(undefined); }, reject);
-        return promise;
+        return stream.ready;
     }
 
     private async open(id: string, target: ContainerAppLogStreamTarget, stream: Stream): Promise<void> {
@@ -120,9 +124,12 @@ export class ContainerAppLogStreamService implements Disposable {
 
     private async initialize(id: string, target: ContainerAppLogStreamTarget, stream: Stream): Promise<void> {
         const signal = stream.abort.signal;
+        signal.throwIfAborted();
         const client = this.createClient(target.app.subscription);
         const resourceGroupName = getResourceGroupName(target.app.id);
-        const endpoint = await this.resolveEndpoint(client, resourceGroupName, target, signal);
+        const endpoint = target.kind === 'system'
+            ? await this.resolveSystemEndpoint(client, resourceGroupName, target.app, signal)
+            : target.logStreamEndpoint;
 
         const { token } = await client.containerApps.getAuthToken(resourceGroupName, target.app.name, { abortSignal: signal });
         signal.throwIfAborted();
@@ -144,41 +151,21 @@ export class ContainerAppLogStreamService implements Disposable {
         void this.pump(id, response, stream, running);
     }
 
-    private async resolveEndpoint(
+    private async resolveSystemEndpoint(
         client: IContainerAppsClient,
         resourceGroupName: string,
-        target: ContainerAppLogStreamTarget,
+        target: LogStreamApp,
         signal: AbortSignal,
     ): Promise<string> {
-        if (target.kind === 'system') {
-            const app = await client.containerApps.get(resourceGroupName, target.app.name, { abortSignal: signal });
-            signal.throwIfAborted();
-            if (!app.eventStreamEndpoint) {
-                throw new Error(this.code.l10n.t('No system log stream is available for \'{0}\'.', target.app.name));
-            }
-            const url = new URL(app.eventStreamEndpoint);
-            url.searchParams.set('follow', 'true');
-            url.searchParams.set('output', 'json');
-            return url.toString();
-        }
-
-        const replicas = await client.containerAppsRevisionReplicas.listReplicas(
-            resourceGroupName,
-            target.app.name,
-            target.revisionName,
-            { abortSignal: signal },
-        );
+        const app = await client.containerApps.get(resourceGroupName, target.name, { abortSignal: signal });
         signal.throwIfAborted();
-        const container = replicas
-            .find(replica => replica.name === target.replicaName)
-            ?.containers?.find(c => c.name === target.containerName);
-        if (!container?.logStreamEndpoint) {
-            throw new Error(this.code.l10n.t(
-                'No log stream is available for container \'{0}\'. It may not be running yet.',
-                target.containerName,
-            ));
+        if (!app.eventStreamEndpoint) {
+            throw new Error(this.code.l10n.t('No system log stream is available for \'{0}\'.', target.name));
         }
-        return container.logStreamEndpoint;
+        const url = new URL(app.eventStreamEndpoint);
+        url.searchParams.set('follow', 'true');
+        url.searchParams.set('output', 'json');
+        return url.toString();
     }
 
     private createTerminal(id: string, target: ContainerAppLogStreamTarget, stream: Stream): RunningStream {

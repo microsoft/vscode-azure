@@ -46,7 +46,8 @@ Open in Portal, Browse Website, and Delete come from the shared resource-generic
 Container Apps console and system log streams use **chunked HTTP, not web sockets**:
 
 1. `containerApps.getAuthToken` exchanges the user's ARM credentials for a short-lived data-plane token.
-2. Console logs use the container's `logStreamEndpoint`, read from the replica. System logs use the
+2. Console logs use the container's `logStreamEndpoint`, captured during replica/container selection
+   and passed to the streaming service. System logs use the
    app's ARM-returned `eventStreamEndpoint` with `follow=true&output=json`, without revision or replica filters.
 3. The chunked response is written into a terminal. System terminals are labeled `system, JSON` and show
    JSON lines. Closing a terminal cancels that stream.

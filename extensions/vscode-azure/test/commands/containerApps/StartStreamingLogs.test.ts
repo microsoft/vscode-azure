@@ -23,25 +23,26 @@ function createCommand(revisions: Partial<Revision>[], replicas: Partial<Replica
     });
 
     const start = mock.fn((_target: ContainerAppLogStreamTarget) => Promise.resolve());
+    const createClient = mock.fn(() => client);
 
     const command = new StartStreamingLogs(
-        mockResult.vscode,
         ctx,
         selector,
-        () => client,
+        createClient,
         { start } as never,
     );
 
-    return { command, start, mockResult, client, app, key: AzureNodeId.from(app).toString() };
+    return { command, start, mockResult, client, createClient, app, key: AzureNodeId.from(app).toString() };
 }
 
-const oneContainer = [{ name: 'replica1', containers: [{ name: 'api' }] }];
+const logStreamEndpoint = 'https://app.region.azurecontainerapps.io/logstream';
+const oneContainer = [{ name: 'replica1', containers: [{ name: 'api', logStreamEndpoint }] }];
 
 describe('StartStreamingLogs (unit)', () => {
     it('opens the stream with no prompts when there is one of everything', async () => {
         // The common case is a single-revision, single-replica app. Asking three
         // questions with one answer each would be pure friction.
-        const { command, start, mockResult, key } = createCommand(
+        const { command, start, mockResult, createClient, key } = createCommand(
             [{ name: 'rev1', active: true }],
             oneContainer,
         );
@@ -49,11 +50,13 @@ describe('StartStreamingLogs (unit)', () => {
         await command.execute(key);
 
         expect(mockResult.quickPicks).to.have.length(0);
+        expect(createClient.mock.callCount()).to.equal(1);
         expect(start.mock.callCount()).to.equal(1);
         expect(start.mock.calls[0].arguments[0]).to.include({
             revisionName: 'rev1',
             replicaName: 'replica1',
             containerName: 'api',
+            logStreamEndpoint,
         });
     });
 
@@ -86,13 +89,13 @@ describe('StartStreamingLogs (unit)', () => {
     it('asks which container when a replica runs several', async () => {
         const { command, start, mockResult, key } = createCommand(
             [{ name: 'rev1', active: true }],
-            [{ name: 'replica1', containers: [{ name: 'api' }, { name: 'sidecar' }] }],
+            [{ name: 'replica1', containers: [{ name: 'api', logStreamEndpoint }, { name: 'sidecar', logStreamEndpoint: `${logStreamEndpoint}/sidecar` }] }],
         );
         const tracker = respondToPrompts(mockResult, [{ pick: 'sidecar' }]);
 
         await command.execute(key);
 
-        expect(start.mock.calls[0].arguments[0]).to.include({ containerName: 'sidecar' });
+        expect(start.mock.calls[0].arguments[0]).to.include({ containerName: 'sidecar', logStreamEndpoint: `${logStreamEndpoint}/sidecar` });
         tracker.assertAllConsumed();
     });
 
@@ -100,6 +103,44 @@ describe('StartStreamingLogs (unit)', () => {
         const { command, start, key } = createCommand([{ name: 'old', active: false }], oneContainer);
 
         await expect(command.execute(key)).to.be.rejectedWith(/no active revisions/i);
+        expect(start.mock.callCount()).to.equal(0);
+    });
+
+    it('selects a replica and forwards its endpoint from a single replica lookup', async () => {
+        const { command, start, mockResult, client, key } = createCommand(
+            [{ name: 'rev1', active: true }],
+            [
+                ...oneContainer,
+                { name: 'replica2', containers: [{ name: 'api', logStreamEndpoint: `${logStreamEndpoint}/replica2` }] },
+            ],
+        );
+        const tracker = respondToPrompts(mockResult, [{ pick: 'replica2' }]);
+
+        await command.execute(key);
+
+        expect(start.mock.calls[0].arguments[0]).to.include({
+            replicaName: 'replica2', logStreamEndpoint: `${logStreamEndpoint}/replica2`,
+        });
+        expect(client.containerAppsRevisionReplicas.listReplicas.mock.callCount()).to.equal(1);
+        tracker.assertAllConsumed();
+    });
+
+    it('reports a selected container with no log endpoint', async () => {
+        const { command, start, key } = createCommand(
+            [{ name: 'rev1', active: true }],
+            [{ name: 'replica1', containers: [{ name: 'api' }] }],
+        );
+
+        await expect(command.execute(key)).to.be.rejectedWith(/No log stream is available/i);
+        expect(start.mock.callCount()).to.equal(0);
+    });
+
+    it('reports a replica without named containers', async () => {
+        const { command, start, key } = createCommand(
+            [{ name: 'rev1', active: true }], [{ name: 'replica1', containers: [] }],
+        );
+
+        await expect(command.execute(key)).to.be.rejectedWith(/reports no containers/i);
         expect(start.mock.callCount()).to.equal(0);
     });
 

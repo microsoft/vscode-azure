@@ -162,7 +162,7 @@ describe('VerifyContainerAppStart (unit)', () => {
         const enrich = mock.method(selector, 'whenEnriched');
         const start = mock.fn((_target: ContainerAppLogStreamTarget) => Promise.resolve());
         client.containerAppsRevisionReplicas.listReplicas.mock.mockImplementation(() => Promise.resolve([
-            { name: 'replica', containers: [{ name: 'api' }] },
+            { name: 'replica', containers: [{ name: 'api', logStreamEndpoint: 'https://app.region.azurecontainerapps.io/logstream' }] },
         ]));
         const { executor } = createTestActionExecutor();
         const registry = new CommandRegistry(executor, code.vscode);
