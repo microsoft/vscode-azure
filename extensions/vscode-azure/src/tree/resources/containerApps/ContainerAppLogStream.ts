@@ -283,16 +283,28 @@ export class ContainerAppLogStreamService implements Disposable {
     }
 }
 
-/** Writable terminal endpoint whose closure cancels its associated stream. */
+/** Buffers output until VS Code opens the terminal; closure cancels its associated stream. */
 class LogStreamPseudoterminal implements vscode.Pseudoterminal {
     private readonly writeEmitter = new EventEmitter<string>();
+    private readonly pending: string[] = [];
+    private opened = false;
     private closed = false;
+    private lastWasCarriageReturn = false;
 
     public readonly onDidWrite = this.writeEmitter.event;
 
     public constructor(private readonly onClose: () => void) { }
 
-    public open(): void { /* The stream starts before VS Code opens its terminal. */ }
+    public open(): void {
+        if (this.closed || this.opened) {
+            return;
+        }
+        this.opened = true;
+        for (const text of this.pending) {
+            this.writeEmitter.fire(text);
+        }
+        this.pending.length = 0;
+    }
 
     public close(): void {
         if (this.closed) {
@@ -300,6 +312,7 @@ class LogStreamPseudoterminal implements vscode.Pseudoterminal {
         }
 
         this.closed = true;
+        this.pending.length = 0;
         this.onClose();
         this.writeEmitter.dispose();
     }
@@ -307,7 +320,14 @@ class LogStreamPseudoterminal implements vscode.Pseudoterminal {
     /** Writes stream text using the CRLF line endings expected by terminals. */
     public write(value: string): void {
         if (!this.closed && value) {
-            this.writeEmitter.fire(value.replace(/\r?\n/g, '\r\n'));
+            const text = value.replace(/\r?\n/g, (match: string, offset: number) =>
+                offset === 0 && match === '\n' && this.lastWasCarriageReturn ? '\n' : '\r\n');
+            this.lastWasCarriageReturn = value.endsWith('\r');
+            if (this.opened) {
+                this.writeEmitter.fire(text);
+            } else {
+                this.pending.push(text);
+            }
         }
     }
 }

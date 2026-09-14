@@ -49,7 +49,8 @@ Container Apps console and system log streams use **chunked HTTP, not web socket
 2. Console logs use the container's `logStreamEndpoint`, captured during replica/container selection
    and passed to the streaming service. System logs use the
    app's ARM-returned `eventStreamEndpoint` with `follow=true&output=json`, without revision or replica filters.
-3. The chunked response is written into a terminal. System terminals are labeled `system, JSON` and show
+3. Output is buffered until VS Code opens the terminal, then streamed as it arrives.
+   System terminals are labeled `system, JSON` and show
    JSON lines. Closing a terminal cancels that stream.
 
 Redirects from Azure's log service are followed **manually** to preserve `Authorization` across origins,

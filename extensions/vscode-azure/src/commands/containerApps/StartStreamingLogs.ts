@@ -159,7 +159,7 @@ export class StartStreamingLogs implements ManagedCommand {
     }
 
     private async pick<T extends vscode.QuickPickItem>(items: T[], placeHolder: string): Promise<T> {
-        return items.length === 1 ? items[0] : showSmartQuickPick(this.ctx, items, { placeHolder, showBack: true });
+        return items.length === 1 ? items[0] : showSmartQuickPick(this.ctx, items, { placeHolder, ignoreFocusOut: true });
     }
 }
 

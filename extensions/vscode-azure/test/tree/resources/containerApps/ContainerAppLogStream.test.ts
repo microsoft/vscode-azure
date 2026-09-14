@@ -32,7 +32,7 @@ function makeTarget(app: GenericResource, logStreamEndpoint = LogStreamEndpoint)
 }
 
 /** Builds a service with test terminals that expose their pseudoterminal lifecycle. */
-function createService(client = createMockContainerAppsClient()) {
+function createService(client = createMockContainerAppsClient(), openOnShow = true) {
     const terminals: TestTerminal[] = [];
     const createTerminal = mock.fn((options: vscode.ExtensionTerminalOptions): vscode.Terminal => {
         const writes: string[] = [];
@@ -44,7 +44,11 @@ function createService(client = createMockContainerAppsClient()) {
             name: options.name,
             pty: options.pty,
             writes,
-            show: mock.fn(),
+            show: mock.fn(() => {
+                if (openOnShow) {
+                    options.pty.open(undefined);
+                }
+            }),
             dispose: mock.fn(() => {
                 options.pty.close();
             }),
@@ -105,6 +109,47 @@ describe('ContainerAppLogStreamService (unit)', () => {
         expect(terminals[0].show.mock.callCount()).to.equal(2);
         expect(fetchMock.mock.callCount()).to.equal(1);
 
+        service.dispose();
+    });
+
+    it('retains initial output until VS Code opens the pseudoterminal', async () => {
+        const body = new ReadableStream<Uint8Array>({
+            start(controller) {
+                controller.enqueue(new TextEncoder().encode('startup log\n'));
+                controller.close();
+            },
+        });
+        mock.method(globalThis, 'fetch', () => Promise.resolve(new Response(body)));
+        const { service, terminals } = createService(createMockContainerAppsClient(), false);
+
+        await service.start(makeTarget(makeContainerApp()));
+        await waitFor(() => !body.locked);
+        expect(terminals[0].writes).to.be.empty;
+
+        terminals[0].pty.open(undefined);
+        expect(terminals[0].writes.join('')).to.equal('startup log\r\n');
+        terminals[0].pty.close();
+        service.dispose();
+    });
+
+    it('preserves UTF-8 characters and CRLF across network chunk boundaries', async () => {
+        const bytes = new TextEncoder().encode('first\r\n\u20ac\n');
+        const body = new ReadableStream<Uint8Array>({
+            start(controller) {
+                controller.enqueue(bytes.slice(0, 6));
+                controller.enqueue(bytes.slice(6, 8));
+                controller.enqueue(bytes.slice(8));
+                controller.close();
+            },
+        });
+        mock.method(globalThis, 'fetch', () => Promise.resolve(new Response(body)));
+        const { service, terminals } = createService();
+
+        await service.start(makeTarget(makeContainerApp()));
+        await waitFor(() => !body.locked);
+
+        expect(terminals[0].writes.join('')).to.equal('first\r\n\u20ac\r\n');
+        terminals[0].pty.close();
         service.dispose();
     });
 
