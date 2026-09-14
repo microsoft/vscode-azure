@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    getResourceGroupName, IContainerAppsClientProvider, type GenericResource,
+    getResourceGroupName, IContainerAppsClientProvider, type GenericResource, type IContainerAppsClient,
 } from '@microsoft/vscode-azure-azutils';
 import {
     CancellationError, CaselessMap, Disposable, EventEmitter, IActionExecutor, IVsCode, stringifyError,
@@ -122,37 +122,7 @@ export class ContainerAppLogStreamService implements Disposable {
         const signal = stream.abort.signal;
         const client = this.createClient(target.app.subscription);
         const resourceGroupName = getResourceGroupName(target.app.id);
-
-        let endpoint: string;
-        if (target.kind === 'system') {
-            const app = await client.containerApps.get(resourceGroupName, target.app.name, { abortSignal: signal });
-            signal.throwIfAborted();
-            if (!app.eventStreamEndpoint) {
-                throw new Error(this.code.l10n.t('No system log stream is available for \'{0}\'.', target.app.name));
-            }
-            const url = new URL(app.eventStreamEndpoint);
-            url.searchParams.set('follow', 'true');
-            url.searchParams.set('output', 'json');
-            endpoint = url.toString();
-        } else {
-            const replicas = await client.containerAppsRevisionReplicas.listReplicas(
-                resourceGroupName,
-                target.app.name,
-                target.revisionName,
-                { abortSignal: signal },
-            );
-            signal.throwIfAborted();
-            const container = replicas
-                .find(replica => replica.name === target.replicaName)
-                ?.containers?.find(c => c.name === target.containerName);
-            if (!container?.logStreamEndpoint) {
-                throw new Error(this.code.l10n.t(
-                    'No log stream is available for container \'{0}\'. It may not be running yet.',
-                    target.containerName,
-                ));
-            }
-            endpoint = container.logStreamEndpoint;
-        }
+        const endpoint = await this.resolveEndpoint(client, resourceGroupName, target, signal);
 
         const { token } = await client.containerApps.getAuthToken(resourceGroupName, target.app.name, { abortSignal: signal });
         signal.throwIfAborted();
@@ -166,6 +136,52 @@ export class ContainerAppLogStreamService implements Disposable {
             signal.throwIfAborted();
         }
 
+        const running = this.createTerminal(id, target, stream);
+        stream.running = running;
+        running.terminal.show();
+
+        // The pump lasts until the connection ends or its terminal closes.
+        void this.pump(id, response, stream, running);
+    }
+
+    private async resolveEndpoint(
+        client: IContainerAppsClient,
+        resourceGroupName: string,
+        target: ContainerAppLogStreamTarget,
+        signal: AbortSignal,
+    ): Promise<string> {
+        if (target.kind === 'system') {
+            const app = await client.containerApps.get(resourceGroupName, target.app.name, { abortSignal: signal });
+            signal.throwIfAborted();
+            if (!app.eventStreamEndpoint) {
+                throw new Error(this.code.l10n.t('No system log stream is available for \'{0}\'.', target.app.name));
+            }
+            const url = new URL(app.eventStreamEndpoint);
+            url.searchParams.set('follow', 'true');
+            url.searchParams.set('output', 'json');
+            return url.toString();
+        }
+
+        const replicas = await client.containerAppsRevisionReplicas.listReplicas(
+            resourceGroupName,
+            target.app.name,
+            target.revisionName,
+            { abortSignal: signal },
+        );
+        signal.throwIfAborted();
+        const container = replicas
+            .find(replica => replica.name === target.replicaName)
+            ?.containers?.find(c => c.name === target.containerName);
+        if (!container?.logStreamEndpoint) {
+            throw new Error(this.code.l10n.t(
+                'No log stream is available for container \'{0}\'. It may not be running yet.',
+                target.containerName,
+            ));
+        }
+        return container.logStreamEndpoint;
+    }
+
+    private createTerminal(id: string, target: ContainerAppLogStreamTarget, stream: Stream): RunningStream {
         const label = target.kind === 'system'
             ? this.code.l10n.t('{0} (system, JSON)', target.app.name)
             : this.code.l10n.t('{0} ({1})', target.replicaName, target.containerName);
@@ -178,17 +194,7 @@ export class ContainerAppLogStreamService implements Disposable {
             name: this.code.l10n.t('Logs: {0}', label),
             pty,
         });
-        const running: RunningStream = {
-            terminal,
-            pty,
-        };
-
-        stream.running = running;
-        terminal.show();
-
-        // Deliberately not awaited: the pump runs until the stream ends or is
-        // cancelled, which is the lifetime of the feature, not of this call.
-        void this.pump(id, response, stream, running);
+        return { terminal, pty };
     }
 
     /** Stops one stream when its terminal closes. */
