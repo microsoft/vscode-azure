@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IActionExecutor, IVsCode, PromptStep } from '@microsoft/vscode-azure-utils';
+import { IActionExecutor, IVsCode, PromptStep, readText } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 import { ContainerfileTag } from '../../../tree/workspace/containerApps/containerAppsDetector';
@@ -55,27 +55,14 @@ export class DetectTargetPortStep extends PromptStep<CreateContainerAppContext> 
             : [];
 
         for (const uri of scoped) {
-            const port = await this.readExposedPort(uri);
+            const content = await readText(this.code, uri);
+            const port = content === undefined ? undefined : parseExposedPort(content);
             if (port !== undefined) {
                 return port;
             }
         }
 
         return undefined;
-    }
-
-    private async readExposedPort(uri: vscode.Uri): Promise<number | undefined> {
-        try {
-            const content = Buffer.from(await this.code.workspace.fs.readFile(uri)).toString();
-            return parseExposedPort(content);
-        } catch (error) {
-            // A Containerfile that vanished between indexing and reading is not
-            // worth failing the wizard over -- fall back to the default port.
-            if (error instanceof this.code.FileSystemError && error.code === 'FileNotFound') {
-                return undefined;
-            }
-            throw error;
-        }
     }
 }
 

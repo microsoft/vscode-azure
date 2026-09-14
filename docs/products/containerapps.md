@@ -35,7 +35,7 @@ product.
 | Deploy Project as Container App... | palette | azd + Bicep, `deploy` job |
 | Restart Container App | app node | Restarts the latest revision |
 | Reveal Environment | app node | Jumps to the hosting managed environment |
-| Start Streaming Logs... | app node | Live log stream from one container of one replica |
+| Open Log Stream... | app node | Live log stream from one container of one replica |
 | Open Console in Portal | app node | Portal `/console` blade |
 | Open Logs in Portal | app node | Portal `/logs` blade |
 

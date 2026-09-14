@@ -68,6 +68,7 @@ describe('CreateContainerApp (unit)', () => {
 
         expect(azd.provision.mock.callCount()).to.equal(1);
         expect(azd.deploy.mock.callCount()).to.equal(1);
+        expect(azd.show.mock.callCount()).to.equal(2);
         expect(azd.provision.mock.calls[0].arguments[0]).to.equal(folder);
         expect(azd.updateAzureYaml.mock.callCount()).to.equal(1); // eslint-disable-line @typescript-eslint/no-deprecated -- command uses the compatibility editor
         const parameters = JSON.parse(Buffer.from(await code.fs.readFile(MockUri.joinPath(folder, 'infra', 'main.parameters.json'))).toString());
@@ -86,6 +87,7 @@ describe('CreateContainerApp (unit)', () => {
 
         expect(azd.provision.mock.callCount()).to.equal(1);
         expect(azd.deploy.mock.callCount()).to.equal(0);
+        expect(azd.show.mock.callCount()).to.equal(0);
         const folder = azd.provision.mock.calls[0].arguments[0];
         expect(folder.toString()).not.to.equal(workspaceFolder.toString());
         const parameters = JSON.parse(Buffer.from(await code.fs.readFile(MockUri.joinPath(folder, 'infra', 'main.parameters.json'))).toString());
