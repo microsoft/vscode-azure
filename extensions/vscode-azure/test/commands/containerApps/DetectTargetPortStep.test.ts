@@ -211,12 +211,15 @@ describe('DetectTargetPortStep (unit)', () => {
         })).to.be.rejectedWith('permission denied');
     });
 
-    it('resolves a Windows service project path', async () => {
-        const { step } = createStep({ 'C:\\repo\\src\\api\\Dockerfile': 'EXPOSE 8080\n' });
+    it('resolves a drive-letter service URI through its native filesystem path', async () => {
+        const { step, mockResult } = createStep({});
+        const root = MockUri.parse('file:///c:/repo');
+        const service = MockUri.joinPath(root, 'src', 'api');
+        mockResult.fs.addFile(MockUri.joinPath(service, 'Dockerfile'), 'EXPOSE 8080\n');
 
         expect((await step.prompt({
-            ...baseContext, iacFolder: MockUri.file('C:\\repo'), hasServices: true,
-            hydratedServiceProjectPath: 'C:\\repo\\src\\api',
+            ...baseContext, iacFolder: root, hasServices: true,
+            hydratedServiceProjectPath: service.fsPath,
         })).targetPort).to.equal(8080);
     });
 });
