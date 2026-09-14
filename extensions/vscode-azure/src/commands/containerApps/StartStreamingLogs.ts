@@ -8,11 +8,16 @@ import {
     collectAsync, ICodeContext, IVsCode, showSmartQuickPick, withDelayedProgress,
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import { IContainerAppLogStreamService } from '../../tree/resources/containerApps/ContainerAppLogStream';
+import { IContainerAppLogStreamService, type LogStreamApp } from '../../tree/resources/containerApps/ContainerAppLogStream';
 import type { ContainerApp } from '../../tree/resources/containerApps/ContainerApp';
 import { ContainerAppResourceType, isContainerApp } from '../../tree/resources/containerApps/ContainerApp';
 import { IResourceSelector } from '../../tree/resources/ResourceSelector';
 import type { ManagedCommand } from '../ManagedCommand';
+
+/** Explicit activity target; a known revision is never replaced by revision selection. */
+export type StartStreamingLogsRequest =
+    | { readonly kind: 'system'; readonly app: LogStreamApp }
+    | { readonly kind: 'console'; readonly app: LogStreamApp; readonly revisionName?: string };
 
 /**
  * Streams live logs from one container of one running replica.
@@ -23,6 +28,8 @@ import type { ManagedCommand } from '../ManagedCommand';
  */
 @injectable()
 export class StartStreamingLogs implements ManagedCommand {
+    /** Shared command for tree, palette, and explicit activity targets. */
+    public static readonly CommandId = 'vscode-azure/containerApps/startStreamingLogs';
     /** Context value gating this command's visibility in the tree view. */
     public static ContextValue = 'startContainerAppLogStream';
 
@@ -35,23 +42,33 @@ export class StartStreamingLogs implements ManagedCommand {
     ) { }
 
     /** @inheritdoc */
-    public async execute(key?: string): Promise<void> {
-        const resource = await this.selector.selectResource({ logicalType: ContainerAppResourceType, key });
-        if (!isContainerApp(resource)) {
+    public async execute(target?: string | StartStreamingLogsRequest): Promise<void> {
+        if (typeof target === 'object' && target.kind === 'system') {
+            await this.streams.start(target);
             return;
         }
 
-        const app = await this.selector.whenEnriched<ContainerApp>(resource);
+        let app: LogStreamApp;
+        if (typeof target === 'object') {
+            app = target.app;
+        } else {
+            const resource = await this.selector.selectResource({ logicalType: ContainerAppResourceType, key: target });
+            if (!isContainerApp(resource)) {
+                return;
+            }
+            app = await this.selector.whenEnriched<ContainerApp>(resource);
+        }
         const resourceGroupName = getResourceGroupName(app.id);
 
-        const revisionName = await this.pickRevision(app, resourceGroupName);
+        const revisionName = (typeof target === 'object' ? target.revisionName : undefined)
+            ?? await this.pickRevision(app, resourceGroupName);
         const replica = await this.pickReplica(app, resourceGroupName, revisionName);
         const containerName = await this.pickContainer(replica);
 
         await this.streams.start({ app, revisionName, replicaName: replica.name, containerName });
     }
 
-    private async pickRevision(app: ContainerApp, resourceGroupName: string): Promise<string> {
+    private async pickRevision(app: LogStreamApp, resourceGroupName: string): Promise<string> {
         const client = this.createClient(app.subscription);
 
         const revisions = await withDelayedProgress(
@@ -86,7 +103,7 @@ export class StartStreamingLogs implements ManagedCommand {
         return picked.data.name;
     }
 
-    private async pickReplica(app: ContainerApp, resourceGroupName: string, revisionName: string): Promise<Replica & { name: string }> {
+    private async pickReplica(app: LogStreamApp, resourceGroupName: string, revisionName: string): Promise<Replica & { name: string }> {
         const client = this.createClient(app.subscription);
 
         const replicas = await withDelayedProgress(

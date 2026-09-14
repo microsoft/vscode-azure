@@ -524,6 +524,8 @@ export interface MockContainerAppsClientOptions {
     readonly provisioningState?: string;
     /** Name of the app's latest revision. */
     readonly latestRevisionName?: string;
+    /** App-wide system log endpoint reported by `containerApps.get`. */
+    readonly eventStreamEndpoint?: string;
     /** Containers in the app's current template. */
     readonly containers?: readonly Container[];
     /** Revisions returned by `containerAppsRevisions.listRevisions`. */
@@ -569,6 +571,7 @@ export function createMockContainerAppsClient(options?: MockContainerAppsClientO
                 environmentId,
                 provisioningState: options?.provisioningState ?? 'Succeeded',
                 latestRevisionName: options?.latestRevisionName,
+                eventStreamEndpoint: options?.eventStreamEndpoint,
                 configuration: { ingress: { fqdn: options?.fqdn } },
                 template: { containers: options?.containers ? [...options.containers] : [] },
             })),

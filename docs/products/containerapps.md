@@ -43,23 +43,33 @@ Open in Portal, Browse Website, and Delete come from the shared resource-generic
 
 ## Log streaming
 
-The Container Apps log stream is **chunked HTTP, not a web socket**:
+Container Apps console and system log streams use **chunked HTTP, not web sockets**:
 
 1. `containerApps.getAuthToken` exchanges the user's ARM credentials for a short-lived data-plane token.
-2. That token is presented to the container's `logStreamEndpoint`, read from the replica.
-3. The chunked response is written into a per-replica terminal. Closing the terminal cancels the stream.
+2. Console logs use the container's `logStreamEndpoint`, read from the replica. System logs use the
+   app's ARM-returned `eventStreamEndpoint` with `follow=true&output=json`, without revision or replica filters.
+3. The chunked response is written into a terminal. System terminals are labeled `system, JSON` and show
+   JSON lines. Closing a terminal cancels that stream.
 
 Redirects are followed **manually**. The fetch specification strips `Authorization` across origins, and
 following a redirect blindly would instead hand an Azure credential to whatever host the response names, so
 the token is only re-attached over HTTPS to the subscription cloud's Container Apps hosts:
-`*.azurecontainerapps.io` (public), `*.azurecontainerapps.us` (Government), or
+`*.azurecontainerapps.io` and `*.azurecontainerapps.dev` (public), `*.azurecontainerapps.us` (Government), or
 `*.azurecontainerapps.cn` (China). Cross-cloud and unrecognized-cloud redirects are rejected.
 
-Concurrent starts for the same container share initialization and one terminal. Disposing the service
-cancels pending ARM requests and connection attempts as well as established streams.
+Concurrent starts for the same target share initialization and one terminal. System and console streams
+have separate identities and can run together. Disposing the service cancels pending ARM requests and
+connection attempts as well as established streams. Neither stream requires Azure CLI or Log Analytics
+query permission; ARM app/replica reads and the app's log-stream token action must be authorized.
 
 The revision -> replica -> container picks are each skipped when they have a single candidate, so the common
 single-revision app streams with no prompts.
+
+Transport references: [Container Apps log streaming](https://learn.microsoft.com/en-us/azure/container-apps/log-streaming),
+[Azure CLI transport](https://github.com/Azure/azure-cli/blob/dev/src/azure-cli/azure/cli/command_modules/containerapp/custom.py)
+(`stream_containerapp_logs`), and the
+[ARM response recording](https://github.com/Azure/azure-cli/blob/dev/src/azure-cli/azure/cli/command_modules/containerapp/tests/latest/recordings/test_container_acr.yaml)
+showing the app's `https://eastus.azurecontainerapps.dev/.../eventstream` endpoint.
 
 ## Provisioning
 
@@ -110,10 +120,43 @@ uses port 80 independently of any workspace Containerfile. Neither job asks for 
 must be installed and running. Building in ACR instead would remove that requirement; it is tracked by
 [#334](https://github.com/microsoft/vscode-azure/issues/334).
 
-After provisioning, the app's latest revision is polled until it settles. Provisioning succeeding only means
-ARM accepted the template -- the container can still fail to start on a bad image reference or a crash on
-boot. When it does, the app's own console logs are read from the environment's Log Analytics workspace and
-written to the output channel, which is where the explanation actually lives.
+### Startup verification
+
+After a successful application-image deployment, a thin wizard step dispatches the hidden
+`vscode-azure/containerApps/verifyStart` managed command without awaiting completion. Quickstart-only
+creation does not launch verification; deploying into an existing environment does, even when provisioning
+is skipped. Verification has its own command execution scope and root activity, independent of the
+completed `azd deploy` activity and the wizard's lifetime.
+
+The launcher resolves the subscription and reads the app and resource group names from the
+`AZURE_CONTAINER_APP_NAME` and `AZURE_RESOURCE_GROUP` azd outputs using the wizard's error handling.
+It passes only the resolved subscription and those names to the command, not the wizard context.
+The command reads the app from ARM once to capture its latest revision, then uses
+`@azure/core-lro` to poll that same revision's provisioning and running states. The two-minute startup
+bound includes the initial app lookup. `Provisioned` plus `Running` or `ScaledToZero` is healthy.
+Failed states, app or revision lookup errors, missing revisions, and timeouts produce a failed verification
+activity without changing the deployment's result. The wizard does not wait for ARM lookup or startup
+polling; the independent command does not read azd outputs or resolve the subscription again.
+
+The shared azd deployment API does not return the deployed revision or image digest. Verification therefore
+checks the latest revision observed after deployment, **not an image-correlated deployment result**.
+A concurrent deployment before that first ARM read can affect which revision is selected; subsequent
+deployments do not change the revision being polled.
+
+On startup failure, the activity offers two clickable leaf entries:
+
+- **Open System Log Stream** opens app-scoped system events, including when no replica is running.
+- **Open App Log Stream** opens console logs for the captured revision, with replica/container picks as
+  needed. If that revision has no replicas, the command explains this rather than selecting another
+  revision. If verification could not capture a revision (including an app lookup failure), the shortcut
+  still targets the app and selects an active revision when clicked.
+
+Log access occurs only when the user selects a shortcut. Verification does not query Log Analytics or
+attach customer log text to the activity. The app tree/palette **Open Log Stream...** command uses the
+usual console revision/replica/container selection flow.
+
+Programmatic callers may supply a cancellation token to stop verification and mark its activity canceled.
+The launcher does not pass a wizard-owned token, and the activity tree has no Cancel action.
 
 ## What this product deliberately does not do
 

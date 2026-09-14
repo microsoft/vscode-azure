@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureChinaCloud, AzurePublicCloud, AzureUSGovernment, type ContainerAppAuthToken, type GenericResource, type Replica } from '@microsoft/vscode-azure-azutils';
+import { AzureChinaCloud, AzurePublicCloud, AzureUSGovernment, type ContainerApp, type ContainerAppAuthToken, type GenericResource, type Replica } from '@microsoft/vscode-azure-azutils';
 import { createMockContainerAppsClient, makeContainerApp, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
 import { CancellationError } from '@microsoft/vscode-azure-utils';
 import { createMockVsCode, createTestActionExecutor, waitFor } from '@microsoft/vscode-azure-utils/testing';
@@ -12,6 +12,7 @@ import type * as vscode from 'vscode';
 import { ContainerAppLogStreamService, type LogStreamTarget } from '../../../../src/tree/resources/containerApps/ContainerAppLogStream';
 
 const LogStreamEndpoint = 'https://myapp.eastus.azurecontainerapps.io/logstream';
+const EventStreamEndpoint = 'https://eastus.azurecontainerapps.dev/subscriptions/sub/resourceGroups/rg/containerApps/app/eventstream';
 const Clouds = [
     { environment: AzurePublicCloud, suffix: 'azurecontainerapps.io' },
     { environment: AzureUSGovernment, suffix: 'azurecontainerapps.us' },
@@ -121,6 +122,95 @@ describe('ContainerAppLogStreamService (unit)', () => {
 
         service.dispose();
     });
+
+    it('streams app-wide JSON events and independently reuses console and system terminals', async () => {
+        const cancel = mock.fn();
+        const fetchMock = mock.method(globalThis, 'fetch', () => Promise.resolve(new Response(openBody(cancel))));
+        const client = createStreamingClient();
+        const app = makeContainerApp();
+        const details = await client.containerApps.get('rg', app.name);
+        client.containerApps.get.mock.resetCalls();
+        client.containerApps.get.mock.mockImplementation(() => Promise.resolve({ ...details, eventStreamEndpoint: `${EventStreamEndpoint}?api-version=2025-01-01` }));
+        const { service, terminals } = createService(client);
+        const system = { kind: 'system' as const, app };
+
+        await Promise.all([service.start(system), service.start(system)]);
+
+        expect(client.containerApps.get.mock.callCount()).to.equal(1);
+        expect(client.containerAppsRevisionReplicas.listReplicas.mock.callCount()).to.equal(0);
+        expect(client.containerApps.getAuthToken.mock.callCount()).to.equal(1);
+        const url = new URL(fetchMock.mock.calls[0].arguments[0] as string);
+        expect(url.origin + url.pathname).to.equal(EventStreamEndpoint);
+        expect(Object.fromEntries(url.searchParams)).to.deep.equal({ 'api-version': '2025-01-01', follow: 'true', output: 'json' });
+        expect(fetchMock.mock.calls[0].arguments[1]?.headers).to.have.property('Authorization', 'Bearer test-token');
+        expect(terminals[0].name).to.include(app.name).and.include('system, JSON');
+
+        await service.start(makeTarget(app));
+        await service.start({ kind: 'system', app: { ...app, id: app.id.toUpperCase() } });
+        await service.start(makeTarget(app));
+        expect(terminals).to.have.length(2);
+        expect(fetchMock.mock.callCount()).to.equal(2);
+        expect(terminals[0].show.mock.callCount()).to.equal(3);
+        expect(terminals[1].show.mock.callCount()).to.equal(2);
+        terminals[0].pty.close();
+        await waitFor(() => cancel.mock.callCount() > 0);
+        expect(fetchMock.mock.calls[0].arguments[1]?.signal?.aborted).to.be.true;
+        expect(fetchMock.mock.calls[1].arguments[1]?.signal?.aborted).to.be.false;
+        service.dispose();
+    });
+
+    it('reports a missing system endpoint and allows retry after the app exposes it', async () => {
+        const client = createMockContainerAppsClient();
+        const { service, terminals } = createService(client);
+        const target = { kind: 'system' as const, app: makeContainerApp() };
+        await expect(service.start(target)).to.be.rejectedWith('No system log stream');
+        expect(client.containerApps.getAuthToken.mock.callCount()).to.equal(0);
+        expect(terminals).to.be.empty;
+        const ready = createMockContainerAppsClient({ eventStreamEndpoint: EventStreamEndpoint });
+        client.containerApps.get.mock.mockImplementation((...args) => ready.containerApps.get(...args));
+        mock.method(globalThis, 'fetch', () => Promise.resolve(new Response(openBody())));
+        await service.start(target);
+        expect(terminals).to.have.length(1);
+        service.dispose();
+    });
+
+    it('cancels system initialization while the app endpoint lookup is pending', async () => {
+        const app = Promise.withResolvers<ContainerApp>();
+        const client = createMockContainerAppsClient();
+        client.containerApps.get.mock.mockImplementation(() => app.promise);
+        const { service, terminals } = createService(client);
+        const started = expect(service.start({ kind: 'system', app: makeContainerApp() })).to.be.rejectedWith(CancellationError);
+        await waitFor(() => client.containerApps.get.mock.callCount() > 0);
+        service.dispose();
+        expect(client.containerApps.get.mock.calls[0].arguments[2]?.abortSignal?.aborted).to.be.true;
+        app.resolve(await createMockContainerAppsClient({ eventStreamEndpoint: EventStreamEndpoint }).containerApps.get('rg', 'app'));
+        await started;
+        expect(client.containerApps.getAuthToken.mock.callCount()).to.equal(0);
+        expect(terminals).to.be.empty;
+    });
+
+    for (const destination of [
+        'https://region.azurecontainerapps.dev/eventstream',
+        'https://other.azurecontainerapps.us/eventstream',
+        'https://evilazurecontainerapps.dev/eventstream',
+        'http://region.azurecontainerapps.dev/eventstream',
+    ]) {
+        it(`validates system stream redirect ${destination}`, async () => {
+            const fetchMock = mock.method(globalThis, 'fetch', () => Promise.resolve(new Response(openBody())));
+            fetchMock.mock.mockImplementationOnce(() => Promise.resolve(new Response(null, { status: 302, headers: { location: destination } })));
+            const { service } = createService(createMockContainerAppsClient({ eventStreamEndpoint: EventStreamEndpoint }));
+            const started = service.start({ kind: 'system', app: makeContainerApp() });
+            if (destination.startsWith('https://region.azurecontainerapps.dev/')) {
+                await started;
+                expect(fetchMock.mock.calls[1].arguments[0]).to.equal(destination);
+                expect(fetchMock.mock.calls[1].arguments[1]?.headers).to.deep.equal(fetchMock.mock.calls[0].arguments[1]?.headers);
+            } else {
+                await expect(started).to.be.rejectedWith(/redirected outside/i);
+                expect(fetchMock.mock.callCount()).to.equal(1);
+            }
+            service.dispose();
+        });
+    }
 
     it('shares initialization across concurrent starts at every network boundary', async () => {
         const replicas = Promise.withResolvers<readonly Replica[]>();

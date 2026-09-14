@@ -25,14 +25,20 @@ A command's handler, telemetry and menu entry are **one** row. Commands are neve
 
 | Disposition | Count | Meaning |
 |---|---|---|
-| Migrate | 7 | Rebuild with the same UX, using monorepo patterns |
-| Adapt | 18 | Rebuild with **changed** behaviour/UX (azd+Bicep, provider registries, tree flattening) |
+| Migrate | 4 | Rebuild with the same UX, using monorepo patterns |
+| Adapt | 21 | Rebuild with **changed** behaviour/UX (azd+Bicep, provider registries, tree flattening) |
 | Reuse | 11 | Already provided by a shared monorepo package/command; wire it up |
 | Defer | 16 | Keep, but a later phase -- the blocker is named in the rationale |
 | Drop | 88 | Do not migrate |
 | **Total** | **140** | |
 
 ## How decisions were reached
+
+User-approved diagnostic refinement (2026-09-14): ACA-105, ACA-115, and ACA-118 are **Adapt**.
+Failed startup verification offers separate **Open System Log Stream** and **Open App Log Stream**
+activity shortcuts. Diagnostics are user-initiated live streams, not automatic Log Analytics queries.
+System streaming is app-scoped and console streaming preserves a known failing revision. The existing
+app tree/palette console command retains its UX.
 
 Recommendations were produced from the inventory and reviewed by a human in a spreadsheet, where a blank
 decision meant agreement with the recommendation. Of the 140 rows: 107 were accepted as recommended, 9 were
@@ -260,7 +266,7 @@ ACA-068, ACA-069, ACA-070, ACA-083, ACA-084, ACA-085, ACA-093, ACA-094.
 | ACA-102 | `Registry credentials -- docker login / admin user` | wizard flow | B | **Drop** | Admin-user auth is discouraged; identity path supersedes | n/a -- no telemetry event |
 | ACA-103 | `env discovery & parsing` | detector | B | **Drop** | Env config belongs to the settings adapter / azd | n/a -- no telemetry event |
 | ACA-104 | `Ingress auto-config from Dockerfile EXPOSE` | detector | B | **Adapt** | Useful as a Bicep parameter default, not a prompt | n/a -- no telemetry event |
-| ACA-105 | `Start verification + Log Analytics fetch` | execute step | B | **Migrate** | Real diagnostic value; feeds Copilot context | n/a -- no telemetry event |
+| ACA-105 | `Start verification + Log Analytics fetch` | execute step | B | **Adapt** | User-approved refinement: independent verification activity with separate system/app log-stream shortcuts; app logs retain the captured revision | n/a -- no telemetry event |
 | ACA-106 | `V1 -> V2 settings conversion` | migration | B | **Drop** | Both schemas dropped (ACA-055-058) | n/a -- no telemetry event |
 | ACA-107 | `Basic vs Advanced deployment mode` | wizard flow | B | **Drop** | Prompt budget explicitly bans the mode split | n/a -- no telemetry event |
 | ACA-108 | `Saved deployment-configuration reuse` | wizard flow | B | **Drop** | Replaced by azd environments | n/a -- no telemetry event |
@@ -275,10 +281,10 @@ ACA-068, ACA-069, ACA-070, ACA-083, ACA-084, ACA-085, ACA-093, ACA-094.
 | ACA-112 | `ContainerRegistry management client` | client | B | **Reuse** | AcrClient exists | n/a -- no telemetry event |
 | ACA-113 | `@azure/container-registry data-plane client` | client | B | **Defer** | Supporting ACR discovery for ACA-096, only as needed; reuse shared clients rather than require a particular SDK. **Blocked by:** image-selection UX in [#347](https://github.com/microsoft/vscode-azure/issues/347). | n/a -- no telemetry event |
 | ACA-114 | `Authorization client (role assignments)` | client | B | **Adapt** | Role assignment moves into Bicep | n/a -- no telemetry event |
-| ACA-115 | `LogsQueryClient (@azure/monitor-query)` | client | B | **Migrate** | Backs ACA-105 | n/a -- no telemetry event |
+| ACA-115 | `LogsQueryClient (@azure/monitor-query)` | client | B | **Adapt** | User-approved refinement: diagnostic access through Container Apps token/stream APIs; no automatic Log Analytics query | n/a -- no telemetry event |
 | ACA-116 | `Storage blob upload (source archive)` | client | B | **Drop** | JC4. azd performs the source-archive upload. | n/a -- no telemetry event |
 | ACA-117 | `Docker Hub v2 REST client` | client | B | **Defer** | Only for ACA-097 **Blocked by:** Client for ACA-097; deferred with it. | n/a -- no telemetry event |
-| ACA-118 | `Log-stream data-plane transport` | provider | B | **Migrate** | Non-trivial: ARM token exchange + cross-origin redirect opt-in + chunked stream | n/a -- no telemetry event |
+| ACA-118 | `Log-stream data-plane transport` | provider | B | **Adapt** | User-approved refinement: console plus app-wide system JSON streams; ARM token exchange, cloud-restricted redirects, independent terminal lifetimes | n/a -- no telemetry event |
 | ACA-119 | `Revision-draft FileSystemProvider` | provider | B | **Drop** | JC1. The virtual filesystem is the draft mechanism itself. | n/a -- no telemetry event |
 | ACA-120 | `Confirmation webview (React/Fluent)` | webview | B | **Drop** | New capability for the monorepo -- judgment call Reviewer (verbatim): "Drop the webviews" | n/a -- no telemetry event |
 | ACA-121 | `Loading webview` | webview | B | **Drop** | Same | n/a -- no telemetry event |

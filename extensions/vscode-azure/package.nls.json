@@ -31,6 +31,7 @@
     "commands.vscode-azure/containerApps/startStreamingLogs": "Open Log Stream...",
     "commands.vscode-azure/containerApps/createNew": "Create Empty Container App in Azure...",
     "commands.vscode-azure/containerApps/deploy": "Deploy Project as Container App...",
+    "commands.vscode-azure/containerApps/verifyStart": "Verify Container App Startup",
     "commands.vscode-azure/staticWebApps/createNew": "Create Static Web App...",
     "commands.vscode-azure/staticWebApps/deleteEnvironment": "Delete Environment...",
     "commands.vscode-azure/staticWebApps/createSwaConfigFile": "Create Configuration File",

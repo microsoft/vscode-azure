@@ -89,6 +89,7 @@ export interface AddChildOptions {
     readonly title: string;
     readonly status?: ActivityStatus;
     readonly isLeaf?: boolean;
+    readonly command?: Activity['command'];
 }
 
 /**
@@ -119,6 +120,7 @@ export class CodeDeploymentHandle {
             status: opts.status ?? 'Completed',
             title: opts.title,
             isLeaf: opts.isLeaf,
+            command: opts.command,
             startTime: new Date(),
             endTime: isTerminalActivityStatus(opts.status ?? 'Completed') ? new Date() : undefined,
         };

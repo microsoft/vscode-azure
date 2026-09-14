@@ -9,7 +9,7 @@ import { createMockContainerAppsClient, makeContainerApp } from '@microsoft/vsco
 import { respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import { StartStreamingLogs } from '../../../src/commands/containerApps/StartStreamingLogs';
-import type { LogStreamTarget } from '../../../src/tree/resources/containerApps/ContainerAppLogStream';
+import type { ContainerAppLogStreamTarget } from '../../../src/tree/resources/containerApps/ContainerAppLogStream';
 import { createTestResourceSelector } from '../../tree/resources/testResourceSelector';
 
 function createCommand(revisions: Partial<Revision>[], replicas: Partial<Replica>[]) {
@@ -22,7 +22,7 @@ function createCommand(revisions: Partial<Revision>[], replicas: Partial<Replica
         replicas,
     });
 
-    const start = mock.fn((_target: LogStreamTarget) => Promise.resolve());
+    const start = mock.fn((_target: ContainerAppLogStreamTarget) => Promise.resolve());
 
     const command = new StartStreamingLogs(
         mockResult.vscode,
@@ -32,7 +32,7 @@ function createCommand(revisions: Partial<Revision>[], replicas: Partial<Replica
         { start } as never,
     );
 
-    return { command, start, mockResult, key: AzureNodeId.from(app).toString() };
+    return { command, start, mockResult, client, app, key: AzureNodeId.from(app).toString() };
 }
 
 const oneContainer = [{ name: 'replica1', containers: [{ name: 'api' }] }];
@@ -66,7 +66,7 @@ describe('StartStreamingLogs (unit)', () => {
 
         await command.execute(key);
 
-        expect(start.mock.calls[0].arguments[0].revisionName).to.equal('rev2');
+        expect(start.mock.calls[0].arguments[0]).to.include({ revisionName: 'rev2' });
         tracker.assertAllConsumed();
     });
 
@@ -80,7 +80,7 @@ describe('StartStreamingLogs (unit)', () => {
         await command.execute(key);
 
         expect(mockResult.quickPicks).to.have.length(0);
-        expect(start.mock.calls[0].arguments[0].revisionName).to.equal('current');
+        expect(start.mock.calls[0].arguments[0]).to.include({ revisionName: 'current' });
     });
 
     it('asks which container when a replica runs several', async () => {
@@ -92,7 +92,7 @@ describe('StartStreamingLogs (unit)', () => {
 
         await command.execute(key);
 
-        expect(start.mock.calls[0].arguments[0].containerName).to.equal('sidecar');
+        expect(start.mock.calls[0].arguments[0]).to.include({ containerName: 'sidecar' });
         tracker.assertAllConsumed();
     });
 
@@ -108,6 +108,20 @@ describe('StartStreamingLogs (unit)', () => {
         const { command, start, key } = createCommand([{ name: 'rev1', active: true }], []);
 
         await expect(command.execute(key)).to.be.rejectedWith(/scaled to zero/i);
+        expect(start.mock.callCount()).to.equal(0);
+    });
+
+    it('selects a revision for an explicit app when verification could not capture one', async () => {
+        const { command, start, app } = createCommand([{ name: 'current', active: true }], oneContainer);
+        await command.execute({ kind: 'console', app });
+        expect(start.mock.calls[0].arguments[0]).to.include({ app, revisionName: 'current' });
+    });
+
+    it('reports unavailable replicas of the captured revision rather than switching to a healthy revision', async () => {
+        const { command, client, start, app } = createCommand([{ name: 'healthy', active: true }], []);
+        await expect(command.execute({ kind: 'console', app, revisionName: 'failed' })).to.be.rejectedWith('no running replicas');
+        expect(client.containerAppsRevisionReplicas.listReplicas.mock.calls[0].arguments[2]).to.equal('failed');
+        expect(client.containerAppsRevisions.listRevisions.mock.callCount()).to.equal(0);
         expect(start.mock.callCount()).to.equal(0);
     });
 });

@@ -79,6 +79,7 @@ export function toActivityTreeItem(code: IVsCode, activity: Activity, activityId
     const treeItem = new code.TreeItem(activity.title, collapsibleState);
     treeItem.id = activityId;
     treeItem.description = activity.description;
+    treeItem.command = activity.command;
 
     switch (activity.status) {
         case 'NotStarted':

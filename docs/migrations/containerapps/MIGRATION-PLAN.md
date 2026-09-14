@@ -295,15 +295,25 @@ the app actually started.
       features* half does not carry over: it existed because the source round-tripped the app's ARM template
       through its own model and could silently drop what it did not understand. Here Bicep is the source of
       truth and the user can read it, so nothing is silently lost  <- ACA-110
-- [x] `VerifyContainerAppStartStep` -- after provisioning, poll the app's latest revision until it leaves a
-      transient running state; on failure query the environment's Log Analytics workspace
-      (`ContainerAppConsoleLogs_CL`, last 5 minutes) and write the output to the output channel so it can be
-      explained. Never throws: the resources exist either way, so failing the wizard here would misreport
-      what happened. Learns what was created from the consumer template's azd outputs rather than guessing
-      at the module's naming scheme  <- ACA-105
-- [x] Add `@azure/monitor-query-logs` and a `LogsQueryClient` wrapper in azutils to back that step. **Not**
-      `@azure/monitor-query` as the plan originally said (inherited from the source extension's inventory):
-      npm marks that package deprecated in favor of the split `-logs` / `-metrics` packages  <- ACA-115
+- [x] `VerifyContainerAppStartStep` dispatches the hidden `VerifyContainerAppStart` managed command after
+      application-image deployment, including deployment without provisioning. Quickstart-only creation
+      skips verification. The launcher resolves the subscription and reads app/resource group names from azd
+      outputs; these lookups use wizard error handling. The independent command owns a separate root activity,
+      reads the app once to capture its latest revision, and polls that revision's provisioning
+      and running states with `@azure/core-lro`. Its two-minute bound includes the initial app lookup.
+      The shared deploy API provides no exact revision/image correlation. Failures offer two clickable leaves,
+      **Open System Log Stream** and **Open App Log Stream**, through reusable activity command pass-through.
+      App logs retain the captured revision when known; system logs are app-scoped and require no replica.
+      App/revision lookup, missing revision, timeout, and startup failures remain
+      visible without changing the wizard's result. Optional programmatic cancellation is supported; the
+      activity tree has no Cancel action. See [startup verification](../../products/containerapps.md#startup-verification)
+      for the correlation limitation and diagnostic behavior. <- ACA-105
+- [x] Diagnostic access uses the shared `ContainerAppLogStreamService` with typed console/system targets,
+      ARM `getAuthToken`, and the app's `eventStreamEndpoint` (`follow=true&output=json`). System and
+      console terminals coexist, deduplicate independently, and retain cloud-scoped redirect checks and
+      cancellation. `StartStreamingLogs` accepts explicit activity targets without a cached resource;
+      its tree/palette console flow is unchanged. This is the user-approved Adapt refinement recorded
+      in `TRIAGE.md`; no automatic Log Analytics query is part of verification. <- ACA-115, ACA-118
 - [x] Register `CreateContainerApp` twice -- `vscode-azure/containerApps/createNew` and
       `vscode-azure/containerApps/deploy` -- via `prefixArgs`, matching the Functions precedent. This is
       where `createContainerApp`, `createManagedEnvironment`, `deployWorkspaceProject` and

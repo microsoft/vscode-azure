@@ -3,17 +3,16 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { AzureNodeId } from '@microsoft/vscode-azure-azutils';
 import {
-    AzureNodeId, IContainerAppsClientProvider, ILogsQueryClientProvider,
-} from '@microsoft/vscode-azure-azutils';
-import {
-    createMockContainerAppsClient, createMockDataItemTree, createMockSubscriptionClientProvider,
+    createMockDataItemTree, createMockSubscriptionClientProvider,
     createMockViewItemTree, makeSubscription,
 } from '@microsoft/vscode-azure-azutils/testing';
 import { IActionExecutor } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, createTestActionExecutor, MockUri, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import { CreateContainerApp } from '../../../src/commands/containerApps/CreateContainerApp';
+import { VerifyContainerAppStart } from '../../../src/commands/containerApps/VerifyContainerAppStart';
 import { ContainerfileTag } from '../../../src/tree/workspace/containerApps/containerAppsDetector';
 import { IWorkspaceIndexService } from '../../../src/utils/workspaceIndex/WorkspaceIndexService';
 import { createMockAzdService } from '../../azd/MockAzdService';
@@ -24,6 +23,8 @@ import { createWizardCommandContainer } from '../createWizardCommandContainer';
 describe('CreateContainerApp (unit)', () => {
     const subscription = makeSubscription({ subscriptionId: 'sub-1' });
 
+    afterEach(() => { mock.restoreAll(); });
+
     function createCommand() {
         const { ctx, mock: code } = createMockCodeContext();
         const folder = MockUri.file('/workspace');
@@ -32,6 +33,12 @@ describe('CreateContainerApp (unit)', () => {
         code.fs.addFile(dockerfile, 'FROM node:20\nEXPOSE 3000\n');
         const { executor } = createTestActionExecutor();
         const azd = createMockAzdService();
+        azd.envGetValues.mock.mockImplementation(() => Promise.resolve({
+            // eslint-disable-next-line @typescript-eslint/naming-convention -- azd output keys
+            AZURE_CONTAINER_APP_NAME: 'app',
+            // eslint-disable-next-line @typescript-eslint/naming-convention -- azd output keys
+            AZURE_RESOURCE_GROUP: 'rg',
+        }));
         azd.findAzureYaml.mock.mockImplementation(cwd => {
             if (!cwd) {
                 throw new Error('The wizard must scope azure.yaml discovery to its project.');
@@ -48,26 +55,25 @@ describe('CreateContainerApp (unit)', () => {
             dataTree: createMockDataItemTree([subscription]),
             viewItemTree: createMockViewItemTree({ '': [AzureNodeId.from(subscription).toString()] }),
             subscriptionClientProvider: createMockSubscriptionClientProvider([{ name: 'eastus', displayName: 'East US' }]),
+            subscriptionResolver: () => Promise.resolve(subscription),
             armProvider: createMockArmProvider(),
             codeProvider: createMockCodeProvider(),
         });
         container.bind(IActionExecutor).toConstantValue(executor);
         container.bind(IWorkspaceIndexService).toConstantValue(createMockWorkspaceIndexService({ [ContainerfileTag]: [dockerfile] }));
-        container.bind(IContainerAppsClientProvider).toConstantValue(() => createMockContainerAppsClient());
-        container.bind(ILogsQueryClientProvider).toConstantValue(() => ({
-            queryWorkspace: mock.fn(() => Promise.resolve([])),
-        }));
-        return { command: container.get(CreateContainerApp), code, azd, folder };
+        const dispatch = mock.method(ctx.code.commands, 'executeCommand', () => Promise.resolve());
+        return { command: container.get(CreateContainerApp), code, azd, folder, dispatch };
     }
 
     it('deploys the selected workspace with its detected port and Docker service', async () => {
-        const { command, code, azd, folder } = createCommand();
+        const { command, code, azd, folder, dispatch } = createCommand();
         const prompts = respondToPrompts(code, [{ pick: 'sub-1' }, { pick: 'East US' }, { input: 'my-app' }]);
 
         await command.execute('deploy');
 
         expect(azd.provision.mock.callCount()).to.equal(1);
         expect(azd.deploy.mock.callCount()).to.equal(1);
+        expect(dispatch.mock.calls.some(call => call.arguments[0] === VerifyContainerAppStart.CommandId)).to.be.true;
         expect(azd.show.mock.callCount()).to.equal(2);
         expect(azd.provision.mock.calls[0].arguments[0]).to.equal(folder);
         expect(azd.updateAzureYaml.mock.callCount()).to.equal(1); // eslint-disable-line @typescript-eslint/no-deprecated -- command uses the compatibility editor
@@ -78,7 +84,7 @@ describe('CreateContainerApp (unit)', () => {
     });
 
     it('provisions the quickstart in a temporary project on its known port', async () => {
-        const { command, code, azd, folder: workspaceFolder } = createCommand();
+        const { command, code, azd, folder: workspaceFolder, dispatch } = createCommand();
         const prompts = respondToPrompts(code, [
             { pick: 'sub-1' }, { pick: 'East US' }, { input: 'my-app' },
         ]);
@@ -87,11 +93,54 @@ describe('CreateContainerApp (unit)', () => {
 
         expect(azd.provision.mock.callCount()).to.equal(1);
         expect(azd.deploy.mock.callCount()).to.equal(0);
+        expect(dispatch.mock.calls.filter(call => call.arguments[0] === VerifyContainerAppStart.CommandId)).to.have.length(0);
         expect(azd.show.mock.callCount()).to.equal(0);
         const folder = azd.provision.mock.calls[0].arguments[0];
         expect(folder.toString()).not.to.equal(workspaceFolder.toString());
         const parameters = JSON.parse(Buffer.from(await code.fs.readFile(MockUri.joinPath(folder, 'infra', 'main.parameters.json'))).toString());
         expect(parameters.parameters.targetPort.value).to.equal(80);
+        prompts.assertAllConsumed();
+    });
+
+    it('launches startup verification for deployment when the user skips provisioning', async () => {
+        const { command, code, azd, folder, dispatch } = createCommand();
+        code.fs.addFile(MockUri.joinPath(folder, 'azure.yaml'), 'name: my-app\nservices:\n  api:\n    project: ./\n');
+        code.fs.addFile(MockUri.joinPath(folder, 'infra', 'main.bicep'), '// bicep');
+        azd.show.mock.mockImplementation(() => Promise.resolve({
+            name: 'my-app', services: { api: { project: { path: './', language: 'docker' } } },
+        }));
+        azd.envList.mock.mockImplementation(() => Promise.resolve([{ Name: 'my-app', IsDefault: true }]));
+        azd.envExists.mock.mockImplementation(() => Promise.resolve(true));
+        azd.envGetValues.mock.mockImplementation(() => Promise.resolve({
+            // eslint-disable-next-line @typescript-eslint/naming-convention -- azd output keys
+            AZURE_LOCATION: 'eastus',
+            // eslint-disable-next-line @typescript-eslint/naming-convention -- azd output keys
+            AZURE_SUBSCRIPTION_ID: 'sub-1',
+            // eslint-disable-next-line @typescript-eslint/naming-convention -- azd output keys
+            AZURE_CONTAINER_APP_NAME: 'app',
+            // eslint-disable-next-line @typescript-eslint/naming-convention -- azd output keys
+            AZURE_RESOURCE_GROUP: 'rg',
+        }));
+        const prompts = respondToPrompts(code, [{ pick: 'No' }]);
+
+        await command.execute('deploy');
+
+        expect(azd.provision.mock.callCount()).to.equal(0);
+        expect(azd.deploy.mock.callCount()).to.equal(1);
+        expect(dispatch.mock.calls.find(call => call.arguments[0] === VerifyContainerAppStart.CommandId)?.arguments[1]).to.deep.equal({
+            subscription, resourceGroupName: 'rg', appName: 'app',
+        });
+        prompts.assertAllConsumed();
+    });
+
+    it('fails the deployment before launching verification if azd deploy fails', async () => {
+        const { command, code, azd, dispatch } = createCommand();
+        const prompts = respondToPrompts(code, [{ pick: 'sub-1' }, { pick: 'East US' }, { input: 'my-app' }]);
+        azd.deploy.mock.mockImplementation(() => Promise.reject(new Error('deployment failed')));
+
+        await expect(command.execute('deploy')).to.be.rejectedWith('deployment failed');
+
+        expect(dispatch.mock.calls.filter(call => call.arguments[0] === VerifyContainerAppStart.CommandId)).to.have.length(0);
         prompts.assertAllConsumed();
     });
 });

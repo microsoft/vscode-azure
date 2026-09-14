@@ -4,8 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type * as vscode from 'vscode';
-import { CancellationError } from '../vscode/CancellationError';
-import { toAbortSignal } from './toAbortSignal';
+import { withCancellation } from './withCancellation';
 
 /**
  * Returns a promise that resolves after {@linkcode ms} milliseconds.
@@ -13,33 +12,15 @@ import { toAbortSignal } from './toAbortSignal';
  * If the optional {@linkcode cancellation} source (either a
  * {@linkcode vscode.CancellationToken CancellationToken} or an
  * {@linkcode AbortSignal}) fires -- or has already fired -- the promise
- * rejects with {@linkcode CancellationError}.
+ * rejects as described by {@linkcode withCancellation}.
  */
-export function delay(ms: number, cancellation?: vscode.CancellationToken | AbortSignal): Promise<void> {
-    const { signal, disposable } = toAbortSignal(cancellation);
-
-    if (signal?.aborted) {
-        disposable.dispose();
-        return Promise.reject(new CancellationError());
+export async function delay(ms: number, cancellation?: vscode.CancellationToken | AbortSignal): Promise<void> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+        await withCancellation(() => new Promise<void>(resolve => {
+            timer = setTimeout(resolve, ms);
+        }), cancellation);
+    } finally {
+        clearTimeout(timer);
     }
-
-    return new Promise<void>((resolve, reject) => {
-        const cleanup = () => {
-            clearTimeout(timer);
-            signal?.removeEventListener('abort', onCancel);
-            disposable.dispose();
-        };
-
-        const onCancel = () => {
-            cleanup();
-            reject(new CancellationError());
-        };
-
-        const timer = setTimeout(() => {
-            cleanup();
-            resolve();
-        }, ms);
-
-        signal?.addEventListener('abort', onCancel, { once: true });
-    });
 }

@@ -72,12 +72,9 @@ export class CreateContainerApp implements ManagedCommand {
             get(CreateAzdEnvStep),
             get(AzdProvisionStep),
             get(AzdDeployStep),
+            get(VerifyContainerAppStartStep),
             get(ShowEndpointUrlStep),
         ];
-
-        // Last: a container can only fail to start once it has an image, which
-        // on the deploy job is only true after `azd deploy` has pushed one.
-        executeSteps.push(get(VerifyContainerAppStartStep));
 
         const wizard = new Wizard<CreateContainerAppContext>(
             this.output,

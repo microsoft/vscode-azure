@@ -3,145 +3,94 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createMockContainerAppsClient, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
+import { makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
+import { ExecuteStep, Wizard } from '@microsoft/vscode-azure-utils';
 import { createMockVsCode, DebugOutputChannel, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import type { CreateContainerAppContext } from '../../../src/commands/containerApps/CreateContainerAppContext';
 import { VerifyContainerAppStartStep } from '../../../src/commands/containerApps/steps/VerifyContainerAppStartStep';
-
-interface StepOptions {
-    /** Running states returned by successive `getRevision` calls. */
-    readonly runningStates?: string[];
-    /** Values reported by `azd env get-values`. */
-    readonly envValues?: Record<string, string>;
-    /** Lines the Log Analytics query returns. */
-    readonly logLines?: string[];
-}
-
-function createStep(options: StepOptions = {}) {
-    const mockResult = createMockVsCode();
-    const output = new DebugOutputChannel('test');
-
-    const client = createMockContainerAppsClient({
-        environmentId: '/subscriptions/sub/resourceGroups/MyRG/providers/Microsoft.App/managedEnvironments/MyEnv',
-        latestRevisionName: 'myapp--abc123',
-    });
-
-    const states = [...(options.runningStates ?? ['running'])];
-    client.containerAppsRevisions.getRevision.mock.mockImplementation(() => Promise.resolve({
-        id: '/revisions/myapp--abc123',
-        name: 'myapp--abc123',
-        type: 'Microsoft.App/containerApps/revisions',
-        // Repeat the final state once the script is exhausted, so a test that
-        // never settles keeps returning a transient state.
-        runningState: states.length > 1 ? states.shift() : states[0],
-    }));
-
-    client.managedEnvironments.get.mock.mockImplementation(() => Promise.resolve({
-        id: '/subscriptions/sub/resourceGroups/MyRG/providers/Microsoft.App/managedEnvironments/MyEnv',
-        name: 'MyEnv',
-        type: 'Microsoft.App/managedEnvironments',
-        location: 'eastus',
-        appLogsConfiguration: { logAnalyticsConfiguration: { customerId: 'workspace-guid' } },
-    }));
-
-    const queryWorkspace = mock.fn((_workspaceId: string, _query: string, _minutes: number) =>
-        Promise.resolve(options.logLines ?? []));
-
-    const azd = {
-        envGetValues: mock.fn(() => Promise.resolve(options.envValues ?? {
-            // eslint-disable-next-line @typescript-eslint/naming-convention -- azd output names
-            AZURE_CONTAINER_APP_NAME: 'MyApp',
-            // eslint-disable-next-line @typescript-eslint/naming-convention -- azd output names
-            AZURE_RESOURCE_GROUP: 'MyRG',
-        })),
-    };
-
-    const step = new VerifyContainerAppStartStep(
-        mockResult.vscode,
-        output,
-        azd as never,
-        () => client,
-        () => ({ queryWorkspace }),
-        () => Promise.resolve(undefined),
-    );
-
-    return { step, client, queryWorkspace, azd, mockResult };
-}
+import { VerifyContainerAppStart } from '../../../src/commands/containerApps/VerifyContainerAppStart';
+import { createMockAzdService } from '../../azd/MockAzdService';
 
 const baseContext: CreateContainerAppContext = {
     resourceDisplayName: 'Container App',
     provision: true,
+    deploy: true,
     subscription: makeSubscription(),
     iacFolder: MockUri.file('/project'),
     environmentName: 'dev',
 };
 
 describe('VerifyContainerAppStartStep (unit)', () => {
-    afterEach(() => {
-        mock.restoreAll();
-    });
+    afterEach(() => { mock.restoreAll(); });
 
-    it('only runs when the wizard provisioned something', () => {
+    function createStep() {
+        const code = createMockVsCode();
+        const azd = createMockAzdService();
+        azd.envGetValues.mock.mockImplementation(() => Promise.resolve({
+            // eslint-disable-next-line @typescript-eslint/naming-convention -- azd output keys
+            AZURE_CONTAINER_APP_NAME: 'app',
+            // eslint-disable-next-line @typescript-eslint/naming-convention -- azd output keys
+            AZURE_RESOURCE_GROUP: 'rg',
+        }));
+        const resolveSubscription = mock.fn(() => Promise.resolve(makeSubscription()));
+        return { code, azd, resolveSubscription, step: new VerifyContainerAppStartStep(code.vscode, azd, resolveSubscription) };
+    }
+
+    it('runs after image deployment with or without provisioning', () => {
         const { step } = createStep();
-
         expect(step.shouldExecute(baseContext)).to.be.true;
-        expect(step.shouldExecute({ ...baseContext, provision: false })).to.be.false;
+        expect(step.shouldExecute({ ...baseContext, provision: false })).to.be.true;
+        expect(step.shouldExecute({ ...baseContext, deploy: false })).to.be.false;
+        expect(step.shouldExecute({ ...baseContext, deploy: undefined })).to.be.false;
+        expect(step.shouldExecute({ ...baseContext, iacFolder: undefined })).to.be.false;
     });
 
-    it('does not warn when the app is running', async () => {
-        const { step, queryWorkspace, mockResult } = createStep({ runningStates: ['running'] });
+    it('advances the wizard while the separately dispatched command is unresolved', async () => {
+        const { step, code, resolveSubscription } = createStep();
+        const pending = Promise.withResolvers<undefined>();
+        const dispatch = mock.method(code.vscode.commands, 'executeCommand', () => pending.promise);
+        const next = new class extends ExecuteStep<CreateContainerAppContext> {
+            public readonly execute = mock.fn(() => Promise.resolve());
+        }();
+        const wizard = new Wizard(new DebugOutputChannel('test'), baseContext, [], [step, next]);
 
-        await step.execute(baseContext);
+        await wizard.run();
 
-        expect(queryWorkspace.mock.callCount()).to.equal(0);
-        expect(mockResult.window.showWarningMessage.mock.callCount()).to.equal(0);
-    });
-
-    it('treats a scaled-to-zero app as healthy', async () => {
-        // An app with no traffic legitimately has no running replicas; warning
-        // about it would cry wolf on every idle deployment.
-        const { step, mockResult } = createStep({ runningStates: ['scaledtozero'] });
-
-        await step.execute(baseContext);
-
-        expect(mockResult.window.showWarningMessage.mock.callCount()).to.equal(0);
-    });
-
-    it('reads the console logs when the app failed to start', async () => {
-        const { step, queryWorkspace, mockResult } = createStep({
-            runningStates: ['failed'],
-            logLines: ['exec format error'],
+        expect(next.execute.mock.callCount()).to.equal(1);
+        expect(dispatch.mock.calls[0].arguments[0]).to.equal(VerifyContainerAppStart.CommandId);
+        const request = dispatch.mock.calls[0].arguments[1];
+        expect(request).to.deep.equal({
+            subscription: baseContext.subscription,
+            resourceGroupName: 'rg', appName: 'app',
         });
-
-        await step.execute(baseContext);
-
-        expect(queryWorkspace.mock.callCount()).to.equal(1);
-        expect(queryWorkspace.mock.calls[0].arguments[1]).to.contain('ContainerAppConsoleLogs_CL');
-        expect(mockResult.window.showWarningMessage.mock.callCount()).to.equal(1);
+        expect(Object.isFrozen(request)).to.be.true;
+        expect(resolveSubscription.mock.callCount()).to.equal(0);
+        pending.resolve(undefined);
     });
 
-    it('does nothing when provisioning published no app name', async () => {
-        const { step, client } = createStep({ envValues: {} });
-
-        await step.execute(baseContext);
-
-        expect(client.containerApps.get.mock.callCount()).to.equal(0);
+    it('snapshots a hydrated subscription without retaining the wizard context', async () => {
+        const { step, code, resolveSubscription } = createStep();
+        const dispatch = mock.method(code.vscode.commands, 'executeCommand', () => Promise.resolve());
+        await step.execute({ ...baseContext, subscription: undefined, hydratedSubscriptionId: 'hydrated' });
+        expect(dispatch.mock.calls[0].arguments[1]).to.deep.equal({
+            subscription: await resolveSubscription.mock.calls[0].result,
+            resourceGroupName: 'rg', appName: 'app',
+        });
+        expect(resolveSubscription.mock.calls[0].arguments).to.deep.equal(['hydrated']);
     });
 
-    it('does not throw when the app cannot be read', async () => {
-        // The resources exist whether or not this diagnostic runs, so throwing
-        // here would report a failed deployment that actually succeeded.
-        const { step, client } = createStep();
-        client.containerAppsRevisions.getRevision.mock.mockImplementation(() => Promise.reject(new Error('403')));
-
-        await step.execute(baseContext);
-    });
-
-    it('does not throw when the log query fails', async () => {
-        const { step, queryWorkspace } = createStep({ runningStates: ['failed'] });
-        queryWorkspace.mock.mockImplementation(() => Promise.reject(new Error('no access')));
-
-        await step.execute(baseContext);
-    });
+    for (const kind of ['outputs', 'subscription'] as const) {
+        it(`reports unavailable ${kind} through wizard error handling`, async () => {
+            const { step, code, azd, resolveSubscription } = createStep();
+            const dispatch = mock.method(code.vscode.commands, 'executeCommand', () => Promise.resolve());
+            if (kind === 'outputs') {
+                azd.envGetValues.mock.mockImplementation(() => Promise.resolve({}));
+            } else {
+                resolveSubscription.mock.mockImplementation(() => Promise.reject(new Error('not signed in')));
+            }
+            await expect(step.execute({ ...baseContext, subscription: undefined, hydratedSubscriptionId: 'sub' })).to.be.rejected;
+            expect(dispatch.mock.callCount()).to.equal(0);
+        });
+    }
 });

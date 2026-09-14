@@ -132,4 +132,10 @@ describe('toActivityTreeItem (unit)', () => {
             expect(item.iconPath).to.not.be.undefined;
         }
     });
+
+    it('preserves an activity action and its arguments for selection', () => {
+        const command = { command: 'test.open', title: 'Open detail', arguments: [{ id: 'resource' }] };
+        const activity = makeActivity({ command });
+        expect(toActivityTreeItem(code, activity, activity.id).command).to.equal(command);
+    });
 });

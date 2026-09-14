@@ -167,6 +167,10 @@
                 "title": "%commands.vscode-azure/containerApps/deploy%"
             },
             {
+                "command": "vscode-azure/containerApps/verifyStart",
+                "title": "%commands.vscode-azure/containerApps/verifyStart%"
+            },
+            {
                 "command": "vscode-azure/staticWebApps/createNew",
                 "category": "%commands.category.azureStaticWebApps%",
                 "icon": "$(add)",
@@ -231,6 +235,10 @@
         ],
         "menus": {
             "commandPalette": [
+                {
+                    "command": "vscode-azure/containerApps/verifyStart",
+                    "when": "false"
+                },
                 {
                     "command": "vscode-azure/acquireTool",
                     "when": "false"

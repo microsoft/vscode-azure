@@ -4,13 +4,14 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    ContainerAppsClient, IContainerAppsClientProvider, ILogsQueryClientProvider, LogsQueryClient,
+    ContainerAppsClient, IContainerAppsClientProvider,
 } from '@microsoft/vscode-azure-azutils';
 import { CreateContainerApp } from '../commands/containerApps/CreateContainerApp';
 import { OpenContainerAppConsole, OpenContainerAppLogs } from '../commands/containerApps/portalBlades';
 import { RestartContainerApp } from '../commands/containerApps/RestartContainerApp';
 import { RevealContainerAppEnvironment } from '../commands/containerApps/RevealContainerAppEnvironment';
 import { StartStreamingLogs } from '../commands/containerApps/StartStreamingLogs';
+import { VerifyContainerAppStart } from '../commands/containerApps/VerifyContainerAppStart';
 import { OpenUrl } from '../commands/OpenUrl';
 import type { ProductRegistrar } from '../registration/ProductRegistrar';
 import { pushDisposable } from '../services';
@@ -24,10 +25,6 @@ import { IWorkspaceDetector } from '../utils/workspaceIndex/WorkspaceDetector';
 export function registerContainerApps(registrar: ProductRegistrar): void {
     registrar.registerAzureClientProvider(IContainerAppsClientProvider, ContainerAppsClient.create.bind(ContainerAppsClient));
 
-    registrar.registerAzureClientProvider(ILogsQueryClientProvider, (context, executor, credential, subscription) => {
-        return LogsQueryClient.create(context, executor, credential, subscription.environment);
-    });
-
     registrar.registerBinding(container => {
         container.bind(IContainerAppLogStreamService).to(ContainerAppLogStreamService).inSingletonScope().onActivation(pushDisposable);
         container.bind(IWorkspaceDetector).toConstantValue(containerAppsDetector);
@@ -40,7 +37,8 @@ export function registerContainerApps(registrar: ProductRegistrar): void {
     registrar.registerCommand('vscode-azure/containerApps/openLogsInPortal', OpenUrl, OpenContainerAppLogs.getUrl);
     registrar.registerCommand('vscode-azure/containerApps/restart', RestartContainerApp);
     registrar.registerCommand('vscode-azure/containerApps/revealEnvironment', RevealContainerAppEnvironment);
-    registrar.registerCommand('vscode-azure/containerApps/startStreamingLogs', StartStreamingLogs);
+    registrar.registerCommand(StartStreamingLogs.CommandId, StartStreamingLogs);
     registrar.registerCommand('vscode-azure/containerApps/createNew', CreateContainerApp, 'createNew');
     registrar.registerCommand('vscode-azure/containerApps/deploy', CreateContainerApp, 'deploy');
+    registrar.registerCommand(VerifyContainerAppStart.CommandId, VerifyContainerAppStart);
 }

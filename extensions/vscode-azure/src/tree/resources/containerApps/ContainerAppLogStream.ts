@@ -16,13 +16,26 @@ import type * as vscode from 'vscode';
 export const IContainerAppLogStreamService: ServiceIdentifier<IContainerAppLogStreamService> = Symbol.for('IContainerAppLogStreamService');
 export type IContainerAppLogStreamService = ContainerAppLogStreamService;
 
+/** App identity sufficient to stream logs without a cached tree resource. */
+export type LogStreamApp = Pick<GenericResource, 'id' | 'name' | 'subscription'>;
+
 /** Identifies one container within one replica of one container app. */
 export interface LogStreamTarget {
-    readonly app: GenericResource;
+    readonly kind?: 'console';
+    readonly app: LogStreamApp;
     readonly revisionName: string;
     readonly replicaName: string;
     readonly containerName: string;
 }
+
+/** App-wide system events do not require a running revision or replica. */
+export interface SystemLogStreamTarget {
+    readonly kind: 'system';
+    readonly app: LogStreamApp;
+}
+
+/** A console container stream or an app-wide system event stream. */
+export type ContainerAppLogStreamTarget = LogStreamTarget | SystemLogStreamTarget;
 
 /**
  * Hosts on which each cloud's data-plane token may be presented, keyed by ARM endpoint.
@@ -34,9 +47,9 @@ export interface LogStreamTarget {
  * data plane. Unrecognized ARM endpoints do not authorize redirects.
  */
 const LogStreamHostSuffixes = new Map([
-    [AzurePublicCloud.resourceManagerEndpointUrl, '.azurecontainerapps.io'],
-    [AzureUSGovernment.resourceManagerEndpointUrl, '.azurecontainerapps.us'],
-    [AzureChinaCloud.resourceManagerEndpointUrl, '.azurecontainerapps.cn'],
+    [AzurePublicCloud.resourceManagerEndpointUrl, ['.azurecontainerapps.io', '.azurecontainerapps.dev']],
+    [AzureUSGovernment.resourceManagerEndpointUrl, ['.azurecontainerapps.us']],
+    [AzureChinaCloud.resourceManagerEndpointUrl, ['.azurecontainerapps.cn']],
 ]);
 
 /** Redirect hops tolerated before the request is treated as a loop. */
@@ -54,11 +67,12 @@ interface Stream {
 }
 
 /**
- * Opens and tracks live log streams for container app replicas.
+ * Opens and tracks live console and system log streams for container apps.
  *
  * The Container Apps log stream is chunked HTTP, not a web socket: an ARM call
  * exchanges the user's credentials for a short-lived data-plane token, which is
- * then presented to the container's `logStreamEndpoint`. Each stream writes into
+ * then presented to the container's `logStreamEndpoint` or app's
+ * `eventStreamEndpoint`. Each stream writes into
  * its own pseudoterminal and is cancelled when the user closes that terminal.
  */
 @injectable()
@@ -73,16 +87,16 @@ export class ContainerAppLogStreamService implements Disposable {
     ) { }
 
     /**
-     * Opens a log stream for one container and shows its terminal.
+     * Opens a container console stream or app-wide system stream and shows its terminal.
      *
      * Concurrent starts share initialization. Starting a stream that is already
      * open re-focuses its terminal rather than opening a second connection.
      *
-     * @throws if the container exposes no log-stream endpoint, or if the
+     * @throws if the target exposes no log-stream endpoint, or if the
      *   endpoint rejects the request.
      * @throws {@linkcode CancellationError} if the service is disposed.
      */
-    public async start(target: LogStreamTarget): Promise<void> {
+    public async start(target: ContainerAppLogStreamTarget): Promise<void> {
         if (this.disposed) {
             throw new CancellationError();
         }
@@ -104,7 +118,7 @@ export class ContainerAppLogStreamService implements Disposable {
         return promise;
     }
 
-    private async open(id: string, target: LogStreamTarget, stream: Stream): Promise<void> {
+    private async open(id: string, target: ContainerAppLogStreamTarget, stream: Stream): Promise<void> {
         try {
             await this.initialize(id, target, stream);
         } catch (error) {
@@ -119,29 +133,40 @@ export class ContainerAppLogStreamService implements Disposable {
         }
     }
 
-    private async initialize(id: string, target: LogStreamTarget, stream: Stream): Promise<void> {
+    private async initialize(id: string, target: ContainerAppLogStreamTarget, stream: Stream): Promise<void> {
         const signal = stream.abort.signal;
         const client = this.createClient(target.app.subscription);
         const resourceGroupName = getResourceGroupName(target.app.id);
 
-        const replicas = await client.containerAppsRevisionReplicas.listReplicas(
-            resourceGroupName,
-            target.app.name,
-            target.revisionName,
-            { abortSignal: signal },
-        );
-        signal.throwIfAborted();
-
-        const container = replicas
-            .find(replica => replica.name === target.replicaName)
-            ?.containers?.find(c => c.name === target.containerName);
-
-        const endpoint = container?.logStreamEndpoint;
-        if (!endpoint) {
-            throw new Error(this.code.l10n.t(
-                'No log stream is available for container \'{0}\'. It may not be running yet.',
-                target.containerName,
-            ));
+        let endpoint: string;
+        if (target.kind === 'system') {
+            const app = await client.containerApps.get(resourceGroupName, target.app.name, { abortSignal: signal });
+            signal.throwIfAborted();
+            if (!app.eventStreamEndpoint) {
+                throw new Error(this.code.l10n.t('No system log stream is available for \'{0}\'.', target.app.name));
+            }
+            const url = new URL(app.eventStreamEndpoint);
+            url.searchParams.set('follow', 'true');
+            url.searchParams.set('output', 'json');
+            endpoint = url.toString();
+        } else {
+            const replicas = await client.containerAppsRevisionReplicas.listReplicas(
+                resourceGroupName,
+                target.app.name,
+                target.revisionName,
+                { abortSignal: signal },
+            );
+            signal.throwIfAborted();
+            const container = replicas
+                .find(replica => replica.name === target.replicaName)
+                ?.containers?.find(c => c.name === target.containerName);
+            if (!container?.logStreamEndpoint) {
+                throw new Error(this.code.l10n.t(
+                    'No log stream is available for container \'{0}\'. It may not be running yet.',
+                    target.containerName,
+                ));
+            }
+            endpoint = container.logStreamEndpoint;
         }
 
         const { token } = await client.containerApps.getAuthToken(resourceGroupName, target.app.name, { abortSignal: signal });
@@ -150,14 +175,16 @@ export class ContainerAppLogStreamService implements Disposable {
             throw new Error(this.code.l10n.t('Could not obtain a token to stream logs for \'{0}\'.', target.app.name));
         }
 
-        const hostSuffix = LogStreamHostSuffixes.get(target.app.subscription.environment.resourceManagerEndpointUrl.toLowerCase());
-        const response = await this.connect(endpoint, token, hostSuffix, signal);
+        const hostSuffixes = LogStreamHostSuffixes.get(target.app.subscription.environment.resourceManagerEndpointUrl.toLowerCase());
+        const response = await this.connect(endpoint, token, hostSuffixes, signal);
         if (signal.aborted) {
             await response.body?.cancel();
             signal.throwIfAborted();
         }
 
-        const label = this.code.l10n.t('{0} ({1})', target.replicaName, target.containerName);
+        const label = target.kind === 'system'
+            ? this.code.l10n.t('{0} (system, JSON)', target.app.name)
+            : this.code.l10n.t('{0} ({1})', target.replicaName, target.containerName);
         const pty = new LogStreamPseudoterminal(() => {
             if (this.streams.get(id) === stream) {
                 this.stop(id, false);
@@ -211,7 +238,7 @@ export class ContainerAppLogStreamService implements Disposable {
      * Issues the streaming request, following redirects by hand so the
      * data-plane token is only ever re-sent to a Container Apps host.
      */
-    private async connect(endpoint: string, token: string, hostSuffix: string | undefined, signal: AbortSignal): Promise<Response> {
+    private async connect(endpoint: string, token: string, hostSuffixes: readonly string[] | undefined, signal: AbortSignal): Promise<Response> {
         let url = endpoint;
 
         for (let hop = 0; hop <= MaxRedirects; hop++) {
@@ -243,7 +270,7 @@ export class ContainerAppLogStreamService implements Disposable {
             }
 
             const target = new URL(location, url);
-            if (target.protocol !== 'https:' || !hostSuffix || !target.hostname.toLowerCase().endsWith(hostSuffix)) {
+            if (target.protocol !== 'https:' || !hostSuffixes?.some(suffix => target.hostname.toLowerCase().endsWith(suffix))) {
                 throw new Error(this.code.l10n.t('The log stream endpoint redirected outside Azure Container Apps.'));
             }
 
@@ -331,7 +358,9 @@ async function* streamChunks(body: ReadableStream<Uint8Array>, signal: AbortSign
     }
 }
 
-/** Builds the stable identity of a stream: one per container per replica. */
-function streamId(target: LogStreamTarget): string {
-    return `${target.app.id}/${target.revisionName}/${target.replicaName}/${target.containerName}`;
+/** Separates app-wide system streams from container/replica console streams. */
+function streamId(target: ContainerAppLogStreamTarget): string {
+    return target.kind === 'system'
+        ? `${target.app.id}/system`
+        : `${target.app.id}/console/${target.revisionName}/${target.replicaName}/${target.containerName}`;
 }

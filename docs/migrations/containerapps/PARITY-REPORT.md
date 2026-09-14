@@ -15,8 +15,8 @@ Evidence paths are relative to `extensions/vscode-azure/src/` unless another pac
 
 | Disposition | Rows | Outcome |
 |---|---|---|
-| Migrate | 7 | all landed |
-| Adapt | 18 | adapted scope landed; ACA-008's existing-image branch is deferred with ACA-096 / ACA-098 |
+| Migrate | 4 | all landed |
+| Adapt | 21 | adapted scope landed; ACA-008's existing-image branch is deferred with ACA-096 / ACA-098 |
 | Reuse | 11 | all wired (verified against source, not assumed) |
 | Defer | 16 | all tracked in [MIGRATION-PLAN.md](MIGRATION-PLAN.md#deferred-tracked-not-built-now) |
 | Drop | 88 | all confirmed absent from the codebase |
@@ -59,13 +59,13 @@ Evidence paths are relative to `extensions/vscode-azure/src/` unless another pac
 | ACA-095 | Quickstart image source | Adapt | landed | `CreateContainerApp.ts` provisions the upsert pattern's quickstart image automatically; `DetectTargetPortStep` uses port 80 |
 | ACA-101 | Registry creds -- managed identity | Adapt | landed | topology module: `identityType: 'UserAssigned'` + AcrPull |
 | ACA-104 | Ingress from Dockerfile `EXPOSE` | Adapt | landed | `steps/DetectTargetPortStep.ts` -> `targetPort` Bicep param; project-scoped detection with a port 80 default |
-| ACA-105 | Start verification + log fetch | Migrate | landed | `steps/VerifyContainerAppStartStep.ts` |
+| ACA-105 | Start verification + log fetch | Adapt | landed | `steps/VerifyContainerAppStartStep.ts` launches hidden `VerifyContainerAppStart.ts`; independent activity after application-image deployment, fixed-revision health polling, separate clickable system/app log-stream shortcuts |
 | ACA-110 | Overwrite confirm | Adapt | landed (reuse) | `azd/wizard/ConfirmProvisionStep.ts`, wording sharpened |
 | ACA-111 | Container Apps client | Migrate | landed | `packages/azutils/src/rest/clients/ContainerAppsClient.ts` |
 | ACA-112 | ACR management client | Reuse | wired | existing `AcrClient`; no `arm-containerregistry` import in this product |
 | ACA-114 | Authorization client | Adapt | landed | role assignment expressed in Bicep, not an ARM call |
-| ACA-115 | Logs query client | Migrate | landed | `packages/azutils/src/rest/clients/LogsQueryClient.ts` |
-| ACA-118 | Log-stream transport | Migrate | landed | `tree/resources/containerApps/ContainerAppLogStream.ts` |
+| ACA-115 | Diagnostic access | Adapt | landed | `ContainerAppLogStreamService` and `ContainerAppsClient` token/stream APIs; user-initiated console/system streams |
+| ACA-118 | Log-stream transport | Adapt | landed | `tree/resources/containerApps/ContainerAppLogStream.ts`; console and app-wide system JSON streams with independent deduplication and cancellation |
 | ACA-125 | Portal URL builder | Reuse | wired | `OpenInPortal` over `AzureNodeId.toPortalUrl` (sovereign-aware) |
 | ACA-126 | Branch data provider | Adapt | landed | `products/registerContainerApps.ts` |
 | ACA-134 | Resource-provider registration | Adapt | landed | ARM registers RPs as a side effect of the deployment; no `VerifyProvidersStep` |
@@ -134,6 +134,10 @@ Honest remainder. None is a silent omission -- each is tracked.
 1. **No live-Azure verification.** The log-stream transport (ACA-118) and start verification (ACA-105) are
    covered by unit tests over stubbed I/O but have never run against a real container app. The redirect
    behavior of the real log-stream endpoint is the most likely thing to need adjustment.
+   The shared azd deploy result supplies neither a revision name nor an image digest: startup verification
+   captures ARM's latest revision once after deployment, without claiming exact image correlation.
+   Concurrent deployments before that read can affect the selected revision. Quickstart-only creation
+   skips verification. Cancellation is available to programmatic callers, not through the activity tree.
 2. **`getParent` is grouping-unaware for loaded nodes.** Affects reveal (ACA-014) under `resourceType` /
    `location` / `armTag` grouping. **Pre-existing and not specific to this product** -- `AcrViewProvider`,
    `WebAppViewProvider` and `SettingsViewProvider` have the identical naive implementation. Tracked by
