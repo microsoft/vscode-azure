@@ -63,6 +63,7 @@ function createService(client = createMockContainerAppsClient(), openOnShow = tr
     return {
         service: new ContainerAppLogStreamService(code, executor, () => client),
         terminals,
+        executor,
     };
 }
 
@@ -77,6 +78,25 @@ function openBody(onCancel?: () => void): ReadableStream<Uint8Array> {
 }
 
 describe('ContainerAppLogStreamService (unit)', () => {
+    for (const missing of ['endpoint', 'token']) {
+        it(`suppresses issue reporting for an unavailable system log ${missing}`, async () => {
+            const client = createMockContainerAppsClient(
+                missing === 'token' ? { eventStreamEndpoint: EventStreamEndpoint } : {},
+            );
+            if (missing === 'token') {
+                client.containerApps.getAuthToken.mock.mockImplementation(() => Promise.resolve({ location: 'eastus' }));
+            }
+            const { service, executor } = createService(client);
+            await executor.callWithTelemetryAndErrorHandling('test', async context => {
+                context.errorHandling.rethrow = true;
+                await expect(service.start({ kind: 'system', app: makeContainerApp() }))
+                    .to.be.rejectedWith(missing === 'endpoint' ? 'No system log stream' : 'Could not obtain a token');
+                expect(context.errorHandling.suppress).to.equal('reportIssue');
+            });
+            service.dispose();
+        });
+    }
+
     afterEach(() => {
         mock.restoreAll();
     });

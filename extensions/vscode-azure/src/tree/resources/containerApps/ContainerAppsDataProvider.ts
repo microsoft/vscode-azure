@@ -87,13 +87,15 @@ export class ContainerAppsDataProvider implements DataProvider<ConcreteAzureNode
 
         return (resource.containers ?? []).map((container, index) => ({
             virtualType: ContainerVirtualType,
-            // Containers are only required to be unique by name within a
-            // template, and ARM permits the name to be absent, so the index
-            // keeps every node's identity stable and distinct.
-            virtualPath: container.name ?? `container-${index}`,
+            virtualPath: getContainerVirtualPath(container, index),
             azureResource: resource,
         } satisfies VirtualResource));
     }
+}
+
+/** Uses brackets, which are invalid in container names, to distinguish unnamed template entries. */
+export function getContainerVirtualPath(container: { readonly name?: string }, index: number): string {
+    return container.name ?? `[container-${index}]`;
 }
 
 /** Type guard for the container virtual nodes this provider creates. */

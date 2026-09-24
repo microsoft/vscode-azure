@@ -5,13 +5,13 @@
 
 import type { ConcreteAzureNode, GenericResource } from '@microsoft/vscode-azure-azutils';
 import { AzureNodeId } from '@microsoft/vscode-azure-azutils';
-import { makeContainerApp, makeGenericResource } from '@microsoft/vscode-azure-azutils/testing';
+import { createMockContainerAppsClient, makeContainerApp, makeGenericResource } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockCodeContext, createTestActionExecutor, MockTreeItemCollapsibleState } from '@microsoft/vscode-azure-utils/testing';
 import { OpenContainerAppConsole, OpenContainerAppLogs } from '../../../../src/commands/containerApps/portalBlades';
 import { RevealContainerAppEnvironment } from '../../../../src/commands/containerApps/RevealContainerAppEnvironment';
 import { StartStreamingLogs } from '../../../../src/commands/containerApps/StartStreamingLogs';
 import { ContainerAppResourceType } from '../../../../src/tree/resources/containerApps/ContainerApp';
-import { ContainerVirtualType } from '../../../../src/tree/resources/containerApps/ContainerAppsDataProvider';
+import { ContainerAppsDataProvider, ContainerVirtualType } from '../../../../src/tree/resources/containerApps/ContainerAppsDataProvider';
 import { ContainerAppsViewProvider, shortenImageReference } from '../../../../src/tree/resources/containerApps/ContainerAppsViewProvider';
 import { ManagedEnvironmentResourceType } from '../../../../src/tree/resources/containerApps/ManagedEnvironment';
 
@@ -39,6 +39,23 @@ function createProvider(
 }
 
 describe('ContainerAppsViewProvider (unit)', () => {
+    it('renders mixed named and unnamed containers with distinct keys and their own images', async () => {
+        const app = makeContainerApp({
+            containers: [{ image: 'unnamed:1' }, { name: 'container-0', image: 'named:1' }, { image: 'another:1' }],
+        });
+        const { executor } = createTestActionExecutor();
+        const data = new ContainerAppsDataProvider(executor, () => createMockContainerAppsClient());
+        const children = data.getChildren(app);
+        const provider = createProvider([app, ...children], children);
+        const keys = await provider.getChildren(AzureNodeId.from(app).toString());
+
+        expect(new Set(keys).size).to.equal(3);
+        expect(keys.map(key => provider.getTreeItem(key).description)).to.deep.equal(['unnamed:1', 'named:1', 'another:1']);
+        expect(provider.getTreeItem(keys[1]).label).to.equal('container-0');
+        Object.assign(app, { containers: [{ image: 'unnamed:2' }, { name: 'container-0', image: 'named:2' }, { image: 'another:2' }] });
+        expect(keys.map(key => provider.getTreeItem(key).description)).to.deep.equal(['unnamed:2', 'named:2', 'another:2']);
+    });
+
     it('claims apps, environments and container nodes', () => {
         const app = makeContainerApp();
         const environment = makeEnvironment();

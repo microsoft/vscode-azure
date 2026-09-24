@@ -14,7 +14,7 @@ import { IAzureViewDataTree } from '../../../services';
 import { resourceContextValue } from '../../contextValueHelpers';
 import { getResourceTypeIconUri } from '../../iconPath';
 import { isContainerApp, type ContainerApp } from './ContainerApp';
-import { isContainerNode } from './ContainerAppsDataProvider';
+import { getContainerVirtualPath, isContainerNode } from './ContainerAppsDataProvider';
 import { isManagedEnvironment } from './ManagedEnvironment';
 
 /** Context value carried by the container nodes beneath a container app. */
@@ -155,7 +155,7 @@ export class ContainerAppsViewProvider implements ViewProvider<string> {
         }
 
         return app.containers?.find((container, index) =>
-            (container.name ?? `container-${index}`) === resource.virtualPath)?.image;
+            getContainerVirtualPath(container, index) === resource.virtualPath)?.image;
     }
 }
 

@@ -7,7 +7,7 @@ Phase 6 verification of the Container Apps migration against the signed [TRIAGE.
 | **Source** | `microsoft/vscode-azurecontainerapps` @ `f6c93dcd1a55b6aaf27ed4edca8f6a52b5348e16` (v0.11.2) |
 | **Triage rows** | 140 |
 | **Resolved** | 140 (0 unaccounted for) |
-| **Date** | 2026-09-11 |
+| **Last verified** | 2026-09-24 |
 
 Evidence paths are relative to `extensions/vscode-azure/src/` unless another package is named.
 
@@ -19,7 +19,7 @@ Evidence paths are relative to `extensions/vscode-azure/src/` unless another pac
 | Adapt | 21 | adapted scope landed; ACA-008's existing-image branch is deferred with ACA-096 / ACA-098 |
 | Reuse | 11 | all wired (verified against source, not assumed) |
 | Defer | 16 | all tracked in [MIGRATION-PLAN.md](MIGRATION-PLAN.md#deferred-tracked-not-built-now) |
-| Drop | 88 | all confirmed absent from the codebase |
+| Drop | 88 | not implemented as Container Apps features; scoped symbol audit below |
 | **Total** | **140** | |
 
 ## Artifact check
@@ -29,7 +29,7 @@ Evidence paths are relative to `extensions/vscode-azure/src/` unless another pac
 | `INVENTORY.md` tracked | yes |
 | `TRIAGE.md` tracked, signed | yes -- Brandon Waterloo (@bwateratmsft), 2026-09-11 |
 | `MIGRATION-PLAN.md` tracked, every task tagged with an ID | yes |
-| Artifacts landed before any feature code | yes -- `431c4453` is the branch's first commit |
+| Migration plan landed before feature code | yes -- `431c4453` is the branch's first commit |
 | No artifact exists only in scratch | yes |
 
 ## Kept features (Migrate / Adapt / Reuse)
@@ -73,9 +73,11 @@ Evidence paths are relative to `extensions/vscode-azure/src/` unless another pac
 | ACA-136 | Activity-log integration | Reuse | wired | no product-specific activity registration |
 | ACA-137 | Output channel | Reuse | wired | no product-specific channel registration |
 
-## Dropped features -- confirmed absent
+## Dropped-feature symbol audit
 
-Each judgment-call group was grepped across all 205 tracked source, manifest, and template files.
+The symbol checks below cover the Container Apps command and resource-tree source directories and
+`resources/templates/containerApp`. They do not claim those symbols are absent from unrelated products
+or from the historical migration inventory.
 
 | Group | Patterns searched | Result |
 |---|---|---|
@@ -114,26 +116,27 @@ context value that is declared in source and assembled onto the node by `Contain
 | New `contributes.configuration` settings | none (all 7 source settings were Drop or Reuse) |
 | `azure.yaml` authored or parsed outside shared azd services | no |
 | Calls into the extension being retired | none |
-| `@azure/*` imports in extension source | one, pre-existing (`@azure/core-lro` in `tree/activity/ArmDeploymentDataProvider.ts`); none added by this migration |
+| `@azure/*` imports in extension source | `@azure/core-lro` in `tree/activity/ArmDeploymentDataProvider.ts` and `commands/containerApps/VerifyContainerAppStart.ts`; the verifier uses the existing dependency for startup polling |
 
 ## Build gates
 
 | Gate | Result |
 |---|---|
-| `pnpm --filter @microsoft/vscode-azure-azutils --filter vscode-azure run lint` | clean |
-| `pnpm --filter @microsoft/vscode-azure-azutils --filter vscode-azure run build` | succeeds |
-| `pnpm --filter @microsoft/vscode-azure-azutils --filter vscode-azure run test` | 1,135 extension and 375 azutils passing; 0 failing (4 extension tests pending) |
-| `bicep build` on the consumer template | compiles; all pinned AVM modules resolve |
+| `pnpm run lint` | clean |
+| `pnpm run build` | succeeds |
+| `pnpm run test` | 1,168 extension, 366 azutils, and 586 utils passing; 0 failing (3 extension and 12 utils pending) |
+| `bicep build` on the consumer template | Passed during the 2026-09-11 verification; not rerun for this source/docs review |
 
-Validation covers the affected azutils and extension workspaces. The utils workspace is unchanged.
+Validation on 2026-09-24 covers all three workspaces: extension, azutils, and utils. Shared utils changes include
+`withCancellation`, its export and tests, and reuse by `delay`.
 
 ## Known gaps
 
 Honest remainder. None is a silent omission -- each is tracked.
 
-1. **No live-Azure verification.** The log-stream transport (ACA-118) and start verification (ACA-105) are
-   covered by unit tests over stubbed I/O but have never run against a real container app. The redirect
-   behavior of the real log-stream endpoint is the most likely thing to need adjustment.
+1. **No live-Azure verification recorded in this report.** The log-stream transport (ACA-118) and start
+   verification (ACA-105) are covered by tests over stubbed I/O. Live endpoint redirects and deployed-app
+   startup still need human-test evidence.
    The shared azd deploy result supplies neither a revision name nor an image digest: startup verification
    captures ARM's latest revision once after deployment, without claiming exact image correlation.
    Concurrent deployments before that read can affect the selected revision. Quickstart-only creation

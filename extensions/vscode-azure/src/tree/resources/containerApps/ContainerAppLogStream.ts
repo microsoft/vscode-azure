@@ -134,6 +134,9 @@ export class ContainerAppLogStreamService implements Disposable {
         const { token } = await client.containerApps.getAuthToken(resourceGroupName, target.app.name, { abortSignal: signal });
         signal.throwIfAborted();
         if (!token) {
+            if (this.executor.currentContext) {
+                this.executor.currentContext.errorHandling.suppress = 'reportIssue';
+            }
             throw new Error(this.code.l10n.t('Could not obtain a token to stream logs for \'{0}\'.', target.app.name));
         }
 
@@ -160,6 +163,9 @@ export class ContainerAppLogStreamService implements Disposable {
         const app = await client.containerApps.get(resourceGroupName, target.name, { abortSignal: signal });
         signal.throwIfAborted();
         if (!app.eventStreamEndpoint) {
+            if (this.executor.currentContext) {
+                this.executor.currentContext.errorHandling.suppress = 'reportIssue';
+            }
             throw new Error(this.code.l10n.t('No system log stream is available for \'{0}\'.', target.name));
         }
         const url = new URL(app.eventStreamEndpoint);
