@@ -51,10 +51,9 @@ export interface IActionContext {
          * Controls suppression of error UI shown to the user.
          *
          * - `'display'` -- suppress the error toast entirely.
-         * - `'reportIssue'` -- show the toast but omit the "Report Issue" button.
          * - `undefined` (default) -- show the full error toast with the "Report Issue" button.
          */
-        suppress?: 'display' | 'reportIssue';
+        suppress?: 'display';
         /** If `true`, the executor re-throws the error after recording telemetry. */
         rethrow?: boolean;
     }

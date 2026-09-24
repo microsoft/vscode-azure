@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createActionContext } from '@microsoft/vscode-azure-utils';
+import { createActionContext, ExternalError } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import { DeleteStaticWebAppEnvironment } from '../../../src/commands/staticWebApps/DeleteStaticWebAppEnvironment';
@@ -24,8 +24,9 @@ describe('DeleteStaticWebAppEnvironment (unit)', () => {
         const environment = makeStaticWebAppEnvironment();
         const { dataTree, mockResult, selector } = createHarness(environment);
         const deleteBuild = mock.fn(() => Promise.resolve());
+        const actionContext = createActionContext('test');
         const command = new DeleteStaticWebAppEnvironment(
-            createActionContext('test'),
+            actionContext,
             mockResult.vscode,
             (() => ({ staticSites: { deleteStaticSiteBuild: deleteBuild } })) as never,
             selector as never,
@@ -33,7 +34,8 @@ describe('DeleteStaticWebAppEnvironment (unit)', () => {
             new GenericActivityDataProvider(),
         );
 
-        await expect(command.execute('key')).to.be.rejectedWith('Cannot delete the production environment');
+        await expect(command.execute('key')).to.be.rejectedWith(ExternalError, 'Cannot delete the production environment');
+        expect(actionContext.telemetry.properties.isProduction).to.equal('true');
         expect(deleteBuild.mock.callCount()).to.equal(0);
         expect(mockResult.window.showWarningMessage.mock.callCount()).to.equal(0);
     });

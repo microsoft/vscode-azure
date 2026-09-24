@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { getWorkspaceFolder, IActionContext, ICodeContext, PromptStep, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
+import { ExternalError, getWorkspaceFolder, ICodeContext, PromptStep, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 import { IAzdService } from '../AzdService';
@@ -34,7 +34,6 @@ import type { AzdWizardContext } from './AzdWizardContext';
 @injectable()
 export class SelectIacFolderStep<TContext extends AzdWizardContext> extends PromptStep<TContext> {
     public constructor(
-        @inject(IActionContext) private readonly actionContext: IActionContext,
         @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(ITempDirManager) private readonly tempManager: ITempDirManager,
         @inject(IAzdService) private readonly azd: IAzdService,
@@ -75,8 +74,7 @@ export class SelectIacFolderStep<TContext extends AzdWizardContext> extends Prom
             },
         );
         if (!folder) {
-            this.actionContext.errorHandling.suppress = 'reportIssue';
-            throw new Error(this.ctx.code.l10n.t('Open a folder in VS Code to deploy a project as a {0}.', resourceDisplayName));
+            throw new ExternalError(this.ctx.code.l10n.t('Open a folder in VS Code to deploy a project as a {0}.', resourceDisplayName));
         }
         return { iacFolder: folder.uri } as Partial<TContext>;
     }
@@ -84,8 +82,7 @@ export class SelectIacFolderStep<TContext extends AzdWizardContext> extends Prom
     private async promptAzureYamlFolder(): Promise<Partial<TContext>> {
         const workspaceFolders = this.ctx.code.workspace.workspaceFolders;
         if (!workspaceFolders?.length) {
-            this.actionContext.errorHandling.suppress = 'reportIssue';
-            throw new Error(this.ctx.code.l10n.t('No workspace folder is open. Open a folder with an azure.yaml file.'));
+            throw new ExternalError(this.ctx.code.l10n.t('No workspace folder is open. Open a folder with an azure.yaml file.'));
         }
 
         const candidates: { label: string; uri: vscode.Uri }[] = [];
@@ -96,8 +93,7 @@ export class SelectIacFolderStep<TContext extends AzdWizardContext> extends Prom
         }
 
         if (candidates.length === 0) {
-            this.actionContext.errorHandling.suppress = 'reportIssue';
-            throw new Error(this.ctx.code.l10n.t('No azure.yaml file found in the workspace.'));
+            throw new ExternalError(this.ctx.code.l10n.t('No azure.yaml file found in the workspace.'));
         }
 
         if (candidates.length === 1) {

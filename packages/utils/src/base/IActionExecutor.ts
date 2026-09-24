@@ -10,6 +10,7 @@ import { CancellationError } from '../vscode/CancellationError';
 import type { IOutputChannel } from '../vscode/IOutputChannel';
 import type { IVsCode } from '../vscode/IVsCode';
 import { showMessage } from '../ui/uiHelpers';
+import { ExternalError } from './ExternalError';
 import { createActionContext, type IActionContext, type KnownTelemetryProperty, type TelemetryMeasurements, type TelemetryProperties } from './IActionContext';
 import type { ITelemetryReporter } from './ITelemetryReporter';
 import { stringifyError } from './stringifyError';
@@ -125,7 +126,7 @@ export class ActionExecutor implements IActionExecutor {
                     }
 
                     if (context.errorHandling.suppress !== 'display') {
-                        void this.showErrorToast(context, loggedError);
+                        void this.showErrorToast(loggedError);
                     }
                 }
 
@@ -151,15 +152,15 @@ export class ActionExecutor implements IActionExecutor {
         });
     }
 
-    private async showErrorToast(context: IActionContext, error: Error): Promise<void> {
-        const reportIssue = context.errorHandling.suppress === 'reportIssue'
+    private async showErrorToast(error: Error): Promise<void> {
+        const reportIssue = error instanceof ExternalError
             ? undefined
             : this.code.l10n.t('Report Issue');
 
         const items = reportIssue ? [reportIssue] : [];
         const choice = await showMessage(this.code, stringifyError(error), { severity: 'error' }, ...items);
 
-        if (choice === reportIssue) {
+        if (reportIssue && choice === reportIssue) {
             const data = [
                 `Error Name: ${error.name}`,
                 `Error Message: ${stringifyError(error)}`,
