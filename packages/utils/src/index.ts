@@ -5,6 +5,7 @@
 
 export * from './base/Debouncer';
 export * from './base/delay';
+export * from './base/ExternalError';
 export * from './base/IActionContext';
 export * from './base/IActionExecutor';
 export * from './base/ICommandRegistry';

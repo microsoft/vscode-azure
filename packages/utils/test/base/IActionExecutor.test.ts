@@ -5,6 +5,7 @@
 
 import { mock, type Mock } from 'node:test';
 import { delay } from '../../src/base/delay';
+import { ExternalError } from '../../src/base/ExternalError';
 import type { ITelemetryReporter } from '../../src/base/ITelemetryReporter';
 import { CancellationError } from '../../src/vscode/CancellationError';
 import { createTestActionExecutor } from '../createTestActionExecutor';
@@ -220,19 +221,22 @@ describe('ActionExecutor (unit)', () => {
             expect(showErrorMessage.mock.callCount()).to.equal(0);
         });
 
-        it('should not show Report Issue button when suppress is reportIssue', async () => {
-            const { executor, mockVsCode } = createExecutor();
+        it('should show an ExternalError toast without Report Issue and record a failure', async () => {
+            const { executor, mockVsCode, reporter } = createExecutor();
             const showErrorMessage = mockVsCode.window.showErrorMessage;
 
-            await executor.callWithTelemetryAndErrorHandling('test', (ctx) => {
-                ctx.errorHandling.suppress = 'reportIssue';
-                throw new Error('no report button');
+            await executor.callWithTelemetryAndErrorHandling('test', () => {
+                throw new ExternalError('sign in and try again');
             });
 
             expect(showErrorMessage.mock.callCount()).to.equal(1);
-            expect(showErrorMessage.mock.calls[0].arguments[0]).to.equal('no report button');
+            expect(showErrorMessage.mock.calls[0].arguments[0]).to.equal('sign in and try again');
             expect(showErrorMessage.mock.calls[0].arguments[1]).to.deep.equal({});
             expect(showErrorMessage.mock.calls[0].arguments.length).to.equal(2);
+            expect(reporter.sendTelemetryErrorEvent.mock.calls[0].arguments[1]?.result).to.equal('Failed');
+            expect(reporter.sendTelemetryErrorEvent.mock.calls[0].arguments[1]?.error).to.equal('ExternalError');
+            await delay(0);
+            expect(mockVsCode.commands.executeCommand.mock.callCount()).to.equal(0);
         });
 
         it('should open issue reporter with extensionId and data when Report Issue is clicked', async () => {

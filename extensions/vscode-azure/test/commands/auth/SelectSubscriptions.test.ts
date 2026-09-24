@@ -5,7 +5,7 @@
 
 import { AzureListingCache } from '@microsoft/vscode-azure-azutils';
 import { createMockAzureListingFetcher, makeAccount, makeSubscription, makeTenant, type MockAzureListingFetcher, type MockAzureListingFetcherOptions } from '@microsoft/vscode-azure-azutils/testing';
-import { collectAsync, createActionContext } from '@microsoft/vscode-azure-utils';
+import { collectAsync, ExternalError } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, createTestActionExecutor, respondToPrompts, withSettings } from '@microsoft/vscode-azure-utils/testing';
 import { SelectSubscriptions } from '../../../src/commands/auth/SelectSubscriptions';
 import { ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../../../src/constants';
@@ -18,10 +18,9 @@ describe('SelectSubscriptions (unit)', () => {
     function createCommand(options: MockAzureListingFetcherOptions, fetcher?: MockAzureListingFetcher) {
         const { ctx, mock: mockResult } = createMockCodeContext();
         const { executor } = createTestActionExecutor();
-        const actionContext = createActionContext('test');
         const listings = new AzureListingCache(fetcher ?? createMockAzureListingFetcher(options), executor);
-        const command = new SelectSubscriptions(ctx, executor, listings, new CredentialOptionsScope(), actionContext);
-        return { command, ctx, mockResult, actionContext, listings };
+        const command = new SelectSubscriptions(ctx, executor, listings, new CredentialOptionsScope());
+        return { command, ctx, mockResult, listings };
     }
 
     const account = makeAccount({ id: 'acct-1' });
@@ -104,26 +103,21 @@ describe('SelectSubscriptions (unit)', () => {
     });
 
     it('should throw when no tenant could be enumerated', async () => {
-        const { command, mockResult, actionContext } = createCommand({
+        const { command, mockResult } = createCommand({
             accounts: [account],
             tenants: [tenant],
             subscriptions: [sub1],
             unreachableTenantIds: [tenant.tenantId],
         });
 
-        let caught: unknown;
-        try {
-            await command.execute();
-        } catch (error) {
-            caught = error;
-        }
-
-        expect(caught).to.be.instanceOf(Error);
-        expect((caught as Error).message).to.match(/Could not load subscriptions for any tenant/);
+        await expect(command.execute()).to.be.rejectedWith(ExternalError, 'Could not load subscriptions for any tenant');
         expect(mockResult.window.showWarningMessage.mock.callCount()).to.equal(1);
-        // The error is user-actionable ("sign in"), not a bug, so the toast
-        // should omit the "Report Issue" button.
-        expect(actionContext.errorHandling.suppress).to.equal('reportIssue');
+    });
+
+    it('should explain when no subscriptions are reachable', async () => {
+        const { command } = createCommand({ accounts: [], tenants: [], subscriptions: [] });
+
+        await expect(command.execute()).to.be.rejectedWith(ExternalError, 'No reachable subscriptions were found');
     });
 
     it('should offer sign-in rather than warn when a tenant is merely not signed in', async () => {
