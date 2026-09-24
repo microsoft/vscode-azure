@@ -5,7 +5,7 @@
 
 import { AzureChinaCloud, AzurePublicCloud, AzureUSGovernment, type ContainerApp, type ContainerAppAuthToken, type GenericResource } from '@microsoft/vscode-azure-azutils';
 import { createMockContainerAppsClient, makeContainerApp, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
-import { CancellationError } from '@microsoft/vscode-azure-utils';
+import { CancellationError, ExternalError } from '@microsoft/vscode-azure-utils';
 import { createMockVsCode, createTestActionExecutor, waitFor } from '@microsoft/vscode-azure-utils/testing';
 import { mock, type Mock } from 'node:test';
 import type * as vscode from 'vscode';
@@ -63,7 +63,6 @@ function createService(client = createMockContainerAppsClient(), openOnShow = tr
     return {
         service: new ContainerAppLogStreamService(code, executor, () => client),
         terminals,
-        executor,
     };
 }
 
@@ -86,13 +85,9 @@ describe('ContainerAppLogStreamService (unit)', () => {
             if (missing === 'token') {
                 client.containerApps.getAuthToken.mock.mockImplementation(() => Promise.resolve({ location: 'eastus' }));
             }
-            const { service, executor } = createService(client);
-            await executor.callWithTelemetryAndErrorHandling('test', async context => {
-                context.errorHandling.rethrow = true;
-                await expect(service.start({ kind: 'system', app: makeContainerApp() }))
-                    .to.be.rejectedWith(missing === 'endpoint' ? 'No system log stream' : 'Could not obtain a token');
-                expect(context.errorHandling.suppress).to.equal('reportIssue');
-            });
+            const { service } = createService(client);
+            await expect(service.start({ kind: 'system', app: makeContainerApp() }))
+                .to.be.rejectedWith(ExternalError, missing === 'endpoint' ? 'No system log stream' : 'Could not obtain a token');
             service.dispose();
         });
     }

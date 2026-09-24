@@ -6,7 +6,7 @@
 import type { Replica, Revision } from '@microsoft/vscode-azure-azutils';
 import { AzureNodeId } from '@microsoft/vscode-azure-azutils';
 import { createMockContainerAppsClient, makeContainerApp } from '@microsoft/vscode-azure-azutils/testing';
-import { createActionContext } from '@microsoft/vscode-azure-utils';
+import { ExternalError } from '@microsoft/vscode-azure-utils';
 import { respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import { StartStreamingLogs } from '../../../src/commands/containerApps/StartStreamingLogs';
@@ -25,17 +25,15 @@ function createCommand(revisions: Partial<Revision>[], replicas: Partial<Replica
 
     const start = mock.fn((_target: ContainerAppLogStreamTarget) => Promise.resolve());
     const createClient = mock.fn(() => client);
-    const actionContext = createActionContext('test');
 
     const command = new StartStreamingLogs(
-        actionContext,
         ctx,
         selector,
         createClient,
         { start } as never,
     );
 
-    return { command, start, mockResult, client, createClient, actionContext, app, key: AzureNodeId.from(app).toString() };
+    return { command, start, mockResult, client, createClient, app, key: AzureNodeId.from(app).toString() };
 }
 
 const logStreamEndpoint = 'https://app.region.azurecontainerapps.io/logstream';
@@ -43,13 +41,13 @@ const oneContainer = [{ name: 'replica1', containers: [{ name: 'api', logStreamE
 
 describe('StartStreamingLogs (unit)', () => {
     it('preserves issue reporting for unexpected ARM failures', async () => {
-        const { command, client, key, actionContext } = createCommand([], []);
+        const { command, client, key } = createCommand([], []);
+        const error = new Error('unexpected failure');
         client.containerAppsRevisions.listRevisions.mock.mockImplementation(() => {
-            throw new Error('unexpected failure');
+            throw error;
         });
 
-        await expect(command.execute(key)).to.be.rejectedWith('unexpected failure');
-        expect(actionContext.errorHandling.suppress).to.be.undefined;
+        await expect(command.execute(key)).to.be.rejectedWith('unexpected failure').and.eventually.equal(error);
     });
 
     it('opens the stream with no prompts when there is one of everything', async () => {
@@ -113,10 +111,9 @@ describe('StartStreamingLogs (unit)', () => {
     });
 
     it('explains an app with no active revisions', async () => {
-        const { command, start, key, actionContext } = createCommand([{ name: 'old', active: false }], oneContainer);
+        const { command, start, key } = createCommand([{ name: 'old', active: false }], oneContainer);
 
-        await expect(command.execute(key)).to.be.rejectedWith(/no active revisions/i);
-        expect(actionContext.errorHandling.suppress).to.equal('reportIssue');
+        await expect(command.execute(key)).to.be.rejectedWith(ExternalError, /no active revisions/i);
         expect(start.mock.callCount()).to.equal(0);
     });
 
@@ -140,32 +137,29 @@ describe('StartStreamingLogs (unit)', () => {
     });
 
     it('reports a selected container with no log endpoint', async () => {
-        const { command, start, key, actionContext } = createCommand(
+        const { command, start, key } = createCommand(
             [{ name: 'rev1', active: true }],
             [{ name: 'replica1', containers: [{ name: 'api' }] }],
         );
 
-        await expect(command.execute(key)).to.be.rejectedWith(/No log stream is available/i);
-        expect(actionContext.errorHandling.suppress).to.equal('reportIssue');
+        await expect(command.execute(key)).to.be.rejectedWith(ExternalError, /No log stream is available/i);
         expect(start.mock.callCount()).to.equal(0);
     });
 
     it('reports a replica without named containers', async () => {
-        const { command, start, key, actionContext } = createCommand(
+        const { command, start, key } = createCommand(
             [{ name: 'rev1', active: true }], [{ name: 'replica1', containers: [] }],
         );
 
-        await expect(command.execute(key)).to.be.rejectedWith(/reports no containers/i);
-        expect(actionContext.errorHandling.suppress).to.equal('reportIssue');
+        await expect(command.execute(key)).to.be.rejectedWith(ExternalError, /reports no containers/i);
         expect(start.mock.callCount()).to.equal(0);
     });
 
     it('explains a revision that is scaled to zero', async () => {
         // No replicas is ordinary for an idle app, not a fault in the request.
-        const { command, start, key, actionContext } = createCommand([{ name: 'rev1', active: true }], []);
+        const { command, start, key } = createCommand([{ name: 'rev1', active: true }], []);
 
-        await expect(command.execute(key)).to.be.rejectedWith(/scaled to zero/i);
-        expect(actionContext.errorHandling.suppress).to.equal('reportIssue');
+        await expect(command.execute(key)).to.be.rejectedWith(ExternalError, /scaled to zero/i);
         expect(start.mock.callCount()).to.equal(0);
     });
 

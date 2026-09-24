@@ -124,7 +124,7 @@ context value that is declared in source and assembled onto the node by `Contain
 |---|---|
 | `pnpm run lint` | clean |
 | `pnpm run build` | succeeds |
-| `pnpm run test` | 1,168 extension, 366 azutils, and 586 utils passing; 0 failing (3 extension and 12 utils pending) |
+| `pnpm run test` | 1,171 extension, 366 azutils, and 586 utils passing; 0 failing (3 extension and 12 utils pending) |
 | `bicep build` on the consumer template | Passed during the 2026-09-11 verification; not rerun for this source/docs review |
 
 Validation on 2026-09-24 covers all three workspaces: extension, azutils, and utils. Shared utils changes include

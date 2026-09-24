@@ -5,7 +5,7 @@
 
 import { getResourceGroupName, IContainerAppsClientProvider, type IContainerAppsClient, type Replica, type ReplicaContainer, type Revision } from '@microsoft/vscode-azure-azutils';
 import {
-    collectAsync, IActionContext, ICodeContext, showSmartQuickPick, withDelayedProgress,
+    collectAsync, ExternalError, ICodeContext, showSmartQuickPick, withDelayedProgress,
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
@@ -35,7 +35,6 @@ export class StartStreamingLogs implements ManagedCommand {
     public static ContextValue = 'startContainerAppLogStream';
 
     public constructor(
-        @inject(IActionContext) private readonly actionContext: IActionContext,
         @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IResourceSelector) private readonly selector: IResourceSelector,
         @inject(IContainerAppsClientProvider) private readonly createClient: IContainerAppsClientProvider,
@@ -67,8 +66,7 @@ export class StartStreamingLogs implements ManagedCommand {
         const replica = await this.pickReplica(client, app.name, resourceGroupName, revisionName);
         const container = await this.pickContainer(replica);
         if (!container.logStreamEndpoint) {
-            this.actionContext.errorHandling.suppress = 'reportIssue';
-            throw new Error(this.ctx.code.l10n.t(
+            throw new ExternalError(this.ctx.code.l10n.t(
                 'No log stream is available for container \'{0}\'. It may not be running yet.',
                 container.name,
             ));
@@ -93,8 +91,7 @@ export class StartStreamingLogs implements ManagedCommand {
         // An inactive revision runs nothing, so it has no logs to stream.
         const active = revisions.filter(revision => revision.active !== false);
         if (active.length === 0) {
-            this.actionContext.errorHandling.suppress = 'reportIssue';
-            throw new Error(this.ctx.code.l10n.t('\'{0}\' has no active revisions to stream logs from.', appName));
+            throw new ExternalError(this.ctx.code.l10n.t('\'{0}\' has no active revisions to stream logs from.', appName));
         }
 
         const picked = await this.pick(
@@ -121,10 +118,9 @@ export class StartStreamingLogs implements ManagedCommand {
 
         const named = replicas.filter((replica): replica is Replica & { name: string } => !!replica.name);
         if (named.length === 0) {
-            this.actionContext.errorHandling.suppress = 'reportIssue';
             // A revision scaled to zero has no replicas, and therefore nothing
             // to stream -- this is ordinary, not an error in the request.
-            throw new Error(this.ctx.code.l10n.t(
+            throw new ExternalError(this.ctx.code.l10n.t(
                 'Revision \'{0}\' has no running replicas. It may be scaled to zero.',
                 revisionName,
             ));
@@ -147,8 +143,7 @@ export class StartStreamingLogs implements ManagedCommand {
             .filter((container): container is ReplicaContainer & { name: string } => !!container.name);
 
         if (containers.length === 0) {
-            this.actionContext.errorHandling.suppress = 'reportIssue';
-            throw new Error(this.ctx.code.l10n.t('Replica \'{0}\' reports no containers.', replica.name ?? ''));
+            throw new ExternalError(this.ctx.code.l10n.t('Replica \'{0}\' reports no containers.', replica.name ?? ''));
         }
 
         const picked = await this.pick(

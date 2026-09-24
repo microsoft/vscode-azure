@@ -7,7 +7,7 @@ import {
     getResourceGroupName, IContainerAppsClientProvider, type GenericResource, type IContainerAppsClient,
 } from '@microsoft/vscode-azure-azutils';
 import {
-    CancellationError, CaselessMap, Disposable, EventEmitter, IActionExecutor, IVsCode, stringifyError,
+    CancellationError, CaselessMap, Disposable, EventEmitter, ExternalError, IActionExecutor, IVsCode, stringifyError,
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
 import type * as vscode from 'vscode';
@@ -134,10 +134,7 @@ export class ContainerAppLogStreamService implements Disposable {
         const { token } = await client.containerApps.getAuthToken(resourceGroupName, target.app.name, { abortSignal: signal });
         signal.throwIfAborted();
         if (!token) {
-            if (this.executor.currentContext) {
-                this.executor.currentContext.errorHandling.suppress = 'reportIssue';
-            }
-            throw new Error(this.code.l10n.t('Could not obtain a token to stream logs for \'{0}\'.', target.app.name));
+            throw new ExternalError(this.code.l10n.t('Could not obtain a token to stream logs for \'{0}\'.', target.app.name));
         }
 
         const response = await this.connect(endpoint, token, signal);
@@ -163,10 +160,7 @@ export class ContainerAppLogStreamService implements Disposable {
         const app = await client.containerApps.get(resourceGroupName, target.name, { abortSignal: signal });
         signal.throwIfAborted();
         if (!app.eventStreamEndpoint) {
-            if (this.executor.currentContext) {
-                this.executor.currentContext.errorHandling.suppress = 'reportIssue';
-            }
-            throw new Error(this.code.l10n.t('No system log stream is available for \'{0}\'.', target.name));
+            throw new ExternalError(this.code.l10n.t('No system log stream is available for \'{0}\'.', target.name));
         }
         const url = new URL(app.eventStreamEndpoint);
         url.searchParams.set('follow', 'true');
