@@ -313,7 +313,7 @@ Judgment-call groups (`JC-*`) mark rows the reviewer was asked to weigh as a set
 | FUNC-238 | 5 Wizards | Connection family: Netherite (Event Hubs) | **Drop** | Niche durable backend; DTS is the recommended backend. |  | JC-DTS |
 | FUNC-239 | 5 Wizards | Connection family: SQL durable backend | **Drop** | Niche durable backend. |  | JC-DTS |
 | FUNC-240 | 5 Wizards | Resource-backed binding settings (Cosmos DB, Event Hubs, Service Bus) | **Defer** | Follows the createFunction scope. |  | JC-SCAFFOLD |
-| FUNC-241 | 5 Wizards | Create app: Flex Consumption plan | **Reuse** | Already in PickHostingPlanStep (FC1, default). |  |  |
+| FUNC-241 | 5 Wizards | Create app: Flex Consumption plan | **Reuse** | Already satisfied: `functionApp/main.bicep` defaults `appServicePlanSkuName` to FC1. |  |  |
 | FUNC-242 | 5 Wizards | Create app: Premium and App Service plans | **Drop** | "Drop" in the sense that we will always assume flex consumption--users can change plans if they want to in the Bicep. | Override (recommended Reuse). |  |
 | FUNC-243 | 5 Wizards | Create app: legacy Consumption (Y1) plan | **Drop** | Legacy plan; Flex replaces it. |  |  |
 | FUNC-244 | 5 Wizards | Create app: custom location (Azure Arc / Kubernetes) | **Drop** | Advanced-only, niche. |  |  |

@@ -329,9 +329,12 @@ Wizard:         SelectIacFolder -> HydrateAzdInfo -> subscription -> location ->
 
 - [ ] Close creation gaps against the source flow; no advanced/existing-
   resource variant. <- FUNC-057
-- [ ] Remove `PickHostingPlanStep` and its Premium/App Service options; always
-  provision Flex Consumption (users change plans in the Bicep).
-  <- FUNC-241 (FC1 kept; Premium/App Service removal per FUNC-242)
+- [ ] Delete `PickHostingPlanStep`, its test, and the non-FC1
+  `AppServicePlanSku` values; stop passing `appServicePlanSkuName` to
+  `GenerateBicepStep` so the template's FC1 default applies (users change
+  plans in the Bicep).
+  <- FUNC-241 (FC1 from the existing template default; Premium/App Service
+  removal per FUNC-242)
 - [ ] Managed identity only: no secrets or connection strings, no prompt
   (the module's user-assigned identity and `AzureWebJobsStorage__credential`).
   <- FUNC-246
