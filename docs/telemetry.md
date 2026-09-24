@@ -9,16 +9,16 @@ The per-execution telemetry context, injected into commands via DI:
 ```typescript
 interface IActionContext {
     readonly telemetry: {
-        readonly id: string;                          // telemetry event name (command ID)
-        readonly properties: TelemetryProperties;     // string key-value pairs
+        readonly id: string; // telemetry event name (command ID)
+        readonly properties: TelemetryProperties; // string key-value pairs
         readonly measurements: TelemetryMeasurements; // numeric measurements
-        suppress?: 'always' | 'onSuccess';            // opt out of sending
-        isUserEvent?: boolean;                        // false = not user-initiated (see below)
+        suppress?: 'always' | 'onSuccess'; // opt out of sending
+        isUserEvent?: boolean; // false = not user-initiated (see below)
     };
 
     readonly errorHandling: {
-        suppress?: 'display';                       // hide the error toast
-        rethrow?: boolean;                          // re-throw after recording
+        suppress?: 'display'; // hide the error toast
+        rethrow?: boolean; // re-throw after recording
     };
 }
 ```
