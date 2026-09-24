@@ -49,10 +49,10 @@ These were resolved during mapping and are binding for the slices below.
   stream. There is no Logs node and no Kudu `/api/logstream` path.
 - **Flat function trees.** Functions are direct children of the Function App
   node and of the local project node; there are no group nodes.
-- **F5 without generated files.** Local debugging should not require a
-  generated `tasks.json` / `launch.json`. The `$func-watch` problem matcher and
-  `func` problem pattern are contributed only if the chosen F5 design needs
-  them (Slice 4 spike).
+- **F5 without `tasks.json` / `launch.json`.** A contributed `azure-functions`
+  debug type starts the host in-process and resolves to the language debugger's
+  attach configuration (Slice 4). Existing projects' source-generated debug
+  files are left untouched.
 
 ## Slice 0 -- Models and clients
 
@@ -204,53 +204,75 @@ Tree contract:  Local project node: revealInExplorer, createFunction, deployProj
 
 ## Slice 4 -- Local development (F5)
 
-Starts with a design spike; the decisions below are recorded in this file
-before code lands.
+A contributed debug type resolves to the language debugger's attach
+configuration after the extension has built the project and started the host
+itself. Resolving to a different debug type is proven in the Container Tools
+extension. Nothing is generated into `tasks.json` or `launch.json`, and no task
+type, problem matcher, or process-pick command is contributed.
 
 ```
-Pattern:        contributed debugger type that resolves to "start host + attach language debugger"; host started through a
-                CustomExecution pseudoterminal task driven by IProcessExecutor, so readiness is known in-process
+Pattern:        contributed `azure-functions` debugger (launch request, no adapter) whose DebugConfigurationProvider
+                (Initial + Dynamic) builds, starts the host, and returns a config of the language's debug type
 Target files:   extensions/vscode-azure/src/functions/debug/* (debug configuration provider, per-language attach configs)
-                extensions/vscode-azure/src/functions/host/* (host task, host tracking, pre-debug validation)
-Precedent:      tools/FuncInstaller + ToolService (Core Tools discovery); none for debugging (SWA debugging waits on this,
-                see #339)
+                extensions/vscode-azure/src/functions/host/* (host process, host tracking, pre-debug validation)
+Precedent:      Container Tools debug providers (resolve to another debug type); tools/FuncInstaller + ToolService (Core
+                Tools discovery). SWA debugging builds on this (#339).
 Sweep:          reused IProcessExecutor (packages/utils), createShellTask (packages/utils), CommandLineBuilder,
-                ToolService/FuncInstaller, IWorkspaceIndexService. Searched "registerDebugConfigurationProvider",
-                "registerTaskProvider", "pickProcess", "ps-tree", "process list": none exist -> new debug/task code, with
-                process enumeration added as a shared primitive in packages/utils.
-Activation:     only the implicit events VS Code generates for a contributed `debuggers` / `taskDefinitions` entry;
-                justify any explicit onDebug* entry in this record before adding it.
-External facts: implicit activation for contributed debuggers and task types; debug types and attach settings for
-                node (9229), debugpy (9091), java (5005), and PowerShell (pipe); Python extension
-                `getRemoteLauncherCommand` API; host readiness log lines -- verify each against the pinned source and the
-                owning extension's docs.
+                ToolService/FuncInstaller, IWorkspaceIndexService, ExternalError. Searched
+                "registerDebugConfigurationProvider", "DebugConfigurationProviderTriggerKind", "onDidTerminateDebugSession",
+                "CustomExecution": none exist -> new product code under functions/debug and functions/host.
+Activation:     only the implicit events VS Code generates for a contributed `debuggers` entry; justify any explicit
+                onDebug* entry in this record before adding it.
+External facts: implicit activation for contributed debuggers; attach settings for node (`--inspect`), debugpy, java
+                (jdwp), PowerShell, and coreclr; `languageWorkers__<runtime>__arguments` env names; Core Tools
+                `--dotnet-isolated-debug` / `--enable-json-output` worker PID output; host readiness signal
+                (`/admin/host/status` or log line); Python extension environment and launcher APIs -- verify each against
+                the pinned source and the owning extension's or Core Tools' docs.
 ```
 
-- [ ] Spike: choose the F5 entry point (contributed debugger type vs dynamic
-  configurations) so a project debugs with no generated `tasks.json` /
-  `launch.json`; record the choice here. <- FUNC-030
-- [ ] `initProjectForVSCode` writes only what the chosen design still needs
-  (possibly nothing beyond `.vscode/extensions.json`), never project
+Resolution flow for one session:
+
+1. Pick the Functions project from the workspace index (remembered per
+   workspace when a folder has several).
+2. Pre-debug validation; failures are `ExternalError`s.
+3. Build with in-code tasks (`npm run build`, `dotnet build`, `mvn package`,
+   dependency install), using VS Code's own `$tsc` / `$msCompile` matchers.
+4. Start `func host start` in an in-code pseudoterminal task with the worker
+   debug arguments in its environment and a free debug port.
+5. Wait for host readiness.
+6. Return the attach configuration of the language's debug type; stop the host
+   when the session ends.
+
+- [ ] Contribute the `azure-functions` debugger (languages for the kept
+  runtimes) and register its provider for initial and dynamic configurations,
+  so projects appear in the Run and Debug dropdown with no `launch.json`.
+  <- FUNC-030
+- [ ] `initProjectForVSCode` writes no debug files; only non-debug workspace
+  files such as `.vscode/extensions.json` recommendations, never project
   configuration in VS Code settings. <- FUNC-030
-- [ ] `func` task type and task provider (host start, extensions install) on
-  the shared shell/CustomExecution task primitives. <- FUNC-203, FUNC-204
-- [ ] `$func-watch` background matcher and `func` pattern, contributed only if
-  the spike's design needs a user-visible task to signal readiness. If it does
-  not, amend [TRIAGE.md](TRIAGE.md) (Adapt -> Drop) and reconfirm.
-  <- FUNC-205, FUNC-206, FUNC-207
 - [ ] Attach configurations for Node, Python (via the Python extension's
-  launcher), Java, and PowerShell. <- FUNC-210, FUNC-211, FUNC-212, FUNC-214, FUNC-268
-- [ ] Process picking for .NET attach on the shared process enumeration
-  primitive. <- FUNC-033, FUNC-269
-- [ ] Host tracking: port, readiness, terminal errors, start/stop events for
-  local listing and execute. <- FUNC-216
+  launcher), Java, and PowerShell, with free debug ports.
+  <- FUNC-210, FUNC-211, FUNC-212, FUNC-214, FUNC-268
+- [ ] .NET isolated attach using the worker PID reported by
+  `--dotnet-isolated-debug`, instead of a process picker.
+  <- FUNC-033, FUNC-269
+- [ ] Host process and tracking: build steps, start, readiness, port, terminal
+  errors, stop on session end, and start/stop events for local listing and
+  execute. <- FUNC-216
 - [ ] Pre-debug validation: Core Tools present, `FUNCTIONS_WORKER_RUNTIME`,
-  `AzureWebJobsStorage` / emulator reachable; failures are `ExternalError`s.
-  <- FUNC-215
+  `AzureWebJobsStorage` / emulator reachable. <- FUNC-215
 - [ ] Wire shared Core Tools install/update and version checks; no
   activation-time prompts. <- FUNC-021, FUNC-031, FUNC-217
+- [ ] Opt-in minimal `launch.json` entry (`{ "type": "azure-functions",
+  "request": "launch" }`) for compounds and per-project overrides; never
+  generated automatically. <- FUNC-030
 - [ ] Unit tests for configuration resolution and host tracking; integration
   test for the attach path where the precedent allows.
+
+Existing projects' source-generated `tasks.json` / `launch.json` (task type
+`func`, `$func-watch`, `${command:azureFunctions.pickProcess}`) are left
+untouched: no compatibility registrations and no rewrite prompt. Users delete
+them or re-initialize.
 
 ## Slice 5 -- Project and function scaffolding
 
@@ -437,6 +459,8 @@ External facts: `https://json.schemastore.org/function.json` and `https://json.s
 - Creation variants beyond Flex with new resources: FUNC-058, FUNC-242,
   FUNC-243, FUNC-244, FUNC-245.
 - Remote debugging: FUNC-067, FUNC-068, FUNC-121, FUNC-122.
+- Task type, task provider, and problem matchers (host started in-process by
+  the debug provider): FUNC-203, FUNC-204, FUNC-205, FUNC-206, FUNC-207.
 - Settings sync, secrets, and system-assigned identity: FUNC-073, FUNC-074,
   FUNC-079, FUNC-080, FUNC-083, FUNC-183, FUNC-189.
 - Agent deploy commands and MCP project setting: FUNC-104, FUNC-105,

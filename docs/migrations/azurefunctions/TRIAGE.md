@@ -17,6 +17,7 @@ by editing this file and reconfirming with the reviewer.
 | **Signed off by** | Brandon Waterloo (@bwateratmsft) |
 | **Date** | 2026-09-24 |
 | **Review** | Excel review workbook; 30 rows overridden, 241 accepted as recommended (blank decision = agreement). |
+| **Last confirmed** | 2026-09-24; F5 design review moved FUNC-203 through FUNC-207 to Drop and narrowed FUNC-030. |
 
 ## Granularity
 
@@ -33,9 +34,9 @@ problem matcher and pattern; per manifest-level contract; per orphan.
 | Disposition | Count | Meaning in this record |
 |---|---:|---|
 | Migrate | 24 | Preserve the source capability using monorepo patterns |
-| Adapt | 43 | Preserve the user goal with intentionally different behavior or UX |
+| Adapt | 38 | Preserve the user goal with intentionally different behavior or UX |
 | Reuse | 18 | Satisfy the feature by wiring an existing monorepo capability |
-| Drop | 130 | Do not carry the source capability forward |
+| Drop | 135 | Do not carry the source capability forward |
 | Defer | 56 | Retain the goal for later tracked work |
 | **Total** | **271** | |
 
@@ -55,8 +56,12 @@ problem matcher and pattern; per manifest-level contract; per orphan.
 - **No settings file sync.** App settings are owned by IaC; there is no
   `local.settings.json` upload, download, or tree node.
 - **Scaffolding delegates to Core Tools.** Project and function creation wrap
-  `func init` / `func new`; the template subsystem is not carried forward, and
-  debugging should work without generated `tasks.json` / `launch.json` wherever possible.
+  `func init` / `func new`; the template subsystem is not carried forward.
+- **F5 without `tasks.json` / `launch.json`.** A contributed `azure-functions`
+  debug type builds the project, starts the host in-process, and resolves to the
+  language debugger's attach configuration. No task type, problem matcher, or
+  process-pick command is contributed. Existing projects' source-generated
+  `tasks.json` / `launch.json` are left untouched; users delete them or re-initialize.
 - **No exported API or agent contract.** The source's exported API and
   `agent.*` commands have no monorepo consumer.
 - Telemetry informed these decisions qualitatively; see
@@ -97,7 +102,7 @@ Judgment-call groups (`JC-*`) mark rows the reviewer was asked to weigh as a set
 | FUNC-027 | 1.1 Local project | `azureFunctions.createNewProjectWithDockerfile` | **Defer** | Cancel-dominant; tied to the containerized-hosting decision. |  | JC-CONTAINER |
 | FUNC-028 | 1.1 Local project | `azureFunctions.createFunction` | **Adapt** | High usage. Rebuild over Core Tools `func new` templates. |  | JC-SCAFFOLD |
 | FUNC-029 | 1.1 Local project | `azureFunctions.addBinding` | **Drop** | Only `function.json` projects; near-zero successes per telemetry. |  |  |
-| FUNC-030 | 1.1 Local project | `azureFunctions.initProjectForVSCode` | **Adapt** | High usage. Write only `tasks.json`/`launch.json` needed by F5; do not write project config into VS Code settings. | Adapt, but to the greatest extent possible, make debugging work without a tasks.json/launch.json needed. | JC-SCAFFOLD |
+| FUNC-030 | 1.1 Local project | `azureFunctions.initProjectForVSCode` | **Adapt** | Debugging needs no generated `tasks.json` / `launch.json`; init writes only non-debug workspace files (for example `.vscode/extensions.json` recommendations), never project configuration in VS Code settings. | Adapt, but to the greatest extent possible, make debugging work without a tasks.json/launch.json needed. | JC-SCAFFOLD |
 | FUNC-031 | 1.1 Local project | `azureFunctions.installOrUpdateFuncCoreTools` | **Reuse** | `vscode-azure/installFunc` + FuncInstaller already exist; source failure rate is a reliability lesson. |  |  |
 | FUNC-032 | 1.1 Local project | `azureFunctions.uninstallFuncCoreTools` | **Drop** | Incidental; mostly fails; SWA precedent dropped CLI uninstall. |  |  |
 | FUNC-033 | 1.1 Local project | `azureFunctions.pickProcess` | **Adapt** | High usage; .NET attach depends on it. Rebuild on shared process/task services. |  | JC-LOCALDEV |
@@ -270,11 +275,11 @@ Judgment-call groups (`JC-*`) mark rows the reviewer was asked to weigh as a set
 | FUNC-200 | 3 Tree | ARG bulk listing + site cache in the resolver | **Reuse** | Target resource listing + WebAppDataProvider enrich. |  |  |
 | FUNC-201 | 3 Tree | Submenu `workspaceActions` (create function/project, deploy) | **Drop** | No workspace actions submenu, this was an antipattern. | Override (recommended Adapt). |  |
 | FUNC-202 | 3 Tree | `explorer/context` Deploy on a folder | **Adapt** | Follows the deploy decision. |  | JC-DEPLOY |
-| FUNC-203 | 4 Debug | Task definition `func` | **Adapt** | Needed for `func host start` pre-launch task. |  | JC-LOCALDEV |
-| FUNC-204 | 4 Debug | Task provider `FuncTaskProvider` (host start, extensions install, pack) | **Adapt** | Core of F5; rebuild on the shared shell-task service. |  | JC-LOCALDEV |
-| FUNC-205 | 4 Debug | Problem matcher `func-watch` | **Adapt** | Background matcher for the host task. |  | JC-LOCALDEV |
-| FUNC-206 | 4 Debug | Problem matchers per language (dotnet, java, node, python, golang, powershell watch) | **Adapt** | Define a single `$func-watch` background matcher only if F5 needs it (decided in mapping); no other extension provides these matchers. | Can we reuse existing problem matchers from other extensions? I hope we don't have our own defined? Define a single `$func-watch` background matcher only if F5 needs it; decided in mapping. | JC-LOCALDEV |
-| FUNC-207 | 4 Debug | Problem pattern `func` | **Adapt** | Base of the matchers. |  | JC-LOCALDEV |
+| FUNC-203 | 4 Debug | Task definition `func` | **Drop** | Host is started in-process by the Functions debug configuration provider; no `tasks.json` task or problem matcher is needed. | Override (recommended Adapt); reconfirmed after the F5 design review. | JC-LOCALDEV |
+| FUNC-204 | 4 Debug | Task provider `FuncTaskProvider` (host start, extensions install, pack) | **Drop** | Host is started in-process by the Functions debug configuration provider; no `tasks.json` task or problem matcher is needed. | Override (recommended Adapt); reconfirmed after the F5 design review. | JC-LOCALDEV |
+| FUNC-205 | 4 Debug | Problem matcher `func-watch` | **Drop** | Host is started in-process by the Functions debug configuration provider; no `tasks.json` task or problem matcher is needed. | Override (recommended Adapt); reconfirmed after the F5 design review. | JC-LOCALDEV |
+| FUNC-206 | 4 Debug | Problem matchers per language (dotnet, java, node, python, golang, powershell watch) | **Drop** | Host is started in-process by the Functions debug configuration provider; no `tasks.json` task or problem matcher is needed. | Can we reuse existing problem matchers from other extensions? I hope we don't have our own defined? Override (recommended Adapt); reconfirmed after the F5 design review. | JC-LOCALDEV |
+| FUNC-207 | 4 Debug | Problem pattern `func` | **Drop** | Host is started in-process by the Functions debug configuration provider; no `tasks.json` task or problem matcher is needed. | Override (recommended Adapt); reconfirmed after the F5 design review. | JC-LOCALDEV |
 | FUNC-208 | 5 Wizards | Template Gallery webview panel (preview) | **Defer** | Powers that be will want this back. | Override (recommended Drop). | JC-SCAFFOLD |
 | FUNC-209 | 5 Wizards | Open from portal (URI handler, `onUri`) | **Drop** | Experimental, gated off, no usage in window. |  |  |
 | FUNC-210 | 4 Debug | Node debug provider (attach 9229) | **Adapt** | F5 for JS/TS. |  | JC-LOCALDEV |
