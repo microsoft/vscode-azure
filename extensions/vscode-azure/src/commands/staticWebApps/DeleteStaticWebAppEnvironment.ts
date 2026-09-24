@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { IStaticWebAppClientProvider, parseAzureResourceId } from '@microsoft/vscode-azure-azutils';
-import { IActionContext, IVsCode, showMessage } from '@microsoft/vscode-azure-utils';
+import { ExternalError, IActionContext, IVsCode, showMessage } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzureViewDataTree } from '../../services';
 import { IGenericActivityDataProvider } from '../../tree/activity/GenericActivityDataProvider';
@@ -43,8 +43,7 @@ export class DeleteStaticWebAppEnvironment implements ManagedCommand {
         const environment = await this.selector.selectVirtual({ key, canHandle: isStaticWebAppEnvironment });
         this.context.telemetry.properties.isProduction = String(environment.isProduction);
         if (environment.isProduction) {
-            this.context.errorHandling.suppress = 'reportIssue';
-            throw new Error(this.code.l10n.t('Cannot delete the production environment directly. Delete the Static Web App instead.'));
+            throw new ExternalError(this.code.l10n.t('Cannot delete the production environment directly. Delete the Static Web App instead.'));
         }
 
         const label = getStaticWebAppEnvironmentLabel(this.code, environment);

@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { IAzureListingCache, type AzureListingCache, type AzureSubscription } from '@microsoft/vscode-azure-azutils';
-import { CaselessSet, IActionContext, IActionExecutor, ICodeContext, showMessage, showSmartQuickPick, stringifyError, type QuickPickItemWithData } from '@microsoft/vscode-azure-utils';
+import { CaselessSet, ExternalError, IActionExecutor, ICodeContext, showMessage, showSmartQuickPick, stringifyError, type QuickPickItemWithData } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { ConfigurationSection, SelectedSubscriptionsConfigurationKey } from '../../constants';
 import { ICredentialOptionsScope } from '../../utils/CredentialOptionsScope';
@@ -29,7 +29,6 @@ export class SelectSubscriptions implements ManagedCommand {
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IAzureListingCache) private readonly listings: AzureListingCache,
         @inject(ICredentialOptionsScope) private readonly credentialOptions: ICredentialOptionsScope,
-        @inject(IActionContext) private readonly actionContext: IActionContext,
     ) { }
 
     /** @inheritdoc */
@@ -52,13 +51,10 @@ export class SelectSubscriptions implements ManagedCommand {
         }
 
         if (reachable.length === 0) {
-            // Both messages are user-actionable ("sign in"), not bugs, so show
-            // the toast but omit the "Report Issue" button.
-            this.actionContext.errorHandling.suppress = 'reportIssue';
             if (failures.length > 0) {
-                throw new Error(code.l10n.t('Could not load subscriptions for any tenant. Sign in to those tenants and try again.'));
+                throw new ExternalError(code.l10n.t('Could not load subscriptions for any tenant. Sign in to those tenants and try again.'));
             }
-            throw new Error(code.l10n.t('No reachable subscriptions were found. Sign in to Azure and try again.'));
+            throw new ExternalError(code.l10n.t('No reachable subscriptions were found. Sign in to Azure and try again.'));
         }
 
         const picks: QuickPickItemWithData<AzureSubscription>[] = reachable.map(({ account, tenant, subscription }) => {

@@ -17,8 +17,8 @@ interface IActionContext {
     };
 
     readonly errorHandling: {
-        suppress?: 'display' | 'reportIssue'; // 'display' = hide toast; 'reportIssue' = hide button
-        rethrow?: boolean;             // re-throw after recording
+        suppress?: 'display';                       // hide the error toast
+        rethrow?: boolean;                          // re-throw after recording
     };
 }
 ```
@@ -58,13 +58,18 @@ The `callWithTelemetryAndErrorHandling` method wraps every command:
 │  └─────────────────────────────────────────────┘ │
 │  On success: result = 'Succeeded'                │
 │  On CancellationError: result = 'Canceled'       │
-│  On other error: result = 'Failed'               │
+│  On other errors: result = 'Failed'              │
 │  Calculate duration                              │
 │  Send telemetry (unless suppressed)              │
 │  If rethrow: re-throw the error                  │
 │  Otherwise: return undefined                     │
 └──────────────────────────────────────────────────┘
 ```
+
+Throw `ExternalError` for user-actionable failures that should show an error toast
+without a "Report Issue" button. Other failures show the toast with that button;
+`CancellationError` shows no toast. All non-cancellation errors are logged and
+recorded as failures.
 
 ### AsyncLocalStorage
 
