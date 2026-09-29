@@ -5,6 +5,7 @@
 
 import type { ProductRegistrar } from '../registration/ProductRegistrar';
 import { registerAcr } from './registerAcr';
+import { registerContainerApps } from './registerContainerApps';
 import { registerFunctions } from './registerFunctions';
 import { registerGenericAzure } from './registerGenericAzure';
 import { registerSettings } from './registerSettings';
@@ -17,6 +18,7 @@ export function registerProducts(registrar: ProductRegistrar): void {
     registerSettings(registrar);
     registerStaticWebApps(registrar);
     registerAcr(registrar);
+    registerContainerApps(registrar);
     registerFunctions(registrar);
     registerGenericAzure(registrar);
 }

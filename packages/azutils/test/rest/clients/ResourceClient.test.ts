@@ -86,6 +86,49 @@ describe('ResourceClient (unit)', () => {
         expect(resources[0].subscription).to.equal(subscription);
     });
 
+    it('should list resources across the whole subscription', async () => {
+        const { ctx } = createMockCodeContext();
+        const { executor } = createTestActionExecutor();
+        const subscription = makeSubscription();
+
+        const resourcesBody = JSON.stringify({
+            value: [
+                { id: '/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.ContainerRegistry/registries/reg1', name: 'reg1', type: 'Microsoft.ContainerRegistry/registries', location: 'eastus' },
+                { id: '/subscriptions/test-sub/resourceGroups/rg2/providers/Microsoft.ContainerRegistry/registries/reg2', name: 'reg2', type: 'Microsoft.ContainerRegistry/registries', location: 'westus' },
+            ],
+        });
+
+        const httpClient = new MockHttpClient({
+            handler: (req) => makeResponse(req, 200, resourcesBody),
+        });
+
+        const client = ResourceClient.create(ctx, executor, makeCredential(), subscription, { httpClient });
+        const pages = await collectPages(client.resources.list());
+
+        const resources = pages[0].items;
+        expect(resources.map(r => r.name)).to.deep.equal(['reg1', 'reg2']);
+        expect(resources[0].subscription).to.equal(subscription);
+        // Subscription-scoped, so the URL must not be pinned to one group.
+        expect(httpClient.requests[0].url).to.not.include('resourceGroups');
+    });
+
+    it('should forward a $filter when listing across the subscription', async () => {
+        const { ctx } = createMockCodeContext();
+        const { executor } = createTestActionExecutor();
+        const subscription = makeSubscription();
+
+        const httpClient = new MockHttpClient({
+            handler: (req) => makeResponse(req, 200, JSON.stringify({ value: [] })),
+        });
+
+        const client = ResourceClient.create(ctx, executor, makeCredential(), subscription, { httpClient });
+        await collectPages(client.resources.list({ filter: "resourceType eq 'Microsoft.ContainerRegistry/registries'" }));
+
+        // Filtering server-side is the point of the overload: without it a
+        // caller pages through every resource in the subscription.
+        expect(decodeURIComponent(httpClient.requests[0].url)).to.include("resourceType eq 'Microsoft.ContainerRegistry/registries'");
+    });
+
     it('should map Microsoft.Web/sites with functionapp kind to FunctionApp logicalType', async () => {
         const { ctx } = createMockCodeContext();
         const { executor } = createTestActionExecutor();

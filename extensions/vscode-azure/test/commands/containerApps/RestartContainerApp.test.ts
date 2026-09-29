@@ -1,0 +1,64 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import { AzureNodeId } from '@microsoft/vscode-azure-azutils';
+import { createMockContainerAppsClient, makeContainerApp } from '@microsoft/vscode-azure-azutils/testing';
+import { mock } from 'node:test';
+import { RestartContainerApp } from '../../../src/commands/containerApps/RestartContainerApp';
+import type { ContainerApp } from '../../../src/tree/resources/containerApps/ContainerApp';
+import { createTestResourceSelector } from '../../tree/resources/testResourceSelector';
+
+function createCommand(app: ContainerApp) {
+    const { selector, cache, codeContext } = createTestResourceSelector({ nodes: [app] });
+    const mockResult = codeContext.mock;
+    const client = createMockContainerAppsClient();
+
+    const command = new RestartContainerApp(
+        mockResult.vscode,
+        selector,
+        () => client,
+        cache,
+    );
+
+    return { command, client, cache, mockResult, key: AzureNodeId.from(app).toString() };
+}
+
+describe('RestartContainerApp (unit)', () => {
+    afterEach(() => {
+        mock.restoreAll();
+    });
+
+    it('restarts the app\'s latest revision', async () => {
+        const { command, client, key } = createCommand(makeContainerApp());
+
+        await command.execute(key);
+
+        expect(client.containerAppsRevisions.restartRevision.mock.callCount()).to.equal(1);
+        expect(client.containerAppsRevisions.restartRevision.mock.calls[0].arguments)
+            .to.deep.equal(['rg1', 'app1', 'app1--abc123']);
+    });
+
+    it('re-renders the node without dropping its children', async () => {
+        const { command, cache, key } = createCommand(makeContainerApp());
+        const invalidate = mock.method(cache, 'invalidate', () => { /* noop */ });
+
+        await command.execute(key);
+
+        // Restarting replaces the running replicas, not the app's template, so
+        // evicting the container children would be a pointless refetch.
+        expect(invalidate.mock.callCount()).to.equal(1);
+        const target = invalidate.mock.calls[0].arguments[0] as unknown as { scope?: string };
+        expect(target.scope).to.equal('self');
+    });
+
+    it('explains that an app with no revision cannot be restarted', async () => {
+        // An app that has never deployed has nothing to restart; calling ARM
+        // with an empty revision name would fail deep inside the SDK instead.
+        const { command, client, key } = createCommand(makeContainerApp({ latestRevisionName: undefined }));
+
+        await expect(command.execute(key)).to.be.rejectedWith(/no revision to restart/i);
+        expect(client.containerAppsRevisions.restartRevision.mock.callCount()).to.equal(0);
+    });
+});

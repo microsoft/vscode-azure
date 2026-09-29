@@ -18,6 +18,8 @@ import { InfraFolderName, MainBicepFileName } from './GenerateBicepStep';
  *
  * Detected signals (all best-effort -- failures leave the flag unset):
  * - `hasAzureYaml` / `hasServices` -- derived from `azd show --output json`.
+ * - `hydratedServiceProjectPath` -- project path from `azd show`, only when
+ *   exactly one service exists.
  * - `hasInfra` -- presence of `infra/main.bicep`.
  * - `existingDefaultEnvName` -- name of the default azd environment, *only*
  *   when that env is fully configured (has both `AZURE_SUBSCRIPTION_ID` and
@@ -70,6 +72,9 @@ export class HydrateAzdInfoStep<TContext extends AzdWizardContext> extends Promp
             if (serviceNames.length > 0) {
                 result.azdServiceName = serviceNames[0];
             }
+            result.hydratedServiceProjectPath = serviceNames.length === 1
+                ? show.services?.[serviceNames[0]].project?.path
+                : undefined;
         }
 
         result.hasInfra = await this.hasInfraTemplate(iacFolder);

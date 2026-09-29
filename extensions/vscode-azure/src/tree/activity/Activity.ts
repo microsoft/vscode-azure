@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import type * as vscode from 'vscode';
+
 /** Discriminator for the concrete activity variants. */
 export type ActivityType = 'armDeployment' | 'armDeploymentOperation' | 'codeDeployment' | 'generic';
 
@@ -21,6 +23,8 @@ export interface Activity {
     status: ActivityStatus;
     title: string;
     description?: string;
+    /** Optional action invoked when the activity is selected. */
+    readonly command?: vscode.Command;
     readonly startTime: Date;
     endTime?: Date;
 }

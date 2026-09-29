@@ -19,7 +19,9 @@ import type { GenericResource } from '../src/models/GenericResource';
 import type { ResourceGroup, VirtualGroup } from '../src/models/Grouping';
 import type { VirtualResource } from '../src/models/VirtualResource';
 import type { ISubscriptionClient, ISubscriptionClientProvider, Location, Subscription, TenantIdDescription } from '../src/rest/clients/SubscriptionClient';
+import type { Container, IContainerAppsClient, Replica, Revision } from '../src/rest/clients/ContainerAppsClient';
 import type { IWebAppClient } from '../src/rest/clients/WebAppClient';
+import { makePagedAsyncIterable } from './rest/mockPaging';
 
 const defaultEnvironment: EnvironmentLike = AzurePublicCloud;
 
@@ -193,6 +195,33 @@ export function makeGenericResource(overrides?: Partial<GenericResource>): Gener
         subscription: makeSubscription(),
         ...overrides,
     };
+}
+
+/**
+ * Container App resource fixture enriched with the fields used by tree and command consumers.
+ */
+export interface MockContainerApp extends GenericResource {
+    readonly environmentId: string | undefined;
+    readonly provisioningState: string | undefined;
+    readonly latestRevisionName: string | undefined;
+    readonly containers: readonly Container[];
+}
+
+/**
+ * Builds an enriched Container App resource in the default resource group.
+ */
+export function makeContainerApp(overrides?: Partial<MockContainerApp>): MockContainerApp {
+    return makeGenericResource<MockContainerApp>({
+        id: '/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.App/containerApps/app1',
+        name: 'app1',
+        type: 'Microsoft.App/containerApps',
+        logicalType: 'Microsoft.App/containerApps',
+        environmentId: undefined,
+        provisioningState: 'Succeeded',
+        latestRevisionName: 'app1--abc123',
+        containers: [],
+        ...overrides,
+    });
 }
 
 /**
@@ -474,6 +503,105 @@ export function createMockWebAppClient(options?: MockWebAppClientOptions): MockW
                 Object.assign(settings, appSettings.properties);
                 return Promise.resolve({ properties: { ...settings } });
             }),
+        },
+    };
+}
+
+/** Options for {@linkcode createMockContainerAppsClient}. */
+export interface MockContainerAppsClientOptions {
+    /** Ingress FQDN reported by `containerApps.get`. */
+    readonly fqdn?: string;
+    /**
+     * ARM id of the hosting managed environment, returned as `environmentId` by
+     * `containerApps.get` and as the resource id by `managedEnvironments.get`.
+     *
+     * Defaults to a real id rather than `undefined`: every deployed container
+     * app has an environment, so a mock that omitted it would let a test pass
+     * while never exercising the app-to-environment relationship.
+     */
+    readonly environmentId?: string;
+    /** Provisioning state reported by `containerApps.get`. */
+    readonly provisioningState?: string;
+    /** Name of the app's latest revision. */
+    readonly latestRevisionName?: string;
+    /** App-wide system log endpoint reported by `containerApps.get`. */
+    readonly eventStreamEndpoint?: string;
+    /** Containers in the app's current template. */
+    readonly containers?: readonly Container[];
+    /** Revisions returned by `containerAppsRevisions.listRevisions`. */
+    readonly revisions?: readonly Revision[];
+    /** Replicas returned by `containerAppsRevisionReplicas.listReplicas`. */
+    readonly replicas?: readonly Replica[];
+    /** Data-plane token returned by `containerApps.getAuthToken`. */
+    readonly authToken?: string;
+}
+
+/**
+ * An {@linkcode IContainerAppsClient} whose operations are `mock.fn()`
+ * instances, so tests can assert call counts and arguments.
+ */
+export type MockContainerAppsClient = IContainerAppsClient & {
+    readonly containerApps: { [K in keyof IContainerAppsClient['containerApps']]: Mock<IContainerAppsClient['containerApps'][K]> };
+    readonly containerAppsRevisions: { [K in keyof IContainerAppsClient['containerAppsRevisions']]: Mock<IContainerAppsClient['containerAppsRevisions'][K]> };
+    readonly containerAppsRevisionReplicas: { [K in keyof IContainerAppsClient['containerAppsRevisionReplicas']]: Mock<IContainerAppsClient['containerAppsRevisionReplicas'][K]> };
+    readonly managedEnvironments: { [K in keyof IContainerAppsClient['managedEnvironments']]: Mock<IContainerAppsClient['managedEnvironments'][K]> };
+};
+
+/**
+ * Creates a mock {@linkcode IContainerAppsClient} whose operations are
+ * `mock.fn()` instances, so tests can assert call counts and arguments via
+ * `client.containerApps.get.mock`.
+ *
+ * The `@azure/arm-appcontainers` modular SDK flattens ARM's `properties` bag
+ * onto the resource, so the values supplied here are returned as top-level
+ * fields, matching what the real client hands back.
+ */
+export function createMockContainerAppsClient(options?: MockContainerAppsClientOptions): MockContainerAppsClient {
+    const id = '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/MyRG/providers/Microsoft.App/containerApps/MyApp';
+    const environmentId = options?.environmentId
+        ?? '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/MyRG/providers/Microsoft.App/managedEnvironments/MyEnv';
+
+    return {
+        containerApps: {
+            get: mock.fn(() => Promise.resolve({
+                id,
+                name: 'MyApp',
+                type: 'Microsoft.App/containerApps',
+                location: 'eastus',
+                environmentId,
+                provisioningState: options?.provisioningState ?? 'Succeeded',
+                latestRevisionName: options?.latestRevisionName,
+                eventStreamEndpoint: options?.eventStreamEndpoint,
+                configuration: { ingress: { fqdn: options?.fqdn } },
+                template: { containers: options?.containers ? [...options.containers] : [] },
+            })),
+            getAuthToken: mock.fn(() => Promise.resolve({
+                id: `${id}/authtoken`,
+                name: 'MyApp',
+                type: 'Microsoft.App/containerApps',
+                location: 'eastus',
+                token: options?.authToken ?? 'test-token',
+            })),
+        },
+        containerAppsRevisions: {
+            getRevision: mock.fn(() => Promise.resolve({
+                id: `${id}/revisions/rev1`,
+                name: 'rev1',
+                type: 'Microsoft.App/containerApps/revisions',
+            })),
+            listRevisions: mock.fn(() => makePagedAsyncIterable(options?.revisions ?? [])),
+            restartRevision: mock.fn(() => Promise.resolve()),
+        },
+        containerAppsRevisionReplicas: {
+            listReplicas: mock.fn(() => Promise.resolve(options?.replicas ?? [])),
+        },
+        managedEnvironments: {
+            get: mock.fn(() => Promise.resolve({
+                id: environmentId,
+                name: 'MyEnv',
+                type: 'Microsoft.App/managedEnvironments',
+                location: 'eastus',
+            })),
         },
     };
 }

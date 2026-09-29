@@ -187,7 +187,7 @@ export interface AzdServiceDescriptor extends Record<string, unknown> {
     readonly ingressUrl?: string;
     /** Project containing the source code for this service. */
     readonly project?: {
-        /** Absolute filesystem path to the service's project folder. */
+        /** Absolute filesystem path to the service directory or project file (for example, a `.csproj`). */
         readonly path?: string;
         /** Programming language of the service. */
         readonly language?: string;

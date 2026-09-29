@@ -6,7 +6,7 @@
 import { createResourceManagement, type ResourceManagementClientOptionalParams, type ResourceManagementContext } from '@azure/arm-resources/api';
 import { get as sdkGetProvider } from '@azure/arm-resources/api/providers';
 import { $delete as sdkDeleteResourceGroup, list as sdkListResourceGroups, type ResourceGroupsDeleteOptionalParams, type ResourceGroupsListOptionalParams } from '@azure/arm-resources/api/resourceGroups';
-import { deleteById as sdkDeleteById, listByResourceGroup as sdkListByResourceGroup, type ResourcesDeleteByIdOptionalParams, type ResourcesListByResourceGroupOptionalParams } from '@azure/arm-resources/api/resources';
+import { deleteById as sdkDeleteById, list as sdkListResources, listByResourceGroup as sdkListByResourceGroup, type ResourcesDeleteByIdOptionalParams, type ResourcesListByResourceGroupOptionalParams, type ResourcesListOptionalParams } from '@azure/arm-resources/api/resources';
 import type { TokenCredential } from '@azure/core-auth';
 import { CaselessMap } from '@microsoft/vscode-azure-utils';
 import type { IActionExecutor, ICodeContext, Page, SyncFactory } from '@microsoft/vscode-azure-utils';
@@ -18,7 +18,7 @@ import { createArmRestSubscriptionClient } from '../createAzureClient';
 import { toPages } from '../toPages';
 
 export type { ResourceGroupsDeleteOptionalParams, ResourceGroupsListOptionalParams };
-export type { ResourcesDeleteByIdOptionalParams, ResourcesListByResourceGroupOptionalParams };
+export type { ResourcesDeleteByIdOptionalParams, ResourcesListByResourceGroupOptionalParams, ResourcesListOptionalParams };
 
 /** ARM and logical resource type for Azure Static Web Apps (`Microsoft.Web/staticSites`). */
 export const StaticWebAppResourceType = 'Microsoft.Web/staticSites';
@@ -71,6 +71,14 @@ export interface IResourceClient {
         delete(resourceGroupName: string, options?: ResourceGroupsDeleteOptionalParams): Promise<void>;
     };
     readonly resources: {
+        /**
+         * Lists resources across the whole subscription.
+         *
+         * Prefer {@linkcode listByResourceGroup} when the group is known; this
+         * exists for the cases that genuinely span groups, such as finding every
+         * registry a user could pull an image from.
+         */
+        list(options?: ResourcesListOptionalParams): AsyncIterable<Page<GenericResource>>;
         listByResourceGroup(resourceGroupName: string, options?: ResourcesListByResourceGroupOptionalParams): AsyncIterable<Page<GenericResource>>;
         deleteById(resourceId: string, resourceType: string, options?: ResourcesDeleteByIdOptionalParams): Promise<void>;
     };
@@ -124,6 +132,7 @@ export class ResourceClient implements IResourceClient {
 
     public get resources(): IResourceClient['resources'] {
         return {
+            list: (options) => this.listAllResources(options),
             listByResourceGroup: (resourceGroupName, options) => this.listResources(resourceGroupName, options),
             deleteById: (resourceId, resourceType, options) => this.deleteResourceById(resourceId, resourceType, options),
         };
@@ -143,6 +152,13 @@ export class ResourceClient implements IResourceClient {
                     groupingValue: resourceGroup.name,
                 });
             }
+        );
+    }
+
+    private listAllResources(options?: ResourcesListOptionalParams): AsyncIterable<Page<GenericResource>> {
+        return toPages(
+            sdkListResources(this.inner, options),
+            r => attachMetadata(r, this.subscription)
         );
     }
 

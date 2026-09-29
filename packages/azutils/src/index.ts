@@ -18,6 +18,7 @@ export * from './models/Grouping';
 export * from './models/VirtualResource';
 export * from './rest/azureLoggerSetup';
 export * from './rest/clients/AcrClient';
+export * from './rest/clients/ContainerAppsClient';
 export * from './rest/clients/DeploymentClient';
 export * from './rest/clients/ResourceClient';
 export * from './rest/clients/StaticWebAppClient';

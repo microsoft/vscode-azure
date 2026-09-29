@@ -13,7 +13,7 @@ only by editing this file and re-confirming with the reviewer.
 | **Precedents** | `acr` (resource tree + virtual child categories), `functions` (azd create wizard, AVM pattern module), `deploy` (azd job wiring) |
 | **Rows** | 140 |
 | **Signed off by** | Brandon Waterloo (@bwateratmsft) |
-| **Date** | 2026-08-21 |
+| **Date** | 2026-09-11 |
 
 ## Granularity rule
 
@@ -25,19 +25,31 @@ A command's handler, telemetry and menu entry are **one** row. Commands are neve
 
 | Disposition | Count | Meaning |
 |---|---|---|
-| Migrate | 10 | Rebuild with the same UX, using monorepo patterns |
-| Adapt | 18 | Rebuild with **changed** behaviour/UX (azd+Bicep, provider registries, tree flattening) |
+| Migrate | 4 | Rebuild with the same UX, using monorepo patterns |
+| Adapt | 21 | Rebuild with **changed** behaviour/UX (azd+Bicep, provider registries, tree flattening) |
 | Reuse | 11 | Already provided by a shared monorepo package/command; wire it up |
-| Defer | 13 | Keep, but a later phase -- the blocker is named in the rationale |
+| Defer | 16 | Keep, but a later phase -- the blocker is named in the rationale |
 | Drop | 88 | Do not migrate |
 | **Total** | **140** | |
 
 ## How decisions were reached
 
+User-approved diagnostic refinement (2026-09-14): ACA-105, ACA-115, and ACA-118 are **Adapt**.
+Failed startup verification offers separate **Open System Log Stream** and **Open App Log Stream**
+activity shortcuts. Diagnostics are user-initiated live streams, not automatic Log Analytics queries.
+System streaming is app-scoped and console streaming preserves a known failing revision. The existing
+app tree/palette console command retains its UX.
+
 Recommendations were produced from the inventory and reviewed by a human in a spreadsheet, where a blank
 decision meant agreement with the recommendation. Of the 140 rows: 107 were accepted as recommended, 9 were
 overridden in the sheet, and 24 were decided in review conversation (the eight flagged judgment calls
 and their consequences). Reviewer rationale is quoted **verbatim** where given.
+
+Creation scope is quickstart-only, matching the source extension's create command. Project deployment
+builds and pushes through azd. Deploying a prebuilt image to an existing app is a separate deferred
+scenario (ACA-096, ACA-098, ACA-113), approved by Brandon Waterloo on 2026-09-11 and tracked in
+[#347](https://github.com/microsoft/vscode-azure/issues/347). Image selection supplies an azd image-backed
+service; registry access remains an explicit infrastructure prerequisite.
 
 Telemetry from `cluster('ddtelvscode')` (90-day window, collected 2026-08-21) informed the command rows and is
 cited **qualitatively only** -- raw counts are deliberately not committed. Re-run the roll-up here:
@@ -142,7 +154,7 @@ ACA-068, ACA-069, ACA-070, ACA-083, ACA-084, ACA-085, ACA-093, ACA-094.
 | ACA-005 | `deployWorkspaceProject` | cmd+wizard | A+B | **Adapt** | Flagship. -> azd deploy job + GenerateBicepStep / AzdProvisionStep / AzdDeployStep; not 1:1 | yes |
 | ACA-006 | `deployWorkspaceProjectApi` | cmd | A | **Drop** | Contributed with no handler -- broken today (inventory-flagged) | yes |
 | ACA-007 | `deployImageApi (compat shim)` | cmd | A+B | **Defer** | Tied to the exported API consumed by the Containers extension (ACA-127) **Blocked by:** Blocked on ACA-127 -- the shim only exists to serve the exported API. | yes |
-| ACA-008 | `deployContainerApp` | cmd+wizard | A+B | **Adapt** | -> azd deploy job; not 1:1 | yes |
+| ACA-008 | `deployContainerApp` | cmd+wizard | A+B | **Adapt** | Source-project deployment uses the azd deploy job; the existing-image branch is deferred with ACA-096 / ACA-098 in [#347](https://github.com/microsoft/vscode-azure/issues/347). | yes |
 | ACA-009 | `deployContainerAppWithCopilot` | cmd | A+B | **Drop** | 100% failure rate in-window; needs the monorepo's Copilot story Reviewer (verbatim): "Too much overlap with existing CoR work" | yes |
 | ACA-010 | `deployContainerAppInternal` | cmd | B | **Drop** | Internal plumbing; ManagedCommand + IResourceSelector replace it | yes |
 | ACA-011 | `deleteContainerApp` | cmd | A+B | **Reuse** | Generic DeleteAzureResource | yes |
@@ -152,8 +164,8 @@ ACA-068, ACA-069, ACA-070, ACA-083, ACA-084, ACA-085, ACA-093, ACA-094.
 | ACA-015 | `openConsoleInPortal` | cmd | A+B | **Reuse** | Generic OpenInPortal with a URL suffix | yes |
 | ACA-016 | `startStreamingLogs` | cmd | A+B | **Migrate** | Highest-usage command. Needs new data-plane transport (ACA-118). Surface on the container app node in both the context menu and the `inline` group -- it absorbs the `logStreamItem` leaf (ACA-093), so no Logs group node is needed. See [Tree shape directives](#tree-shape-directives-phase-3). | yes |
 | ACA-017 | `stopStreamingLogs` | cmd | A+B | **Migrate** | Pairs with ACA-016; same context-menu + `inline` treatment, gated on an active stream. | yes |
-| ACA-018 | `editContainer` | cmd+wizard | A+B | **Drop** | Folds into the azd deploy job (ACA-008) plus the image-source pick (ACA-096); no distinct behaviour remains once revision drafts are dropped. | yes |
-| ACA-019 | `editContainerImage` | cmd+wizard | A+B | **Drop** | Folds into the azd deploy job (ACA-008) plus the image-source pick (ACA-096). | yes |
+| ACA-018 | `editContainer` | cmd+wizard | A+B | **Drop** | Container configuration belongs in Bicep; project deployment uses the azd deploy job (ACA-008). | yes |
+| ACA-019 | `editContainerImage` | cmd+wizard | A+B | **Drop** | No revision-draft image-editing command. Project images use the azd deploy job (ACA-008); prebuilt-image deployment is deferred separately in ACA-096 / ACA-098. | yes |
 | ACA-020 | `addEnvironmentVariable` | cmd | A+B | **Drop** | Settings framework: one document, no per-setting commands Reviewer (verbatim): "For env, agreed, Bicep is easy here. We already have a need and an issue to steer users from editing settings directly toward doing it in the Bicep, so nothing to add there." | yes |
 | ACA-021 | `editEnvironmentVariables (.env)` | cmd | A+B | **Drop** | Same; bulk.env edit is the document itself | yes |
 | ACA-022 | `editEnvironmentVariableName` | cmd | A+B | **Drop** | Same | yes |
@@ -245,16 +257,16 @@ ACA-068, ACA-069, ACA-070, ACA-083, ACA-084, ACA-085, ACA-093, ACA-094.
 | ID | Feature | Kind | Layer | Disposition | Rationale | Usage consulted |
 |---|---|---|---|---|---|---|
 | ACA-095 | `Quickstart image source` | wizard step | B | **Adapt** | Becomes a Bicep default, not a prompt | n/a -- no telemetry event |
-| ACA-096 | `ACR image source (registry/repo/tag pick)` | wizard step | B | **Migrate** | Real pick flow; reuse AcrClient Reviewer (verbatim): "Maybe some kind of combobox that combines ACR sources plus freeform input? Like we did with our manual tenants thing" | n/a -- no telemetry event |
+| ACA-096 | `ACR image source (registry/repo/tag pick)` | wizard step | B | **Defer** | Supplies a prebuilt image to an azd-backed deployment targeting an existing app. **Blocked by:** the image-backed service workflow and registry-access contract in [#347](https://github.com/microsoft/vscode-azure/issues/347). | n/a -- no telemetry event |
 | ACA-097 | `Docker Hub image source` | wizard step | B | **Defer** | Unauthenticated, public-only; niche **Blocked by:** Non-ACR registry support; revisit on demand. | n/a -- no telemetry event |
-| ACA-098 | `"Other registry" free-text image` | wizard step | B | **Migrate** | Ships as part of ACA-096's combobox rather than as a separate surface. | n/a -- no telemetry event |
+| ACA-098 | `"Other registry" free-text image` | wizard step | B | **Defer** | Fully qualified prebuilt-image input for the same azd workflow as ACA-096. **Blocked by:** [#347](https://github.com/microsoft/vscode-azure/issues/347); private-registry access must be configured explicitly. | n/a -- no telemetry event |
 | ACA-099 | `Remote ACR build pipeline (tar -> blob -> run -> poll)` | wizard flow | B | **Drop** | JC4. azd covers this via `docker.remoteBuild: true`, using the same ACR Tasks APIs (`GetBuildSourceUploadURL` -> blob upload -> `BeginScheduleRun` with a `DockerBuildRequest` -> poll -> log SAS URL). Reviewer (verbatim): "let's plan on relying entirely on AZD for JC4" | n/a -- no telemetry event |
 | ACA-100 | `Dockerfile --platform strip workaround` | parser | B | **Drop** | JC4. azd does not strip `FROM --platform=`; per the ownership rule that fix belongs upstream in azd, not as a Dockerfile rewriter maintained here. File an azd issue. | n/a -- no telemetry event |
 | ACA-101 | `Registry credentials -- managed identity` | wizard flow | B | **Adapt** | Becomes Bicep (identity + AcrPull role assignment) | n/a -- no telemetry event |
 | ACA-102 | `Registry credentials -- docker login / admin user` | wizard flow | B | **Drop** | Admin-user auth is discouraged; identity path supersedes | n/a -- no telemetry event |
 | ACA-103 | `env discovery & parsing` | detector | B | **Drop** | Env config belongs to the settings adapter / azd | n/a -- no telemetry event |
 | ACA-104 | `Ingress auto-config from Dockerfile EXPOSE` | detector | B | **Adapt** | Useful as a Bicep parameter default, not a prompt | n/a -- no telemetry event |
-| ACA-105 | `Start verification + Log Analytics fetch` | execute step | B | **Migrate** | Real diagnostic value; feeds Copilot context | n/a -- no telemetry event |
+| ACA-105 | `Start verification + Log Analytics fetch` | execute step | B | **Adapt** | User-approved refinement: independent verification activity with separate system/app log-stream shortcuts; app logs retain the captured revision | n/a -- no telemetry event |
 | ACA-106 | `V1 -> V2 settings conversion` | migration | B | **Drop** | Both schemas dropped (ACA-055-058) | n/a -- no telemetry event |
 | ACA-107 | `Basic vs Advanced deployment mode` | wizard flow | B | **Drop** | Prompt budget explicitly bans the mode split | n/a -- no telemetry event |
 | ACA-108 | `Saved deployment-configuration reuse` | wizard flow | B | **Drop** | Replaced by azd environments | n/a -- no telemetry event |
@@ -267,12 +279,12 @@ ACA-068, ACA-069, ACA-070, ACA-083, ACA-084, ACA-085, ACA-093, ACA-094.
 |---|---|---|---|---|---|---|
 | ACA-111 | `ContainerAppsAPIClient wrapper` | client | B | **Migrate** | New ContainerAppsClient.ts in azutils; re-export SDK types | n/a -- no telemetry event |
 | ACA-112 | `ContainerRegistry management client` | client | B | **Reuse** | AcrClient exists | n/a -- no telemetry event |
-| ACA-113 | `@azure/container-registry data-plane client` | client | B | **Migrate** | Needed for repo/tag picks (ACA-096) | n/a -- no telemetry event |
+| ACA-113 | `@azure/container-registry data-plane client` | client | B | **Defer** | Supporting ACR discovery for ACA-096, only as needed; reuse shared clients rather than require a particular SDK. **Blocked by:** image-selection UX in [#347](https://github.com/microsoft/vscode-azure/issues/347). | n/a -- no telemetry event |
 | ACA-114 | `Authorization client (role assignments)` | client | B | **Adapt** | Role assignment moves into Bicep | n/a -- no telemetry event |
-| ACA-115 | `LogsQueryClient (@azure/monitor-query)` | client | B | **Migrate** | Backs ACA-105 | n/a -- no telemetry event |
+| ACA-115 | `LogsQueryClient (@azure/monitor-query)` | client | B | **Adapt** | User-approved refinement: diagnostic access through Container Apps token/stream APIs; no automatic Log Analytics query | n/a -- no telemetry event |
 | ACA-116 | `Storage blob upload (source archive)` | client | B | **Drop** | JC4. azd performs the source-archive upload. | n/a -- no telemetry event |
 | ACA-117 | `Docker Hub v2 REST client` | client | B | **Defer** | Only for ACA-097 **Blocked by:** Client for ACA-097; deferred with it. | n/a -- no telemetry event |
-| ACA-118 | `Log-stream data-plane transport` | provider | B | **Migrate** | Non-trivial: ARM token exchange + cross-origin redirect opt-in + chunked stream | n/a -- no telemetry event |
+| ACA-118 | `Log-stream data-plane transport` | provider | B | **Adapt** | User-approved refinement: console plus app-wide system JSON streams; ARM token exchange, authenticated HTTPS redirects from Azure's log service, independent terminal lifetimes | n/a -- no telemetry event |
 | ACA-119 | `Revision-draft FileSystemProvider` | provider | B | **Drop** | JC1. The virtual filesystem is the draft mechanism itself. | n/a -- no telemetry event |
 | ACA-120 | `Confirmation webview (React/Fluent)` | webview | B | **Drop** | New capability for the monorepo -- judgment call Reviewer (verbatim): "Drop the webviews" | n/a -- no telemetry event |
 | ACA-121 | `Loading webview` | webview | B | **Drop** | Same | n/a -- no telemetry event |
