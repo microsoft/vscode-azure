@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { FunctionAppLogicalType, SubscriptionArmType } from '@microsoft/vscode-azure-azutils';
+import { FoundryProjectResourceType, FunctionAppLogicalType, SubscriptionArmType } from '@microsoft/vscode-azure-azutils';
 import { createMockCodeContext } from '@microsoft/vscode-azure-utils/testing';
 import { getAzureIconUri, getResourceTypeIconUri } from '../../src/tree/iconPath';
 import { AcrResourceType } from '../../src/tree/resources/acr/AcrRegistry';
@@ -29,6 +29,13 @@ describe('getResourceTypeIconUri (unit)', () => {
         const uri = getResourceTypeIconUri(ctx, AcrResourceType.toUpperCase());
 
         expect(uri.path).to.include('microsoft.containerregistry/registries.svg');
+    });
+
+    it('should resolve a shared project icon for Cognitive Services projects', () => {
+        const { ctx } = createMockCodeContext();
+        const uri = getResourceTypeIconUri(ctx, FoundryProjectResourceType);
+
+        expect(uri.path).to.include('microsoft.machinelearningservices/workspaces~project.svg');
     });
 });
 

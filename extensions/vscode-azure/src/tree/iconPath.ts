@@ -3,12 +3,13 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { getResourceTypePresentation } from '@microsoft/vscode-azure-azutils';
 import type { ICodeContext } from '@microsoft/vscode-azure-utils';
 import type * as vscode from 'vscode';
 
 /**
  * Returns a {@linkcode vscode.Uri} pointing to an Azure resource icon SVG
- * whose path is derived from the resource's logical type.
+ * whose path is selected by the resource's logical type.
  *
  * Callers should pass {@linkcode GenericResource.logicalType} rather than
  * the raw ARM `type`, because logical types disambiguate resources that
@@ -18,7 +19,9 @@ import type * as vscode from 'vscode';
  * (e.g. {@linkcode SubscriptionArmType}, {@linkcode ResourceGroupArmType}).
  *
  * The icon files are organized by provider namespace under `dist/azureIcons/`,
- * mirroring the ARM type structure. For example, the logical type
+ * mirroring the ARM type structure. A resource type may use an icon key from
+ * {@linkcode getResourceTypePresentation} when its icon is shared with another
+ * logical type. For example, the logical type
  * `Microsoft.Web/sites~functionapp` resolves to
  * `dist/azureIcons/microsoft.web/sites~functionapp.svg`.
  *
@@ -26,7 +29,7 @@ import type * as vscode from 'vscode';
  * `packages/azutils/resources/azureIcons/` -- no code changes required.
  */
 export function getResourceTypeIconUri(ctx: ICodeContext, resourceType: string): vscode.Uri {
-    return getAzureIconUri(ctx, resourceType);
+    return getAzureIconUri(ctx, getResourceTypePresentation(ctx.code, resourceType)?.iconName ?? resourceType);
 }
 
 

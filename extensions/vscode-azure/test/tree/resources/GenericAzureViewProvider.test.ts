@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AIFoundryProjectLogicalType, AIServicesLogicalType, AppServiceLogicalType, AzureNodeId, CosmosDBLogicalType, CosmosDBMongoLogicalType, DurableTaskHubLogicalType, FunctionAppLogicalType, LogicAppLogicalType, StaticWebAppResourceType, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
+import { AIFoundryProjectLogicalType, AIServicesLogicalType, AppServiceLogicalType, AzureNodeId, CosmosDBLogicalType, CosmosDBMongoLogicalType, DocumentDbResourceType, DurableTaskHubLogicalType, FoundryProjectResourceType, FunctionAppLogicalType, LogicAppLogicalType, StaticWebAppResourceType, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
 import { makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockCodeContext, createTestActionExecutor, withSettings } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
@@ -262,13 +262,15 @@ describe('GenericAzureViewProvider (unit)', () => {
         });
 
         for (const [logicalType, label, iconPath] of [
-            [AIFoundryProjectLogicalType, 'AI Foundry Projects', 'microsoft.machinelearningservices/workspaces~project.svg'],
+            [AIFoundryProjectLogicalType, 'Microsoft Foundry Projects', 'microsoft.machinelearningservices/workspaces~project.svg'],
+            [FoundryProjectResourceType, 'Microsoft Foundry Projects', 'microsoft.machinelearningservices/workspaces~project.svg'],
             [AIServicesLogicalType, 'AI Services', 'microsoft.cognitiveservices/accounts~aiservices.svg'],
             [AppServiceLogicalType, 'App Services', 'microsoft.web/sites~app.svg'],
             [ContainerAppResourceType, 'Container Apps', 'microsoft.app/containerapps.svg'],
             [ManagedEnvironmentResourceType, 'Container App Environments', 'microsoft.app/managedenvironments.svg'],
             [CosmosDBLogicalType, 'Azure Cosmos DB', 'microsoft.documentdb/databaseaccounts~cosmosdb.svg'],
-            [CosmosDBMongoLogicalType, 'Azure Cosmos DB for MongoDB', 'microsoft.documentdb/databaseaccounts~mongodb.svg'],
+            [CosmosDBMongoLogicalType, 'Azure Cosmos DB for MongoDB (RU)', 'microsoft.documentdb/databaseaccounts~mongodb.svg'],
+            [DocumentDbResourceType, 'Azure DocumentDB', 'microsoft.documentdb/mongoclusters.svg'],
             [DurableTaskHubLogicalType, 'Durable Task Hubs', 'microsoft.durabletask/schedulers/taskhubs.svg'],
             [FunctionAppLogicalType, 'Function Apps', 'microsoft.web/sites~functionapp.svg'],
             [LogicAppLogicalType, 'Logic Apps', 'microsoft.web/sites~workflowapp.svg'],

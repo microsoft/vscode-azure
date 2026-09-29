@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { CaselessMap, type IVsCode } from '@microsoft/vscode-azure-utils';
-import { AcrResourceType, AIFoundryProjectLogicalType, AIServicesLogicalType, AppServiceLogicalType, ContainerAppResourceType, CosmosDBLogicalType, CosmosDBMongoLogicalType, DurableTaskHubLogicalType, FunctionAppLogicalType, LogicAppLogicalType, ManagedEnvironmentResourceType, StaticWebAppResourceType } from '../rest/clients/ResourceClient';
+import { AcrResourceType, AIFoundryProjectLogicalType, AIServicesLogicalType, AppServiceLogicalType, ContainerAppResourceType, CosmosDBLogicalType, CosmosDBMongoLogicalType, DocumentDbResourceType, DurableTaskHubLogicalType, FoundryProjectResourceType, FunctionAppLogicalType, LogicAppLogicalType, ManagedEnvironmentResourceType, StaticWebAppResourceType } from '../rest/clients/ResourceClient';
 
 /** Localized presentation for a supported logical resource type. */
 export interface ResourceTypePresentation {
@@ -14,15 +14,16 @@ export interface ResourceTypePresentation {
     readonly iconName: string;
 }
 
-const presentationEntries: [string, (code: IVsCode) => string][] = [
+const presentationEntries: [string, (code: IVsCode) => string, string?][] = [
     ['Microsoft.ApiManagement/service', code => code.l10n.t('API Management')],
     [ContainerAppResourceType, code => code.l10n.t('Container Apps')],
     [ManagedEnvironmentResourceType, code => code.l10n.t('Container App Environments')],
     ['Microsoft.AppPlatform/Spring', code => code.l10n.t('Spring Apps')],
     ['Microsoft.Batch/batchAccounts', code => code.l10n.t('Batch Accounts')],
     ['Microsoft.Cache/Redis', code => code.l10n.t('Cache for Redis')],
-    ['Microsoft.Cdn/profiles', code => code.l10n.t('CDN Profiles')],
+    ['Microsoft.Cdn/profiles', code => code.l10n.t('Front Door and CDN Profiles')],
     [AIServicesLogicalType, code => code.l10n.t('AI Services')],
+    [FoundryProjectResourceType, code => code.l10n.t('Microsoft Foundry Projects'), AIFoundryProjectLogicalType],
     ['Microsoft.Compute/availabilitySets', code => code.l10n.t('Availability Sets')],
     ['Microsoft.Compute/disks', code => code.l10n.t('Managed Disks')],
     ['Microsoft.Compute/images', code => code.l10n.t('Images')],
@@ -36,8 +37,8 @@ const presentationEntries: [string, (code: IVsCode) => string][] = [
     ['Microsoft.Devices/IotHubs', code => code.l10n.t('IoT Hubs')],
     ['Microsoft.DevTestLab/labs', code => code.l10n.t('DevTest Labs')],
     [CosmosDBLogicalType, code => code.l10n.t('Azure Cosmos DB')],
-    [CosmosDBMongoLogicalType, code => code.l10n.t('Azure Cosmos DB for MongoDB')],
-    ['Microsoft.DocumentDB/mongoClusters', code => code.l10n.t('MongoDB Clusters')],
+    [CosmosDBMongoLogicalType, code => code.l10n.t('Azure Cosmos DB for MongoDB (RU)')],
+    [DocumentDbResourceType, code => code.l10n.t('Azure DocumentDB')],
     ['Microsoft.DurableTask/schedulers', code => code.l10n.t('Durable Task Schedulers')],
     [DurableTaskHubLogicalType, code => code.l10n.t('Durable Task Hubs')],
     ['Microsoft.EventGrid/domains', code => code.l10n.t('Event Grid Domains')],
@@ -50,7 +51,7 @@ const presentationEntries: [string, (code: IVsCode) => string][] = [
     ['Microsoft.KeyVault/vaults', code => code.l10n.t('Key Vaults')],
     ['Microsoft.Kubernetes/connectedClusters', code => code.l10n.t('Arc-enabled Kubernetes Clusters')],
     ['Microsoft.Logic/workflows', code => code.l10n.t('Logic Apps')],
-    [AIFoundryProjectLogicalType, code => code.l10n.t('AI Foundry Projects')],
+    [AIFoundryProjectLogicalType, code => code.l10n.t('Microsoft Foundry Projects')],
     ['Microsoft.ManagedIdentity/userAssignedIdentities', code => code.l10n.t('User-assigned Managed Identities')],
     ['Microsoft.Network/applicationGateways', code => code.l10n.t('Application Gateways')],
     ['Microsoft.Network/applicationSecurityGroups', code => code.l10n.t('Application Security Groups')],
@@ -84,8 +85,8 @@ const presentationEntries: [string, (code: IVsCode) => string][] = [
     [StaticWebAppResourceType, code => code.l10n.t('Static Web Apps')],
 ];
 
-const presentations = new CaselessMap(presentationEntries.map(([iconName, name]) =>
-    [iconName, { name, iconName }] as const,
+const presentations = new CaselessMap(presentationEntries.map(([logicalType, name, iconName = logicalType]) =>
+    [logicalType, { name, iconName }] as const,
 ));
 
 /**

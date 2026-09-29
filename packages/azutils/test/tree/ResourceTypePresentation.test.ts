@@ -6,7 +6,7 @@
 import { createMockCodeContext } from '@microsoft/vscode-azure-utils/testing';
 import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { ContainerAppResourceType, FunctionAppLogicalType } from '../../src/rest/clients/ResourceClient';
+import { AIFoundryProjectLogicalType, ContainerAppResourceType, CosmosDBMongoLogicalType, DocumentDbResourceType, FoundryProjectResourceType, FunctionAppLogicalType } from '../../src/rest/clients/ResourceClient';
 import { getResourceTypePresentation } from '../../src/tree/ResourceTypePresentation';
 
 describe('ResourceTypePresentation (unit)', () => {
@@ -28,6 +28,16 @@ describe('ResourceTypePresentation (unit)', () => {
 
     it('returns undefined when a resource type has no presentation metadata', () => {
         expect(getResourceTypePresentation(ctx.code, 'Microsoft.Example/unknown')).to.be.undefined;
+    });
+
+    it('uses the Foundry project icon for Cognitive Services projects and brands DocumentDB', () => {
+        expect(getResourceTypePresentation(ctx.code, FoundryProjectResourceType.toUpperCase())).to.deep.equal({
+            name: 'Microsoft Foundry Projects',
+            iconName: AIFoundryProjectLogicalType,
+        });
+        expect(getResourceTypePresentation(ctx.code, DocumentDbResourceType)?.name).to.equal('Azure DocumentDB');
+        expect(getResourceTypePresentation(ctx.code, CosmosDBMongoLogicalType)?.name).to.equal('Azure Cosmos DB for MongoDB (RU)');
+        expect(getResourceTypePresentation(ctx.code, 'Microsoft.Cdn/profiles')?.name).to.equal('Front Door and CDN Profiles');
     });
 
     it('provides presentation metadata for every bundled resource icon', () => {
