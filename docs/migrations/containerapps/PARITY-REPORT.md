@@ -7,7 +7,7 @@ Phase 6 verification of the Container Apps migration against the signed [TRIAGE.
 | **Source** | `microsoft/vscode-azurecontainerapps` @ `f6c93dcd1a55b6aaf27ed4edca8f6a52b5348e16` (v0.11.2) |
 | **Triage rows** | 140 |
 | **Resolved** | 140 (0 unaccounted for) |
-| **Last verified** | 2026-09-24 |
+| **Last verified** | 2026-09-29 |
 
 Evidence paths are relative to `extensions/vscode-azure/src/` unless another package is named.
 
@@ -125,18 +125,27 @@ context value that is declared in source and assembled onto the node by `Contain
 | `pnpm run lint` | clean |
 | `pnpm run build` | succeeds |
 | `pnpm run test` | 1,171 extension, 366 azutils, and 586 utils passing; 0 failing (3 extension and 12 utils pending) |
-| `bicep build` on the consumer template | Passed during the 2026-09-11 verification; not rerun for this source/docs review |
+| `bicep build` on the consumer template | Passed on 2026-09-29 with zone redundancy disabled and minimum replicas set to one |
 
-Validation on 2026-09-24 covers all three workspaces: extension, azutils, and utils. Shared utils changes include
+Validation on 2026-09-29 covers all three workspaces: extension, azutils, and utils. Shared utils changes include
 `withCancellation`, its export and tests, and reuse by `delay`.
+
+## Human verification and deployment defaults
+
+On 2026-09-29, Brandon Waterloo reported the human-test checklist complete and all tests passing.
+During that session, an independent read of the deployed BusyBox app confirmed a Healthy/Running
+revision, ingress targeting port 8080, and an HTTP 200 response containing the expected page text.
+This is live-Azure evidence, not a claim of coverage across every region or sovereign cloud.
+
+The generated topology disables zone redundancy because it does not provision an infrastructure
+subnet. The app has a minimum of one replica and inherits the AVM maximum of ten. Expected log-stream
+unavailability uses `ExternalError` to display a message without a Report Issue button.
 
 ## Known gaps
 
-Honest remainder. None is a silent omission -- each is tracked.
+Accepted limitations and deferred scope:
 
-1. **No live-Azure verification recorded in this report.** The log-stream transport (ACA-118) and start
-   verification (ACA-105) are covered by tests over stubbed I/O. Live endpoint redirects and deployed-app
-   startup still need human-test evidence.
+1. **Startup verification does not establish exact image correlation.**
    The shared azd deploy result supplies neither a revision name nor an image digest: startup verification
    captures ARM's latest revision once after deployment, without claiming exact image correlation.
    Concurrent deployments before that read can affect the selected revision. Quickstart-only creation
@@ -148,7 +157,13 @@ Honest remainder. None is a silent omission -- each is tracked.
 3. **Deploying requires a local container runtime.** The source extension always built in ACR, so it did
    not. Accepted for now; restoring remote build is tracked by
    [#334](https://github.com/microsoft/vscode-azure/issues/334).
-4. **16 Defer rows are not built**, by signed decision:
+4. **Initial placeholder image can fail startup probes for non-80 project ports.** Provisioning uses
+   AVM's port-80 hello-world image with the project's target port until `azd deploy` installs the real
+   image. This can produce transient probe failures and an unavailable endpoint during that interval.
+   The earlier observed probe messages were not conclusively tied to a particular revision.
+   Retaining this flow is an accepted limitation as of 2026-09-29; a service-specific deployment
+   module redesign is deferred.
+5. **16 Defer rows are not built**, by signed decision:
 
    | Theme | IDs | Status |
    |---|---|---|
