@@ -90,6 +90,7 @@ user-assigned identity for the app, the AcrPull role assignment, and the contain
 the `azd-service-name` tag, because only the app is an `azd deploy` target. Public network access is enabled
 for external ingress. Registry login servers come from ARM, including the active sovereign cloud's suffix.
 Zone redundancy is disabled because this topology does not provision an infrastructure subnet.
+The app uses a minimum of one replica and inherits the AVM module's maximum of ten replicas.
 
 **Registry authentication is managed identity only.** No admin user, no registry password, and no secret of
 any kind is written to the template, to ARM, or to disk.

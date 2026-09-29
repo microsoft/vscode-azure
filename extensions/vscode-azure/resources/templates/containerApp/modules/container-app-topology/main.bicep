@@ -114,6 +114,7 @@ module containerApp 'br/public:avm/ptn/azd/container-app-upsert:0.4.0' = {
     ingressEnabled: ingressEnabled
     external: ingressExternal
     targetPort: targetPort
+    containerMinReplicas: 1
     enableTelemetry: enableTelemetry
   }
 }
