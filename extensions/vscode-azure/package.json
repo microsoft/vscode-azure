@@ -429,7 +429,7 @@
                 {
                     "command": "vscode-azure/resources/refresh",
                     "when": "view == vscode-azure/resources && viewItem =~ /\\b(?:azureStaticEnvironment|azureStaticFunctions)\\b/i",
-                    "group": "9@3"
+                    "group": "3_actions@3"
                 },
                 {
                     "command": "vscode-azure/workspace/revealInExplorer",
