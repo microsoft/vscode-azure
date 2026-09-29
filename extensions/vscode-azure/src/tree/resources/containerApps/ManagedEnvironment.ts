@@ -4,12 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { GenericResource } from '@microsoft/vscode-azure-azutils';
-import { isGenericResource } from '@microsoft/vscode-azure-azutils';
+import { isGenericResource, ManagedEnvironmentResourceType } from '@microsoft/vscode-azure-azutils';
 
-/**
- * The ARM resource type string for Azure Container Apps managed environments.
- */
-export const ManagedEnvironmentResourceType = 'Microsoft.App/managedEnvironments';
+export { ManagedEnvironmentResourceType };
 
 /**
  * Type guard that narrows an unknown value to a managed environment resource.

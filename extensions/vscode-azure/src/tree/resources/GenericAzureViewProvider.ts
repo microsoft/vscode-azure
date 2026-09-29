@@ -4,9 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { AzureNode, AzureSubscription, ConcreteAzureNode, GenericResource, GroupingStrategy, VirtualGroup } from '@microsoft/vscode-azure-azutils';
-import { AIFoundryProjectLogicalType, AIServicesLogicalType, AppServiceLogicalType, AzureNodeId, CosmosDBLogicalType, CosmosDBMongoLogicalType, DurableTaskHubLogicalType, FunctionAppLogicalType, getNodeType, isAccount, isGenericResource, isResourceGroup, isSubscription, isTenant, LogicAppLogicalType, ResourceGroupArmType, StaticWebAppResourceType, SubscriptionArmType } from '@microsoft/vscode-azure-azutils';
-import type { ITreeItem, IVsCode, ViewProvider } from '@microsoft/vscode-azure-utils';
-import { CaselessMap, Disposable, EventEmitter, Everything, IActionExecutor, ICodeContext, Limiter, type DataProviderChangeEvent } from '@microsoft/vscode-azure-utils';
+import { AzureNodeId, getNodeType, getResourceTypePresentation, isAccount, isGenericResource, isResourceGroup, isSubscription, isTenant, ResourceGroupArmType, SubscriptionArmType } from '@microsoft/vscode-azure-azutils';
+import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
+import { Disposable, EventEmitter, Everything, IActionExecutor, ICodeContext, Limiter, type DataProviderChangeEvent } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { DeleteAzureResource } from '../../commands/tree/DeleteAzureResource';
 import { OpenInPortal } from '../../commands/tree/OpenInPortal';
@@ -14,80 +14,7 @@ import { ViewProperties } from '../../commands/tree/ViewProperties';
 import { AzdEnvNameTag, ConfigurationSection } from '../../constants';
 import { IAzureViewDataTree } from '../../services';
 import { combineContextValues, resourceContextValue } from '../contextValueHelpers';
-import { getResourceTypeIconUri } from '../iconPath';
-import { AcrResourceType } from './acr/AcrRegistry';
-import { ContainerAppResourceType } from './containerApps/ContainerApp';
-import { ManagedEnvironmentResourceType } from './containerApps/ManagedEnvironment';
-
-const resourceTypeGroupLabels = new CaselessMap<(code: IVsCode) => string>([
-    ['Microsoft.ApiManagement/service', code => code.l10n.t('API Management')],
-    [ContainerAppResourceType, code => code.l10n.t('Container Apps')],
-    [ManagedEnvironmentResourceType, code => code.l10n.t('Container App Environments')],
-    ['Microsoft.AppPlatform/Spring', code => code.l10n.t('Spring Apps')],
-    ['Microsoft.Batch/batchAccounts', code => code.l10n.t('Batch Accounts')],
-    ['Microsoft.Cache/Redis', code => code.l10n.t('Cache for Redis')],
-    ['Microsoft.Cdn/profiles', code => code.l10n.t('CDN Profiles')],
-    [AIServicesLogicalType, code => code.l10n.t('AI Services')],
-    ['Microsoft.Compute/availabilitySets', code => code.l10n.t('Availability Sets')],
-    ['Microsoft.Compute/disks', code => code.l10n.t('Managed Disks')],
-    ['Microsoft.Compute/images', code => code.l10n.t('Images')],
-    ['Microsoft.Compute/virtualMachines', code => code.l10n.t('Virtual Machines')],
-    ['Microsoft.Compute/virtualMachineScaleSets', code => code.l10n.t('Virtual Machine Scale Sets')],
-    [AcrResourceType, code => code.l10n.t('Container Registries')],
-    ['Microsoft.ContainerService/managedClusters', code => code.l10n.t('Kubernetes Clusters')],
-    ['Microsoft.DBforMySQL/servers', code => code.l10n.t('MySQL Servers')],
-    ['Microsoft.DBforPostgreSQL/flexibleServers', code => code.l10n.t('PostgreSQL Flexible Servers')],
-    ['Microsoft.DBforPostgreSQL/servers', code => code.l10n.t('PostgreSQL Servers')],
-    ['Microsoft.Devices/IotHubs', code => code.l10n.t('IoT Hubs')],
-    ['Microsoft.DevTestLab/labs', code => code.l10n.t('DevTest Labs')],
-    [CosmosDBLogicalType, code => code.l10n.t('Azure Cosmos DB')],
-    [CosmosDBMongoLogicalType, code => code.l10n.t('Azure Cosmos DB for MongoDB')],
-    ['Microsoft.DocumentDB/mongoClusters', code => code.l10n.t('MongoDB Clusters')],
-    ['Microsoft.DurableTask/schedulers', code => code.l10n.t('Durable Task Schedulers')],
-    [DurableTaskHubLogicalType, code => code.l10n.t('Durable Task Hubs')],
-    ['Microsoft.EventGrid/domains', code => code.l10n.t('Event Grid Domains')],
-    ['Microsoft.EventGrid/eventSubscriptions', code => code.l10n.t('Event Grid Subscriptions')],
-    ['Microsoft.EventGrid/topics', code => code.l10n.t('Event Grid Topics')],
-    ['Microsoft.EventHub/namespaces', code => code.l10n.t('Event Hubs')],
-    ['Microsoft.ExtendedLocation/customLocations', code => code.l10n.t('Custom Locations')],
-    ['Microsoft.HybridCompute/machines', code => code.l10n.t('Arc-enabled Servers')],
-    ['Microsoft.Insights/components', code => code.l10n.t('Application Insights')],
-    ['Microsoft.KeyVault/vaults', code => code.l10n.t('Key Vaults')],
-    ['Microsoft.Kubernetes/connectedClusters', code => code.l10n.t('Arc-enabled Kubernetes Clusters')],
-    ['Microsoft.Logic/workflows', code => code.l10n.t('Logic Apps')],
-    [AIFoundryProjectLogicalType, code => code.l10n.t('AI Foundry Projects')],
-    ['Microsoft.ManagedIdentity/userAssignedIdentities', code => code.l10n.t('User-assigned Managed Identities')],
-    ['Microsoft.Network/applicationGateways', code => code.l10n.t('Application Gateways')],
-    ['Microsoft.Network/applicationSecurityGroups', code => code.l10n.t('Application Security Groups')],
-    ['Microsoft.Network/loadBalancers', code => code.l10n.t('Load Balancers')],
-    ['Microsoft.Network/localNetworkGateways', code => code.l10n.t('Local Network Gateways')],
-    ['Microsoft.Network/networkInterfaces', code => code.l10n.t('Network Interfaces')],
-    ['Microsoft.Network/networkSecurityGroups', code => code.l10n.t('Network Security Groups')],
-    ['Microsoft.Network/networkWatchers', code => code.l10n.t('Network Watchers')],
-    ['Microsoft.Network/publicIPAddresses', code => code.l10n.t('Public IP Addresses')],
-    ['Microsoft.Network/publicIPPrefixes', code => code.l10n.t('Public IP Prefixes')],
-    ['Microsoft.Network/routeTables', code => code.l10n.t('Route Tables')],
-    ['Microsoft.Network/virtualNetworkGateways', code => code.l10n.t('Virtual Network Gateways')],
-    ['Microsoft.Network/virtualNetworks', code => code.l10n.t('Virtual Networks')],
-    ['Microsoft.NotificationHubs/namespaces', code => code.l10n.t('Notification Hubs')],
-    ['Microsoft.OperationalInsights/workspaces', code => code.l10n.t('Log Analytics Workspaces')],
-    ['Microsoft.OperationsManagement/solutions', code => code.l10n.t('Operations Management Solutions')],
-    ['Microsoft.ServiceBus/namespaces', code => code.l10n.t('Service Bus Namespaces')],
-    ['Microsoft.ServiceFabric/clusters', code => code.l10n.t('Service Fabric Clusters')],
-    ['Microsoft.ServiceFabricMesh/applications', code => code.l10n.t('Service Fabric Mesh Applications')],
-    ['Microsoft.SignalRService/SignalR', code => code.l10n.t('SignalR Service')],
-    ['Microsoft.SignalRService/webPubSub', code => code.l10n.t('Web PubSub')],
-    ['Microsoft.Sql/servers', code => code.l10n.t('SQL Servers')],
-    ['Microsoft.Sql/servers/databases', code => code.l10n.t('SQL Databases')],
-    ['Microsoft.Storage/storageAccounts', code => code.l10n.t('Storage Accounts')],
-    ['Microsoft.Web/hostingEnvironments', code => code.l10n.t('App Service Environments')],
-    ['Microsoft.Web/kubeEnvironments', code => code.l10n.t('Kubernetes Environments')],
-    ['Microsoft.Web/serverFarms', code => code.l10n.t('App Service Plans')],
-    [AppServiceLogicalType, code => code.l10n.t('App Services')],
-    [FunctionAppLogicalType, code => code.l10n.t('Function Apps')],
-    [LogicAppLogicalType, code => code.l10n.t('Logic Apps')],
-    [StaticWebAppResourceType, code => code.l10n.t('Static Web Apps')],
-]);
+import { getAzureIconUri, getResourceTypeIconUri } from '../iconPath';
 
 /** Render a generic ARM resource with the collapsibility chosen by its owning product provider. */
 export function createGenericResourceTreeItem(
@@ -181,11 +108,11 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
 
         if (nodeId.isVirtualGroupNodeId()) {
             this.executor.setTelProp('nodeType', virtualGroupNodeType);
-            const { label, resourceType } = this.getVirtualGroupPresentation(key);
+            const { label, iconName } = this.getVirtualGroupPresentation(key);
             const item = new this.ctx.code.TreeItem(label, this.ctx.code.TreeItemCollapsibleState.Collapsed);
             item.id = key;
-            if (resourceType) {
-                item.iconPath = getResourceTypeIconUri(this.ctx, resourceType);
+            if (iconName) {
+                item.iconPath = getAzureIconUri(this.ctx, iconName);
             } else {
                 item.iconPath = new this.ctx.code.ThemeIcon('symbol-namespace');
             }
@@ -464,17 +391,17 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
         return this.ctx.code.workspace.getConfiguration(ConfigurationSection).get<string>('groupByTag', '');
     }
 
-    private getVirtualGroupPresentation(key: string): { readonly label: string; readonly resourceType?: string } {
+    private getVirtualGroupPresentation(key: string): { readonly label: string; readonly iconName?: string } {
         const grouping = AzureNodeId.parse(key).getGrouping();
         if (!grouping) {
             return { label: key };
         } else if (grouping.groupingValue === untaggedSentinel) {
             return { label: this.ctx.code.l10n.t('(No Tag)') };
         } else if (grouping.groupingStrategy === 'resourceType') {
-            const label = resourceTypeGroupLabels.get(grouping.groupingValue)?.(this.ctx.code);
+            const presentation = getResourceTypePresentation(this.ctx.code, grouping.groupingValue);
             return {
-                label: label ?? grouping.groupingValue,
-                resourceType: label ? grouping.groupingValue : undefined,
+                label: presentation?.name ?? grouping.groupingValue,
+                iconName: presentation?.iconName,
             };
         } else {
             return { label: grouping.groupingValue };

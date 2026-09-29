@@ -405,17 +405,18 @@ Most resources use their raw ARM `type` as the icon key. However, some ARM types
 ### Resource-type group presentation
 
 Resource-type grouping keeps `GenericResource.logicalType` as the stable group
-identity and node key. `GenericAzureViewProvider` owns the mapping from logical
-types with bundled icons to localized, product-specific group labels (for
-example, `Microsoft.App/containerApps` appears as "Container Apps"). It resolves
-group icons directly from the logical type using the convention above. Unknown
+identity and node key. `getResourceTypePresentation()` in azutils returns the
+localized product name and icon key for each supported logical type (for
+example, `Microsoft.App/containerApps` appears as "Container Apps" with its
+matching icon). `GenericAzureViewProvider` renders that presentation. Unknown
 logical types retain their raw type label and generic `symbol-namespace` icon.
 
 To add group presentation for a supported service:
 
 1. Ensure the resource has a stable logical type and matching icon file.
-2. Add a case-insensitive branch to the resource-type label mapping in
-   `GenericAzureViewProvider`. Localize the display name with `IVsCode.l10n.t()`.
+2. Add an entry to `packages/azutils/src/tree/ResourceTypePresentation.ts`.
+   Localize the name with `IVsCode.l10n.t()`; the icon key is derived from the
+   logical type.
 3. Test the localized label, convention-based icon path, and generic fallback.
 
 ## Putting It Together

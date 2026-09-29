@@ -4,12 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { Container, GenericResource } from '@microsoft/vscode-azure-azutils';
-import { isGenericResource } from '@microsoft/vscode-azure-azutils';
+import { ContainerAppResourceType, isGenericResource } from '@microsoft/vscode-azure-azutils';
 
-/**
- * The ARM resource type string for Azure Container Apps.
- */
-export const ContainerAppResourceType = 'Microsoft.App/containerApps';
+export { ContainerAppResourceType };
 
 /**
  * A {@linkcode GenericResource} with lazily enriched container-app properties.

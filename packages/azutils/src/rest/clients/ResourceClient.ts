@@ -23,6 +23,13 @@ export type { ResourcesDeleteByIdOptionalParams, ResourcesListByResourceGroupOpt
 /** ARM and logical resource type for Azure Static Web Apps (`Microsoft.Web/staticSites`). */
 export const StaticWebAppResourceType = 'Microsoft.Web/staticSites';
 
+/** ARM and logical resource type for Container Apps. */
+export const ContainerAppResourceType = 'Microsoft.App/containerApps';
+/** ARM and logical resource type for Container App managed environments. */
+export const ManagedEnvironmentResourceType = 'Microsoft.App/managedEnvironments';
+/** ARM and logical resource type for Container Registries. */
+export const AcrResourceType = 'Microsoft.ContainerRegistry/registries';
+
 /** ARM resource type string for App Service-family resources (`Microsoft.Web/sites`). */
 export const SiteType = 'Microsoft.Web/sites';
 /** Logical type assigned to function apps (`Microsoft.Web/sites` with `kind` containing `functionapp`). */
