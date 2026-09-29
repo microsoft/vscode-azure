@@ -9,8 +9,10 @@ hand. It is deliberately AVM-shaped and composes those published modules rather 
 them, so it can be replaced by a single `br/public:avm/ptn/azd/...` reference once such a module is
 published. Tracked by https://github.com/microsoft/vscode-azure/issues/329.
 
-Registry authentication is managed identity only: no admin user, no registry password, and no secret of
-any kind is written to the template, to ARM, or to disk.'''
+Registry authentication uses managed identity rather than a registry password. The app receives the
+Application Insights connection string for use by application-owned instrumentation.'''
+
+import { withApplicationInsights } from 'environment.bicep'
 
 @minLength(1)
 @maxLength(48)
@@ -92,6 +94,12 @@ module appIdentity 'br/public:avm/res/managed-identity/user-assigned-identity:0.
   }
 }
 
+resource existingApp 'Microsoft.App/containerApps@2025-01-01' existing = if (containerAppExists) {
+  name: appName
+}
+
+var existingEnvironment = containerAppExists ? (existingApp!.properties.template.containers[0].?env ?? []) : []
+
 module containerApp 'br/public:avm/ptn/azd/container-app-upsert:0.4.0' = {
   name: 'container-app-${resourceToken}'
   params: {
@@ -111,6 +119,7 @@ module containerApp 'br/public:avm/ptn/azd/container-app-upsert:0.4.0' = {
     // An empty image selects quickstart on creation and preserves the live image on updates.
     imageName: ''
     exists: containerAppExists
+    env: withApplicationInsights(existingEnvironment, monitoring.outputs.applicationInsightsConnectionString)
     ingressEnabled: ingressEnabled
     external: ingressExternal
     targetPort: targetPort

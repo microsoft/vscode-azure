@@ -80,20 +80,21 @@ infra/
   main.bicep                                  consumer: subscription scope, resource group, azd params
   main.parameters.json                        azd placeholders + the wizard's answers
   modules/container-app-topology/main.bicep   the topology
+  modules/container-app-topology/environment.bicep   container environment merge
 ```
 
 For project deployment, the command also ensures `azure.yaml` declares the selected service as a local Docker
 project hosted by Container Apps. Existing service declarations are preserved.
 
-The topology module provisions a Log Analytics workspace, a managed environment, a container registry, a
+The topology module provisions a Log Analytics workspace, Application Insights and its dashboard, a managed environment, a container registry, a
 user-assigned identity for the app, the AcrPull role assignment, and the container app. Only the app carries
 the `azd-service-name` tag, because only the app is an `azd deploy` target. Public network access is enabled
 for external ingress. Registry login servers come from ARM, including the active sovereign cloud's suffix.
 Zone redundancy is disabled because this topology does not provision an infrastructure subnet.
 The app uses a minimum of one replica and inherits the AVM module's maximum of ten replicas.
 
-**Registry authentication is managed identity only.** No admin user, no registry password, and no secret of
-any kind is written to the template, to ARM, or to disk.
+**Registry authentication is managed identity only.** The registry admin account is disabled and no
+registry password is generated or stored by the topology.
 
 The `createNew` job provisions the quickstart sample image with external ingress on port 80. Its IaC lives
 in a temporary directory; it does not build local source or run `azd deploy`. The `deploy` job provisions
@@ -124,6 +125,44 @@ port in the nearest Dockerfile result in port 80 without a prompt. Custom Docker
 build-stage selection are not interpreted. Users can correct the generated parameter; existing
 infrastructure is left untouched. Quickstart creation always uses port 80.
 Neither job asks for an image reference.
+
+### Application telemetry
+
+The primary container receives `APPLICATIONINSIGHTS_CONNECTION_STRING` from the provisioned Application
+Insights resource. On reprovisioning, the topology preserves the primary container's other environment
+variables (including `secretRef` entries) and replaces any entry with that exact name with the provisioned
+connection string. The upsert module continues to preserve the deployed image. An application-only
+`azd deploy` retains the provisioned environment; explicit service environment settings can override it.
+
+The application must install and initialize an Application Insights SDK or Azure Monitor OpenTelemetry
+integration that reads this environment variable, or pass its value to the SDK explicitly. For example,
+an ASP.NET Core app using the `Azure.Monitor.OpenTelemetry.AspNetCore` package can register
+`builder.Services.AddOpenTelemetry().UseAzureMonitor()` (with the `Azure.Monitor.OpenTelemetry.AspNetCore`
+namespace imported). See [Azure Monitor OpenTelemetry setup](https://learn.microsoft.com/azure/azure-monitor/app/opentelemetry-enable)
+for language-specific setup and supported versions.
+
+An environment variable does not instrument an arbitrary Docker image. The quickstart image and a
+plain BusyBox HTTP server do not gain request, dependency, or trace telemetry from this configuration.
+Container Apps console/system logging to Log Analytics remains configured independently of the
+application SDK and Application Insights.
+
+The pinned monitoring module leaves Application Insights local authentication enabled. This topology
+does not configure managed-identity-authenticated telemetry or disable local authentication; connection-
+string-only ingestion requires local authentication to be permitted by the resource and applicable
+Azure policy. The app's managed identity is used for registry access, not automatically by a telemetry SDK.
+
+Existing generated projects must incorporate this template configuration and reprovision to add the
+connection string; deploying an image alone does not add it. User-owned infrastructure is never rewritten
+by the generation step.
+
+The environment merge is exercised using the Bicep CLI and Node's built-in test runner:
+
+```powershell
+node --test extensions\vscode-azure\test\bicep\containerApp.test.mjs
+bicep build extensions\vscode-azure\resources\templates\containerApp\main.bicep --stdout
+```
+
+These compiler-backed tests are separate from the VS Code test suite and require `bicep` on `PATH`.
 
 **Deploying requires a local container runtime.** azd builds the image locally with Docker or Podman, so one
 must be installed and running. Building in ACR instead would remove that requirement; it is tracked by

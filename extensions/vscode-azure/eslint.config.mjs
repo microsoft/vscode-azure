@@ -18,6 +18,16 @@ import { defineConfig } from 'eslint/config';
 export default defineConfig([
     azExtEslintStrictTypeChecked,
     {
+        files: ['test/bicep/*.mjs'],
+        languageOptions: {
+            parserOptions: {
+                projectService: {
+                    allowDefaultProject: ['test/bicep/*.mjs'],
+                },
+            },
+        },
+    },
+    {
         ignores: ['test/**'],
         rules: {
             '@typescript-eslint/no-restricted-imports': ['error', {
