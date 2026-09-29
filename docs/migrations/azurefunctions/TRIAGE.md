@@ -97,7 +97,7 @@ Judgment-call groups (`JC-*`) mark rows the reviewer was asked to weigh as a set
 | ID | Section | Inventory feature | Disposition | Rationale | Reviewer note | Group |
 |---|---|---|---|---|---|---|
 | FUNC-001 | 0 Extension | extensionDependencies on Azure Resources | **Drop** | Never depend on an extension being retired; the monorepo owns its own views. |  |  |
-| FUNC-002 | 0 Extension | Project detection (`workspaceContains:**/host.json` activation) | **Reuse** | `functionsDetector` already tags `host.json` through the workspace index; no activation event needed. |  |  |
+| FUNC-002 | 0 Extension | Project detection (`workspaceContains:**/host.json` activation) | **Reuse** | `functionsDetector` already tags `host.json` through the workspace index; no activation event needed. Core Tools project-info command requested in [Azure/azure-functions-core-tools#5344](https://github.com/Azure/azure-functions-core-tools/issues/5344). |  |  |
 | FUNC-003 | 0 Extension | `onView:azureWorkspace` activation | **Drop** | Host view belongs to Azure Resources; the target has its own workspace view. |  |  |
 | FUNC-004 | 0 Extension | virtualWorkspaces limited capability + `!virtualWorkspace` enablement gates | **Migrate** | Keep the gate on every retained local-only command (create project, deploy, debug). |  |  |
 | FUNC-005 | 0 Extension | x-azResources azure/workspace branches + onFetch/onResolve activation | **Drop** | Azure Resources host contract; replaced by providers in `registerTrees`. |  |  |

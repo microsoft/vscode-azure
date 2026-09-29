@@ -192,7 +192,9 @@ Tree contract:  Local project node: revealInExplorer, createFunction, deployProj
 - [ ] List functions directly under the project node (no group node): from
   `function.json` for script-model projects, from build output for precompiled
   projects, and from the running host otherwise. Closes
-  [#178](https://github.com/microsoft/vscode-azure/issues/178).
+  [#178](https://github.com/microsoft/vscode-azure/issues/178). A Core Tools
+  function-list command has been requested in
+  [Azure/azure-functions-core-tools#5344](https://github.com/Azure/azure-functions-core-tools/issues/5344).
   <- FUNC-182, FUNC-184, FUNC-185
 - [ ] Hint nodes: "Run build task to update this list..." and "Start debugging
   to update this list...". <- FUNC-187, FUNC-188
@@ -420,7 +422,10 @@ External facts: `https://json.schemastore.org/function.json` and `https://json.s
 - [ ] `enablement: !virtualWorkspace` on every retained local-only command.
   <- FUNC-004
 - [ ] Project detection stays on `functionsDetector`; no
-  `workspaceContains` activation. <- FUNC-002
+  `workspaceContains` activation. Core Tools v5 may make `host.json` optional;
+  a machine-readable project-info command has been requested in
+  [Azure/azure-functions-core-tools#5344](https://github.com/Azure/azure-functions-core-tools/issues/5344).
+  <- FUNC-002
 - [ ] Report Issue stays on the framework error toast; user-actionable errors
   use `ExternalError`. <- FUNC-100
 - [ ] No Functions settings are contributed: every source setting is Drop or
