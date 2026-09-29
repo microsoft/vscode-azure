@@ -12,8 +12,6 @@ published. Tracked by https://github.com/microsoft/vscode-azure/issues/329.
 Registry authentication uses managed identity rather than a registry password. The app receives the
 Application Insights connection string for use by application-owned instrumentation.'''
 
-import { withApplicationInsights } from 'environment.bicep'
-
 @minLength(1)
 @maxLength(48)
 @description('Required. Name of the azd environment; used to derive resource names and to tag resources.')
@@ -119,7 +117,15 @@ module containerApp 'br/public:avm/ptn/azd/container-app-upsert:0.4.0' = {
     // An empty image selects quickstart on creation and preserves the live image on updates.
     imageName: ''
     exists: containerAppExists
-    env: withApplicationInsights(existingEnvironment, monitoring.outputs.applicationInsightsConnectionString)
+    env: concat(
+      filter(existingEnvironment, entry => entry.name != 'APPLICATIONINSIGHTS_CONNECTION_STRING'),
+      [
+        {
+          name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+          value: monitoring.outputs.applicationInsightsConnectionString
+        }
+      ]
+    )
     ingressEnabled: ingressEnabled
     external: ingressExternal
     targetPort: targetPort

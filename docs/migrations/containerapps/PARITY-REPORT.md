@@ -126,7 +126,6 @@ context value that is declared in source and assembled onto the node by `Contain
 | `pnpm run build` | succeeds |
 | `pnpm run test` | 1,171 extension, 366 azutils, and 586 utils passing; 0 failing (3 extension and 12 utils pending) |
 | `bicep build` on the consumer template | Passed on 2026-09-29 including the Application Insights environment merge, zone redundancy disabled, and minimum replicas set to one |
-| `node --test extensions\vscode-azure\test\bicep\containerApp.test.mjs` | 3 passing; compiles and evaluates the actual Bicep environment merge for creation, reprovisioning, and repeat provisioning |
 
 Validation on 2026-09-29 covers all three workspaces: extension, azutils, and utils. Shared utils changes include
 `withCancellation`, its export and tests, and reuse by `delay`.

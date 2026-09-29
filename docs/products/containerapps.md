@@ -80,7 +80,6 @@ infra/
   main.bicep                                  consumer: subscription scope, resource group, azd params
   main.parameters.json                        azd placeholders + the wizard's answers
   modules/container-app-topology/main.bicep   the topology
-  modules/container-app-topology/environment.bicep   container environment merge
 ```
 
 For project deployment, the command also ensures `azure.yaml` declares the selected service as a local Docker
@@ -154,15 +153,6 @@ Azure policy. The app's managed identity is used for registry access, not automa
 Existing generated projects must incorporate this template configuration and reprovision to add the
 connection string; deploying an image alone does not add it. User-owned infrastructure is never rewritten
 by the generation step.
-
-The environment merge is exercised using the Bicep CLI and Node's built-in test runner:
-
-```powershell
-node --test extensions\vscode-azure\test\bicep\containerApp.test.mjs
-bicep build extensions\vscode-azure\resources\templates\containerApp\main.bicep --stdout
-```
-
-These compiler-backed tests are separate from the VS Code test suite and require `bicep` on `PATH`.
 
 **Deploying requires a local container runtime.** azd builds the image locally with Docker or Podman, so one
 must be installed and running. Building in ACR instead would remove that requirement; it is tracked by
