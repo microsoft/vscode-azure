@@ -47,12 +47,16 @@ These were resolved during mapping and are binding for the slices below.
 - **Log streaming** is a pseudoterminal for every plan that polls the app's
   Application Insights / Log Analytics logs; closing the terminal stops the
   stream. There is no Logs node and no Kudu `/api/logstream` path.
-- **Flat function trees.** Functions are direct children of the Function App
-  node and of the local project node; there are no group nodes.
+- **Function tree shape.** Under a Function App, functions sit in one
+  "Functions" group node beside Application Settings; under the local project
+  node they are listed directly, with no group node.
+- **`local.settings.json` stays.** It is written by `func init` and read by the
+  host and by local execute; there is no upload, download, encrypt, or decrypt.
 - **F5 without `tasks.json` / `launch.json`.** A contributed `azure-functions`
   debug type starts the host in-process and resolves to the language debugger's
-  attach configuration (Slice 4). Existing projects' source-generated debug
-  files are left untouched.
+  attach configuration (Slice 4). `launch.json` is optional: users can generate
+  an `azure-functions` entry to reach its configurable options. Existing
+  projects' source-generated debug files are left untouched.
 
 ## Slice 0 -- Models and clients
 
@@ -105,13 +109,15 @@ External facts: none
 Tree contract:  Function App node: combineContextValues(browseWebsite, viewProperties, editSettings,
                   startWebApp|stopWebApp (by state), restartWebApp, deployFunctionApp (azd-tagged only),
                   streamFunctionLogs, revealIdentity (when an identity is assigned)).
+                Functions group node: no actions except refresh.
                 Remote function node: executeFunction, copyFunctionUrl (HTTP triggers), enableFunction|disableFunction
                   (by state), deleteFunction.
                 Invalid function / invalid app nodes: no actions except refresh.
 ```
 
-- [ ] Function App children: shared settings node, then one node per function
-  (flat, no group node). <- FUNC-166, FUNC-168, FUNC-169, FUNC-173
+- [ ] Function App children: shared settings node, then a "Functions" group
+  node (virtual resource) listing one node per function.
+  <- FUNC-166, FUNC-168, FUNC-169, FUNC-173
 - [ ] Function App description shows state (stopped) and Flex; context values
   reflect running/stopped. <- FUNC-166
 - [ ] Explicit invalid nodes for a function or app that cannot be read,
@@ -207,8 +213,10 @@ Tree contract:  Local project node: revealInExplorer, createFunction, deployProj
 A contributed debug type resolves to the language debugger's attach
 configuration after the extension has built the project and started the host
 itself. Resolving to a different debug type is proven in the Container Tools
-extension. Nothing is generated into `tasks.json` or `launch.json`, and no task
-type, problem matcher, or process-pick command is contributed.
+extension. Debugging works with no `tasks.json` or `launch.json`; a
+`launch.json` entry is optional and exposes the configurable options. No
+`tasks.json` is generated, and no task type, problem matcher, or process-pick
+command is contributed.
 
 ```
 Pattern:        contributed `azure-functions` debugger (launch request, no adapter) whose DebugConfigurationProvider
@@ -247,9 +255,10 @@ Resolution flow for one session:
   runtimes) and register its provider for initial and dynamic configurations,
   so projects appear in the Run and Debug dropdown with no `launch.json`.
   <- FUNC-030
-- [ ] `initProjectForVSCode` writes no debug files; only non-debug workspace
-  files such as `.vscode/extensions.json` recommendations, never project
-  configuration in VS Code settings. <- FUNC-030
+- [ ] `initProjectForVSCode` writes no `tasks.json` and no project
+  configuration in VS Code settings; it writes non-debug workspace files such
+  as `.vscode/extensions.json` recommendations, and offers (never forces) the
+  optional `launch.json` entry below. <- FUNC-030
 - [ ] Attach configurations for Node, Python (via the Python extension's
   launcher), Java, and PowerShell, with free debug ports.
   <- FUNC-210, FUNC-211, FUNC-212, FUNC-214, FUNC-268
@@ -263,9 +272,15 @@ Resolution flow for one session:
   `AzureWebJobsStorage` / emulator reachable. <- FUNC-215
 - [ ] Wire shared Core Tools install/update and version checks; no
   activation-time prompts. <- FUNC-021, FUNC-031, FUNC-217
-- [ ] Opt-in minimal `launch.json` entry (`{ "type": "azure-functions",
-  "request": "launch" }`) for compounds and per-project overrides; never
-  generated automatically. <- FUNC-030
+- [ ] Optional `launch.json` generation: an `azure-functions` entry
+  (`{ "type": "azure-functions", "request": "launch", ... }`) produced by the
+  provider's initial configurations (Run and Debug "create a launch.json file"),
+  `configurationSnippets`, and the init offer. The debugger's
+  `configurationAttributes` schema documents the options, for example project
+  path, host arguments, extra environment, debug port, skip build, and a
+  `preLaunchTask` that replaces the built-in build. Entries also serve compound
+  launches. Omitted options fall back to the no-`launch.json` defaults.
+  <- FUNC-030
 - [ ] Unit tests for configuration resolution and host tracking; integration
   test for the attach path where the precedent allows.
 

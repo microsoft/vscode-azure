@@ -17,7 +17,7 @@ by editing this file and reconfirming with the reviewer.
 | **Signed off by** | Brandon Waterloo (@bwateratmsft) |
 | **Date** | 2026-09-24 |
 | **Review** | Excel review workbook; 30 rows overridden, 241 accepted as recommended (blank decision = agreement). |
-| **Last confirmed** | 2026-09-24; F5 design review moved FUNC-203 through FUNC-207 to Drop and narrowed FUNC-030. |
+| **Last confirmed** | 2026-09-29; PR review moved FUNC-168 back to Migrate (remote Functions group node), added optional `launch.json` generation to FUNC-030, and clarified that `local.settings.json` stays. Earlier, 2026-09-24: F5 design review moved FUNC-203 through FUNC-207 to Drop. |
 
 ## Granularity
 
@@ -33,8 +33,8 @@ problem matcher and pattern; per manifest-level contract; per orphan.
 
 | Disposition | Count | Meaning in this record |
 |---|---:|---|
-| Migrate | 24 | Preserve the source capability using monorepo patterns |
-| Adapt | 38 | Preserve the user goal with intentionally different behavior or UX |
+| Migrate | 25 | Preserve the source capability using monorepo patterns |
+| Adapt | 37 | Preserve the user goal with intentionally different behavior or UX |
 | Reuse | 18 | Satisfy the feature by wiring an existing monorepo capability |
 | Drop | 135 | Do not carry the source capability forward |
 | Defer | 56 | Retain the goal for later tracked work |
@@ -48,18 +48,24 @@ problem matcher and pattern; per manifest-level contract; per orphan.
   Consumption; users change plans in the generated Bicep.
 - **Managed identity only.** Created apps use managed identity for connections;
   no secrets or connection strings.
-- **Flat function tree.** Individual functions are listed directly under the
-  Function App (remote) and under the local project node (workspace), with no
-  group nodes.
+- **Function tree shape.** Under a Function App, functions sit in one
+  "Functions" group node beside Application Settings, so an app with many
+  triggers does not bury its other children. Under the local project node
+  (workspace), functions are listed directly, with no group node.
 - **Log streaming follows Container Apps.** Streaming opens a pseudoterminal;
   closing it stops the stream. There is no Logs node.
-- **No settings file sync.** App settings are owned by IaC; there is no
-  `local.settings.json` upload, download, or tree node.
+- **`local.settings.json` stays; no settings file sync.** Projects keep
+  `local.settings.json` (written by `func init`, read by `func host start` and
+  local execute). Remote app settings are owned by IaC, so there is no upload,
+  download, encrypt, decrypt, or tree node for the file.
 - **Scaffolding delegates to Core Tools.** Project and function creation wrap
   `func init` / `func new`; the template subsystem is not carried forward.
 - **F5 without `tasks.json` / `launch.json`.** A contributed `azure-functions`
   debug type builds the project, starts the host in-process, and resolves to the
-  language debugger's attach configuration. No task type, problem matcher, or
+  language debugger's attach configuration. `launch.json` is optional: F5
+  works without it, and users who want more control can generate an
+  `azure-functions` entry that exposes the configurable options. No
+  `tasks.json` is generated, and no task type, problem matcher, or
   process-pick command is contributed. Existing projects' source-generated
   `tasks.json` / `launch.json` are left untouched; users delete them or re-initialize.
 - **No exported API or agent contract.** The source's exported API and
@@ -102,7 +108,7 @@ Judgment-call groups (`JC-*`) mark rows the reviewer was asked to weigh as a set
 | FUNC-027 | 1.1 Local project | `azureFunctions.createNewProjectWithDockerfile` | **Defer** | Cancel-dominant; tied to the containerized-hosting decision. |  | JC-CONTAINER |
 | FUNC-028 | 1.1 Local project | `azureFunctions.createFunction` | **Adapt** | High usage. Rebuild over Core Tools `func new` templates. |  | JC-SCAFFOLD |
 | FUNC-029 | 1.1 Local project | `azureFunctions.addBinding` | **Drop** | Only `function.json` projects; near-zero successes per telemetry. |  |  |
-| FUNC-030 | 1.1 Local project | `azureFunctions.initProjectForVSCode` | **Adapt** | Debugging needs no generated `tasks.json` / `launch.json`; init writes only non-debug workspace files (for example `.vscode/extensions.json` recommendations), never project configuration in VS Code settings. | Adapt, but to the greatest extent possible, make debugging work without a tasks.json/launch.json needed. | JC-SCAFFOLD |
+| FUNC-030 | 1.1 Local project | `azureFunctions.initProjectForVSCode` | **Adapt** | Debugging needs no generated `tasks.json` / `launch.json`. Generating an `azure-functions` `launch.json` entry is optional and exposes the configurable options. Init otherwise writes only non-debug workspace files (for example `.vscode/extensions.json` recommendations), never project configuration in VS Code settings. | Adapt, but to the greatest extent possible, make debugging work without a tasks.json/launch.json needed. | JC-SCAFFOLD |
 | FUNC-031 | 1.1 Local project | `azureFunctions.installOrUpdateFuncCoreTools` | **Reuse** | `vscode-azure/installFunc` + FuncInstaller already exist; source failure rate is a reliability lesson. |  |  |
 | FUNC-032 | 1.1 Local project | `azureFunctions.uninstallFuncCoreTools` | **Drop** | Incidental; mostly fails; SWA precedent dropped CLI uninstall. |  |  |
 | FUNC-033 | 1.1 Local project | `azureFunctions.pickProcess` | **Adapt** | High usage; .NET attach depends on it. Rebuild on shared process/task services. |  | JC-LOCALDEV |
@@ -238,9 +244,9 @@ Judgment-call groups (`JC-*`) mark rows the reviewer was asked to weigh as a set
 | FUNC-163 | 2 Settings | Deprecated `zipGlobPattern` / `zipIgnorePattern` (read-only warning) | **Drop** | Deprecated; `.funcignore` is used. |  |  |
 | FUNC-164 | 2 Settings | Foreign `azurite.*` host/port/cert keys | **Defer** | Only needed for the storage emulator connection string. |  | JC-LOCALDEV |
 | FUNC-165 | 2 Settings | Foreign `azureResourceGroups.groupBy` | **Drop** | Never read a retiring extension's settings; target has `vscode-azure.groupBy`. |  |  |
-| FUNC-166 | 3 Tree | Function App node (production / Flex CV, state and Flex description) | **Migrate** | Node exists via WebAppViewProvider; add Functions context values for kept commands. | Consider flattening the tree and showing only individual functions under a Function App--no more grouping. Flatten the tree: individual functions directly under the Function App. |  |
+| FUNC-166 | 3 Tree | Function App node (production / Flex CV, state and Flex description) | **Migrate** | Node exists via WebAppViewProvider; add Functions context values for kept commands. | Consider flattening the tree and showing only individual functions under a Function App--no more grouping. Flatten the tree: individual functions directly under the Function App. Group node restored by FUNC-168 in PR review (2026-09-29). |  |
 | FUNC-167 | 3 Tree | Internal SlotTreeItem wrapper CV (`...;slot`) | **Drop** | Source implementation artifact. |  |  |
-| FUNC-168 | 3 Tree | Remote Functions group node | **Adapt** | Flatten this group away? Flattened: individual functions are shown directly under the Function App node, with no group node. | Override (recommended Migrate). |  |
+| FUNC-168 | 3 Tree | Remote Functions group node | **Migrate** | One "Functions" group under the Function App keeps many triggers from burying Application Settings and other children. | Reconfirmed in PR review (2026-09-29); earlier override to flatten withdrawn. |  |
 | FUNC-169 | 3 Tree | Remote Function node (trigger / state / access tokens) | **Migrate** | Backs execute/copy URL/enable/disable/delete. |  |  |
 | FUNC-170 | 3 Tree | Invalid remote function node | **Migrate** | Preserve the error state. |  |  |
 | FUNC-171 | 3 Tree | Identity node + System Assigned (enabled/disabled) + role children | **Adapt** | A command to jump from the fn app to the identity it is using, i.e. reveal. | Override (recommended Defer). | JC-IDENTITY |
