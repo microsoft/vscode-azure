@@ -73,6 +73,8 @@ module containerAppsStack 'br/public:avm/ptn/azd/container-apps-stack:0.4.0' = {
     containerRegistryName: containerRegistryName
     logAnalyticsWorkspaceName: monitoring.outputs.logAnalyticsWorkspaceName
     publicNetworkAccess: ingressEnabled && ingressExternal ? 'Enabled' : 'Disabled'
+    // Zone redundancy requires an infrastructure subnet; this topology does not provision one.
+    zoneRedundant: false
     // The app authenticates to the registry with its managed identity, so the
     // admin account is left disabled.
     acrAdminUserEnabled: false
