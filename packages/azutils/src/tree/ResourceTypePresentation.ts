@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { CaselessMap, type IVsCode } from '@microsoft/vscode-azure-utils';
+import { CaselessMap, type ICaselessMapReader, type IVsCode } from '@microsoft/vscode-azure-utils';
 import { AcrResourceType, AIFoundryProjectLogicalType, AIServicesLogicalType, AppServiceLogicalType, ContainerAppResourceType, CosmosDBLogicalType, CosmosDBMongoLogicalType, DocumentDbResourceType, DurableTaskHubLogicalType, FoundryProjectResourceType, FunctionAppLogicalType, LogicAppLogicalType, ManagedEnvironmentResourceType, StaticWebAppResourceType } from '../rest/clients/ResourceClient';
 
 /** Localized presentation for a supported logical resource type. */
@@ -85,7 +85,7 @@ const presentationEntries: [string, (code: IVsCode) => string, string?][] = [
     [StaticWebAppResourceType, code => code.l10n.t('Static Web Apps')],
 ];
 
-const presentations = new CaselessMap(presentationEntries.map(([logicalType, name, iconName = logicalType]) =>
+const presentations: ICaselessMapReader<{ readonly name: (code: IVsCode) => string; readonly iconName: string }> = new CaselessMap(presentationEntries.map(([logicalType, name, iconName = logicalType]) =>
     [logicalType, { name, iconName }] as const,
 ));
 
