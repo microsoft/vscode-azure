@@ -69,9 +69,26 @@ problem matcher and pattern; per manifest-level contract; per orphan.
   process-pick command is contributed. Existing projects' source-generated
   `tasks.json` / `launch.json` are left untouched; users delete them or re-initialize.
 - **No exported API or agent contract.** The source's exported API and
-  `agent.*` commands have no monorepo consumer.
+  `agent.*` commands have no monorepo consumer. External consumers exist (see
+  [Known external consumers](#known-external-consumers)); they are dropped
+  anyway, and the owning teams are told before the source extension is retired.
 - Telemetry informed these decisions qualitatively; see
   [INVENTORY.md Section 9](INVENTORY.md#9-usage-summary-telemetry). No raw counts are recorded here.
+
+## Known external consumers
+
+Extensions that depend on the source extension's API, commands, settings, or
+task type. The affected rows stay dispositioned as recorded; the consumers
+are listed so their owners can be told before the source extension is retired.
+
+| Consumer | Dependency | Affected rows |
+|---|---|---|
+| C# Dev Kit | Exported API | FUNC-016, FUNC-017 |
+| Logic Apps Standard (`Azure/LogicAppsUX`) | Hard `extensionDependencies`; runs source commands; generates `func` tasks | FUNC-032, FUNC-034, FUNC-035, FUNC-102, FUNC-203, FUNC-204 |
+| Fabric User Data Functions (`microsoft/vscode-fabric-functions`) | Hard `extensionDependencies`; `func` tasks in templates; reads source settings | FUNC-116, FUNC-131, FUNC-133, FUNC-203, FUNC-204 |
+| Static Web Apps | Exported API; also being migrated into `vscode-azure` | FUNC-011, FUNC-012, FUNC-013 |
+| SQL Bindings (`mssql` / Azure Data Studio) | Exported API types; current upstream use unconfirmed | JC-API rows |
+| Azure Resources | Hosts the source tree; also being migrated into `vscode-azure` | FUNC-005, FUNC-006 |
 
 ## Decision table
 
@@ -89,13 +106,13 @@ Judgment-call groups (`JC-*`) mark rows the reviewer was asked to weigh as a set
 | FUNC-008 | 0 Extension | jsonValidation `function.json` schema | **Migrate** | Zero activation cost; `function.json` is still used by v4 script-model languages (PowerShell, JS v3, Python v1). |  |  |
 | FUNC-009 | 0 Extension | jsonValidation `host.json` schema | **Migrate** | Zero activation cost; every Functions project has `host.json`. |  |  |
 | FUNC-010 | 0 Extension | API `revealTreeItem` | **Drop** | No monorepo consumer; no telemetry in window. |  | JC-API |
-| FUNC-011 | 0 Extension | API `createFunction` | **Drop** | Consumers are sibling extensions being retired; no monorepo consumer found. |  | JC-API |
-| FUNC-012 | 0 Extension | API `downloadAppSettings` | **Drop** | No monorepo consumer; App Service-family sync belongs to the shared settings framework. |  | JC-API |
-| FUNC-013 | 0 Extension | API `uploadAppSettings` | **Drop** | No monorepo consumer. |  | JC-API |
+| FUNC-011 | 0 Extension | API `createFunction` | **Drop** | Consumers are sibling extensions being retired; no monorepo consumer found. Known external consumer: Static Web Apps. |  | JC-API |
+| FUNC-012 | 0 Extension | API `downloadAppSettings` | **Drop** | No monorepo consumer; App Service-family sync belongs to the shared settings framework. Known external consumer: Static Web Apps. |  | JC-API |
+| FUNC-013 | 0 Extension | API `uploadAppSettings` | **Drop** | No monorepo consumer. Known external consumer: Static Web Apps. |  | JC-API |
 | FUNC-014 | 0 Extension | API `listLocalProjects` | **Drop** | Very high-volume cross-extension poll, but its consumers are the extensions being retired; the monorepo uses the workspace index. |  | JC-API |
 | FUNC-015 | 0 Extension | API `listLocalFunctions` | **Drop** | Same as listLocalProjects; the capability survives internally for the local function tree. |  | JC-API |
-| FUNC-016 | 0 Extension | API `isFuncCoreToolsInstalled` | **Drop** | ToolService answers this internally; no monorepo consumer. |  | JC-API |
-| FUNC-017 | 0 Extension | API `startFuncProcess` | **Drop** | No monorepo consumer; the host-start capability survives internally if F5 is kept. |  | JC-API |
+| FUNC-016 | 0 Extension | API `isFuncCoreToolsInstalled` | **Drop** | ToolService answers this internally; no monorepo consumer. Known external consumer: C# Dev Kit. |  | JC-API |
+| FUNC-017 | 0 Extension | API `startFuncProcess` | **Drop** | No monorepo consumer; the host-start capability survives internally for F5. Known external consumer: C# Dev Kit. |  | JC-API |
 | FUNC-018 | 0 Extension | Test-only API (`VSCODE_RUNNING_TESTS`, apiVersion 99) | **Drop** | Source test plumbing. |  |  |
 | FUNC-019 | 0 Extension | Consumed Container Apps extension API (`deployWorkspaceProject`) | **Drop** | Never depend on a retiring extension. |  | JC-CONTAINER |
 | FUNC-020 | 0 Extension | Activation: finish deferred post-create steps after reload | **Drop** | Don't want to support cross-session creation like this. | Override (recommended Adapt). | JC-SCAFFOLD |
@@ -110,10 +127,10 @@ Judgment-call groups (`JC-*`) mark rows the reviewer was asked to weigh as a set
 | FUNC-029 | 1.1 Local project | `azureFunctions.addBinding` | **Drop** | Only `function.json` projects; near-zero successes per telemetry. |  |  |
 | FUNC-030 | 1.1 Local project | `azureFunctions.initProjectForVSCode` | **Adapt** | Debugging needs no generated `tasks.json` / `launch.json`. Generating an `azure-functions` `launch.json` entry is optional and exposes the configurable options. Init otherwise writes only non-debug workspace files (for example `.vscode/extensions.json` recommendations), never project configuration in VS Code settings. | Adapt, but to the greatest extent possible, make debugging work without a tasks.json/launch.json needed. | JC-SCAFFOLD |
 | FUNC-031 | 1.1 Local project | `azureFunctions.installOrUpdateFuncCoreTools` | **Reuse** | `vscode-azure/installFunc` + FuncInstaller already exist; source failure rate is a reliability lesson. |  |  |
-| FUNC-032 | 1.1 Local project | `azureFunctions.uninstallFuncCoreTools` | **Drop** | Incidental; mostly fails; SWA precedent dropped CLI uninstall. |  |  |
+| FUNC-032 | 1.1 Local project | `azureFunctions.uninstallFuncCoreTools` | **Drop** | Incidental; mostly fails; SWA precedent dropped CLI uninstall. Known external consumer: Logic Apps Standard. |  |  |
 | FUNC-033 | 1.1 Local project | `azureFunctions.pickProcess` | **Adapt** | High usage; .NET attach depends on it. Rebuild on shared process/task services. |  | JC-LOCALDEV |
-| FUNC-034 | 1.1 Local project | `azureFunctions.appSettings.encrypt` | **Drop** | Low usage; thin wrapper over `func settings encrypt`. |  |  |
-| FUNC-035 | 1.1 Local project | `azureFunctions.appSettings.decrypt` | **Drop** | Low usage; thin wrapper over `func settings decrypt`. |  |  |
+| FUNC-034 | 1.1 Local project | `azureFunctions.appSettings.encrypt` | **Drop** | Low usage; thin wrapper over `func settings encrypt`. Known external consumer: Logic Apps Standard. |  |  |
+| FUNC-035 | 1.1 Local project | `azureFunctions.appSettings.decrypt` | **Drop** | Low usage; thin wrapper over `func settings decrypt`. Known external consumer: Logic Apps Standard. |  |  |
 | FUNC-036 | 1.1 Local project | `azureFunctions.setAzureWebJobsStorage` | **Drop** | This sort of thing goes to IaC. | Override (recommended Defer). | JC-LOCALDEV |
 | FUNC-037 | 1.1 Local project | `azureFunctions.addLocalMIConnections` | **Drop** | Low, cancel-dominant. |  | JC-IDENTITY |
 | FUNC-038 | 1.1 Local project | `azureFunctions.eventGrid.sendMockRequest` | **Drop** | Very low usage; every recorded call failed. |  |  |
@@ -180,7 +197,7 @@ Judgment-call groups (`JC-*`) mark rows the reviewer was asked to weigh as a set
 | FUNC-099 | 1.8 Host debug view | `funcHostDebug.askCopilot` | **Defer** | Host debug view. |  | JC-LOCALDEV |
 | FUNC-100 | 1.9 Plumbing | `azureFunctions.reportIssue` | **Reuse** | Target framework error toasts provide Report Issue. |  |  |
 | FUNC-101 | 1.9 Plumbing | `azureFunctions.getMcpHostKey` | **Defer** | MCP projects reference it from `.vscode/mcp.json`; needs a monorepo command id and MCP scope decision. |  | JC-AGENT |
-| FUNC-102 | 1.9 Plumbing | `azureFunctions.openFile` (code-only; Files/Logs file click) | **Drop** | Drop remote file browsing...the source is literally there in their repository. | Override (recommended Defer). | JC-KUDU |
+| FUNC-102 | 1.9 Plumbing | `azureFunctions.openFile` (code-only; Files/Logs file click) | **Drop** | Drop remote file browsing...the source is literally there in their repository. Known external consumer: Logic Apps Standard. | Override (recommended Defer). | JC-KUDU |
 | FUNC-103 | 1.9 Plumbing | `azureFunctions.showOutputChannel` (code-only) | **Drop** | Target has its own output channel and activity children. |  |  |
 | FUNC-104 | 1.9 Plumbing | `agent.getCommands` (code-only) | **Drop** | Removing agent deploy. | Override (recommended Defer). | JC-AGENT |
 | FUNC-105 | 1.9 Plumbing | `agent.runWizardCommandWithoutExecution` (code-only) | **Drop** | Removing agent deploy. | Override (recommended Defer). | JC-AGENT |
@@ -194,7 +211,7 @@ Judgment-call groups (`JC-*`) mark rows the reviewer was asked to weigh as a set
 | FUNC-113 | 2 Settings | `projectLanguage` | **Drop** | Project config; detect from the workspace instead. |  | JC-SCAFFOLD |
 | FUNC-114 | 2 Settings | `projectLanguageModel` | **Drop** | Project config; latest programming models only. |  |  |
 | FUNC-115 | 2 Settings | `projectTemplateKey` | **Drop** | Source template subsystem not migrated. |  |  |
-| FUNC-116 | 2 Settings | `deploySubpath` | **Drop** | Deployment config belongs in `azure.yaml` (service `dist`). |  | JC-DEPLOY |
+| FUNC-116 | 2 Settings | `deploySubpath` | **Drop** | Deployment config belongs in `azure.yaml` (service `dist`). Known external consumer: Fabric User Data Functions. |  | JC-DEPLOY |
 | FUNC-117 | 2 Settings | `projectSubpath` | **Drop** | Workspace index discovers every `host.json`. |  |  |
 | FUNC-118 | 2 Settings | `showCoreToolsWarning` | **Drop** | Tool version UX is owned by ToolService. |  |  |
 | FUNC-119 | 2 Settings | `showMultiCoreToolsWarning` | **Drop** | Tool version UX is owned by ToolService. |  |  |
@@ -209,9 +226,9 @@ Judgment-call groups (`JC-*`) mark rows the reviewer was asked to weigh as a set
 | FUNC-128 | 2 Settings | `pickProcessTimeout` | **Drop** | Excessive to keep this setting. | Override (recommended Migrate). | JC-LOCALDEV |
 | FUNC-129 | 2 Settings | `templateVersion` | **Drop** | Source template subsystem not migrated. |  |  |
 | FUNC-130 | 2 Settings | `projectOpenBehavior` | **Drop** | Scaffolding sort of thing. | Override (recommended Migrate). | JC-SCAFFOLD |
-| FUNC-131 | 2 Settings | `preDeployTask` | **Drop** | Deployment config; azd hooks replace it. |  | JC-DEPLOY |
+| FUNC-131 | 2 Settings | `preDeployTask` | **Drop** | Deployment config; azd hooks replace it. Known external consumer: Fabric User Data Functions. |  | JC-DEPLOY |
 | FUNC-132 | 2 Settings | `postDeployTask` | **Drop** | Deployment config; azd hooks replace it. |  | JC-DEPLOY |
-| FUNC-133 | 2 Settings | `pythonVenv` | **Drop** | Project config; detect the venv folder instead. |  | JC-LOCALDEV |
+| FUNC-133 | 2 Settings | `pythonVenv` | **Drop** | Project config; detect the venv folder instead. Known external consumer: Fabric User Data Functions. |  | JC-LOCALDEV |
 | FUNC-134 | 2 Settings | `createPythonVenv` | **Drop** | This belongs to scaffolding and/or the Python extension. | Override (recommended Migrate). | JC-SCAFFOLD |
 | FUNC-135 | 2 Settings | `scmDoBuildDuringDeployment` | **Drop** | Deployment config; belongs in IaC/azd. |  | JC-DEPLOY |
 | FUNC-136 | 2 Settings | `enableOutputTimestamps` | **Drop** | Shared output channel. |  |  |
@@ -281,8 +298,8 @@ Judgment-call groups (`JC-*`) mark rows the reviewer was asked to weigh as a set
 | FUNC-200 | 3 Tree | ARG bulk listing + site cache in the resolver | **Reuse** | Target resource listing + WebAppDataProvider enrich. |  |  |
 | FUNC-201 | 3 Tree | Submenu `workspaceActions` (create function/project, deploy) | **Drop** | No workspace actions submenu, this was an antipattern. | Override (recommended Adapt). |  |
 | FUNC-202 | 3 Tree | `explorer/context` Deploy on a folder | **Adapt** | Follows the deploy decision. |  | JC-DEPLOY |
-| FUNC-203 | 4 Debug | Task definition `func` | **Drop** | Host is started in-process by the Functions debug configuration provider; no `tasks.json` task or problem matcher is needed. | Override (recommended Adapt); reconfirmed after the F5 design review. | JC-LOCALDEV |
-| FUNC-204 | 4 Debug | Task provider `FuncTaskProvider` (host start, extensions install, pack) | **Drop** | Host is started in-process by the Functions debug configuration provider; no `tasks.json` task or problem matcher is needed. | Override (recommended Adapt); reconfirmed after the F5 design review. | JC-LOCALDEV |
+| FUNC-203 | 4 Debug | Task definition `func` | **Drop** | Host is started in-process by the Functions debug configuration provider; no `tasks.json` task or problem matcher is needed. Known external consumers: Logic Apps Standard, Fabric User Data Functions. | Override (recommended Adapt); reconfirmed after the F5 design review. | JC-LOCALDEV |
+| FUNC-204 | 4 Debug | Task provider `FuncTaskProvider` (host start, extensions install, pack) | **Drop** | Host is started in-process by the Functions debug configuration provider; no `tasks.json` task or problem matcher is needed. Known external consumers: Logic Apps Standard, Fabric User Data Functions. | Override (recommended Adapt); reconfirmed after the F5 design review. | JC-LOCALDEV |
 | FUNC-205 | 4 Debug | Problem matcher `func-watch` | **Drop** | Host is started in-process by the Functions debug configuration provider; no `tasks.json` task or problem matcher is needed. | Override (recommended Adapt); reconfirmed after the F5 design review. | JC-LOCALDEV |
 | FUNC-206 | 4 Debug | Problem matchers per language (dotnet, java, node, python, golang, powershell watch) | **Drop** | Host is started in-process by the Functions debug configuration provider; no `tasks.json` task or problem matcher is needed. | Can we reuse existing problem matchers from other extensions? I hope we don't have our own defined? Override (recommended Adapt); reconfirmed after the F5 design review. | JC-LOCALDEV |
 | FUNC-207 | 4 Debug | Problem pattern `func` | **Drop** | Host is started in-process by the Functions debug configuration provider; no `tasks.json` task or problem matcher is needed. | Override (recommended Adapt); reconfirmed after the F5 design review. | JC-LOCALDEV |
