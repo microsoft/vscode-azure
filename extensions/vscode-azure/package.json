@@ -348,27 +348,33 @@
             "view/item/context": [
                 {
                     "command": "vscode-azure/acr/disableAdminUser",
-                    "when": "view == vscode-azure/resources && viewItem =~ /\\bdisableAcrAdminUser\\b/i"
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\bdisableAcrAdminUser\\b/i",
+                    "group": "3_actions@1"
                 },
                 {
                     "command": "vscode-azure/resources/openInPortal",
-                    "when": "view == vscode-azure/resources && viewItem =~ /\\bopenInPortal\\b/i"
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\bopenInPortal\\b/i",
+                    "group": "1_browse@4"
                 },
                 {
                     "command": "vscode-azure/resources/delete",
-                    "when": "view == vscode-azure/resources && viewItem =~ /\\bdeleteResource\\b/i"
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\bdeleteResource\\b/i",
+                    "group": "3_actions@9"
                 },
                 {
                     "command": "vscode-azure/resourceGroups/delete",
-                    "when": "view == vscode-azure/resources && viewItem =~ /\\bdeleteResourceGroup\\b/i"
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\bdeleteResourceGroup\\b/i",
+                    "group": "3_actions@9"
                 },
                 {
                     "command": "vscode-azure/resources/browseWebsite",
-                    "when": "view == vscode-azure/resources && viewItem =~ /\\bbrowseWebsite\\b/i"
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\bbrowseWebsite\\b/i",
+                    "group": "1_browse@1"
                 },
                 {
                     "command": "vscode-azure/resources/viewProperties",
-                    "when": "view == vscode-azure/resources && viewItem =~ /\\bviewProperties\\b/i"
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\bviewProperties\\b/i",
+                    "group": "1_browse@5"
                 },
                 {
                     "command": "vscode-azure/settings/edit",
@@ -377,19 +383,23 @@
                 },
                 {
                     "command": "vscode-azure/containerApps/openConsoleInPortal",
-                    "when": "view == vscode-azure/resources && viewItem =~ /\\bopenContainerAppConsole\\b/i"
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\bopenContainerAppConsole\\b/i",
+                    "group": "1_browse@3"
                 },
                 {
                     "command": "vscode-azure/containerApps/openLogsInPortal",
-                    "when": "view == vscode-azure/resources && viewItem =~ /\\bopenContainerAppLogs\\b/i"
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\bopenContainerAppLogs\\b/i",
+                    "group": "2_logs@2"
                 },
                 {
                     "command": "vscode-azure/containerApps/revealEnvironment",
-                    "when": "view == vscode-azure/resources && viewItem =~ /\\brevealContainerAppEnvironment\\b/i"
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\brevealContainerAppEnvironment\\b/i",
+                    "group": "1_browse@2"
                 },
                 {
                     "command": "vscode-azure/containerApps/restart",
-                    "when": "view == vscode-azure/resources && viewItem =~ /\\brestartContainerApp\\b/i"
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\brestartContainerApp\\b/i",
+                    "group": "3_actions@1"
                 },
                 {
                     "command": "vscode-azure/containerApps/restart",
@@ -398,7 +408,8 @@
                 },
                 {
                     "command": "vscode-azure/containerApps/startStreamingLogs",
-                    "when": "view == vscode-azure/resources && viewItem =~ /\\bstartContainerAppLogStream\\b/i"
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\bstartContainerAppLogStream\\b/i",
+                    "group": "2_logs@1"
                 },
                 {
                     "command": "vscode-azure/containerApps/startStreamingLogs",
@@ -408,12 +419,12 @@
                 {
                     "command": "vscode-azure/staticWebApps/createNew",
                     "when": "view == vscode-azure/resources && viewItem =~ /\\bStaticWebApps\\b/i && viewItem =~ /\\bazureResourceTypeGroup\\b/i",
-                    "group": "1@1"
+                    "group": "3_actions@1"
                 },
                 {
                     "command": "vscode-azure/staticWebApps/deleteEnvironment",
                     "when": "view == vscode-azure/resources && viewItem =~ /\\b(?:deleteStaticWebAppEnvironment|azureStaticEnvironment)\\b/i",
-                    "group": "3@2"
+                    "group": "3_actions@9"
                 },
                 {
                     "command": "vscode-azure/resources/refresh",
