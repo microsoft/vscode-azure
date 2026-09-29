@@ -6,8 +6,6 @@
 import type { GenericResource } from '@microsoft/vscode-azure-azutils';
 import { isGenericResource, ManagedEnvironmentResourceType } from '@microsoft/vscode-azure-azutils';
 
-export { ManagedEnvironmentResourceType };
-
 /**
  * Type guard that narrows an unknown value to a managed environment resource.
  *

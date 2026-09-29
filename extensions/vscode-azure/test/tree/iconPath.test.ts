@@ -3,10 +3,9 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { FoundryProjectResourceType, FunctionAppLogicalType, SubscriptionArmType } from '@microsoft/vscode-azure-azutils';
+import { AcrResourceType, FoundryProjectResourceType, FunctionAppLogicalType, SubscriptionArmType } from '@microsoft/vscode-azure-azutils';
 import { createMockCodeContext } from '@microsoft/vscode-azure-utils/testing';
 import { getAzureIconUri, getResourceTypeIconUri } from '../../src/tree/iconPath';
-import { AcrResourceType } from '../../src/tree/resources/acr/AcrRegistry';
 
 describe('getResourceTypeIconUri (unit)', () => {
     it('should return a URI under dist/azureIcons with .svg extension', () => {

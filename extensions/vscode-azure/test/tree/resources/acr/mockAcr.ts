@@ -3,10 +3,9 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { IAcrClient } from '@microsoft/vscode-azure-azutils';
+import { AcrResourceType, type IAcrClient } from '@microsoft/vscode-azure-azutils';
 import { makeGenericResource } from '@microsoft/vscode-azure-azutils/testing';
 import type { AcrRegistry } from '../../../../src/tree/resources/acr/AcrRegistry';
-import { AcrResourceType } from '../../../../src/tree/resources/acr/AcrRegistry';
 
 export function makeAcrRegistry(overrides?: Partial<AcrRegistry>): AcrRegistry {
     return makeGenericResource<AcrRegistry>({

@@ -3,12 +3,11 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureNodeId, type ConcreteAzureNode, type VirtualResource } from '@microsoft/vscode-azure-azutils';
+import { AcrResourceType, AzureNodeId, type ConcreteAzureNode, type VirtualResource } from '@microsoft/vscode-azure-azutils';
 import { makeGenericResource, makeVirtualResource } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockCodeContext, createTestActionExecutor, MockTreeItemCollapsibleState } from '@microsoft/vscode-azure-utils/testing';
 import { DisableAcrAdminUser } from '../../../../src/commands/acr/DisableAcrAdminUser';
 import { OpenInPortal } from '../../../../src/commands/tree/OpenInPortal';
-import { AcrResourceType } from '../../../../src/tree/resources/acr/AcrRegistry';
 import { AcrViewProvider } from '../../../../src/tree/resources/acr/AcrViewProvider';
 import { makeAcrRegistry } from './mockAcr';
 

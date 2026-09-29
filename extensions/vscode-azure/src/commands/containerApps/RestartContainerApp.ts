@@ -3,12 +3,12 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { getResourceGroupName, IContainerAppsClientProvider } from '@microsoft/vscode-azure-azutils';
+import { ContainerAppResourceType, getResourceGroupName, IContainerAppsClientProvider } from '@microsoft/vscode-azure-azutils';
 import { IVsCode, selfOnly, showMessage, withDelayedProgress } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzureViewDataTree } from '../../services';
 import type { ContainerApp } from '../../tree/resources/containerApps/ContainerApp';
-import { ContainerAppResourceType, isContainerApp } from '../../tree/resources/containerApps/ContainerApp';
+import { isContainerApp } from '../../tree/resources/containerApps/ContainerApp';
 import { IResourceSelector } from '../../tree/resources/ResourceSelector';
 import type { ManagedCommand } from '../ManagedCommand';
 

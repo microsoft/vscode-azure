@@ -6,8 +6,6 @@
 import type { Container, GenericResource } from '@microsoft/vscode-azure-azutils';
 import { ContainerAppResourceType, isGenericResource } from '@microsoft/vscode-azure-azutils';
 
-export { ContainerAppResourceType };
-
 /**
  * A {@linkcode GenericResource} with lazily enriched container-app properties.
  *

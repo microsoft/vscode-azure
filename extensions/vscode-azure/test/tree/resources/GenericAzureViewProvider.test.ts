@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AIFoundryProjectLogicalType, AIServicesLogicalType, AppServiceLogicalType, AzureNodeId, CosmosDBLogicalType, CosmosDBMongoLogicalType, DocumentDbResourceType, DurableTaskHubLogicalType, FoundryProjectResourceType, FunctionAppLogicalType, LogicAppLogicalType, StaticWebAppResourceType, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
+import { AcrResourceType, AIFoundryProjectLogicalType, AIServicesLogicalType, AppServiceLogicalType, AzureNodeId, ContainerAppResourceType, CosmosDBLogicalType, CosmosDBMongoLogicalType, DocumentDbResourceType, DurableTaskHubLogicalType, FoundryProjectResourceType, FunctionAppLogicalType, LogicAppLogicalType, ManagedEnvironmentResourceType, StaticWebAppResourceType, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
 import { makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockCodeContext, createTestActionExecutor, withSettings } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
@@ -11,9 +11,6 @@ import { BrowseWebsite } from '../../../src/commands/tree/BrowseWebsite';
 import { DeleteAzureResource } from '../../../src/commands/tree/DeleteAzureResource';
 import { OpenInPortal } from '../../../src/commands/tree/OpenInPortal';
 import { AzdEnvNameTag, ConfigurationSection } from '../../../src/constants';
-import { AcrResourceType } from '../../../src/tree/resources/acr/AcrRegistry';
-import { ContainerAppResourceType } from '../../../src/tree/resources/containerApps/ContainerApp';
-import { ManagedEnvironmentResourceType } from '../../../src/tree/resources/containerApps/ManagedEnvironment';
 import { GenericAzureViewProvider } from '../../../src/tree/resources/GenericAzureViewProvider';
 import { setWebsiteUrl } from '../../../src/tree/resources/websiteUrl';
 

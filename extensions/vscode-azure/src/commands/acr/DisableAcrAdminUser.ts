@@ -3,10 +3,11 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { AcrResourceType } from '@microsoft/vscode-azure-azutils';
 import { IVsCode, showMessage, withDelayedProgress } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type { EnrichedAcrRegistry } from '../../tree/resources/acr/AcrRegistry';
-import { AcrResourceType, isAcrRegistry } from '../../tree/resources/acr/AcrRegistry';
+import { isAcrRegistry } from '../../tree/resources/acr/AcrRegistry';
 import { IResourceSelector } from '../../tree/resources/ResourceSelector';
 import type { ManagedCommand } from '../ManagedCommand';
 

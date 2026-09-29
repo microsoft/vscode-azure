@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { getResourceGroupName, IContainerAppsClientProvider, type IContainerAppsClient, type Replica, type ReplicaContainer, type Revision } from '@microsoft/vscode-azure-azutils';
+import { ContainerAppResourceType, getResourceGroupName, IContainerAppsClientProvider, type IContainerAppsClient, type Replica, type ReplicaContainer, type Revision } from '@microsoft/vscode-azure-azutils';
 import {
     collectAsync, ExternalError, ICodeContext, showSmartQuickPick, withDelayedProgress,
 } from '@microsoft/vscode-azure-utils';
@@ -11,7 +11,7 @@ import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 import { IContainerAppLogStreamService, type LogStreamApp } from '../../tree/resources/containerApps/ContainerAppLogStream';
 import type { ContainerApp } from '../../tree/resources/containerApps/ContainerApp';
-import { ContainerAppResourceType, isContainerApp } from '../../tree/resources/containerApps/ContainerApp';
+import { isContainerApp } from '../../tree/resources/containerApps/ContainerApp';
 import { IResourceSelector } from '../../tree/resources/ResourceSelector';
 import type { ManagedCommand } from '../ManagedCommand';
 

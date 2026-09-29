@@ -6,8 +6,6 @@
 import type { Sku as AcrSku, GenericResource } from '@microsoft/vscode-azure-azutils';
 import { AcrResourceType, isGenericResource } from '@microsoft/vscode-azure-azutils';
 
-export { AcrResourceType };
-
 /**
  * A {@linkcode GenericResource} that has been enriched with ACR-specific
  * properties fetched from the ARM management API.
