@@ -140,8 +140,8 @@ an ASP.NET Core app using the `Azure.Monitor.OpenTelemetry.AspNetCore` package c
 namespace imported). See [Azure Monitor OpenTelemetry setup](https://learn.microsoft.com/azure/azure-monitor/app/opentelemetry-enable)
 for language-specific setup and supported versions.
 
-An environment variable does not instrument an arbitrary Docker image. The quickstart image and a
-plain BusyBox HTTP server do not gain request, dependency, or trace telemetry from this configuration.
+An environment variable does not instrument an arbitrary Docker image. The quickstart image does
+not gain request, dependency, or trace telemetry from this configuration.
 Container Apps console/system logging to Log Analytics remains configured independently of the
 application SDK and Application Insights.
 

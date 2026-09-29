@@ -133,7 +133,7 @@ Validation on 2026-09-29 covers all three workspaces: extension, azutils, and ut
 ## Human verification and deployment defaults
 
 On 2026-09-29, Brandon Waterloo reported the human-test checklist complete and all tests passing.
-During that session, an independent read of the deployed BusyBox app confirmed a Healthy/Running
+During that session, an independent read of the deployed app confirmed a Healthy/Running
 revision, ingress targeting port 8080, and an HTTP 200 response containing the expected page text.
 This is live-Azure evidence, not a claim of coverage across every region or sovereign cloud.
 That checklist preceded the Application Insights connection-string hookup. Application telemetry
