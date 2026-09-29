@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AIFoundryProjectLogicalType, AIServicesLogicalType, AppServiceLogicalType, AzureNodeId, CosmosDBLogicalType, CosmosDBMongoLogicalType, DurableTaskHubLogicalType, FunctionAppLogicalType, LogicAppLogicalType, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
+import { AIFoundryProjectLogicalType, AIServicesLogicalType, AppServiceLogicalType, AzureNodeId, CosmosDBLogicalType, CosmosDBMongoLogicalType, DurableTaskHubLogicalType, FunctionAppLogicalType, LogicAppLogicalType, StaticWebAppResourceType, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
 import { makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockCodeContext, createTestActionExecutor, withSettings } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
@@ -12,6 +12,8 @@ import { DeleteAzureResource } from '../../../src/commands/tree/DeleteAzureResou
 import { OpenInPortal } from '../../../src/commands/tree/OpenInPortal';
 import { AzdEnvNameTag, ConfigurationSection } from '../../../src/constants';
 import { AcrResourceType } from '../../../src/tree/resources/acr/AcrRegistry';
+import { ContainerAppResourceType } from '../../../src/tree/resources/containerApps/ContainerApp';
+import { ManagedEnvironmentResourceType } from '../../../src/tree/resources/containerApps/ManagedEnvironment';
 import { GenericAzureViewProvider } from '../../../src/tree/resources/GenericAzureViewProvider';
 import { setWebsiteUrl } from '../../../src/tree/resources/websiteUrl';
 
@@ -259,23 +261,29 @@ describe('GenericAzureViewProvider (unit)', () => {
             expect((item.iconPath as { id: string }).id).to.equal('symbol-namespace');
         });
 
-        for (const [logicalType, iconPath] of [
-            [AIFoundryProjectLogicalType, 'microsoft.machinelearningservices/workspaces~project.svg'],
-            [AIServicesLogicalType, 'microsoft.cognitiveservices/accounts~aiservices.svg'],
-            [AppServiceLogicalType, 'microsoft.web/sites~app.svg'],
-            [CosmosDBLogicalType, 'microsoft.documentdb/databaseaccounts~cosmosdb.svg'],
-            [CosmosDBMongoLogicalType, 'microsoft.documentdb/databaseaccounts~mongodb.svg'],
-            [DurableTaskHubLogicalType, 'microsoft.durabletask/schedulers/taskhubs.svg'],
-            [FunctionAppLogicalType, 'microsoft.web/sites~functionapp.svg'],
-            [LogicAppLogicalType, 'microsoft.web/sites~workflowapp.svg'],
-            [AcrResourceType, 'microsoft.containerregistry/registries.svg'],
+        for (const [logicalType, label, iconPath] of [
+            [AIFoundryProjectLogicalType, 'AI Foundry Projects', 'microsoft.machinelearningservices/workspaces~project.svg'],
+            [AIServicesLogicalType, 'AI Services', 'microsoft.cognitiveservices/accounts~aiservices.svg'],
+            [AppServiceLogicalType, 'App Services', 'microsoft.web/sites~app.svg'],
+            [ContainerAppResourceType, 'Container Apps', 'microsoft.app/containerapps.svg'],
+            [ManagedEnvironmentResourceType, 'Container App Environments', 'microsoft.app/managedenvironments.svg'],
+            [CosmosDBLogicalType, 'Azure Cosmos DB', 'microsoft.documentdb/databaseaccounts~cosmosdb.svg'],
+            [CosmosDBMongoLogicalType, 'Azure Cosmos DB for MongoDB', 'microsoft.documentdb/databaseaccounts~mongodb.svg'],
+            [DurableTaskHubLogicalType, 'Durable Task Hubs', 'microsoft.durabletask/schedulers/taskhubs.svg'],
+            [FunctionAppLogicalType, 'Function Apps', 'microsoft.web/sites~functionapp.svg'],
+            [LogicAppLogicalType, 'Logic Apps', 'microsoft.web/sites~workflowapp.svg'],
+            [AcrResourceType, 'Container Registries', 'microsoft.containerregistry/registries.svg'],
+            [StaticWebAppResourceType, 'Static Web Apps', 'microsoft.web/staticsites.svg'],
+            ['Microsoft.Storage/storageAccounts', 'Storage Accounts', 'microsoft.storage/storageaccounts.svg'],
+            ['Microsoft.Compute/virtualMachines', 'Virtual Machines', 'microsoft.compute/virtualmachines.svg'],
         ]) {
-            it(`should render the icon for ${logicalType} case-insensitively`, () => {
+            it(`should render the label and icon for ${logicalType} case-insensitively`, () => {
                 const provider = createProvider();
                 const key = `azr://acc1@portal.azure.com/tenants/t1/subscriptions/sub1/~resourceType/${encodeURIComponent(logicalType.toUpperCase())}`;
 
                 const item = provider.getTreeItem(key);
 
+                expect(item.label).to.equal(label);
                 expect((item.iconPath as { path: string }).path).to.include(iconPath);
                 expect(item.contextValue).to.be.undefined;
             });
@@ -404,7 +412,7 @@ describe('GenericAzureViewProvider (unit)', () => {
             }),
         );
 
-        it('should sort known and unknown resource types by their rendered labels', () =>
+        it('should sort resource types by their rendered labels', () =>
             withSettings(mockCodeContext.mock, { [`${ConfigurationSection}.groupBy`]: 'resourceType' }, async () => {
                 const functionApp = makeGenericResource({
                     ...webApp,
@@ -483,8 +491,7 @@ describe('GenericAzureViewProvider (unit)', () => {
                 // Find the Microsoft.Web/sites group (has 2 resources)
                 let webGroupKey: string | undefined;
                 for (const key of groups) {
-                    const item = provider.getTreeItem(key);
-                    if (item.label === 'Microsoft.Web/sites') {
+                    if (AzureNodeId.parse(key).getGrouping()?.groupingValue === webApp.logicalType) {
                         webGroupKey = key;
                         break;
                     }

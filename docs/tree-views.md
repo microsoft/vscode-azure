@@ -406,9 +406,10 @@ Most resources use their raw ARM `type` as the icon key. However, some ARM types
 
 Resource-type grouping keeps `GenericResource.logicalType` as the stable group
 identity and node key. `GenericAzureViewProvider` owns the mapping from logical
-types to localized group labels. It resolves group icons directly from the
-logical type using the convention above. Unknown logical types retain their raw
-type label and generic `symbol-namespace` icon.
+types with bundled icons to localized, product-specific group labels (for
+example, `Microsoft.App/containerApps` appears as "Container Apps"). It resolves
+group icons directly from the logical type using the convention above. Unknown
+logical types retain their raw type label and generic `symbol-namespace` icon.
 
 To add group presentation for a supported service:
 
