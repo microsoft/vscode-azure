@@ -17,7 +17,7 @@ by editing this file and reconfirming with the reviewer.
 | **Signed off by** | Brandon Waterloo (@bwateratmsft) |
 | **Date** | 2026-09-24 |
 | **Review** | Excel review workbook; 30 rows overridden, 241 accepted as recommended (blank decision = agreement). |
-| **Last confirmed** | 2026-09-29; PR review moved FUNC-168 back to Migrate (remote Functions group node), added optional `launch.json` generation to FUNC-030, and clarified that `local.settings.json` stays. Earlier, 2026-09-24: F5 design review moved FUNC-203 through FUNC-207 to Drop. |
+| **Last confirmed** | 2026-09-29; PR review moved FUNC-055 to Reuse (`azd pipeline config`) and FUNC-168 back to Migrate (remote Functions group node), added optional `launch.json` generation to FUNC-030, and clarified that `local.settings.json` stays. Earlier, 2026-09-24: F5 design review moved FUNC-203 through FUNC-207 to Drop. |
 
 ## Granularity
 
@@ -35,9 +35,9 @@ problem matcher and pattern; per manifest-level contract; per orphan.
 |---|---:|---|
 | Migrate | 25 | Preserve the source capability using monorepo patterns |
 | Adapt | 37 | Preserve the user goal with intentionally different behavior or UX |
-| Reuse | 18 | Satisfy the feature by wiring an existing monorepo capability |
+| Reuse | 19 | Satisfy the feature by wiring an existing monorepo capability |
 | Drop | 135 | Do not carry the source capability forward |
-| Defer | 56 | Retain the goal for later tracked work |
+| Defer | 55 | Retain the goal for later tracked work |
 | **Total** | **271** | |
 
 ## Cross-cutting decisions
@@ -150,7 +150,7 @@ Judgment-call groups (`JC-*`) mark rows the reviewer was asked to weigh as a set
 | FUNC-052 | 1.3 Deploy | `azureFunctions.viewCommitInGitHub` | **Drop** | Zero successes per telemetry. |  |  |
 | FUNC-053 | 1.3 Deploy | `azureFunctions.openInPortal` (deployment node) | **Drop** | Deployment node dropped; generic open-in-portal covers resources. |  | JC-KUDU |
 | FUNC-054 | 1.3 Deploy | `azureFunctions.configureDeploymentSource` | **Drop** | Kudu SCM (None/LocalGit/GitHub); cancel-dominant. CI/CD goal is `vscode-azure/configureCicd`. |  | JC-KUDU |
-| FUNC-055 | 1.3 Deploy | `azureFunctions.connectToGitHub` | **Defer** | Defer GitHub connectivity like this. | Override (recommended Reuse). | JC-KUDU |
+| FUNC-055 | 1.3 Deploy | `azureFunctions.connectToGitHub` | **Reuse** | CI/CD setup goes through `azd pipeline config`, already wired as `vscode-azure/configureCicd`. |  | JC-KUDU |
 | FUNC-056 | 1.3 Deploy | `azureFunctions.disconnectRepo` | **Drop** | Pairs with Kudu deployment source. |  | JC-KUDU |
 | FUNC-057 | 1.4 App lifecycle | `azureFunctions.createFunctionApp` | **Adapt** | Already partly exists as `vscode-azure/functions/createNew`/`deploy` (azd + Bicep). Close gaps from the source flow. |  |  |
 | FUNC-058 | 1.4 App lifecycle | `azureFunctions.createFunctionAppAdvanced` | **Drop** | No advanced variant (prompt budget); advanced deltas become Bicep parameters. |  |  |

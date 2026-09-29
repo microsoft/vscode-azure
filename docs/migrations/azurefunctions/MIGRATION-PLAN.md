@@ -411,7 +411,7 @@ module does not cover it).
 ```
 Pattern:        package.json contributions + package.nls.json; shared framework wiring
 Target files:   extensions/vscode-azure/package.json, package.nls.json, docs/products/functions.md (new)
-Sweep:          reused functionsDetector (project detection), framework error toasts (Report Issue),
+Sweep:          reused functionsDetector (project detection), framework error toasts (Report Issue), ConfigureCicd,
                 existing jsonValidation block.
 Activation:     none (jsonValidation and viewsWelcome add no activation events)
 External facts: `https://json.schemastore.org/function.json` and `https://json.schemastore.org/host.json`, taken from
@@ -428,6 +428,8 @@ External facts: `https://json.schemastore.org/function.json` and `https://json.s
   <- FUNC-002
 - [ ] Report Issue stays on the framework error toast; user-actionable errors
   use `ExternalError`. <- FUNC-100
+- [ ] GitHub / CI/CD setup uses the existing `vscode-azure/configureCicd`
+  (`azd pipeline config`); no Functions-specific command. <- FUNC-055
 - [ ] No Functions settings are contributed: every source setting is Drop or
   Defer in [TRIAGE.md](TRIAGE.md).
 - [ ] Product doc `docs/products/functions.md` (tree, commands, F5, creation,
@@ -462,7 +464,6 @@ External facts: `https://json.schemastore.org/function.json` and `https://json.s
   <- FUNC-140, FUNC-141, FUNC-195
 - [ ] Template Gallery and resource-backed binding settings (with their SDKs).
   <- FUNC-208, FUNC-240, FUNC-265
-- [ ] GitHub connection for deployment. <- FUNC-055
 
 ## Dropped -- recorded for parity
 
