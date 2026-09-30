@@ -34,11 +34,8 @@ with the reviewer.
 
 These were resolved during mapping and are binding for the slices below.
 
-- **Provisioning module.** Keep the current pre-publication build of the
-  function-app pattern module (`br:bwaterpretendavm.azurecr.io/bicep/function-app:0.1.0`)
-  until [Azure/bicep-registry-modules#7299](https://github.com/Azure/bicep-registry-modules/pull/7299)
-  publishes `avm/ptn/app/function-app`, then pin the `br/public` reference.
-  Tracked by [#112](https://github.com/microsoft/vscode-azure/issues/112). See
+- **Provisioning module.** Use the published
+  `br/public:avm/ptn/app/function-app:0.1.0` pattern module. See
   [Provisioning decision](#provisioning-decision).
 - **Deploy from a Function App node** works only for apps carrying an
   `azd-service-name` tag that matches a service in a workspace `azure.yaml`.
@@ -381,21 +378,14 @@ account, Application Insights, Log Analytics workspace, user-assigned managed
 identity, and role assignments, so a pattern module is required (a resource
 module does not cover it).
 
-- **AVM search (2026-09-24):** `avm/ptn` has no published function-app module
-  (`avm/ptn/web` does not exist; `mcr.microsoft.com/v2/bicep/avm/ptn/web/function-app/tags/list`
-  returns 404). `avm/res/web/site` is a single-resource module and does not
-  satisfy the topology.
-- **Candidate:** `avm/ptn/app/function-app` in
+- **Module:** `avm/ptn/app/function-app` from
   [Azure/bicep-registry-modules#7299](https://github.com/Azure/bicep-registry-modules/pull/7299)
-  (open). It covers the whole topology: it creates the user-assigned identity
+  covers the whole topology: it creates the user-assigned identity
   (or accepts one), sets `AzureWebJobsStorage__credential = managedidentity`,
   disables local auth, and exposes `flexConsumptionInstanceMemoryMB` /
   `flexConsumptionMaximumInstanceCount` plus the name, resource ID, default
   hostname, and identity outputs.
-- **Selected:** keep the pre-publication build at
-  `br:bwaterpretendavm.azurecr.io/bicep/function-app:0.1.0` (reviewer
-  decision), then replace it with a pinned `br/public:avm/ptn/app/function-app:<version>`
-  once published. Tracked by [#112](https://github.com/microsoft/vscode-azure/issues/112).
+- **Selected:** `br/public:avm/ptn/app/function-app:0.1.0`.
 - **Parameter map:** `environmentName` -> `functionAppName` (`<env>-func`);
   wizard runtime -> `functionWorkerRuntime`, `runtimeVersion`; `azdServiceName`
   -> `functionAppTags['azd-service-name']`; `appServicePlanSkuName` fixed to
@@ -403,8 +393,7 @@ module does not cover it).
   and portal CORS unchanged. `functionAppDefaultHostname` feeds
   `ShowEndpointUrlStep`.
 
-- [ ] Replace the temporary registry reference with the pinned `br/public`
-  module when #7299 publishes; rebuild the consumer. <- FUNC-249
+- [x] Pin the published `br/public` module in the templates. <- FUNC-249
 
 ## Slice 7 -- Manifest, reuse wiring, and documentation
 

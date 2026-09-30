@@ -344,7 +344,7 @@ Judgment-call groups (`JC-*`) mark rows the reviewer was asked to weigh as a set
 | FUNC-246 | 5 Wizards | Create app: authentication (secrets vs managed identity for storage) | **Adapt** | Default to managed identity in the Bicep module; no prompt. | MI only, no more secrets ever period full stop. |  |
 | FUNC-247 | 5 Wizards | Create app: stack filtered by detected project language | **Adapt** | Detect the runtime from the workspace to skip PickRuntimeStep when possible. |  |  |
 | FUNC-248 | 5 Wizards | Create app: Flex max instance count / instance memory | **Adapt** | Bicep parameters with defaults, no prompt. |  |  |
-| FUNC-249 | 5 Wizards | Create app: provisioning topology (RG, storage, App Insights, Log Analytics, plan, UAMI, role, site) | **Adapt** | AVM function-app pattern module; currently hosted in a temporary registry (issue #112). |  |  |
+| FUNC-249 | 5 Wizards | Create app: provisioning topology (RG, storage, App Insights, Log Analytics, plan, UAMI, role, site) | **Adapt** | Published AVM function-app pattern module (`br/public:avm/ptn/app/function-app:0.1.0`). |  |  |
 | FUNC-250 | 5 Wizards | Create app: containerized (ACA-hosted) function app | **Defer** | Containerized hosting as a unit. |  | JC-CONTAINER |
 | FUNC-251 | 5 Wizards | Deploy: guards and warnings (stopped app, emulator connections, EOL, bundle, Event Grid on Flex) | **Drop** | Source zip-deploy guards; azd deploy has its own validation. |  | JC-DEPLOY |
 | FUNC-252 | 5 Wizards | Deploy: worker runtime / extension version mismatch fixups | **Drop** | Bicep sets app settings. |  | JC-DEPLOY |

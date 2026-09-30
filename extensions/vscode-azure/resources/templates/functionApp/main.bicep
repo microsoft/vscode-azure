@@ -32,9 +32,7 @@ resource rg 'Microsoft.Resources/resourceGroups@2024-03-01' = {
   tags: tags
 }
 
-// The pattern module is temporarily hosted in ACR; see https://github.com/microsoft/vscode-azure/issues/112
-// Publish using the command: `az bicep publish --file "D:\bicep-registry-modules\avm\ptn\web\function-app\main.bicep" --target br:bwaterpretendavm.azurecr.io/bicep/function-app:<version>`
-module functionApp 'br:bwaterpretendavm.azurecr.io/bicep/function-app:0.1.0' = {
+module functionApp 'br/public:avm/ptn/app/function-app:0.1.0' = {
   scope: rg
   name: 'functionApp'
   params: {
