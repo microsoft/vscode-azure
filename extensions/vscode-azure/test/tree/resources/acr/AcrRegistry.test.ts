@@ -3,8 +3,9 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { AcrResourceType } from '@microsoft/vscode-azure-azutils';
 import { makeGenericResource } from '@microsoft/vscode-azure-azutils/testing';
-import { AcrResourceType, isAcrRegistry } from '../../../../src/tree/resources/acr/AcrRegistry';
+import { isAcrRegistry } from '../../../../src/tree/resources/acr/AcrRegistry';
 
 describe('AcrRegistry (unit)', () => {
     describe('isAcrRegistry', () => {

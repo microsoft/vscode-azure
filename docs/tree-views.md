@@ -356,11 +356,11 @@ The `LoadMore` command handles this interaction, and `LoadMoreOptions` configure
 
 ## Resource Icons
 
-Tree items for Azure resources display product-specific SVG icons. The icon for a given resource is resolved at runtime by `getResourceTypeIconUri()` in `extensions/vscode-azure/src/tree/iconPath.ts`, which builds a file URI from the resource's **logical type** (or ARM type for non-resource nodes like subscriptions and resource groups).
+Tree items for Azure resources display product-specific SVG icons. The icon for a given resource is resolved at runtime by `getResourceTypeIconUri()` in `extensions/vscode-azure/src/tree/iconPath.ts`, which uses the resource's **logical type** (or ARM type for non-resource nodes like subscriptions and resource groups) to select an icon key from azutils.
 
 ### Convention
 
-The icon file path is derived mechanically from the type string:
+By default, the icon file path is derived mechanically from the type string:
 
 ```
 <logicalType>.toLowerCase() + '.svg'
@@ -376,6 +376,7 @@ The `/` in the type becomes a directory separator, and `~` separates kind suffix
 | `Microsoft.DocumentDB/databaseAccounts~cosmosdb` | `microsoft.documentdb/databaseaccounts~cosmosdb.svg` |
 
 **This naming convention is load-bearing.** If the icon filename does not match the lowercased logical type, the icon silently fails to load and VS Code shows no icon for that tree item.
+`getResourceTypePresentation()` can instead specify a shared icon key, such as the Foundry project icon for `Microsoft.CognitiveServices/accounts/projects`.
 
 ### Source location
 
@@ -398,23 +399,25 @@ Most resources use their raw ARM `type` as the icon key. However, some ARM types
 
 ### Adding a new icon
 
-1. Drop an SVG file into the matching subfolder of `packages/azutils/resources/azureIcons/`. The filename **must** be `<logicalType>.toLowerCase() + '.svg'`.
+1. Drop an SVG file into the matching subfolder of `packages/azutils/resources/azureIcons/`. By default, the filename **must** be `<logicalType>.toLowerCase() + '.svg'`.
 2. If the ARM type needs kind-based disambiguation, add a logical type constant and a branch to `logicalType()` in `ResourceClient.ts`.
 3. No view provider changes are needed — `GenericAzureViewProvider` already passes `resource.logicalType` to `getResourceTypeIconUri()`.
 
 ### Resource-type group presentation
 
 Resource-type grouping keeps `GenericResource.logicalType` as the stable group
-identity and node key. `GenericAzureViewProvider` owns the mapping from logical
-types to localized group labels. It resolves group icons directly from the
-logical type using the convention above. Unknown logical types retain their raw
-type label and generic `symbol-namespace` icon.
+identity and node key. `getResourceTypePresentation()` in azutils returns the
+localized product name and icon key for each supported logical type (for
+example, `Microsoft.App/containerApps` appears as "Container Apps" with its
+matching icon). `GenericAzureViewProvider` renders that presentation. Unknown
+logical types retain their raw type label and generic `symbol-namespace` icon.
 
 To add group presentation for a supported service:
 
 1. Ensure the resource has a stable logical type and matching icon file.
-2. Add a case-insensitive branch to the resource-type label mapping in
-   `GenericAzureViewProvider`. Localize the display name with `IVsCode.l10n.t()`.
+2. Add an entry to `packages/azutils/src/tree/ResourceTypePresentation.ts`.
+   Localize the name with `IVsCode.l10n.t()`; the icon key defaults to the
+   logical type but can be shared with another resource type.
 3. Test the localized label, convention-based icon path, and generic fallback.
 
 ## Putting It Together

@@ -4,16 +4,14 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { ConcreteAzureNode, GenericResource } from '@microsoft/vscode-azure-azutils';
-import { AzureNodeId } from '@microsoft/vscode-azure-azutils';
+import { AzureNodeId, ContainerAppResourceType, ManagedEnvironmentResourceType } from '@microsoft/vscode-azure-azutils';
 import { createMockContainerAppsClient, makeContainerApp, makeGenericResource } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockCodeContext, createTestActionExecutor, MockTreeItemCollapsibleState } from '@microsoft/vscode-azure-utils/testing';
 import { OpenContainerAppConsole, OpenContainerAppLogs } from '../../../../src/commands/containerApps/portalBlades';
 import { RevealContainerAppEnvironment } from '../../../../src/commands/containerApps/RevealContainerAppEnvironment';
 import { StartStreamingLogs } from '../../../../src/commands/containerApps/StartStreamingLogs';
-import { ContainerAppResourceType } from '../../../../src/tree/resources/containerApps/ContainerApp';
 import { ContainerAppsDataProvider, ContainerVirtualType } from '../../../../src/tree/resources/containerApps/ContainerAppsDataProvider';
 import { ContainerAppsViewProvider, shortenImageReference } from '../../../../src/tree/resources/containerApps/ContainerAppsViewProvider';
-import { ManagedEnvironmentResourceType } from '../../../../src/tree/resources/containerApps/ManagedEnvironment';
 
 function makeEnvironment(): GenericResource {
     return makeGenericResource({

@@ -3,13 +3,11 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureNodeId, type ConcreteAzureNode, type ContainerApp } from '@microsoft/vscode-azure-azutils';
+import { AzureNodeId, ContainerAppResourceType, ManagedEnvironmentResourceType, type ConcreteAzureNode, type ContainerApp } from '@microsoft/vscode-azure-azutils';
 import { createMockContainerAppsClient, makeContainerApp, makeGenericResource } from '@microsoft/vscode-azure-azutils/testing';
 import { DataItemTree } from '@microsoft/vscode-azure-utils';
 import { createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
-import { ContainerAppResourceType } from '../../../../src/tree/resources/containerApps/ContainerApp';
 import { ContainerAppsDataProvider, isContainerNode } from '../../../../src/tree/resources/containerApps/ContainerAppsDataProvider';
-import { ManagedEnvironmentResourceType } from '../../../../src/tree/resources/containerApps/ManagedEnvironment';
 import { getWebsiteUrl } from '../../../../src/tree/resources/websiteUrl';
 
 describe('ContainerAppsDataProvider (unit)', () => {

@@ -3,12 +3,11 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureNodeId, type ConcreteAzureNode, type IAcrClientProvider, type IResourceClientProvider } from '@microsoft/vscode-azure-azutils';
+import { AcrResourceType, AzureNodeId, type ConcreteAzureNode, type IAcrClientProvider, type IResourceClientProvider } from '@microsoft/vscode-azure-azutils';
 import { createMockAccountDataProvider, makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
 import { DataItemTree, type ITreeItem, ViewItemTree, type ViewItemTreeOptions } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, createMockVsCode, createTestActionExecutor, MockTreeItemCollapsibleState } from '@microsoft/vscode-azure-utils/testing';
 import { AcrDataProvider } from '../../../../src/tree/resources/acr/AcrDataProvider';
-import { AcrResourceType } from '../../../../src/tree/resources/acr/AcrRegistry';
 import { AcrViewProvider } from '../../../../src/tree/resources/acr/AcrViewProvider';
 import { AzureResourceDataProvider } from '../../../../src/tree/resources/AzureResourceDataProvider';
 import { GenericAzureViewProvider } from '../../../../src/tree/resources/GenericAzureViewProvider';

@@ -106,6 +106,10 @@ Cosmos DB / AI Foundry / Durable Task equivalents) are exported from the same fi
 are what icon resolution and resource-type grouping key off. See
 [Tree Views — Resource Icons](tree-views.md#resource-icons).
 
+`getResourceTypePresentation()` in `src/tree/ResourceTypePresentation.ts` maps
+supported logical types to localized group names and bundled icon keys. The
+extension's view provider renders these values without owning the service list.
+
 ## `toPages`
 
 Converts Azure SDK's `PagedAsyncIterableIterator` to the project-standard

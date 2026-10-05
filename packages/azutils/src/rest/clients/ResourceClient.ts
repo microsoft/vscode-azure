@@ -23,6 +23,13 @@ export type { ResourcesDeleteByIdOptionalParams, ResourcesListByResourceGroupOpt
 /** ARM and logical resource type for Azure Static Web Apps (`Microsoft.Web/staticSites`). */
 export const StaticWebAppResourceType = 'Microsoft.Web/staticSites';
 
+/** ARM and logical resource type for Container Apps. */
+export const ContainerAppResourceType = 'Microsoft.App/containerApps';
+/** ARM and logical resource type for Container App managed environments. */
+export const ManagedEnvironmentResourceType = 'Microsoft.App/managedEnvironments';
+/** ARM and logical resource type for Container Registries. */
+export const AcrResourceType = 'Microsoft.ContainerRegistry/registries';
+
 /** ARM resource type string for App Service-family resources (`Microsoft.Web/sites`). */
 export const SiteType = 'Microsoft.Web/sites';
 /** Logical type assigned to function apps (`Microsoft.Web/sites` with `kind` containing `functionapp`). */
@@ -36,6 +43,8 @@ export const AppServiceLogicalType = `${SiteType}~app`;
 export const CognitiveServicesAccountType = 'Microsoft.CognitiveServices/accounts';
 /** Logical type assigned to AI Foundry resources (`Microsoft.CognitiveServices/accounts` with `kind` containing `AIServices`). */
 export const AIServicesLogicalType = `${CognitiveServicesAccountType}~aiservices`;
+/** ARM and logical resource type for Microsoft Foundry projects under Cognitive Services accounts. */
+export const FoundryProjectResourceType = `${CognitiveServicesAccountType}/projects`;
 
 /** ARM resource type string for Cosmos DB accounts (`Microsoft.DocumentDB/databaseAccounts`). */
 export const DocumentDBAccountType = 'Microsoft.DocumentDB/databaseAccounts';
@@ -43,6 +52,8 @@ export const DocumentDBAccountType = 'Microsoft.DocumentDB/databaseAccounts';
 export const CosmosDBMongoLogicalType = `${DocumentDBAccountType}~mongodb`;
 /** Logical type assigned to Cosmos DB accounts (any non-MongoDB `Microsoft.DocumentDB/databaseAccounts` kind). */
 export const CosmosDBLogicalType = `${DocumentDBAccountType}~cosmosdb`;
+/** ARM and logical resource type for Azure DocumentDB clusters. */
+export const DocumentDbResourceType = 'Microsoft.DocumentDB/mongoClusters';
 
 /** ARM resource type prefix for Durable Task resources (`Microsoft.DurableTask`). */
 export const DurableTaskPrefix = 'Microsoft.DurableTask';

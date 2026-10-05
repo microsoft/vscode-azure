@@ -4,12 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { Sku as AcrSku, GenericResource } from '@microsoft/vscode-azure-azutils';
-import { isGenericResource } from '@microsoft/vscode-azure-azutils';
-
-/**
- * The ARM resource type string for Azure Container Registries.
- */
-export const AcrResourceType = 'Microsoft.ContainerRegistry/registries';
+import { AcrResourceType, isGenericResource } from '@microsoft/vscode-azure-azutils';
 
 /**
  * A {@linkcode GenericResource} that has been enriched with ACR-specific
