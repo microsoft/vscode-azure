@@ -171,6 +171,13 @@ Commands that appear in tree item context menus should:
 
 The `\b` prevents unintended partial matches.
 
+Resource context menu entries use `1_browse`, `2_logs`, and `3_actions`
+groups to separate navigation, logging, and resource operations. Use `@` ordering
+within each group, with destructive actions last. Shared commands such as
+Delete Resource belong in these groups too, so product-specific commands
+appear alongside them on the same node. The `inline` group controls tree-item
+buttons separately.
+
 ## Comments and Documentation
 
 Comments and docs describe the code **as it is now**, not how it got that way. The
