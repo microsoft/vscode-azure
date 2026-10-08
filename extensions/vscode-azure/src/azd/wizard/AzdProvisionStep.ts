@@ -3,20 +3,15 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { CancellationError, CaselessMap, CaselessSet, delay, ExecuteStep, stringifyError, ICodeContext, IOutputChannel } from '@microsoft/vscode-azure-utils';
+import { CaselessMap, CaselessSet, ExecuteStep, stringifyError, ICodeContext, IOutputChannel } from '@microsoft/vscode-azure-utils';
 import { parseAzureResourceId } from '@microsoft/vscode-azure-azutils';
 import { inject, injectable } from 'inversify';
-import type * as vscode from 'vscode';
 import { IArmDeploymentDataProvider } from '../../tree/activity/ArmDeploymentDataProvider';
 import { ISubscriptionResolver } from '../../services';
 import { IAzdService } from '../AzdService';
 import { ITempDirManager } from '../TempDirManager';
+import { withAzdJsonlOutput } from '../withAzdJsonlOutput';
 import type { AzdWizardContext } from './AzdWizardContext';
-
-/** A single line from the JSONL deployment ID file written by azd. */
-interface DeploymentIdEntry {
-    readonly deploymentId: string;
-}
 
 /** Interval in milliseconds between polls for the deployment ID file. */
 const pollIntervalMs = 3000;
@@ -59,7 +54,6 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
         const deployIdDir = await this.tempDirManager.createTempDir();
         const deployIdFileUri = this.ctx.code.Uri.joinPath(deployIdDir, 'deployment-id.jsonl');
 
-        const abortCtl = new AbortController();
         const trackedIds = new CaselessSet();
 
         // Scope each deployment to the tenant that owns its subscription, so its
@@ -67,18 +61,16 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
         // rejects outright for a subscription owned by another tenant.
         const scopes = this.createScopeResolver(context);
 
-        // Start polling in the background (fire-and-forget)
-        void this.pollLoop(deployIdFileUri, trackedIds, abortCtl.signal, scopes);
-
-        try {
-            await this.azd.provision(context.iacFolder!, { // eslint-disable-line @typescript-eslint/no-non-null-assertion
-                AZD_DEPLOYMENT_ID_FILE: deployIdFileUri.fsPath, // eslint-disable-line @typescript-eslint/naming-convention
-            });
-        } finally {
-            abortCtl.abort();
-            // Final read to catch any entries written just before exit
-            await this.readAndTrack(deployIdFileUri, trackedIds, scopes);
-        }
+        await withAzdJsonlOutput({
+            code: this.ctx.code,
+            file: deployIdFileUri,
+            intervalMs: pollIntervalMs,
+            cancellation: context.cancellation,
+            onEntry: entry => this.trackEntry(entry, trackedIds, scopes),
+            onError: kind => { this.output.warn(this.ctx.code.l10n.t('[provision] Unable to process azd deployment IDs ({0}).', kind)); },
+        }, signal => this.azd.provision(context.iacFolder!, { // eslint-disable-line @typescript-eslint/no-non-null-assertion
+            AZD_DEPLOYMENT_ID_FILE: deployIdFileUri.fsPath, // eslint-disable-line @typescript-eslint/naming-convention
+        }, signal));
     }
 
     /**
@@ -133,79 +125,18 @@ export class AzdProvisionStep<TContext extends AzdWizardContext> extends Execute
         }
     }
 
-    /**
-     * Polls the deployment ID file every {@linkcode pollIntervalMs} until
-     * the abort signal fires. Each poll reads the entire file, parses
-     * JSONL entries, and starts tracking any new deployment IDs.
-     *
-     * Polling lifetime is tied to the `azd provision` task, **not** to the
-     * visibility of the resulting activities. Clearing a tracked deployment
-     * does not stop discovery of additional deployments produced by the
-     * still-running provision -- a brand new deployment is a brand new event
-     * and should appear in the tree.
-     */
-    private async pollLoop(fileUri: vscode.Uri, trackedIds: CaselessSet, signal: AbortSignal, scopes: (deploymentId: string) => Promise<TokenScope>): Promise<void> {
-        try {
-            while (!signal.aborted) {
-                await this.readAndTrack(fileUri, trackedIds, scopes);
-                await delay(pollIntervalMs, signal);
-            }
-        } catch (e) {
-            if (!CancellationError.test(e)) {
-                this.output.debug(`[provision] deployment ID polling failed: ${stringifyError(e)}`);
-            }
+    private async trackEntry(entry: unknown, trackedIds: CaselessSet, scopes: (deploymentId: string) => Promise<TokenScope>): Promise<void> {
+        if (!entry || typeof entry !== 'object' || !('deploymentId' in entry)
+            || typeof entry.deploymentId !== 'string' || !entry.deploymentId) {
+            this.output.warn(this.ctx.code.l10n.t('[provision] Invalid azd deployment ID entry.'));
+            return;
         }
-    }
-
-    /**
-     * Reads the deployment ID file and starts tracking any entries
-     * not already in {@linkcode trackedIds}. Best-effort: silently
-     * ignores missing files and parse errors.
-     */
-    private async readAndTrack(fileUri: vscode.Uri, trackedIds: CaselessSet, scopes: (deploymentId: string) => Promise<TokenScope>): Promise<void> {
-        const entries = await this.readDeploymentIdFile(fileUri);
-        for (const entry of entries) {
-            if (trackedIds.has(entry.deploymentId)) {
-                continue;
-            }
-            trackedIds.add(entry.deploymentId);
-            this.output.debug(`[provision] found deployment ID: ${entry.deploymentId}`);
-
-            try {
-                const scope = await scopes(entry.deploymentId);
-                this.armProvider.trackDeployment(entry.deploymentId, scope.tenantId, scope.accountId);
-            } catch (e) {
-                this.output.debug(`[provision] failed to track deployment ${entry.deploymentId}: ${stringifyError(e)}`);
-            }
+        if (trackedIds.has(entry.deploymentId)) {
+            return;
         }
-    }
-
-    /**
-     * Reads and parses the JSONL deployment ID file. Returns an empty
-     * array when the file doesn't exist or can't be read.
-     */
-    private async readDeploymentIdFile(fileUri: vscode.Uri): Promise<DeploymentIdEntry[]> {
-        try {
-            const content = await this.ctx.code.workspace.fs.readFile(fileUri);
-            const text = new TextDecoder().decode(content);
-            const entries: DeploymentIdEntry[] = [];
-            for (const line of text.split('\n')) {
-                const trimmed = line.trim();
-                if (trimmed.length === 0) {
-                    continue;
-                }
-                try {
-                    const parsed = JSON.parse(trimmed) as DeploymentIdEntry;
-                    if (parsed.deploymentId) {
-                        entries.push(parsed);
-                    }
-                } catch {
-                    // Skip malformed lines
-                }
-            }
-            return entries;
-        } catch {
-            return [];
-        }
+        trackedIds.add(entry.deploymentId);
+        this.output.debug(`[provision] found deployment ID: ${entry.deploymentId}`);
+        const scope = await scopes(entry.deploymentId);
+        this.armProvider.trackDeployment(entry.deploymentId, scope.tenantId, scope.accountId);
     }
 }

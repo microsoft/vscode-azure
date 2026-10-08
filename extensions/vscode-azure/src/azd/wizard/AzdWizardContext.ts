@@ -20,6 +20,8 @@ export type AzdJob = 'createNew' | 'deploy';
 
 /** Shared wizard context for azd-backed resource creation wizards. */
 export interface AzdWizardContext {
+    /** Cancels foreground provision/deploy tasks and their output polling. */
+    readonly cancellation?: vscode.CancellationToken | AbortSignal;
     readonly subscription?: AzureSubscription;
     readonly location?: Location;
     /**

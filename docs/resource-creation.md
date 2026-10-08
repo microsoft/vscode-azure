@@ -66,8 +66,16 @@ Using `CreateFunctionApp` as the concrete example:
 | 2 | `GenerateAzureYamlStep` | No existing `azure.yaml` | Runs `azd init --minimal --no-prompt` |
 | 3 | `CreateAzdEnvStep` | No `existingDefaultEnvName` | Runs `azd env new` |
 | 4 | `AzdProvisionStep` | `provision === true` | Runs `azd provision` as a foreground VS Code task |
-| 5 | `AzdDeployStep` | `deploy === true` | Runs `azd deploy`; tracks progress via `CodeDeploymentHandle` |
+| 5 | `AzdDeployStep` | `deploy === true` | Runs `azd deploy` as a foreground task; tracks console messages and final per-service results via `CodeDeploymentHandle` |
 | 6 | `ShowEndpointUrlStep` | `iacFolder` is set | Shows a toast with the deployed endpoint URL |
+
+## Deployment Activity
+
+`AzdProvisionStep` and `AzdDeployStep` use `withAzdJsonlOutput` to consume append-only JSONL files during their foreground tasks. The helper processes each complete line once, awaits entry handlers, stops polling when the task exits, and drains the file after either success or failure. Missing files are expected; other output failures are reported without replacing the task's result. Polling lifetime is tied to the task, independently of clearing activities from the tree.
+
+An optional `AzdWizardContext.cancellation` token or abort signal is forwarded to both the JSONL helper and the foreground task. Cancellation stops polling, requests task termination, and drains remaining output after the task settles. A cancelled code deployment is shown as `Canceled`, not `Failed`.
+
+`AzdDeployStep` sets `AZD_OUTPUT_JSONL` to a unique file in extension-managed temporary storage. On azd versions that support it, the activity tree shows semantic console messages while the task runs, then service results, warnings, and endpoint artifacts when deployment succeeds. The integrated terminal remains interactive. Older azd versions ignore the variable and still produce a deployment activity with the task's final status. The task's exit status, not the presence of a result event, determines success.
 
 ## Scenario Matrix
 

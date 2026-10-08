@@ -106,16 +106,20 @@ export interface IAzdService {
      *
      * @param env - Additional environment variables to pass to the task
      *   (merged with the auth server env).
+     * @param cancellation - Cancels the foreground task.
      */
-    provision(cwd: vscode.Uri, env?: Readonly<Record<string, string>>): Promise<void>;
+    provision(cwd: vscode.Uri, env?: Readonly<Record<string, string>>, cancellation?: vscode.CancellationToken | AbortSignal): Promise<void>;
 
     /**
      * Runs `azd deploy` as a visible VS Code task.
      *
      * Resolves when the task completes successfully.
      * Rejects on non-zero exit.
+     * @param env - Additional environment variables to pass to the task
+     *   (merged with the auth server env).
+     * @param cancellation - Cancels the foreground task.
      */
-    deploy(cwd: vscode.Uri): Promise<void>;
+    deploy(cwd: vscode.Uri, env?: Readonly<Record<string, string>>, cancellation?: vscode.CancellationToken | AbortSignal): Promise<void>;
 
     /**
      * Runs `azd pipeline config` as a visible VS Code task, interactively
@@ -402,7 +406,7 @@ export class AzdService implements IAzdService {
     }
 
     /** @inheritdoc */
-    public async provision(cwd: vscode.Uri, env?: Readonly<Record<string, string>>): Promise<void> {
+    public async provision(cwd: vscode.Uri, env?: Readonly<Record<string, string>>, cancellation?: vscode.CancellationToken | AbortSignal): Promise<void> {
         const authEnv = await this.authServer.getEnv();
 
         try {
@@ -413,14 +417,17 @@ export class AzdService implements IAzdService {
                 env: { ...authEnv, ...env },
                 name: 'azd provision',
                 source: 'azd',
-            });
+            }, cancellation);
         } catch (e) {
+            if (CancellationError.test(e)) {
+                throw e;
+            }
             throw await this.wrapAzdError(e);
         }
     }
 
     /** @inheritdoc */
-    public async deploy(cwd: vscode.Uri): Promise<void> {
+    public async deploy(cwd: vscode.Uri, env?: Readonly<Record<string, string>>, cancellation?: vscode.CancellationToken | AbortSignal): Promise<void> {
         const authEnv = await this.authServer.getEnv();
 
         try {
@@ -428,11 +435,14 @@ export class AzdService implements IAzdService {
                 execution: 'foreground',
                 command: command(this.getAzdCommand()).arg('deploy'),
                 cwd,
-                env: authEnv,
+                env: { ...authEnv, ...env },
                 name: 'azd deploy',
                 source: 'azd',
-            });
+            }, cancellation);
         } catch (e) {
+            if (CancellationError.test(e)) {
+                throw e;
+            }
             throw await this.wrapAzdError(e);
         }
     }

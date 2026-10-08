@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ProcessError, type IProcessExecutor, type ProcessExecutorOptions, argToString, argsToStrings } from '@microsoft/vscode-azure-utils';
+import { CancellationError, ProcessError, type IProcessExecutor, type ProcessExecutorOptions, argToString, argsToStrings } from '@microsoft/vscode-azure-utils';
 import { MockFileSystem, MockUri, createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import type { IAzdAuthServer } from '../../src/azd/AzdAuthServer';
@@ -520,7 +520,9 @@ describe('AzdService (unit)', () => {
             const { service, spawnMock, fs } = createService(spawnFn);
             fs.addFile(MockUri.file('/project/azure.yaml'));
 
-            await service.deploy(MockUri.file('/project'));
+            await service.deploy(MockUri.file('/project'), {
+                AZD_OUTPUT_JSONL: '/tmp/deploy.jsonl', // eslint-disable-line @typescript-eslint/naming-convention
+            });
 
             expect(spawnMock.mock.callCount()).to.equal(1);
             const opts = spawnMock.mock.calls[0].arguments[0] as SpawnOpts;
@@ -528,6 +530,7 @@ describe('AzdService (unit)', () => {
             expect(argToString(opts.command[0])).to.equal(AzdCommand);
             expect(argsToStrings(opts.command.slice(1))).to.include('deploy');
             expect(opts.source).to.equal('azd');
+            expect(opts.env).to.have.property('AZD_OUTPUT_JSONL', '/tmp/deploy.jsonl');
         });
 
         it('should reject on non-zero exit code', async () => {
@@ -542,6 +545,22 @@ describe('AzdService (unit)', () => {
             await expect(service.deploy(MockUri.file('/project'))).to.be.rejectedWith('Process exited with code 2');
         });
     });
+
+    for (const operation of ['provision', 'deploy'] as const) {
+        it(`should forward cancellation to ${operation} without probing the azd version`, async () => {
+            const controller = new AbortController();
+            const spawnFn = mock.fn((_opts: SpawnOpts, cancellation?: AbortSignal) => {
+                expect(cancellation).to.equal(controller.signal);
+                return Promise.reject(new CancellationError());
+            });
+            const { service, spawnMock } = createService(spawnFn);
+
+            await expect(service[operation](MockUri.file('/project'), undefined, controller.signal))
+                .to.be.rejectedWith(CancellationError);
+
+            expect(spawnMock.mock.callCount()).to.equal(1);
+        });
+    }
 
     describe('pipelineConfig', () => {
         it('should spawn a foreground task with the provider and no --no-prompt', async () => {

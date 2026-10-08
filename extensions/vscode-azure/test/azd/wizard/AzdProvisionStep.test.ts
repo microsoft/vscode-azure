@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { delay } from '@microsoft/vscode-azure-utils';
+import { CancellationError, delay } from '@microsoft/vscode-azure-utils';
 import type { AzureSubscription } from '@microsoft/vscode-azure-azutils';
 import { makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockCodeContext, MockOutputChannel, MockUri } from '@microsoft/vscode-azure-utils/testing';
@@ -403,6 +403,37 @@ describe('AzdProvisionStep (unit)', () => {
             } as AzdWizardContext;
 
             await expect(step.execute(context)).to.be.rejectedWith('provision failed');
+        });
+
+        it('should drain deployment IDs after a failed task and deduplicate case-insensitively', async () => {
+            const deploymentId = '/subscriptions/sub-1/resourceGroups/rg1/providers/Microsoft.Resources/deployments/deploy-1';
+            const { azd, step, armProvider, fs } = createStep();
+            azd.provision.mock.mockImplementation((_cwd, env) => {
+                fs.addFile(MockUri.file(env!.AZD_DEPLOYMENT_ID_FILE), makeJsonl(deploymentId, deploymentId.toUpperCase()));
+                return Promise.reject(new Error('provision failed'));
+            });
+
+            await expect(step.execute({ provision: true, iacFolder: MockUri.file('/project') }))
+                .to.be.rejectedWith('provision failed');
+
+            expect(armProvider.trackDeployment.mock.callCount()).to.equal(1);
+            expect(armProvider.trackDeployment.mock.calls[0].arguments[0]).to.equal(deploymentId);
+        });
+
+        it('should forward cancellation to the provision task', async () => {
+            const { azd, step } = createStep();
+            const controller = new AbortController();
+            azd.provision.mock.mockImplementation((_cwd, _env, signal) => {
+                expect(signal).to.equal(controller.signal);
+                controller.abort();
+                return Promise.reject(new CancellationError());
+            });
+
+            await expect(step.execute({
+                provision: true,
+                iacFolder: MockUri.file('/project'),
+                cancellation: controller.signal,
+            })).to.be.rejectedWith(CancellationError);
         });
     });
 });
