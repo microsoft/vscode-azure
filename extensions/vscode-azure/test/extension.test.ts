@@ -5,6 +5,7 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { RefreshResourcesView } from '../src/commands/tree/RefreshResourcesView';
 import { ExtensionId } from '../src/constants';
 
 let vscode: typeof import('vscode');
@@ -49,6 +50,28 @@ describe('command contributions (vscode integration)', () => {
 
         expect(contributed).to.not.be.empty;
         expect(contributed.filter((command) => !registered.has(command))).to.deep.equal([]);
+    });
+
+    it('should expose shared refresh for its context marker without matching longer markers', () => {
+        const extension = vscode.extensions.getExtension(ExtensionId);
+        if (!extension) {
+            expect.fail('Extension not found');
+        }
+        const manifest = extension.packageJSON as {
+            contributes: { menus: Record<string, readonly { readonly command: string; readonly when?: string }[]> };
+        };
+        const refreshMenus = manifest.contributes.menus['view/item/context'].filter(menu => menu.command === 'vscode-azure/resources/refresh');
+        const token = RefreshResourcesView.ContextValue;
+        expect(refreshMenus.some(menu => {
+            const expression = menu.when?.match(/viewItem =~ \/([^/]+)\/([a-z]*)/);
+            if (!expression) {
+                return false;
+            }
+            const pattern = new RegExp(expression[1], expression[2]);
+            return pattern.test(`otherCapability;${token};additionalCapability`)
+                && pattern.test(token.toUpperCase())
+                && !pattern.test(`${token}Suffix`);
+        })).to.be.true;
     });
 });
 

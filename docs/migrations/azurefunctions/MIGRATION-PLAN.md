@@ -127,29 +127,45 @@ Target files:   extensions/vscode-azure/src/tree/resources/webApp/WebAppDataProv
                 extensions/vscode-azure/src/products/registerFunctions.ts (register)
 Precedent:      StaticWebAppDataProvider / StaticWebAppViewProvider (virtual children, explicit invalid nodes)
 Sweep:          reused getSettingsNodes + WebAppSettingsAdapter, setWebsiteUrl, createGenericResourceTreeItem,
-                AzureNodeId, IAzureViewDataTree, RefreshResourcesView, ResourceSelector, resource listing/enrich.
+                AzureNodeId, IAzureViewDataTree, RefreshResourcesView, ResourceSelector, resource listing/enrich,
+                collectPages, pagesOf, rejectingAsyncIterable, createMockHierarchicalDataItemTree,
+                createMockWebAppClient (additive Site overrides), makeSettingsResource, makeVirtualResource.
                 Searched "invalid", "errorNode", "createErrorItem" in tree/ -> follow the SWA explicit-invalid pattern.
+                Searched "makeFunction", "functionEnvelope", "httpTrigger" in testing -> no remote metadata
+                factory; added makeFunctionEnvelope to the azutils testing barrel and remote tree fixtures
+                alongside the extension's Web App tests.
 Activation:     none (existing resources view)
-External facts: none
-Tree contract:  Function App node: combineContextValues(browseWebsite, viewProperties, editSettings,
-                  startWebApp|stopWebApp (by state), restartWebApp, deployFunctionApp (azd-tagged only),
-                  streamFunctionLogs, revealIdentity (when an identity is assigned)).
-                Functions group node: no actions except refresh.
-                Remote function node: executeFunction, copyFunctionUrl (HTTP triggers), enableFunction|disableFunction
-                  (by state), deleteFunction.
-                Invalid function / invalid app nodes: no actions except refresh.
+External facts: Flex detection by site.functionAppConfig and HTTP auth-level normalization verified against
+                the pinned source's ResolvedFunctionAppResource.ts and funcConfig/function.ts (links below).
+                Shared refresh remains global for both title and context menus: VS Code forwards the focused
+                tree element to title actions, so a key alone cannot distinguish those entry points.
+Tree contract:  Function App node: resourceContextValue plus product, reported running/stopped, Flex, and
+                  RefreshResourcesView.ContextValue markers. Shared settings remain a separate child.
+                Functions group node: RefreshResourcesView.ContextValue only.
+                Remote function node: enabled/disabled markers plus RefreshResourcesView.ContextValue;
+                  trigger and HTTP access level retained in the model and presentation.
+                Invalid function / invalid app nodes: RefreshResourcesView.ContextValue only, error tooltip.
+                Command capability context values and menus for start/stop/restart, execute/copy URL,
+                  enable/disable/delete, deploy, logs, and identity are wired with their commands in Slice 2.
 ```
 
-- [ ] Function App children: shared settings node, then a "Functions" group
+Source contracts:
+[site state and Flex](https://github.com/microsoft/vscode-azurefunctions/blob/801689c66f96b31bc9d7c79ff6cc8d65e41b6965/src/tree/ResolvedFunctionAppResource.ts),
+[trigger, disabled flag and HTTP authentication](https://github.com/microsoft/vscode-azurefunctions/blob/801689c66f96b31bc9d7c79ff6cc8d65e41b6965/src/funcConfig/function.ts).
+[VS Code title argument conversion](https://github.com/microsoft/vscode/blob/main/src/vs/workbench/api/common/extHostTreeViews.ts)
+provides the focused element for a tree-view pane argument.
+
+- [x] Function App children: shared settings node, then a "Functions" group
   node (virtual resource) listing one node per function.
   <- FUNC-166, FUNC-168, FUNC-169, FUNC-173
-- [ ] Function App description shows state (stopped) and Flex; context values
+- [x] Function App description shows state (stopped) and Flex; context values
   reflect running/stopped. <- FUNC-166
-- [ ] Explicit invalid nodes for a function or app that cannot be read,
+- [x] Explicit invalid nodes for a function or app that cannot be read,
   carrying the error. <- FUNC-170, FUNC-180
-- [ ] Wire shared refresh, listing, enrichment, and resource picking on the
+- [x] Wire shared refresh, listing, enrichment, and resource picking on the
   new nodes; no Functions-specific equivalents. <- FUNC-199, FUNC-200, FUNC-271
-- [ ] Unit tests with `createMockDataItemTree` / `makeGenericResource`.
+- [x] Behavioral tests with shared resource, client, and tree fixtures; real
+  `DataItemTree` error recovery; shared refresh/menu consistency.
 
 ## Slice 2 -- Remote commands
 

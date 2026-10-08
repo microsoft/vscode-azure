@@ -9,6 +9,7 @@ import { CreateFunctionApp } from '../commands/functions/CreateFunctionApp';
 import type { ProductRegistrar } from '../registration/ProductRegistrar';
 import { WebAppSettingsAdapter } from '../settings/adapters/WebAppSettingsAdapter';
 import { WebAppDataProvider } from '../tree/resources/webApp/WebAppDataProvider';
+import { FunctionAppViewProvider } from '../tree/resources/webApp/FunctionAppViewProvider';
 import { WebAppViewProvider } from '../tree/resources/webApp/WebAppViewProvider';
 import { functionsDetector } from '../tree/workspace/functions/FunctionsWorkspaceDataProvider';
 import { IWorkspaceDetector } from '../utils/workspaceIndex/WorkspaceDetector';
@@ -29,6 +30,7 @@ export function registerFunctions(registrar: ProductRegistrar): void {
     });
 
     registrar.registerResourceDataProvider(WebAppDataProvider);
+    registrar.registerResourceViewProvider(FunctionAppViewProvider);
     registrar.registerResourceViewProvider(WebAppViewProvider);
     registrar.registerCommand('vscode-azure/functions/createNew', CreateFunctionApp, 'createNew');
     registrar.registerCommand('vscode-azure/functions/deploy', CreateFunctionApp, 'deploy');

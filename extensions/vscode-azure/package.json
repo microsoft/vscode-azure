@@ -428,7 +428,7 @@
                 },
                 {
                     "command": "vscode-azure/resources/refresh",
-                    "when": "view == vscode-azure/resources && viewItem =~ /\\b(?:azureStaticEnvironment|azureStaticFunctions)\\b/i",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\b(?:azureStaticEnvironment|azureStaticFunctions|refreshResource)\\b/i",
                     "group": "3_actions@3"
                 },
                 {

@@ -20,7 +20,7 @@ import type { ResourceGroup, VirtualGroup } from '../src/models/Grouping';
 import type { VirtualResource } from '../src/models/VirtualResource';
 import type { ISubscriptionClient, ISubscriptionClientProvider, Location, Subscription, TenantIdDescription } from '../src/rest/clients/SubscriptionClient';
 import type { Container, IContainerAppsClient, Replica, Revision } from '../src/rest/clients/ContainerAppsClient';
-import type { FunctionEnvelope, IWebAppClient } from '../src/rest/clients/WebAppClient';
+import type { FunctionEnvelope, IWebAppClient, Site } from '../src/rest/clients/WebAppClient';
 import { makePagedAsyncIterable } from './rest/mockPaging';
 
 const defaultEnvironment: EnvironmentLike = AzurePublicCloud;
@@ -457,6 +457,16 @@ export function createMockSubscriptionClientProvider(locations: Location[] = [])
     return () => client;
 }
 
+/** Builds management-plane function metadata, defaulting to a function-authenticated HTTP trigger. */
+export function makeFunctionEnvelope(overrides?: Partial<FunctionEnvelope>): FunctionEnvelope {
+    return {
+        name: 'mock-function-app/HttpTrigger',
+        config: { bindings: [{ type: 'httpTrigger', direction: 'in', authLevel: 'function' }] },
+        isDisabled: false,
+        ...overrides,
+    };
+}
+
 /** Options for {@linkcode createMockWebAppClient}. */
 export interface MockWebAppClientOptions {
     /**
@@ -466,6 +476,8 @@ export interface MockWebAppClientOptions {
     readonly settings?: Record<string, string>;
     /** `defaultHostName` returned by `webApps.get`. */
     readonly defaultHostName?: string;
+    /** Overrides for the latest site metadata returned by `webApps.get`. */
+    readonly site?: Partial<Site>;
     /** Functions returned by the management-plane listing. */
     readonly functions?: readonly FunctionEnvelope[];
 }
@@ -495,7 +507,7 @@ export function createMockWebAppClient(options?: MockWebAppClientOptions): MockW
     return {
         settings,
         webApps: {
-            get: mock.fn(() => Promise.resolve({ location: 'eastus', defaultHostName: options?.defaultHostName })),
+            get: mock.fn(() => Promise.resolve({ location: 'eastus', defaultHostName: options?.defaultHostName, ...options?.site })),
             start: mock.fn(() => Promise.resolve()),
             stop: mock.fn(() => Promise.resolve()),
             restart: mock.fn(() => Promise.resolve()),
