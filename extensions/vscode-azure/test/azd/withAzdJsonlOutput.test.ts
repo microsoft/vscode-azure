@@ -114,7 +114,7 @@ describe('withAzdJsonlOutput (unit)', () => {
         const task = mock.fn(() => Promise.resolve());
 
         await expect(withAzdJsonlOutput({ ...options, cancellation: controller.signal }, task))
-            .to.be.rejectedWith(CancellationError);
+            .to.be.rejectedWith(DOMException);
 
         expect(task.mock.callCount()).to.equal(0);
         expect(fs.readFile.mock.callCount()).to.equal(0);
@@ -139,7 +139,7 @@ describe('withAzdJsonlOutput (unit)', () => {
 
         try {
             await expect(withAzdJsonlOutput({ ...options, cancellation, onEntry }, task))
-                .to.be.rejectedWith(CancellationError);
+                .to.be.rejectedWith(DOMException);
 
             expect(task.mock.calls[0].arguments[0]?.aborted).to.equal(true);
             expect(options.onEntry.mock.calls.map(call => call.arguments[0])).to.deep.equal([
@@ -158,7 +158,7 @@ describe('withAzdJsonlOutput (unit)', () => {
             expect(signal).to.equal(controller.signal);
             controller.abort();
             return Promise.resolve();
-        })).to.be.rejectedWith(CancellationError);
+        })).to.be.rejectedWith(DOMException);
         expect(options.onError.mock.callCount()).to.equal(0);
     });
 });

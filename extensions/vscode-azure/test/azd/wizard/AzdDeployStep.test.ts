@@ -227,7 +227,7 @@ describe('AzdDeployStep (unit)', () => {
                 deploy: true,
                 iacFolder: MockUri.file('/project'),
                 cancellation: controller.signal,
-            })).to.be.rejectedWith(CancellationError);
+            })).to.be.rejectedWith(DOMException);
 
             expect(completeFn.mock.calls[0].arguments).to.deep.equal(['Canceled']);
         });

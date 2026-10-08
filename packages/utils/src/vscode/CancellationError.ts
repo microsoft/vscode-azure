@@ -24,25 +24,12 @@ export class CancellationError extends Error implements vscode.CancellationError
     /**
      * Type guard that returns `true` if `error` is a cancellation --
      * either a {@linkcode CancellationError} instance or a standard
-     * `Error` whose `name` matches the spelling VS Code uses.
+     * `Error` named `Canceled`, `Cancelled`, or `AbortError`.
+     * Recognizes the default error thrown by {@linkcode AbortSignal.throwIfAborted}.
      */
     public static test(error: unknown): error is CancellationError {
-        return error instanceof CancellationError || (error instanceof Error && (error.name === CanceledName || error.name === 'Cancelled'));
-    }
-
-    /**
-     * Throws a {@linkcode CancellationError} when the token or signal is cancelled.
-     *
-     * Does nothing when no cancellation source is supplied. Abort signals are
-     * normalized regardless of their abort reason, so consumers can use
-     * {@linkcode CancellationError.test} uniformly.
-     *
-     * @param stepName - Optional operation name carried on the error for diagnostics.
-     */
-    public static throwIfCancelled(token?: vscode.CancellationToken | AbortSignal, stepName?: string): void {
-        if (token && ('aborted' in token ? token.aborted : token.isCancellationRequested)) {
-            throw new CancellationError(undefined, stepName);
-        }
+        return error instanceof CancellationError
+            || (error instanceof Error && (error.name === CanceledName || error.name === 'Cancelled' || error.name === 'AbortError'));
     }
 }
 
@@ -59,7 +46,9 @@ const CanceledName = 'Canceled'; // VS Code's error uses this spelling and we ne
  *   the error for diagnostics.
  */
 export function throwIfCancelled(token: vscode.CancellationToken | undefined, stepName?: string): void {
-    CancellationError.throwIfCancelled(token, stepName);
+    if (token?.isCancellationRequested) {
+        throw new CancellationError(undefined, stepName);
+    }
 }
 
 /**

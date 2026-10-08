@@ -30,80 +30,84 @@ export interface AzdJsonlOutputOptions {
  * Stops and awaits polling before a final read, on both success and failure.
  * The task's return value or error is preserved; output failures are best-effort.
  * The task must honor the supplied signal and settle when cancelled. Cancellation
- * rejects with {@linkcode CancellationError} after the task settles and output is
- * drained. An already-cancelled source prevents the task and polling from starting.
+ * throws the signal's abort reason after the task settles and output is drained.
+ * Default abort errors are recognized by {@linkcode CancellationError.test}.
+ * An already-cancelled source prevents the task and polling from starting.
  */
 export async function withAzdJsonlOutput<T>(options: AzdJsonlOutputOptions, task: (signal?: AbortSignal) => Promise<T>): Promise<T> {
-    CancellationError.throwIfCancelled(options.cancellation);
     const bridge = toAbortSignal(options.cancellation);
-    let offset = 0;
-    const readEntries = async (): Promise<void> => {
-        let content: Uint8Array;
-        try {
-            content = await options.code.workspace.fs.readFile(options.file);
-        } catch (error) {
-            if (!isFileNotFoundError(error)) {
-                options.onError('read');
-            }
-            return;
-        }
-
-        const lastNewline = content.lastIndexOf(10);
-        if (lastNewline < offset) {
-            return;
-        }
-        const lines = new TextDecoder().decode(content.slice(offset, lastNewline + 1)).split('\n');
-        offset = lastNewline + 1;
-        for (const line of lines) {
-            if (!line.trim()) {
-                continue;
-            }
-            let entry: unknown;
+    try {
+        bridge.signal?.throwIfAborted();
+        let offset = 0;
+        const readEntries = async (): Promise<void> => {
+            let content: Uint8Array;
             try {
-                entry = JSON.parse(line) as unknown;
-            } catch {
-                options.onError('parse');
-                continue;
-            }
-            try {
-                await options.onEntry(entry);
-            } catch {
-                options.onError('handle');
-            }
-        }
-    };
-
-    const abort = new AbortController();
-    const cancelPolling = () => { abort.abort(); };
-    bridge.signal?.addEventListener('abort', cancelPolling, { once: true });
-    const polling = (async (): Promise<void> => {
-        while (!abort.signal.aborted) {
-            await readEntries();
-            try {
-                await delay(options.intervalMs, abort.signal);
+                content = await options.code.workspace.fs.readFile(options.file);
             } catch (error) {
-                if (!CancellationError.test(error)) {
-                    throw error;
+                if (!isFileNotFoundError(error)) {
+                    options.onError('read');
+                }
+                return;
+            }
+
+            const lastNewline = content.lastIndexOf(10);
+            if (lastNewline < offset) {
+                return;
+            }
+            const lines = new TextDecoder().decode(content.slice(offset, lastNewline + 1)).split('\n');
+            offset = lastNewline + 1;
+            for (const line of lines) {
+                if (!line.trim()) {
+                    continue;
+                }
+                let entry: unknown;
+                try {
+                    entry = JSON.parse(line) as unknown;
+                } catch {
+                    options.onError('parse');
+                    continue;
+                }
+                try {
+                    await options.onEntry(entry);
+                } catch {
+                    options.onError('handle');
                 }
             }
-        }
-    })();
+        };
 
-    try {
-        const result = await task(bridge.signal);
-        CancellationError.throwIfCancelled(bridge.signal);
-        return result;
-    } catch (error) {
-        CancellationError.throwIfCancelled(bridge.signal);
-        throw error;
-    } finally {
-        abort.abort();
+        const abort = new AbortController();
+        const cancelPolling = () => { abort.abort(); };
+        bridge.signal?.addEventListener('abort', cancelPolling, { once: true });
+        const polling = (async (): Promise<void> => {
+            while (!abort.signal.aborted) {
+                await readEntries();
+                try {
+                    await delay(options.intervalMs, abort.signal);
+                } catch (error) {
+                    if (!CancellationError.test(error)) {
+                        throw error;
+                    }
+                }
+            }
+        })();
+
         try {
-            await polling;
-            await readEntries();
+            const result = await task(bridge.signal);
+            bridge.signal?.throwIfAborted();
+            return result;
+        } catch (error) {
+            bridge.signal?.throwIfAborted();
+            throw error;
         } finally {
-            bridge.signal?.removeEventListener('abort', cancelPolling);
-            bridge.disposable.dispose();
+            abort.abort();
+            try {
+                await polling;
+                await readEntries();
+            } finally {
+                bridge.signal?.removeEventListener('abort', cancelPolling);
+            }
         }
+    } finally {
+        bridge.disposable.dispose();
     }
 }

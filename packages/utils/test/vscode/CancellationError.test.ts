@@ -4,42 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { CancellationError, isCancellationToken, throwIfCancelled } from '../../src/vscode/CancellationError';
-import { MockCancellationToken } from './MockCancellationToken';
 
 describe('CancellationError (unit)', () => {
-    describe('CancellationError.throwIfCancelled', () => {
-        it('should allow absent and active cancellation sources', () => {
-            const token = new MockCancellationToken();
-            try {
-                expect(() => { CancellationError.throwIfCancelled(); }).to.not.throw();
-                expect(() => { CancellationError.throwIfCancelled(token); }).to.not.throw();
-                expect(() => { CancellationError.throwIfCancelled(new AbortController().signal); }).to.not.throw();
-            } finally {
-                token.dispose();
-            }
-        });
-
-        it('should throw for a cancelled token with the operation name', () => {
-            const token = new MockCancellationToken();
-            try {
-                token.cancel();
-                expect(() => { CancellationError.throwIfCancelled(token, 'Deploy'); })
-                    .to.throw(CancellationError).with.property('stepName', 'Deploy');
-            } finally {
-                token.dispose();
-            }
-        });
-
-        for (const reason of [undefined, new Error('custom reason'), 'custom reason']) {
-            it(`should normalize an aborted signal with ${reason === undefined ? 'the default' : typeof reason} reason`, () => {
-                const controller = new AbortController();
-                controller.abort(reason);
-                expect(() => { CancellationError.throwIfCancelled(controller.signal, 'Deploy'); })
-                    .to.throw(CancellationError).with.property('stepName', 'Deploy');
-            });
-        }
-    });
-
     describe('throwIfCancelled', () => {
         it('does nothing when the token is not cancelled', () => {
             expect(() => {
@@ -108,6 +74,28 @@ describe('CancellationError (unit)', () => {
             const err = new Error('whatever');
             err.name = 'Cancelled';
             expect(CancellationError.test(err)).to.be.true;
+        });
+
+        it('should recognize the default error thrown by AbortSignal.throwIfAborted', () => {
+            const controller = new AbortController();
+            controller.abort();
+            let detected = false;
+            try {
+                controller.signal.throwIfAborted();
+            } catch (error) {
+                detected = CancellationError.test(error);
+            }
+            expect(detected).to.be.true;
+        });
+
+        it('should recognize AbortError from a Node operation', () => {
+            const error = new Error('The operation was aborted');
+            error.name = 'AbortError';
+            expect(CancellationError.test(error)).to.be.true;
+        });
+
+        it('should distinguish a timeout from cancellation', () => {
+            expect(CancellationError.test(new DOMException('The operation timed out', 'TimeoutError'))).to.be.false;
         });
 
         it('should return false for regular errors', () => {

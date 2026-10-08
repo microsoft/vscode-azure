@@ -433,7 +433,7 @@ describe('AzdProvisionStep (unit)', () => {
                 provision: true,
                 iacFolder: MockUri.file('/project'),
                 cancellation: controller.signal,
-            })).to.be.rejectedWith(CancellationError);
+            })).to.be.rejectedWith(DOMException);
         });
     });
 });
