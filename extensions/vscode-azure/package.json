@@ -131,6 +131,50 @@
                 "title": "%commands.vscode-azure/functions/deploy%"
             },
             {
+                "command": "vscode-azure/webApp/start",
+                "title": "%commands.vscode-azure/webApp/start%"
+            },
+            {
+                "command": "vscode-azure/webApp/stop",
+                "title": "%commands.vscode-azure/webApp/stop%"
+            },
+            {
+                "command": "vscode-azure/webApp/restart",
+                "title": "%commands.vscode-azure/webApp/restart%"
+            },
+            {
+                "command": "vscode-azure/functions/execute",
+                "title": "%commands.vscode-azure/functions/execute%"
+            },
+            {
+                "command": "vscode-azure/functions/copyUrl",
+                "title": "%commands.vscode-azure/functions/copyUrl%"
+            },
+            {
+                "command": "vscode-azure/functions/enable",
+                "title": "%commands.vscode-azure/functions/enable%"
+            },
+            {
+                "command": "vscode-azure/functions/disable",
+                "title": "%commands.vscode-azure/functions/disable%"
+            },
+            {
+                "command": "vscode-azure/functions/delete",
+                "title": "%commands.vscode-azure/functions/delete%"
+            },
+            {
+                "command": "vscode-azure/functions/streamLogs",
+                "title": "%commands.vscode-azure/functions/streamLogs%"
+            },
+            {
+                "command": "vscode-azure/functions/revealIdentity",
+                "title": "%commands.vscode-azure/functions/revealIdentity%"
+            },
+            {
+                "command": "vscode-azure/resources/reveal",
+                "title": "%commands.vscode-azure/resources/reveal%"
+            },
+            {
                 "command": "vscode-azure/containerApps/openConsoleInPortal",
                 "icon": "$(terminal)",
                 "title": "%commands.vscode-azure/containerApps/openConsoleInPortal%"
@@ -235,6 +279,50 @@
         ],
         "menus": {
             "commandPalette": [
+                {
+                    "command": "vscode-azure/resources/reveal",
+                    "when": "false"
+                },
+                {
+                    "command": "vscode-azure/webApp/start",
+                    "when": "false"
+                },
+                {
+                    "command": "vscode-azure/webApp/stop",
+                    "when": "false"
+                },
+                {
+                    "command": "vscode-azure/webApp/restart",
+                    "when": "false"
+                },
+                {
+                    "command": "vscode-azure/functions/execute",
+                    "when": "false"
+                },
+                {
+                    "command": "vscode-azure/functions/copyUrl",
+                    "when": "false"
+                },
+                {
+                    "command": "vscode-azure/functions/enable",
+                    "when": "false"
+                },
+                {
+                    "command": "vscode-azure/functions/disable",
+                    "when": "false"
+                },
+                {
+                    "command": "vscode-azure/functions/delete",
+                    "when": "false"
+                },
+                {
+                    "command": "vscode-azure/functions/streamLogs",
+                    "when": "false"
+                },
+                {
+                    "command": "vscode-azure/functions/revealIdentity",
+                    "when": "false"
+                },
                 {
                     "command": "vscode-azure/containerApps/verifyStart",
                     "when": "false"
@@ -346,6 +434,56 @@
                 }
             ],
             "view/item/context": [
+                {
+                    "command": "vscode-azure/webApp/start",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\bstartWebApp\\b/i",
+                    "group": "3_actions@1"
+                },
+                {
+                    "command": "vscode-azure/webApp/stop",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\bstopWebApp\\b/i",
+                    "group": "3_actions@1"
+                },
+                {
+                    "command": "vscode-azure/webApp/restart",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\brestartWebApp\\b/i",
+                    "group": "3_actions@2"
+                },
+                {
+                    "command": "vscode-azure/functions/execute",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\bexecuteFunction\\b/i",
+                    "group": "3_actions@1"
+                },
+                {
+                    "command": "vscode-azure/functions/copyUrl",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\bcopyFunctionUrl\\b/i",
+                    "group": "1_browse@1"
+                },
+                {
+                    "command": "vscode-azure/functions/enable",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\benableFunction\\b/i",
+                    "group": "3_actions@2"
+                },
+                {
+                    "command": "vscode-azure/functions/disable",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\bdisableFunction\\b/i",
+                    "group": "3_actions@2"
+                },
+                {
+                    "command": "vscode-azure/functions/delete",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\bdeleteFunction\\b/i",
+                    "group": "3_actions@9"
+                },
+                {
+                    "command": "vscode-azure/functions/streamLogs",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\bstreamFunctionLogs\\b/i",
+                    "group": "2_logs@1"
+                },
+                {
+                    "command": "vscode-azure/functions/revealIdentity",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\brevealFunctionAppIdentity\\b/i",
+                    "group": "1_browse@2"
+                },
                 {
                     "command": "vscode-azure/acr/disableAdminUser",
                     "when": "view == vscode-azure/resources && viewItem =~ /\\bdisableAcrAdminUser\\b/i",

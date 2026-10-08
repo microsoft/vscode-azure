@@ -7,6 +7,13 @@ import { AppServiceLogicalType, AzureNodeId, FunctionAppLogicalType, type Concre
 import { createMockHierarchicalDataItemTree, createMockWebAppClient } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { BrowseWebsite } from '../../../../src/commands/tree/BrowseWebsite';
+import { CopyFunctionUrl } from '../../../../src/commands/functions/CopyFunctionUrl';
+import { DeleteFunction } from '../../../../src/commands/functions/DeleteFunction';
+import { ExecuteFunction } from '../../../../src/commands/functions/ExecuteFunction';
+import { RevealFunctionAppIdentity } from '../../../../src/commands/functions/RevealFunctionAppIdentity';
+import { SetFunctionState } from '../../../../src/commands/functions/SetFunctionState';
+import { StreamFunctionLogs } from '../../../../src/commands/functions/StreamFunctionLogs';
+import { WebAppLifecycle } from '../../../../src/commands/webApp/WebAppLifecycle';
 import { RefreshResourcesView } from '../../../../src/commands/tree/RefreshResourcesView';
 import { ViewProperties } from '../../../../src/commands/tree/ViewProperties';
 import { WebAppSettingsAdapter } from '../../../../src/settings/adapters/WebAppSettingsAdapter';
@@ -104,6 +111,40 @@ describe('FunctionAppViewProvider (unit)', () => {
         expect(appItem).to.include({ description: 'Invalid', tooltip: 'Site access denied.', contextValue: RefreshResourcesView.ContextValue });
         const errorItem = provider.getTreeItem(key(invalid));
         expect(errorItem).to.include({ label: 'Broken', tooltip: invalid.error, collapsibleState: 0, contextValue: RefreshResourcesView.ContextValue });
+    });
+
+    it('offers lifecycle and identity actions according to readable site metadata', () => {
+        const { app, key, provider } = setup();
+        expect(provider.getTreeItem(key(app)).contextValue).not.to.include(StreamFunctionLogs.ContextValue);
+        app.site = {
+            location: 'eastus', state: 'Running',
+            identity: { type: 'UserAssigned', userAssignedIdentities: { '/identity': {} } },
+        };
+        const running = provider.getTreeItem(key(app)).contextValue?.split(';');
+        expect(running).to.include(WebAppLifecycle.StopContextValue).and.include(WebAppLifecycle.RestartContextValue);
+        expect(running).to.include(StreamFunctionLogs.ContextValue).and.include(RevealFunctionAppIdentity.ContextValue);
+        expect(running).not.to.include(WebAppLifecycle.StartContextValue);
+        app.site = { location: 'eastus', state: 'STOPPED' };
+        const stopped = provider.getTreeItem(key(app)).contextValue?.split(';');
+        expect(stopped).to.include(WebAppLifecycle.StartContextValue);
+        expect(stopped).not.to.include(WebAppLifecycle.StopContextValue);
+        expect(stopped).not.to.include(RevealFunctionAppIdentity.ContextValue);
+        app.site = { location: 'eastus', state: 'Starting' };
+        const starting = provider.getTreeItem(key(app)).contextValue?.split(';');
+        expect(starting).not.to.include(WebAppLifecycle.StartContextValue);
+        expect(starting).not.to.include(WebAppLifecycle.RestartContextValue);
+    });
+
+    it('offers function actions according to trigger and reported disabled state', () => {
+        const { fn, key, provider } = setup();
+        const http = provider.getTreeItem(key(fn)).contextValue?.split(';');
+        expect(http).to.include(CopyFunctionUrl.ContextValue).and.include(ExecuteFunction.ContextValue);
+        expect(http).to.include(DeleteFunction.ContextValue).and.include(SetFunctionState.DisableContextValue);
+        Object.assign(fn, { triggerKind: 'timerTrigger', authLevel: undefined, isDisabled: true });
+        const timer = provider.getTreeItem(key(fn)).contextValue?.split(';');
+        expect(timer).to.include(ExecuteFunction.ContextValue).and.include(SetFunctionState.EnableContextValue);
+        expect(timer).not.to.include(CopyFunctionUrl.ContextValue);
+        expect(timer).not.to.include(SetFunctionState.DisableContextValue);
     });
 
     it('allows the shared selector to resolve app and remote function nodes by their normal tree keys', async () => {

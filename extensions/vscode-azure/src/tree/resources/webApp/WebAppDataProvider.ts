@@ -13,6 +13,7 @@ import {
     FunctionAppVirtualTypes,
     isFunctionApp,
     isFunctionAppVirtualNode,
+    isFunctionTriggerBinding,
     type FunctionApp,
     type FunctionAppFunction,
     type FunctionAppFunctions,
@@ -49,19 +50,19 @@ export class WebAppDataProvider implements DataProvider<ConcreteAzureNode> {
         try {
             const client = this.createClient(resource.subscription);
             const site = await client.webApps.get(getResourceGroupName(resource.id), resource.name);
+            resource.site = site;
             setWebsiteUrl(resource, site.defaultHostName);
             if (isFunctionApp(resource)) {
                 const wasInvalid = resource.siteError !== undefined;
-                resource.site = site;
                 resource.siteError = undefined;
                 return wasInvalid;
             }
             return false;
         } catch (error: unknown) {
+            resource.site = undefined;
             if (!isFunctionApp(resource)) {
                 throw error;
             }
-            resource.site = undefined;
             resource.siteError = stringifyError(error);
             setWebsiteUrl(resource, undefined);
             this.executor.output.error(this.code.l10n.t('[data] Could not read Function App "{0}".', resource.name));
@@ -121,7 +122,7 @@ export class WebAppDataProvider implements DataProvider<ConcreteAzureNode> {
                 throw new Error(this.code.l10n.t('The function metadata does not include a bindings array.'));
             }
             const bindings: unknown[] = config.bindings;
-            const triggers = bindings.filter(isTriggerBinding);
+            const triggers = bindings.filter(isFunctionTriggerBinding);
             if (triggers.length !== 1 || !triggers[0]) {
                 throw new Error(this.code.l10n.t('The function metadata must include exactly one trigger binding.'));
             }
@@ -152,15 +153,4 @@ export class WebAppDataProvider implements DataProvider<ConcreteAzureNode> {
     ): FunctionAppInvalidNode {
         return { virtualType: FunctionAppVirtualTypes.Invalid, virtualPath, azureResource: app, kind, error, sourceLabel };
     }
-}
-
-interface TriggerBinding {
-    readonly type: string;
-    readonly authLevel?: unknown;
-}
-
-function isTriggerBinding(binding: unknown): binding is TriggerBinding {
-    return !!binding && typeof binding === 'object'
-        && 'type' in binding && typeof binding.type === 'string'
-        && binding.type.toLowerCase().endsWith('trigger');
 }

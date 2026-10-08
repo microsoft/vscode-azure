@@ -78,7 +78,7 @@ wrapper file for the current operation surface.
 
 | Wrapper | Azure SDK | Scoped by | Consumed by |
 |---------|-----------|-----------|-------------|
-| `ResourceClient` | `@azure/arm-resources` | Subscription | Resource-group and resource listing in the resources tree |
+| `ResourceClient` | `@azure/arm-resources` | Subscription | Resource listing, live resource reads, and deletion |
 | `DeploymentClient` | `@azure/arm-resourcesdeployments` | Subscription | `ArmDeploymentDataProvider`, for deployment status and operations |
 | `AcrClient` | `@azure/arm-containerregistry` | Subscription | ACR data provider and commands |
 | `WebAppClient` | `@azure/arm-appservice` | Subscription | Web App / Function App / Logic App nodes and their settings |
@@ -99,6 +99,12 @@ tenant set streams into the tree lazily instead of being buffered.
 resources come back from ARM, `attachMetadata()` turns raw SDK types into
 `GenericResource` by attaching `subscription` and `logicalType` -- it is passed to
 [`toPages`](#topages) as the per-item `map`, so every page is normalized on the way out.
+
+`resources.getById(resourceId, resourceType, options?)` reads live provider-specific
+properties and attaches the same metadata. It resolves the resource type's supported
+API version through the existing provider-metadata cache. Request options, including
+an abort signal, are forwarded to the resource GET. Consumers import the operation's
+SDK options from the wrapper's public exports.
 
 `logicalType()` is where an ARM type that covers several visually distinct products
 gets split -- `Microsoft.Web/sites` becomes a Function App, Logic App, or App Service

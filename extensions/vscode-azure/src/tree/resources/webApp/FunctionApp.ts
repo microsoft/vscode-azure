@@ -7,15 +7,12 @@ import {
     FunctionAppLogicalType,
     isGenericResource,
     type FunctionEnvelope,
-    type GenericResource,
-    type Site,
     type VirtualResource,
 } from '@microsoft/vscode-azure-azutils';
+import type { WebApp } from './WebApp';
 
 /** Function App resource with the latest management-plane enrichment. */
-export interface FunctionApp extends GenericResource {
-    /** Populated in-place by the resource data provider. */
-    site?: Site;
+export interface FunctionApp extends WebApp {
     /** Failure from the latest site read, cleared after a successful retry. */
     siteError?: string;
 }
@@ -58,6 +55,19 @@ export interface FunctionAppInvalidNode extends VirtualResource {
 
 /** Virtual nodes owned by the remote Function App providers. */
 export type FunctionAppVirtualNode = FunctionAppFunctions | FunctionAppFunction | FunctionAppInvalidNode;
+
+/** Trigger binding with an access level that still requires runtime validation. */
+export interface FunctionTriggerBinding {
+    readonly type: string;
+    readonly authLevel?: unknown;
+}
+
+/** Recognizes trigger bindings in untrusted management-plane function configuration. */
+export function isFunctionTriggerBinding(binding: unknown): binding is FunctionTriggerBinding {
+    return !!binding && typeof binding === 'object'
+        && 'type' in binding && typeof binding.type === 'string'
+        && binding.type.toLowerCase().endsWith('trigger');
+}
 
 /** Identifies Function Apps without treating other `Microsoft.Web/sites` kinds as functions. */
 export function isFunctionApp(node: unknown): node is FunctionApp {

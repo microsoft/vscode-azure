@@ -18,6 +18,7 @@ export * from './vscode/input/MockQuickPick';
 export * from './vscode/MockCancellationToken';
 export * from './vscode/MockFileSystem';
 export * from './vscode/MockOutputChannel';
+export * from './vscode/MockTerminal';
 export * from './vscode/MockUri';
 export * from './vscode/MockValueTypes';
 export * from './vscode/MockVsCode';

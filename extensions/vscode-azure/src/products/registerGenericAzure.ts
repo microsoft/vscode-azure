@@ -27,6 +27,7 @@ import { GroupBy } from '../commands/tree/GroupBy';
 import { BrowseWebsite } from '../commands/tree/BrowseWebsite';
 import { OpenInPortal } from '../commands/tree/OpenInPortal';
 import { RefreshResourcesView } from '../commands/tree/RefreshResourcesView';
+import { RevealResource } from '../commands/tree/RevealResource';
 import { ViewProperties } from '../commands/tree/ViewProperties';
 import { IPropertiesContentProvider, PropertiesContentProvider, PropertiesScheme } from '../properties/PropertiesContentProvider';
 import { GenericArmPropertiesAdapter } from '../properties/adapters/GenericArmPropertiesAdapter';
@@ -108,6 +109,7 @@ export function registerGenericAzure(registrar: ProductRegistrar): void {
     });
 
     registrar.registerCommand('vscode-azure/resources/refresh', RefreshResourcesView);
+    registrar.registerCommand('vscode-azure/resources/reveal', RevealResource);
     registrar.registerCommand('vscode-azure/resources/groupBy', GroupBy);
     registrar.registerCommand('vscode-azure/resources/browseWebsite', BrowseWebsite);
     registrar.registerCommand('vscode-azure/resources/openInPortal', OpenUrl, OpenInPortal.getUrl);

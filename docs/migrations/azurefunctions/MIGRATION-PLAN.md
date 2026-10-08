@@ -171,46 +171,64 @@ provides the focused element for a tree-view pane argument.
 
 ```
 Pattern:        @injectable() ManagedCommand with static ContextValue; shared commands consume node context values
-Target files:   extensions/vscode-azure/src/commands/webApp/{StartWebApp,StopWebApp,RestartWebApp}.ts (shared by all
+Target files:   extensions/vscode-azure/src/commands/webApp/WebAppLifecycle.ts (action-prefix aliases shared by all
                   Microsoft.Web/sites kinds; ids vscode-azure/webApp/{start,stop,restart})
-                extensions/vscode-azure/src/commands/functions/{ExecuteFunction,CopyFunctionUrl,EnableFunction,
-                  DisableFunction,DeleteFunction,StreamFunctionLogs}.ts (ids vscode-azure/functions/<name>)
+                extensions/vscode-azure/src/commands/functions/{ExecuteFunction,CopyFunctionUrl,SetFunctionState,
+                  DeleteFunction,StreamFunctionLogs,RevealFunctionAppIdentity}.ts (bool-prefix enable/disable aliases)
                 extensions/vscode-azure/src/commands/tree/RevealResource.ts (new shared, id vscode-azure/resources/reveal)
-                extensions/vscode-azure/src/utils/logStream/LogStreamTerminal.ts (new shared pseudoterminal)
+                extensions/vscode-azure/src/utils/logStream/LogStreamTerminal.ts (shared ACA/Functions pseudoterminal)
+                extensions/vscode-azure/src/tree/resources/webApp/FunctionAppLogStream.ts (query-session owner)
 Precedent:      DeleteStaticWebAppEnvironment (virtual-node command + activity), BrowseWebsite (shared node capability)
 Sweep:          reused DeleteAzureResource, BrowseWebsite, ViewProperties, EditSettings + WebAppSettingsAdapter
                 (enable/disable writes AzureWebJobs.<name>.Disabled through it), OpenInPortal, ExternalError (#350),
-                IActionExecutor. Searched "Pseudoterminal", "createTerminal", "logstream", "streamLogs": none exist ->
-                new shared LogStreamTerminal. Searched "treeView.reveal", "revealResource", "reveal(": only
-                RevealInExplorer (workspace files) -> new shared RevealResource for ARM IDs.
+                IActionExecutor, ResourceSelector, AzureNodeId.forRelatedResource, abortable delay, CaselessMap.
+                Reused ACA's pseudoterminal via LogStreamTerminal and related-resource navigation via RevealResource;
+                ACA consumes both shared primitives. Reused mock entity factories, MockHttpClient, ManualTimers,
+                respondToPrompts, real listing/activity services. Promoted ACA's terminal fixture to MockTerminal in
+                the utils testing barrel. Searched live generic-resource reads: added ResourceClient.resources.getById
+                using its existing provider API-version resolution. Searched instrumentation-key parsing and
+                Application Insights discovery: none exists; the product log service owns those operations.
 Activation:     none
-External facts: `AzureWebJobs.<FunctionName>.Disabled` setting name; App Insights `traces` / `requests` tables and
-                ingestion latency -- verify against Azure Functions and Azure Monitor docs before writing user-facing text.
+External facts: Verified disable setting, host acceptance/master-key header, connection-string grammar, resource queries,
+                workspace/classic table names, ingestion delay, and approximate ingestion ordering against the sources below.
 Tree contract:  per Slice 1; menu entries in view/item/context with word-boundary regexes.
 ```
 
-- [ ] Start, stop, and restart as shared `Microsoft.Web/sites` commands.
+- [x] Start, stop, and restart as shared `Microsoft.Web/sites` commands.
   <- FUNC-060, FUNC-061, FUNC-062
-- [ ] Execute a function (remote via the host admin API; request body prompt
+- [x] Execute a function (remote via the host admin API; request body prompt
   for non-HTTP triggers). <- FUNC-041
-- [ ] Copy function URL (with function key when the auth level requires it).
+- [x] Copy function URL (with function key when the auth level requires it).
   <- FUNC-042
-- [ ] Enable / disable a function through the shared app-settings adapter.
+- [x] Enable / disable a function through the shared app-settings adapter.
   <- FUNC-043, FUNC-044
-- [ ] Delete a remote function, reported in the activity tree. <- FUNC-045
-- [ ] Stream logs: shared `LogStreamTerminal` polling `LogsQueryClient` for
+- [x] Delete a remote function, reported in the activity tree. <- FUNC-045
+- [x] Stream logs: shared `LogStreamTerminal` polling `LogsQueryClient` for
   the app's Application Insights resource (resolved from
   `APPLICATIONINSIGHTS_CONNECTION_STRING`); closing the terminal stops polling.
-  Shape it for reuse by a Container Apps migration. <- FUNC-065
-- [ ] Reveal the identity a Function App uses: shared `RevealResource` that
+  Container Apps also uses the shared terminal. <- FUNC-065
+- [x] Reveal the identity a Function App uses: shared `RevealResource` that
   reveals a resource by ARM ID in the resources view. <- FUNC-171
-- [ ] Wire shared delete, browse, and properties on the Function App node, and
+- [x] Wire shared delete, browse, and properties on the Function App node, and
   shared settings add/edit/rename/delete through the settings document.
   <- FUNC-059, FUNC-063, FUNC-064, FUNC-072, FUNC-075, FUNC-076, FUNC-077
-- [ ] Manifest entries (commands, `view/item/context`, `commandPalette`
-  `never` for node-only commands) + `package.nls.json` strings.
-- [ ] Unit tests per command with `createMockCodeContext()` and real
+- [x] Manifest entries (commands, `view/item/context`, `commandPalette`
+  `when: false` for node-only commands) + `package.nls.json` strings.
+- [x] Unit tests per command with `createMockCodeContext()` and real
   `ActionExecutor`.
+
+Slice 2 external contract sources:
+
+- [Disable and enable Functions](https://learn.microsoft.com/en-us/azure/azure-functions/disable-function).
+- [Host admin invocation](https://github.com/Azure/azure-functions-host/blob/dev/src/WebJobs.Script.WebHost/Controllers/FunctionsController.cs)
+  and [manual invocation](https://learn.microsoft.com/en-us/azure/azure-functions/functions-manually-run-non-http).
+- [Application Insights connection strings](https://learn.microsoft.com/en-us/azure/azure-monitor/app/connection-strings).
+- [Resource-context queries](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/api/azure-resource-queries),
+  [AppTraces](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/apptraces),
+  [AppRequests](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/apprequests),
+  and [standard log columns](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/log-standard-columns).
+- [Functions telemetry and ingestion delay](https://learn.microsoft.com/en-us/azure/azure-functions/analyze-telemetry-data)
+  and [approximate ingestion-time ordering](https://learn.microsoft.com/en-us/kusto/query/ingestion-time-function?view=azure-monitor).
 
 ## Slice 3 -- Workspace tree (local functions)
 

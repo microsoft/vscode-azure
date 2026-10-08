@@ -7,6 +7,13 @@ import { AzureNodeId, getNodeType } from '@microsoft/vscode-azure-azutils';
 import { IActionExecutor, ICodeContext, type ITreeItem, type ViewProvider } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { RefreshResourcesView } from '../../../commands/tree/RefreshResourcesView';
+import { WebAppLifecycle } from '../../../commands/webApp/WebAppLifecycle';
+import { CopyFunctionUrl } from '../../../commands/functions/CopyFunctionUrl';
+import { DeleteFunction } from '../../../commands/functions/DeleteFunction';
+import { ExecuteFunction } from '../../../commands/functions/ExecuteFunction';
+import { RevealFunctionAppIdentity } from '../../../commands/functions/RevealFunctionAppIdentity';
+import { SetFunctionState } from '../../../commands/functions/SetFunctionState';
+import { StreamFunctionLogs } from '../../../commands/functions/StreamFunctionLogs';
 import { IAzureViewDataTree } from '../../../services';
 import { combineContextValues, resourceContextValue } from '../../contextValueHelpers';
 import { createGenericResourceTreeItem } from '../GenericAzureViewProvider';
@@ -96,7 +103,10 @@ export class FunctionAppViewProvider implements ViewProvider<string> {
         }
 
         const description: string[] = [];
-        const contexts = [FunctionAppViewProvider.ContextValue, RefreshResourcesView.ContextValue];
+        const contexts = [
+            FunctionAppViewProvider.ContextValue, RefreshResourcesView.ContextValue,
+            ...WebAppLifecycle.contextValues(app.site?.state),
+        ];
         const state = app.site?.state?.toLowerCase();
         if (state === 'stopped') {
             description.push(this.ctx.code.l10n.t('Stopped'));
@@ -111,6 +121,10 @@ export class FunctionAppViewProvider implements ViewProvider<string> {
             contexts.push(FunctionAppViewProvider.FlexContextValue);
         }
         if (app.site) {
+            contexts.push(StreamFunctionLogs.ContextValue);
+            if (Object.keys(app.site.identity?.userAssignedIdentities ?? {}).length > 0) {
+                contexts.push(RevealFunctionAppIdentity.ContextValue);
+            }
             item.description = description.join(', ');
         }
         item.contextValue = resourceContextValue(app, ...contexts);
@@ -143,6 +157,10 @@ export class FunctionAppViewProvider implements ViewProvider<string> {
                 item.contextValue = combineContextValues(
                     RefreshResourcesView.ContextValue,
                     node.isDisabled ? FunctionAppViewProvider.DisabledFunctionContextValue : FunctionAppViewProvider.EnabledFunctionContextValue,
+                    node.isDisabled ? SetFunctionState.EnableContextValue : SetFunctionState.DisableContextValue,
+                    ExecuteFunction.ContextValue,
+                    DeleteFunction.ContextValue,
+                    node.triggerKind.toLowerCase() === 'httptrigger' ? CopyFunctionUrl.ContextValue : '',
                 );
                 break;
             }

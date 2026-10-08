@@ -15,9 +15,16 @@ import { MockInputBox } from './input/MockInputBox';
 import { MockQuickPick } from './input/MockQuickPick';
 import { MockFileChangeType, MockFilePermission, MockFileSystem, MockFileSystemError, MockFileType } from './MockFileSystem';
 import { MockOutputChannel } from './MockOutputChannel';
+import { MockTerminal } from './MockTerminal';
 import { MockUri } from './MockUri';
 import { MockConfigurationTarget, MockMarkdownString, MockProgressLocation, MockRelativePattern, MockShellExecution, MockTask, MockTaskScope, MockThemeColor, MockThemeIcon, MockTreeItemCollapsibleState } from './MockValueTypes';
 import { MockTreeItem } from './tree/MockTreeItem';
+
+/** Controls pseudoterminal opening in shared VS Code fixtures. */
+export interface MockVsCodeOptions {
+    /** Whether showing a terminal opens its pseudoterminal. Defaults to true. */
+    readonly openTerminalsOnShow?: boolean;
+}
 
 /**
  * Maps each method of a `vscode` namespace to its `node:test` {@linkcode Mock}
@@ -72,6 +79,9 @@ export interface MockVsCodeResult {
 
     /** All {@linkcode MockInputBox} instances created so far, in creation order. */
     readonly inputBoxes: readonly MockInputBox[];
+
+    /** Pseudoterminals created through the mock window, in creation order. */
+    readonly terminals: readonly MockTerminal[];
 
     /**
      * The backing store for `workspace.getConfiguration()`. Keyed by
@@ -197,9 +207,19 @@ export interface MockVsCodeResult {
  * expect(mock.quickPicks).to.have.lengthOf(1);
  * ```
  */
-export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult {
+export function createMockVsCode(
+    overrides?: Partial<IVsCode>,
+    terminalOptions?: MockVsCodeOptions,
+): MockVsCodeResult {
     const quickPicks: MockQuickPick<vscode.QuickPickItem>[] = [];
     const inputBoxes: MockInputBox[] = [];
+    const terminals: MockTerminal[] = [];
+    const createTerminal = mock.fn((options: vscode.ExtensionTerminalOptions) => {
+        const terminal = new MockTerminal(options);
+        terminal.openOnShow = terminalOptions?.openTerminalsOnShow ?? true;
+        terminals.push(terminal);
+        return terminal;
+    });
 
     const createQuickPick = mock.fn(() => {
         const qp = new MockQuickPick<vscode.QuickPickItem>();
@@ -323,6 +343,10 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         registerCommand,
     };
     const env = {
+        clipboard: {
+            readText: mock.fn(() => Promise.resolve('')),
+            writeText: mock.fn((_text: string) => Promise.resolve()),
+        },
         appHost: 'desktop',
         language: 'en',
         openExternal,
@@ -338,6 +362,7 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
     );
 
     const window = {
+        createTerminal,
         createQuickPick,
         createInputBox,
         createOutputChannel,
@@ -485,6 +510,7 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         vscode: mockVsCode,
         quickPicks,
         inputBoxes,
+        terminals,
         settings,
         registeredCommands,
         fs,
@@ -547,8 +573,8 @@ export interface MockCodeContextResult {
  * expect(await resultPromise).to.equal('hello');
  * ```
  */
-export function createMockCodeContext(): MockCodeContextResult {
-    const mockResult = createMockVsCode();
+export function createMockCodeContext(terminalOptions?: MockVsCodeOptions): MockCodeContextResult {
+    const mockResult = createMockVsCode(undefined, terminalOptions);
     const extensionContext = {
         workspaceState: new MockMemento(),
         globalState: Object.assign(new MockMemento(), {

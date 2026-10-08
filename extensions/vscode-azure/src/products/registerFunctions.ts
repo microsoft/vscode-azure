@@ -6,10 +6,19 @@
 import { FunctionsHostClient, IFunctionsHostClientProvider, ILogsQueryClientProvider, IWebAppClientProvider, LogsQueryClient, WebAppClient } from '@microsoft/vscode-azure-azutils';
 import { IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
 import { CreateFunctionApp } from '../commands/functions/CreateFunctionApp';
+import { CopyFunctionUrl } from '../commands/functions/CopyFunctionUrl';
+import { DeleteFunction } from '../commands/functions/DeleteFunction';
+import { ExecuteFunction } from '../commands/functions/ExecuteFunction';
+import { RevealFunctionAppIdentity } from '../commands/functions/RevealFunctionAppIdentity';
+import { SetFunctionState } from '../commands/functions/SetFunctionState';
+import { StreamFunctionLogs } from '../commands/functions/StreamFunctionLogs';
+import { WebAppLifecycle } from '../commands/webApp/WebAppLifecycle';
 import type { ProductRegistrar } from '../registration/ProductRegistrar';
+import { pushDisposable } from '../services';
 import { WebAppSettingsAdapter } from '../settings/adapters/WebAppSettingsAdapter';
 import { WebAppDataProvider } from '../tree/resources/webApp/WebAppDataProvider';
 import { FunctionAppViewProvider } from '../tree/resources/webApp/FunctionAppViewProvider';
+import { FunctionAppLogStream } from '../tree/resources/webApp/FunctionAppLogStream';
 import { WebAppViewProvider } from '../tree/resources/webApp/WebAppViewProvider';
 import { functionsDetector } from '../tree/workspace/functions/FunctionsWorkspaceDataProvider';
 import { IWorkspaceDetector } from '../utils/workspaceIndex/WorkspaceDetector';
@@ -27,6 +36,7 @@ export function registerFunctions(registrar: ProductRegistrar): void {
     // this shared ownership rather than registering duplicate providers.
     registrar.registerBinding(container => {
         container.bind(WebAppSettingsAdapter).toSelf().inSingletonScope();
+        container.bind(FunctionAppLogStream).toSelf().inSingletonScope().onActivation(pushDisposable);
     });
 
     registrar.registerResourceDataProvider(WebAppDataProvider);
@@ -34,6 +44,16 @@ export function registerFunctions(registrar: ProductRegistrar): void {
     registrar.registerResourceViewProvider(WebAppViewProvider);
     registrar.registerCommand('vscode-azure/functions/createNew', CreateFunctionApp, 'createNew');
     registrar.registerCommand('vscode-azure/functions/deploy', CreateFunctionApp, 'deploy');
+    registrar.registerCommand('vscode-azure/webApp/start', WebAppLifecycle, 'start');
+    registrar.registerCommand('vscode-azure/webApp/stop', WebAppLifecycle, 'stop');
+    registrar.registerCommand('vscode-azure/webApp/restart', WebAppLifecycle, 'restart');
+    registrar.registerCommand('vscode-azure/functions/execute', ExecuteFunction);
+    registrar.registerCommand('vscode-azure/functions/copyUrl', CopyFunctionUrl);
+    registrar.registerCommand('vscode-azure/functions/enable', SetFunctionState, false);
+    registrar.registerCommand('vscode-azure/functions/disable', SetFunctionState, true);
+    registrar.registerCommand('vscode-azure/functions/delete', DeleteFunction);
+    registrar.registerCommand('vscode-azure/functions/streamLogs', StreamFunctionLogs);
+    registrar.registerCommand('vscode-azure/functions/revealIdentity', RevealFunctionAppIdentity);
 
     registrar.registerBinding(container => {
         container.bind(IWorkspaceDetector).toConstantValue(functionsDetector);

@@ -3,13 +3,52 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { collectPages, delay } from '@microsoft/vscode-azure-utils';
+import { collectPages, delay, stringifyError } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
-import { AppServiceLogicalType, FunctionAppLogicalType, LogicAppLogicalType, ResourceClient, StaticWebAppResourceType } from '../../../src/rest/clients/ResourceClient';
+import { AppServiceLogicalType, ApplicationInsightsResourceType, FunctionAppLogicalType, LogicAppLogicalType, ResourceClient, StaticWebAppResourceType } from '../../../src/rest/clients/ResourceClient';
 import { makeCredential, makeSubscription } from '../../mockAzure';
 import { makeResponse, MockHttpClient } from '../../mockPipeline';
 
 describe('ResourceClient (unit)', () => {
+    it('reads live provider properties by ARM ID with the resolved API version and subscription metadata', async () => {
+        const subscription = makeSubscription();
+        const id = `/subscriptions/${subscription.subscriptionId}/resourceGroups/MyRG/providers/${ApplicationInsightsResourceType}/MyInsights`;
+        const signal = new AbortController().signal;
+        const httpClient = new MockHttpClient({
+            handler: request => makeResponse(request, 200, JSON.stringify(
+                request.url.includes('/providers/Microsoft.Insights?')
+                    ? { namespace: 'Microsoft.Insights', resourceTypes: [{ resourceType: 'components', defaultApiVersion: '2020-02-02' }] }
+                    : { id, type: ApplicationInsightsResourceType, name: 'MyInsights', location: 'eastus', properties: { InstrumentationKey: 'test-key' } },
+            )),
+        });
+        const { ctx } = createMockCodeContext();
+        const { executor } = createTestActionExecutor();
+        const resource = await ResourceClient.create(ctx, executor, makeCredential(), subscription, { httpClient })
+            .resources.getById(id, ApplicationInsightsResourceType, { abortSignal: signal });
+        expect(resource.subscription).to.equal(subscription);
+        expect(resource.logicalType).to.equal(ApplicationInsightsResourceType);
+        expect(resource.properties).to.deep.equal({ InstrumentationKey: 'test-key' });
+        expect(httpClient.requests[1].url).to.include(id).and.include('api-version=2020-02-02');
+        expect(httpClient.requests[1].abortSignal).to.equal(signal);
+    });
+
+    it('reports malformed resource metadata without embedding provider properties in the error', async () => {
+        const httpClient = new MockHttpClient({
+            handler: request => makeResponse(request, 200, JSON.stringify(
+                request.url.includes('/providers/Microsoft.Insights?')
+                    ? { namespace: 'Microsoft.Insights', resourceTypes: [{ resourceType: 'components', defaultApiVersion: '2020-02-02' }] }
+                    : { properties: { privateValue: 'not-for-error-output' } },
+            )),
+        });
+        const result = createClient(httpClient).resources.getById(
+            `/subscriptions/test-sub/resourceGroups/MyRG/providers/${ApplicationInsightsResourceType}/MyInsights`,
+            ApplicationInsightsResourceType,
+        );
+        await expect(result).to.be.rejectedWith(/missing required field/);
+        const error = await result.catch((reason: unknown) => stringifyError(reason));
+        expect(error).not.to.include('not-for-error-output');
+    });
+
     it('should isolate concurrent requests from clients with custom options', async () => {
         const { ctx } = createMockCodeContext();
         const { executor } = createTestActionExecutor();

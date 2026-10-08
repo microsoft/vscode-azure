@@ -21,6 +21,7 @@ import type { VirtualResource } from '../src/models/VirtualResource';
 import type { ISubscriptionClient, ISubscriptionClientProvider, Location, Subscription, TenantIdDescription } from '../src/rest/clients/SubscriptionClient';
 import type { Container, IContainerAppsClient, Replica, Revision } from '../src/rest/clients/ContainerAppsClient';
 import type { FunctionEnvelope, IWebAppClient, Site } from '../src/rest/clients/WebAppClient';
+import type { IFunctionsHostClient } from '../src/rest/clients/FunctionsHostClient';
 import { makePagedAsyncIterable } from './rest/mockPaging';
 
 const defaultEnvironment: EnvironmentLike = AzurePublicCloud;
@@ -464,6 +465,20 @@ export function makeFunctionEnvelope(overrides?: Partial<FunctionEnvelope>): Fun
         config: { bindings: [{ type: 'httpTrigger', direction: 'in', authLevel: 'function' }] },
         isDisabled: false,
         ...overrides,
+    };
+}
+
+/** A Functions host fixture whose requests can be inspected and replaced independently. */
+export type MockFunctionsHostClient = IFunctionsHostClient & {
+    readonly [K in keyof IFunctionsHostClient]: Mock<IFunctionsHostClient[K]>;
+};
+
+/** Builds a ready host with an empty function listing and successful invocation acceptance. */
+export function createMockFunctionsHostClient(): MockFunctionsHostClient {
+    return {
+        listFunctions: mock.fn(() => Promise.resolve([])),
+        getStatus: mock.fn(() => Promise.resolve({ state: 'Running' })),
+        invoke: mock.fn(() => Promise.resolve()),
     };
 }
 
