@@ -10,8 +10,9 @@ import { WebAppSettingsAdapter } from '../../settings/adapters/WebAppSettingsAda
 import { IResourceSelector } from '../../tree/resources/ResourceSelector';
 import { isFunctionAppFunction } from '../../tree/resources/webApp/FunctionApp';
 import type { ManagedCommand } from '../ManagedCommand';
+import { LocalFunctionTarget } from '../../functions/LocalFunctionTarget';
 
-/** Enables or disables a remote function through its app's shared settings adapter. */
+/** Enables or disables functions through remote application settings or local project Values. */
 @injectable()
 export class SetFunctionState implements ManagedCommand {
     /** Capabilities selected according to the function's reported disabled state. */
@@ -23,10 +24,16 @@ export class SetFunctionState implements ManagedCommand {
         @inject(IResourceSelector) private readonly selector: IResourceSelector,
         @inject(WebAppSettingsAdapter) private readonly settings: WebAppSettingsAdapter,
         @inject(IAzureViewDataTree) private readonly tree: IAzureViewDataTree,
+        @inject(LocalFunctionTarget) private readonly local: LocalFunctionTarget,
     ) { }
 
     /** Read-modify-writes only the disable flag while preserving every other setting. */
     public async execute(disabled: boolean, key?: string): Promise<void> {
+        const local = this.local.resolve(key);
+        if (local) {
+            await this.local.setDisabled(local, disabled);
+            return;
+        }
         const fn = await this.selector.selectVirtual({ key, canHandle: isFunctionAppFunction });
         const settingName = `AzureWebJobs.${fn.functionName}.Disabled`;
         const snapshot = await this.settings.read(fn.azureResource);

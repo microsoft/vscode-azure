@@ -236,38 +236,67 @@ Slice 2 external contract sources:
 Pattern:        WorkspaceDetector tags + workspace DataProvider/ViewProvider
 Target files:   extensions/vscode-azure/src/tree/workspace/functions/{FunctionsWorkspaceDataProvider,
                   FunctionsWorkspaceViewProvider}.ts (extend); tree/workspace/WorkspaceNode.ts (local function node)
+                extensions/vscode-azure/src/functions/{FunctionsProjectReader,LocalFunctionSettings,LocalFunctionTarget}.ts
+                extensions/vscode-azure/src/functions/host/LocalFunctionsHostTracker.ts
 Precedent:      FunctionsWorkspaceDataProvider (project nodes), AZD workspace provider
 Sweep:          reused IWorkspaceIndexService (its FileSystemWatcher drives refresh), functionsDetector, createTag,
-                RevealInExplorer, RefreshWorkspaceView. Searched "function.json", "listFunctions", "buildOutput": none
-                exist -> local listing lives in the Functions workspace provider.
+                RevealInExplorer, RefreshWorkspaceView, readText, dirname/basename/relativePath, JsoncSettingsFormat,
+                jsonc-parser edits, isFunctionTriggerBinding, FunctionsHostClient, and Slice 2 command aliases.
+                Tests reuse createMockCodeContext, createTestActionExecutor, ManualDebounceScheduler,
+                createMockFunctionsHostClient, makeFunctionsProjectNode, and the real index/DataItemTree.
+                Searched local listing, generated-output readers, and host ownership: no shared implementations.
+                Product services keep those contracts outside providers; shared index exclusions stay intact.
 Activation:     none (existing workspace index; no workspaceContains event)
-External facts: where precompiled (.NET isolated, Java) function metadata lands after build (`functions.metadata`,
-                `function.json` under the output folder) -- verify against Core Tools v4 output before writing.
-Tree contract:  Local project node: revealInExplorer, createFunction, deployProject, initProject (when not initialized).
-                Local function node: executeFunction, copyFunctionUrl (HTTP; host running), enableFunction|disableFunction.
+External facts: verified Worker SDK output copying, Java Maven staging and function metadata, Node v3/v4 programming
+                models, host invocation templates, and local settings against the sources linked below.
+Tree contract:  Local project node: revealInExplorer, refreshWorkspace (invalid: refresh only).
+                Local function node: executeFunction (ready registered host), copyFunctionUrl (HTTP; ready host),
+                enableFunction|disableFunction, refreshWorkspace, revealInExplorer when a source URI is available.
                 Hint and invalid nodes: no actions except refresh.
 ```
 
-- [ ] List functions directly under the project node (no group node): from
+**Action dependencies approved by the reviewer:** initialization actions remain
+in Slice 4 and creation/welcome actions remain in Slice 5. Slice 3 exposes
+missing-runtime state without contributing a command whose implementation is
+pending. The ready-host registration seam is implemented here; Slice 4's process
+owner must populate it after readiness and release it when the host stops.
+
+- [x] List functions directly under the project node (no group node): from
   `function.json` for script-model projects, from build output for precompiled
   projects, and from the running host otherwise. Closes
   [#178](https://github.com/microsoft/vscode-azure/issues/178). A Core Tools
   function-list command has been requested in
   [Azure/azure-functions-core-tools#5344](https://github.com/Azure/azure-functions-core-tools/issues/5344).
   <- FUNC-182, FUNC-184, FUNC-185
-- [ ] Hint nodes: "Run build task to update this list..." and "Start debugging
+- [x] Hint nodes: "Run build task to update this list..." and "Start debugging
   to update this list...". <- FUNC-187, FUNC-188
-- [ ] Invalid local function and invalid local project nodes. <- FUNC-186, FUNC-191
-- [ ] Uninitialized-project state with an "Initialize project..." action
-  (follows Slice 4's init design). <- FUNC-190
-- [ ] Empty workspace: `viewsWelcome` content pointing at create project.
-  <- FUNC-192
-- [ ] Refresh on `function.json` changes and host start/stop through the
+- [x] Invalid local function and invalid local project nodes. <- FUNC-186, FUNC-191
+- [x] Missing-worker-runtime project state; initialization action is tracked
+  in Slice 4. <- FUNC-190 (presentation)
+- [x] Refresh on `function.json` changes, local settings, generated-output
+  changes/deletion, and host start/stop through the
   workspace index watcher and host tracking events. <- FUNC-198
-- [ ] Local execute / copy URL / enable / disable reuse the Slice 2 commands
+- [x] Local execute / copy URL / enable / disable reuse the Slice 2 commands
   against `FunctionsHostClient` (local) and `local.settings.json` values.
   <- FUNC-041, FUNC-042, FUNC-043, FUNC-044
-- [ ] Unit tests with the workspace index test fixtures.
+- [x] Unit/integration tests with shared fixtures and the real workspace
+  index/tree, including remote-command regression coverage and contribution
+  consistency checks.
+
+Listing bounds and output selection are documented in
+[the product contract](../../products/functions.md#local-workspace-tree).
+No custom output path, guessed port, source-language parser, settings
+synchronization, or local settings tree is contributed.
+
+Verified external contracts:
+
+- [Worker SDK build-output metadata copying](https://github.com/Azure/azure-functions-dotnet-worker/blob/main/sdk/Sdk/Targets/Microsoft.Azure.Functions.Worker.Sdk.targets).
+- [Maven staging directory](https://github.com/microsoft/azure-maven-plugins/blob/975dd140d802c0fcb4fd61f4083095e6d299f7be/azure-appservice-maven-plugin-lib/src/main/java/com/microsoft/azure/maven/appservice/AbstractAppServiceMojo.java)
+  and [generated function metadata](https://github.com/microsoft/azure-maven-plugins/blob/975dd140d802c0fcb4fd61f4083095e6d299f7be/azure-functions-maven-plugin/src/main/java/com/microsoft/azure/maven/function/PackageMojo.java).
+- [Node programming models](https://learn.microsoft.com/en-us/azure/azure-functions/functions-reference-node?pivots=nodejs-model-v4).
+- [Host metadata response and invocation template](https://github.com/Azure/azure-functions-host/blob/dev/src/WebJobs.Script.WebHost/Models/FunctionMetadataResponse.cs).
+- [Local settings structure](https://learn.microsoft.com/en-us/azure/azure-functions/functions-develop-local#local-settings-file)
+  and [function disable flags](https://learn.microsoft.com/en-us/azure/azure-functions/disable-function).
 
 ## Slice 4 -- Local development (F5)
 
@@ -320,6 +349,8 @@ Resolution flow for one session:
   configuration in VS Code settings; it writes non-debug workspace files such
   as `.vscode/extensions.json` recommendations, and offers (never forces) the
   optional `launch.json` entry below. <- FUNC-030
+- [ ] Wire the local project initialization action and its initialization
+  state to the implemented initialization flow. <- FUNC-190
 - [ ] Attach configurations for Node, Python (via the Python extension's
   launcher), Java, and PowerShell, with free debug ports.
   <- FUNC-210, FUNC-211, FUNC-212, FUNC-214, FUNC-268
@@ -369,6 +400,8 @@ External facts: `func init` worker-runtime / language flags for each kept langua
 - [ ] Create project: pick folder and language, run `func init`, open the
   folder in the current window only (no cross-session resume). Local-only
   commands carry `enablement: !virtualWorkspace`. <- FUNC-026, FUNC-004
+- [ ] Empty workspace: `viewsWelcome` content pointing at the implemented
+  create-project command. <- FUNC-192
 - [ ] Languages through `func init`: JavaScript, TypeScript, Python (v2; offer
   the Python extension's environment creation instead of creating a venv
   directly), C# .NET isolated, Java (Maven), PowerShell, custom handler.

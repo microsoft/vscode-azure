@@ -16,6 +16,9 @@ import type * as vscode from 'vscode';
  * - `azdProject` -- a folder that contains an `azure.yaml`/`azure.yml` file
  * - `azdService` -- a single service declared under `services:` in `azure.yaml`
  * - `functionsProject` -- a folder that contains a Functions `host.json`
+ * - `localFunction` -- a function belonging to a local Functions project
+ * - `functionsHint` -- a build or host-start hint beneath a Functions project
+ * - `invalidLocalFunction` -- unreadable function metadata or a failed local listing
  * - `emulatorsGroup` -- a virtual grouping node for local emulators
  * - `emulator` -- a single (currently stubbed) local emulator entry
  */
@@ -23,6 +26,9 @@ export type WorkspaceNodeType =
     | 'azdProject'
     | 'azdService'
     | 'functionsProject'
+    | 'localFunction'
+    | 'functionsHint'
+    | 'invalidLocalFunction'
     | 'emulatorsGroup'
     | 'emulator';
 
@@ -76,7 +82,33 @@ export interface FunctionsProjectNode extends WorkspaceNode {
     readonly type: 'functionsProject';
     /** URI of the `host.json` file itself. */
     readonly resourceUri: vscode.Uri;
+    /** Worker runtime from local settings, when configured. */
+    readonly runtime?: string;
+    /** Whether the project has a worker runtime configured. */
+    readonly initialized?: boolean;
+    /** Safe, user-actionable error from project validation. */
+    readonly error?: string;
 }
+
+/** A local function listed from source, generated output, or its ready host. */
+export interface LocalFunctionNode extends WorkspaceNode {
+    readonly type: 'localFunction';
+    readonly project: FunctionsProjectNode;
+    readonly functionName: string;
+    readonly triggerKind: string;
+    readonly authLevel?: string;
+    readonly isDisabled: boolean;
+}
+
+/** A build/host hint or malformed function under a local project. */
+export interface FunctionsInfoNode extends WorkspaceNode {
+    readonly type: 'functionsHint' | 'invalidLocalFunction';
+    readonly project: FunctionsProjectNode;
+    readonly error?: string;
+}
+
+/** Descendants shown directly beneath a local Functions project. */
+export type LocalFunctionsNode = LocalFunctionNode | FunctionsInfoNode;
 
 /** Virtual grouping node for local emulators. */
 export interface EmulatorsGroupNode extends WorkspaceNode {
@@ -137,6 +169,17 @@ export function isAzdServiceNode(node: unknown): node is AzdServiceNode {
 /** Type guard for {@linkcode FunctionsProjectNode}. */
 export function isFunctionsProjectNode(node: unknown): node is FunctionsProjectNode {
     return isWorkspaceNode(node) && node.type === 'functionsProject';
+}
+
+/** Identifies local function command targets. */
+export function isLocalFunctionNode(node: unknown): node is LocalFunctionNode {
+    return isWorkspaceNode(node) && node.type === 'localFunction';
+}
+
+/** Identifies Functions-owned project descendants for provider dispatch and parent navigation. */
+export function isLocalFunctionsNode(node: unknown): node is LocalFunctionsNode {
+    return isWorkspaceNode(node)
+        && (node.type === 'localFunction' || node.type === 'functionsHint' || node.type === 'invalidLocalFunction');
 }
 
 /** Type guard for {@linkcode EmulatorsGroupNode}. */

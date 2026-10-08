@@ -1,5 +1,72 @@
 # Azure Functions
 
+## Local workspace tree
+
+`FunctionsWorkspaceDataProvider` discovers projects through the shared workspace
+index's `host.json` tags. Nested projects have workspace-relative labels.
+Functions appear directly beneath their owning project, without a grouping node.
+
+`FunctionsProjectReader` uses a registered, ready local host as the authoritative
+source of function metadata. Offline script-model projects use immediate-child
+`function.json` files. Code-first projects without file metadata show a
+"Start debugging to update this list..." hint; language source is not parsed.
+This distinction follows the
+[Node programming-model contract](https://learn.microsoft.com/en-us/azure/azure-functions/functions-reference-node?pivots=nodejs-model-v4).
+`host.json.functions`, when supplied, limits the visible function names.
+
+Offline .NET isolated projects read the most recently modified
+`functions.metadata` under `bin`, with path ordering as a tie-breaker. The
+[Worker SDK copies this metadata into the build output](https://github.com/Azure/azure-functions-dotnet-worker/blob/main/sdk/Sdk/Targets/Microsoft.Azure.Functions.Worker.Sdk.targets).
+Java projects read immediate-child `function.json` files under the single
+packaged app in `target/azure-functions`, following the Maven plugin's
+[staging-directory contract](https://github.com/microsoft/azure-maven-plugins/blob/975dd140d802c0fcb4fd61f4083095e6d299f7be/azure-appservice-maven-plugin-lib/src/main/java/com/microsoft/azure/maven/appservice/AbstractAppServiceMojo.java)
+and [package step](https://github.com/microsoft/azure-maven-plugins/blob/975dd140d802c0fcb4fd61f4083095e6d299f7be/azure-functions-maven-plugin/src/main/java/com/microsoft/azure/maven/function/PackageMojo.java).
+Precompiled listings include a build hint because output can be stale.
+Multiple Java app outputs produce an actionable error rather than choosing one.
+
+Generated output stays excluded from the shared source index. Explicit output
+reads are bounded to 2,000 directory entries and four descendant-directory
+levels, skipping symbolic links and the `.azurefunctions`, `lib`, and `runtimes`
+dependency directories. Exceeding these limits is a visible listing error.
+Custom build-output locations require the running-host path.
+
+Malformed functions remain visible beside readable siblings. Project validation
+shows invalid metadata or a missing worker runtime without putting local settings
+values in nodes. Invalid and hint nodes offer workspace refresh only.
+Source metadata, local settings, and project-file changes use the shared index
+watcher; generated-output and host-registration events invalidate the affected
+project subtree. Workspace refresh invalidates the complete workspace tree.
+
+## Local actions and host ownership
+
+The local tree reuses Execute Function, Copy Function URL, Enable, and Disable.
+Execute and HTTP URL copying require a ready host registered for the exact
+project URI and port. `LocalFunctionsHostTracker` owns registrations, not host
+processes: disposal of an older registration cannot remove its replacement.
+Starting Core Tools, waiting for readiness, and populating this registry belong
+to the [local development slice](../migrations/azurefunctions/MIGRATION-PLAN.md#slice-4----local-development-f5).
+An arbitrary process on the default port is not treated as this project's host.
+
+Local execution submits raw input through `FunctionsHostClient` without Azure
+authentication or recent-input persistence. Copy URL reads current host metadata,
+validates the HTTP trigger, and uses its actual invocation template, preserving
+custom routes. Only HTTP loopback URLs on the registered port, without embedded
+credentials, are accepted. No authentication key is manufactured.
+
+Enable and Disable edit only `Values["AzureWebJobs.<FunctionName>.Disabled"]` in
+`local.settings.json`. `LocalFunctionSettings` uses the shared `JsoncSettingsFormat`
+validation and surgical JSONC edits, preserving comments, unrelated settings,
+`Host`, and `ConnectionStrings`. Missing files receive a `Values` object.
+Encrypted, malformed, duplicate-property, and dirty files are rejected before
+writing. Successful writes refresh the owning project and explain that the host
+must restart to apply the setting. Settings values are neither uploaded nor
+displayed in a local settings tree. See the
+[local settings contract](https://learn.microsoft.com/en-us/azure/azure-functions/functions-develop-local#local-settings-file)
+and [disable-function setting](https://learn.microsoft.com/en-us/azure/azure-functions/disable-function).
+
+Initialization actions and project/function creation are tracked in Slices 4 and
+5 respectively; the local tree contributes only implemented actions.
+
 ## Remote resources tree
 
 Function Apps are identified by `FunctionAppLogicalType`, not by the shared

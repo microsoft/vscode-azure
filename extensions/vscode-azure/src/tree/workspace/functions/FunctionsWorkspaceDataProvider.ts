@@ -4,15 +4,17 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    IActionExecutor, IVsCode,
-    type DataProvider,
+    basename, dirname, Disposable, EventEmitter, IActionExecutor, IVsCode, relativePath, Roots,
+    type DataProvider, type DataProviderChangeEvent,
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IWorkspaceIndexService } from '../../../utils/workspaceIndex/WorkspaceIndexService';
 import type { WorkspaceDetector } from '../../../utils/workspaceIndex/WorkspaceDetector';
 import { createTag, StandardTagNames } from '../../../utils/workspaceIndex/tags';
 import type { FunctionsProjectNode, WorkspaceNode } from '../WorkspaceNode';
-import { FunctionsProjectKeyPrefix, isFunctionsProjectNode } from '../WorkspaceNode';
+import { isFunctionsProjectNode } from '../WorkspaceNode';
+import { FunctionsProjectReader } from '../../../functions/FunctionsProjectReader';
+import { LocalFunctionsHostTracker } from '../../../functions/host/LocalFunctionsHostTracker';
 
 /** File name that marks an Azure Functions project. */
 const FunctionsHostFileName = 'host.json';
@@ -21,13 +23,17 @@ const functions = 'functions';
 
 /** The `host.json` that marks an Azure Functions project. */
 export const FunctionsHostFileTag = createTag(functions, StandardTagNames.projectFile);
+/** Function metadata files in source folders, excluding generated output. */
+export const FunctionsMetadataFileTag = createTag(functions, 'metadata');
+/** Files that affect local function state or runtime selection. */
+export const FunctionsSettingsFileTag = createTag(functions, 'settings');
+/** Source project files identifying precompiled Functions projects. */
+export const FunctionsBuildFileTag = createTag(functions, 'build');
 
 /**
  * Tags the `host.json` of every Azure Functions project.
  *
- * Listing the individual functions inside a project is tracked by
- * https://github.com/microsoft/vscode-azure/issues/178; it fits here as a
- * further tag applied to the project's source files.
+ * Source metadata and settings are tagged so edits invalidate the shared tree.
  */
 export const functionsDetector: WorkspaceDetector = {
     id: 'functions',
@@ -35,20 +41,56 @@ export const functionsDetector: WorkspaceDetector = {
     inspect(node) {
         if (!node.isDirectory && node.name === FunctionsHostFileName) {
             node.tag(FunctionsHostFileTag);
+        } else if (!node.isDirectory && node.name === 'function.json') {
+            node.tag(FunctionsMetadataFileTag);
+        } else if (!node.isDirectory && node.name === 'local.settings.json') {
+            node.tag(FunctionsSettingsFileTag);
+        } else if (!node.isDirectory && (node.name.endsWith('.csproj') || node.name === 'pom.xml')) {
+            node.tag(FunctionsBuildFileTag);
         }
     },
 };
 
 /** Data-layer provider for {@linkcode FunctionsProjectNode}s. */
 @injectable()
-export class FunctionsWorkspaceDataProvider implements DataProvider<WorkspaceNode> {
+export class FunctionsWorkspaceDataProvider implements DataProvider<WorkspaceNode>, Disposable {
     public readonly isRoot = true;
+    private readonly changeEmitter = new EventEmitter<DataProviderChangeEvent<WorkspaceNode>>();
+    public readonly onDidChange = this.changeEmitter.event;
+    private readonly disposables: Disposable[] = [this.changeEmitter];
+    private projects: FunctionsProjectNode[] = [];
 
     public constructor(
         @inject(IVsCode) private readonly code: IVsCode,
         @inject(IWorkspaceIndexService) private readonly indexService: IWorkspaceIndexService,
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
-    ) { }
+        @inject(FunctionsProjectReader) private readonly reader: FunctionsProjectReader,
+        @inject(LocalFunctionsHostTracker) hosts: LocalFunctionsHostTracker,
+    ) {
+        this.disposables.push(hosts.onDidChange(folder => {
+            for (const project of this.projects) {
+                if (dirname(project.resourceUri).toString() === folder.toString()) {
+                    this.changeEmitter.fire({ target: project });
+                }
+            }
+        }));
+        // Generated output is excluded from the shared index; string-glob watching reuses VS Code's watcher.
+        const watcher = code.workspace.createFileSystemWatcher('**');
+        const changed = (uri: Parameters<typeof relativePath>[1]) => {
+            for (const project of this.projects) {
+                const relative = relativePath(dirname(project.resourceUri), uri);
+                if (relative && /^(?:bin|target)(?:\/|$)/.test(relative)) {
+                    this.changeEmitter.fire({ target: project });
+                }
+            }
+        };
+        this.disposables.push(watcher, watcher.onDidCreate(changed), watcher.onDidChange(changed), watcher.onDidDelete(changed));
+        this.disposables.push(hosts.onDidChange(() => {
+            if (!this.projects.length) {
+                this.changeEmitter.fire({ target: Roots });
+            }
+        }));
+    }
 
     /** @inheritdoc */
     public canHandle(resource: unknown): resource is FunctionsProjectNode {
@@ -56,33 +98,47 @@ export class FunctionsWorkspaceDataProvider implements DataProvider<WorkspaceNod
     }
 
     /** @inheritdoc */
-    public async getChildren(resource?: WorkspaceNode): Promise<FunctionsProjectNode[]> {
+    public async getChildren(resource?: WorkspaceNode): Promise<WorkspaceNode[]> {
         if (!resource) {
             return this.discoverProjects();
-        } else {
+        }
+        if (!isFunctionsProjectNode(resource)) {
             return [];
         }
+        const index = await this.indexService.getIndex();
+        const folder = dirname(resource.resourceUri);
+        const files = index.withTag(FunctionsMetadataFileTag).filter(uri =>
+            dirname(dirname(uri)).toString() === folder.toString()
+            && !index.has(this.code.Uri.joinPath(dirname(uri), FunctionsHostFileName), FunctionsHostFileTag));
+        const buildFiles = index.withTag(FunctionsBuildFileTag).filter(uri => dirname(uri).toString() === folder.toString());
+        const compiled = buildFiles.some(uri => basename(uri) === 'pom.xml')
+            ? 'java'
+            : buildFiles.some(uri => basename(uri).endsWith('.csproj'))
+                ? 'dotnet' : undefined;
+        return this.reader.functions(resource, files, compiled);
     }
 
     private async discoverProjects(): Promise<FunctionsProjectNode[]> {
         const index = await this.indexService.getIndex();
-        // The tagged node is the `host.json` file, matching the `resourceUri`
-        // this tree has always exposed to "Reveal in Explorer".
         const projects: FunctionsProjectNode[] = [];
         for (const uri of index.withTag(FunctionsHostFileTag)) {
             const folder = this.code.workspace.getWorkspaceFolder(uri);
             if (!folder) {
                 continue;
             }
-            projects.push({
-                id: `${FunctionsProjectKeyPrefix}${uri.toString()}`,
-                type: 'functionsProject',
-                label: folder.name,
-                resourceUri: uri,
-            });
+            const projectFolder = dirname(uri);
+            const relative = relativePath(folder.uri, projectFolder);
+            const label = relative ? `${folder.name}/${relative}` : folder.name;
+            projects.push(await this.reader.project(uri, label || basename(projectFolder)));
         }
 
         this.executor.output.debug(`[data] functions workspace: discovered=${projects.length}`);
+        this.projects = projects;
         return projects;
+    }
+
+    /** Disposes output and host subscriptions when the workspace tree is released. */
+    public dispose(): void {
+        Disposable.disposeAll(this.disposables);
     }
 }

@@ -15,6 +15,10 @@ import { StreamFunctionLogs } from '../commands/functions/StreamFunctionLogs';
 import { WebAppLifecycle } from '../commands/webApp/WebAppLifecycle';
 import type { ProductRegistrar } from '../registration/ProductRegistrar';
 import { pushDisposable } from '../services';
+import { LocalFunctionSettings } from '../functions/LocalFunctionSettings';
+import { LocalFunctionTarget } from '../functions/LocalFunctionTarget';
+import { FunctionsProjectReader } from '../functions/FunctionsProjectReader';
+import { LocalFunctionsHostTracker } from '../functions/host/LocalFunctionsHostTracker';
 import { WebAppSettingsAdapter } from '../settings/adapters/WebAppSettingsAdapter';
 import { WebAppDataProvider } from '../tree/resources/webApp/WebAppDataProvider';
 import { FunctionAppViewProvider } from '../tree/resources/webApp/FunctionAppViewProvider';
@@ -36,6 +40,10 @@ export function registerFunctions(registrar: ProductRegistrar): void {
     // this shared ownership rather than registering duplicate providers.
     registrar.registerBinding(container => {
         container.bind(WebAppSettingsAdapter).toSelf().inSingletonScope();
+        container.bind(LocalFunctionSettings).toSelf().inSingletonScope();
+        container.bind(LocalFunctionTarget).toSelf();
+        container.bind(FunctionsProjectReader).toSelf();
+        container.bind(LocalFunctionsHostTracker).toSelf().inSingletonScope().onActivation(pushDisposable);
         container.bind(FunctionAppLogStream).toSelf().inSingletonScope().onActivation(pushDisposable);
     });
 

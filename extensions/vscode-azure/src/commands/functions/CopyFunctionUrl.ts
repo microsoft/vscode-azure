@@ -7,23 +7,43 @@ import { getResourceGroupName, IWebAppClientProvider } from '@microsoft/vscode-a
 import { ExternalError, IVsCode, showMessage } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IResourceSelector } from '../../tree/resources/ResourceSelector';
-import { isFunctionAppFunction, isFunctionTriggerBinding } from '../../tree/resources/webApp/FunctionApp';
+import { isFunctionAppFunction, isFunctionTriggerBinding, type FunctionTriggerBinding } from '../../tree/resources/webApp/FunctionApp';
 import type { ManagedCommand } from '../ManagedCommand';
+import { LocalFunctionTarget } from '../../functions/LocalFunctionTarget';
 
 /** Copies a live HTTP invocation URL with the least-privileged key its access level requires. */
 @injectable()
 export class CopyFunctionUrl implements ManagedCommand {
-    /** Capability for remote HTTP-triggered functions. */
+    /** Capability for HTTP-triggered functions with an available invocation URL. */
     public static readonly ContextValue = 'copyFunctionUrl';
 
     public constructor(
         @inject(IVsCode) private readonly code: IVsCode,
         @inject(IResourceSelector) private readonly selector: IResourceSelector,
         @inject(IWebAppClientProvider) private readonly createClient: IWebAppClientProvider,
+        @inject(LocalFunctionTarget) private readonly local: LocalFunctionTarget,
     ) { }
 
     /** Keeps keys out of notifications and output; admin URLs require explicit confirmation. */
     public async execute(key?: string): Promise<void> {
+        const local = this.local.resolve(key);
+        if (local) {
+            const { client, port } = this.local.host(local);
+            const fn = (await client.listFunctions()).find(fn => fn.name === local.functionName);
+            this.httpTrigger(fn?.config);
+            const rawUrl = fn?.invoke_url_template;
+            if (!rawUrl || !URL.canParse(rawUrl)) {
+                throw new ExternalError(this.code.l10n.t('The running host does not report an HTTP invocation URL for this function.'));
+            }
+            const url = new URL(rawUrl);
+            if (url.protocol !== 'http:' || !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)
+                || Number(url.port || '80') !== port || url.username || url.password) {
+                throw new ExternalError(this.code.l10n.t('The local function URL must belong to the registered loopback host.'));
+            }
+            await this.code.env.clipboard.writeText(url.toString());
+            void showMessage(this.code, this.code.l10n.t('Copied the URL for \'{0}\'.', local.functionName));
+            return;
+        }
         const fn = await this.selector.selectVirtual({ key, canHandle: isFunctionAppFunction });
         if (fn.triggerKind.toLowerCase() !== 'httptrigger') {
             throw new ExternalError(this.code.l10n.t('Only HTTP-triggered functions have an invocation URL.'));
@@ -32,14 +52,8 @@ export class CopyFunctionUrl implements ManagedCommand {
         const client = this.createClient(app.subscription);
         const group = getResourceGroupName(app.id);
         const metadata = await client.webApps.getFunction(group, app.name, fn.functionName);
-        const config: unknown = metadata.config;
-        const bindings: unknown[] = config && typeof config === 'object' && 'bindings' in config && Array.isArray(config.bindings)
-            ? config.bindings : [];
-        const triggers = bindings.filter(isFunctionTriggerBinding);
-        if (triggers.length !== 1 || triggers[0].type.toLowerCase() !== 'httptrigger') {
-            throw new ExternalError(this.code.l10n.t('The latest function metadata does not report an HTTP trigger.'));
-        }
-        const authLevel = typeof triggers[0].authLevel === 'string' ? triggers[0].authLevel.toLowerCase() : undefined;
+        const trigger = this.httpTrigger(metadata.config);
+        const authLevel = typeof trigger.authLevel === 'string' ? trigger.authLevel.toLowerCase() : undefined;
         const rawUrl = metadata.invokeUrlTemplate
             ?? (await client.webApps.listFunctionSecrets(group, app.name, fn.functionName)).triggerUrl;
         if (!rawUrl || !URL.canParse(rawUrl)) {
@@ -76,5 +90,15 @@ export class CopyFunctionUrl implements ManagedCommand {
         }
         await this.code.env.clipboard.writeText(url.toString());
         void showMessage(this.code, this.code.l10n.t('Copied the URL for \'{0}\'.', fn.functionName));
+    }
+
+    private httpTrigger(config: unknown): FunctionTriggerBinding {
+        const bindings: unknown[] = config && typeof config === 'object' && 'bindings' in config && Array.isArray(config.bindings)
+            ? config.bindings : [];
+        const triggers = bindings.filter(isFunctionTriggerBinding);
+        if (triggers.length !== 1 || triggers[0].type.toLowerCase() !== 'httptrigger') {
+            throw new ExternalError(this.code.l10n.t('The latest function metadata does not report an HTTP trigger.'));
+        }
+        return triggers[0];
     }
 }

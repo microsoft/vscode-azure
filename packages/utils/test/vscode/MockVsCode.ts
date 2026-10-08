@@ -419,6 +419,7 @@ export function createMockVsCode(
             const document = {
                 uri,
                 isUntitled: false,
+                isDirty: false,
                 languageId: languageFromPath(uri.path),
                 getText: () => content,
             } as unknown as vscode.TextDocument;
@@ -454,6 +455,7 @@ export function createMockVsCode(
 
     const workspace = {
         createFileSystemWatcher,
+        textDocuments,
         findFiles,
         getConfiguration,
         getWorkspaceFolder,
