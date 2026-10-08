@@ -34,11 +34,8 @@ export interface AzdJsonlOutputOptions {
  * drained. An already-cancelled source prevents the task and polling from starting.
  */
 export async function withAzdJsonlOutput<T>(options: AzdJsonlOutputOptions, task: (signal?: AbortSignal) => Promise<T>): Promise<T> {
+    CancellationError.throwIfCancelled(options.cancellation);
     const bridge = toAbortSignal(options.cancellation);
-    if (bridge.signal?.aborted) {
-        bridge.disposable.dispose();
-        throw new CancellationError();
-    }
     let offset = 0;
     const readEntries = async (): Promise<void> => {
         let content: Uint8Array;
@@ -94,14 +91,10 @@ export async function withAzdJsonlOutput<T>(options: AzdJsonlOutputOptions, task
 
     try {
         const result = await task(bridge.signal);
-        if (bridge.signal?.aborted) {
-            throw new CancellationError();
-        }
+        CancellationError.throwIfCancelled(bridge.signal);
         return result;
     } catch (error) {
-        if (bridge.signal?.aborted) {
-            throw new CancellationError();
-        }
+        CancellationError.throwIfCancelled(bridge.signal);
         throw error;
     } finally {
         abort.abort();
