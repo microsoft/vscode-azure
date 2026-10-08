@@ -64,31 +64,59 @@ Target files:   packages/azutils/src/rest/clients/WebAppClient.ts (extend)
                 packages/azutils/src/rest/clients/LogsQueryClient.ts (new)
                 extensions/vscode-azure/src/tree/resources/webApp/FunctionApp.ts (new: guard + virtual function model)
 Precedent:      StaticWebAppClient.ts (minimal surface, toPages), StaticWebApp virtual environment/function models
-Sweep:          reused IWebAppClient/WebAppClient, createArmRestSubscriptionClient, toPages, FunctionAppLogicalType,
-                makeVirtualResource (tests). Searched "admin/functions", "masterKey", "hostKeys", "LogsQuery",
-                "monitor-query", "applicationInsights": none exist -> new FunctionsHostClient and LogsQueryClient in azutils
-                (shared; a Container Apps migration would reuse LogsQueryClient).
+Sweep:          reused IWebAppClient/WebAppClient, createArmRestSubscriptionClient, createDataPlaneRestClient,
+                EnvironmentLike.logAnalyticsEndpoint, parseAzureResourceId, toPages, FunctionAppLogicalType, makeVirtualResource,
+                createMockWebAppClient, pagesOf, collectPages, MockHttpClient, and createTestActionExecutor.
+                Searched "admin/functions", "masterKey", "hostKeys", "LogsQuery", "monitor-query",
+                "applicationInsights", "RestError", and "response.status": no host or query client exists.
+                FunctionsHostClient and LogsQueryClient use the shared data-plane pipeline; assertRestSuccess
+                supplies body-free HTTP failures for both. No new dependency is needed.
 Activation:     none
-External facts: Functions admin API paths (`/admin/functions`, `/admin/host/status`) and key APIs (listHostKeys,
-                listFunctionKeys, listFunctionSecrets) -- verify against the pinned source client code and the
-                @azure/arm-appservice API surface before writing. Log query SDK package name -- verify the current
-                published Azure Monitor query package on npm before adding the dependency.
+External facts: Functions host controllers and wire models; @azure/arm-appservice v19 modular operations and
+                deserializers; Azure Monitor resource/workspace query paths and partial-error response contract.
+                See verified sources below.
 Client:         re-export every SDK type used in the wrapper APIs from azutils
 ```
 
-- [ ] Add a Function App guard (case-insensitive `FunctionAppLogicalType`
+- [x] Add a Function App guard (case-insensitive `FunctionAppLogicalType`
   comparison) and a virtual remote-function model carrying name, trigger
   kind, disabled state, and auth level. <- FUNC-169, FUNC-170
-- [ ] Extend `IWebAppClient` with start, stop, restart, list/get/delete
+- [x] Extend `IWebAppClient` with start, stop, restart, list/get/delete
   function, function and host keys, and function secrets (invoke URL), keeping
   `toPages` for list operations. <- FUNC-060, FUNC-061, FUNC-062, FUNC-262
-- [ ] Add `FunctionsHostClient` for the host admin API: remote (master key
+- [x] Add `FunctionsHostClient` for the host admin API: remote (master key
   from `listHostKeys`) and local (`http://localhost:<port>`). Used by execute,
   local listing, and host readiness. <- FUNC-263
-- [ ] Add `LogsQueryClient` (Application Insights / Log Analytics query) for
+- [x] Add `LogsQueryClient` (Application Insights / Log Analytics query) for
   log streaming. <- FUNC-065
-- [ ] Unit tests with `MockHttpClient` through each client's `create()`
+- [x] Unit tests with `MockHttpClient` through each client's `create()`
   options.
+
+### Slice 0 contracts and verified sources
+
+- `FunctionsHostClient` takes either a loopback port or an HTTPS origin and
+  lazy master-key callback. Remote callers obtain the key through
+  `IWebAppClient.webApps.listHostKeys`; the client sends it in
+  `x-functions-key` and rejects redirects. Function listing, status, and
+  invocation follow the host's
+  [FunctionsController](https://github.com/Azure/azure-functions-host/blob/dev/src/WebJobs.Script.WebHost/Controllers/FunctionsController.cs),
+  [HostController](https://github.com/Azure/azure-functions-host/blob/dev/src/WebJobs.Script.WebHost/Controllers/HostController.cs),
+  and [FunctionMetadataResponse](https://github.com/Azure/azure-functions-host/blob/dev/src/WebJobs.Script.WebHost/Models/FunctionMetadataResponse.cs).
+  Invocation acceptance is HTTP 202, not completion of function execution.
+- Web App operations reuse the installed `@azure/arm-appservice` v19
+  modular SDK. Its [Web Apps API](https://learn.microsoft.com/javascript/api/@azure/arm-appservice/webapps?view=azure-node-latest)
+  covers lifecycle, function listing/deletion, and key/secret operations.
+  Paged function listings use `toPages`.
+- `LogsQueryClient` exposes
+  [resource-context queries](https://learn.microsoft.com/azure/azure-monitor/logs/api/azure-resource-queries)
+  and [workspace queries](https://learn.microsoft.com/azure/azure-monitor/logs/api/request-format)
+  through the shared REST pipeline and the subscription's
+  `logAnalyticsEndpoint`. It preserves table schemas and JSON cells and
+  rejects malformed responses and
+  [partial query errors](https://learn.microsoft.com/azure/azure-monitor/logs/api/response-format).
+- Both client factories are registered lazily by `registerFunctions`.
+  This slice supplies contracts for subsequent tree, command, and debugging
+  slices; it contributes no new user commands or activation events.
 
 ## Slice 1 -- Remote tree
 
@@ -498,3 +526,4 @@ External facts: `https://json.schemastore.org/function.json` and `https://json.s
 | Date | Rebased onto | Swept result |
 |---|---|---|
 | 2026-09-24 | `dfc8edaf` (#350) | Adopt `ExternalError` (`packages/utils`) for user-actionable failures in Slices 2, 4, and 6 (node deploy on untagged apps, missing Core Tools, pre-debug validation). No other new shared surfaces; no slices landed yet. |
+| 2026-10-08 | `8993a3c1` | Slice 0 intake sweep: reuse the shared data-plane REST factory and cloud-aware Log Analytics endpoint. Container Apps already owns its log-stream pseudoterminal; inspect that implementation before Slice 2 instead of assuming a terminal primitive is absent. |

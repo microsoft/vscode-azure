@@ -5,7 +5,7 @@
 
 import type { AccessToken, TokenCredential } from '@azure/core-auth';
 import { CaselessSet, EventEmitter, type ChildResult, type DataProvider, type Event, type Page } from '@microsoft/vscode-azure-utils';
-import { rejectingAsyncIterable } from '@microsoft/vscode-azure-utils/testing';
+import { pagesOf, rejectingAsyncIterable } from '@microsoft/vscode-azure-utils/testing';
 import { mock, type Mock } from 'node:test';
 import type * as vscode from 'vscode';
 import { isAzureSubscriptionTarget, type AzureAccount, type AzureSubscription, type AzureTenant } from '../src/auth/AzureSubscription';
@@ -20,7 +20,7 @@ import type { ResourceGroup, VirtualGroup } from '../src/models/Grouping';
 import type { VirtualResource } from '../src/models/VirtualResource';
 import type { ISubscriptionClient, ISubscriptionClientProvider, Location, Subscription, TenantIdDescription } from '../src/rest/clients/SubscriptionClient';
 import type { Container, IContainerAppsClient, Replica, Revision } from '../src/rest/clients/ContainerAppsClient';
-import type { IWebAppClient } from '../src/rest/clients/WebAppClient';
+import type { FunctionEnvelope, IWebAppClient } from '../src/rest/clients/WebAppClient';
 import { makePagedAsyncIterable } from './rest/mockPaging';
 
 const defaultEnvironment: EnvironmentLike = AzurePublicCloud;
@@ -466,6 +466,8 @@ export interface MockWebAppClientOptions {
     readonly settings?: Record<string, string>;
     /** `defaultHostName` returned by `webApps.get`. */
     readonly defaultHostName?: string;
+    /** Functions returned by the management-plane listing. */
+    readonly functions?: readonly FunctionEnvelope[];
 }
 
 /**
@@ -494,6 +496,18 @@ export function createMockWebAppClient(options?: MockWebAppClientOptions): MockW
         settings,
         webApps: {
             get: mock.fn(() => Promise.resolve({ location: 'eastus', defaultHostName: options?.defaultHostName })),
+            start: mock.fn(() => Promise.resolve()),
+            stop: mock.fn(() => Promise.resolve()),
+            restart: mock.fn(() => Promise.resolve()),
+            listFunctions: mock.fn(() => pagesOf(options?.functions ?? [])),
+            getFunction: mock.fn((_resourceGroupName: string, _name: string, functionName: string) => {
+                const result = options?.functions?.find(fn => fn.name?.split('/').at(-1) === functionName);
+                return result ? Promise.resolve(result) : Promise.reject(new Error('Function not found.'));
+            }),
+            deleteFunction: mock.fn(() => Promise.resolve()),
+            listFunctionKeys: mock.fn(() => Promise.resolve({ properties: {} })),
+            listHostKeys: mock.fn(() => Promise.resolve({ masterKey: 'mock-master-key' })),
+            listFunctionSecrets: mock.fn(() => Promise.resolve({})),
             listApplicationSettings: mock.fn(() => Promise.resolve({ properties: { ...settings } })),
             updateApplicationSettings: mock.fn((_resourceGroupName: string, _name: string, appSettings: { properties?: Record<string, string> }) => {
                 // Replace rather than merge: the ARM operation is a full write of the setting collection.

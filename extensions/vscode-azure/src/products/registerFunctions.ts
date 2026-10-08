@@ -3,7 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IWebAppClientProvider, WebAppClient } from '@microsoft/vscode-azure-azutils';
+import { FunctionsHostClient, IFunctionsHostClientProvider, ILogsQueryClientProvider, IWebAppClientProvider, LogsQueryClient, WebAppClient } from '@microsoft/vscode-azure-azutils';
+import { IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
 import { CreateFunctionApp } from '../commands/functions/CreateFunctionApp';
 import type { ProductRegistrar } from '../registration/ProductRegistrar';
 import { WebAppSettingsAdapter } from '../settings/adapters/WebAppSettingsAdapter';
@@ -15,6 +16,11 @@ import { IWorkspaceDetector } from '../utils/workspaceIndex/WorkspaceDetector';
 /** Contribute all Azure Functions services and UI integrations. */
 export function registerFunctions(registrar: ProductRegistrar): void {
     registrar.registerAzureClientProvider(IWebAppClientProvider, WebAppClient.create.bind(WebAppClient));
+    registrar.registerAzureClientProvider(ILogsQueryClientProvider, LogsQueryClient.create.bind(LogsQueryClient));
+    registrar.registerBinding(container => {
+        container.bind(IFunctionsHostClientProvider).toFactory(() => target =>
+            FunctionsHostClient.create(container.get(ICodeContext), container.get(IActionExecutor), target));
+    });
 
     // Registered once here for every Microsoft.Web/sites flavor; App Service and Logic Apps reuse
     // this shared ownership rather than registering duplicate providers.
