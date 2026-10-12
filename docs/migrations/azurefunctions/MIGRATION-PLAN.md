@@ -418,6 +418,8 @@ them or re-initialize.
 
 ## Slice 5 -- Project and function scaffolding (deferred)
 
+Tracking: [#364](https://github.com/microsoft/vscode-azure/issues/364).
+
 Project creation (`func init`), add-function (`func new`), and gallery-backed
 quickstarts (`func quickstart`) are outside the active migration scope.
 The dependent language flows, template requirements/post-create integration,
@@ -581,7 +583,8 @@ External facts: `https://json.schemastore.org/function.json` and `https://json.s
   integration. <- FUNC-164, FUNC-176, FUNC-267
 - [ ] Go scaffolding and native Go provisioning/deployment integration.
   <- FUNC-226
-- [ ] Template Gallery webview and resource-backed binding settings (with their SDKs).
+- [ ] Template Gallery webview and resource-backed binding settings (with their SDKs),
+  tracked in [#365](https://github.com/microsoft/vscode-azure/issues/365).
   <- FUNC-208, FUNC-240, FUNC-265
 
 ## Dropped -- recorded for parity
