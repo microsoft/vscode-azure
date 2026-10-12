@@ -61,6 +61,11 @@ export interface BackgroundProcessOptions extends ProcessExecutorOptions {
     readonly execution: 'background';
     readonly parseJson?: false;
     readonly jsonLines?: false;
+    /**
+     * Receives decoded output chunks as they arrive instead of retaining stdout/stderr.
+     * The callback must not throw. Results and process errors contain no captured output.
+     */
+    readonly onOutput?: (text: string, stream: 'stdout' | 'stderr') => void;
 }
 
 /**
@@ -317,7 +322,8 @@ export class ProcessExecutor implements IProcessExecutor {
         // stalls: the blocked child stops emitting stderr, so the caller's loop
         // over `jsonLines` never ends, so `completed` is never awaited, so
         // nothing ever drains stdout.
-        const stdout = readAll(child.stdout);
+        const output = 'onOutput' in options ? options.onOutput : undefined;
+        const stdout = readAll(child.stdout, output ? text => { output(text, 'stdout'); } : undefined);
 
         // JSON-lines mode streams stderr line-by-line rather than buffering it,
         // so the caller can observe progress while the process is still running.
@@ -349,7 +355,7 @@ export class ProcessExecutor implements IProcessExecutor {
 
         let result: ProcessResult;
         try {
-            result = await finish(child, stdout, readAll(child.stderr), signal);
+            result = await finish(child, stdout, readAll(child.stderr, output ? text => { output(text, 'stderr'); } : undefined), signal);
         } finally {
             disposable.dispose();
         }
@@ -436,14 +442,14 @@ function asCancellation(e: unknown, signal: AbortSignal | undefined): unknown {
 }
 
 /**
- * Buffers a child stream to a string.
+ * Consumes a child stream, buffering it only when no output callback is supplied.
  *
  * @remarks
  * A stream error resolves with whatever was buffered rather than rejecting:
  * the child's `'error'`/`'close'` event is the authoritative failure signal, and
  * rejecting here would race it.
  */
-function readAll(stream: Readable | null): Promise<string> {
+function readAll(stream: Readable | null, onOutput?: (text: string) => void): Promise<string> {
     if (!stream) {
         return Promise.resolve('');
     }
@@ -452,7 +458,13 @@ function readAll(stream: Readable | null): Promise<string> {
 
     return new Promise<string>((resolve) => {
         let buffer = '';
-        stream.on('data', (chunk: string) => { buffer += chunk; });
+        stream.on('data', (chunk: string) => {
+            if (onOutput) {
+                onOutput(chunk);
+            } else {
+                buffer += chunk;
+            }
+        });
         stream.once('end', () => { resolve(buffer); });
         stream.once('error', () => { resolve(buffer); });
     });

@@ -454,6 +454,7 @@ export function createMockVsCode(
     );
 
     const workspace = {
+        isTrusted: true,
         createFileSystemWatcher,
         textDocuments,
         findFiles,

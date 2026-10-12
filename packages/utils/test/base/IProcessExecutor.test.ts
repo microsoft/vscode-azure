@@ -102,6 +102,31 @@ describe('ProcessExecutor (unit)', () => {
             expect(result.stdout).to.equal('{"key":"value"}');
         });
 
+        it('streams both output channels without retaining process output', async () => {
+            const { vscode: code } = createMockVsCode();
+            const executor = new ProcessExecutor(code, createMockSpawn({ stdout: 'host ready', stderr: 'worker message' }));
+            const onOutput = mock.fn<(text: string, stream: 'stdout' | 'stderr') => void>();
+            const result = await executor.spawn({
+                execution: 'background', command: ['func', 'host', 'start'], onOutput,
+            });
+
+            expect(onOutput.mock.calls.map(call => call.arguments)).to.have.deep.members([
+                ['host ready', 'stdout'], ['worker message', 'stderr'],
+            ]);
+            expect(result).to.deep.equal({ stdout: '', stderr: '' });
+        });
+
+        it('reports process failure while streaming output', async () => {
+            const { vscode: code } = createMockVsCode();
+            const executor = new ProcessExecutor(code, createMockSpawn({ stderr: 'host failure', exitCode: 2 }));
+            const onOutput = mock.fn<(text: string, stream: 'stdout' | 'stderr') => void>();
+            const error: ProcessError = await expect(executor.spawn({
+                execution: 'background', command: ['func'], onOutput,
+            })).to.be.rejected;
+            expect(error.code).to.equal(2);
+            expect(onOutput.mock.calls[0].arguments).to.deep.equal(['host failure', 'stderr']);
+        });
+
         it('should throw ProcessError on non-zero exit code', async () => {
             const { vscode: code } = createMockVsCode();
             const spawnFn = createMockSpawn({ exitCode: 1, stderr: 'failure reason' });
