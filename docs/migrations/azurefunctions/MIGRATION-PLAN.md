@@ -395,34 +395,49 @@ them or re-initialize.
 ## Slice 5 -- Project and function scaffolding
 
 ```
-Pattern:        ManagedCommand + Wizard PromptSteps wrapping Core Tools (`func init`, `func new`) through IProcessExecutor
+Pattern:        ManagedCommand + thin CLI v5 integration (`func init`, `func new`, `func quickstart`) through IProcessExecutor
 Target files:   extensions/vscode-azure/src/commands/functions/{CreateFunctionProject,CreateFunction}.ts + steps/
 Precedent:      SWA `swa init` wrapping (CLI owns detection); CreateFunctionApp steps (PickRuntimeStep)
 Sweep:          reused ToolService/FuncInstaller, IProcessExecutor, CommandLineBuilder, workspace folder pick steps,
                 PickRuntimeStep/runtimesAndVersions. Searched "func init", "func new", "templates", "venv",
                 "createEnvironment": none exist -> new steps under commands/functions/steps.
 Activation:     none (palette + view commands)
-External facts: `func init` worker-runtime / language flags for each kept language (JavaScript, TypeScript, Python v2,
-                dotnet-isolated, Java/Maven, PowerShell, custom), `func new --template` names, and whether Go can be
-                scaffolded without the source template feed -- verify against Core Tools v4 `func init --help` /
-                `func new --help` and docs. Python extension environment-creation command id -- verify.
+External facts: Pin distributed CLI v5/workload versions; verify kept-language init support, `func new` JSON
+                listing, noninteractive prompt options and completion/file results, plus `func quickstart`
+                providers and result shapes. Verify Python editor environment APIs where needed.
+                Source evidence: Azure/azure-functions-core-tools at a0bdc299fa685fa530236c108f4715977c96a8f2
+                (InitCommand.cs, NewCommand.cs, QuickstartCommand.cs, QuickstartManifestOptions.cs,
+                JavaProjectInitializer.cs). Source support is not proof of packaged availability.
 ```
 
-- [ ] Create project: pick folder and language, run `func init`, open the
+- [ ] Acquire verified CLI v5/workloads through shared tool services independently
+  of the Core Tools v4 F5 acquisition contract. Missing packaged capabilities
+  require a scope decision; do not implement bespoke scaffolding.
+  <- FUNC-021, FUNC-031, FUNC-217
+- [ ] Create project: pick folder and supported language, run CLI v5 `func init`, open the
   folder in the current window only (no cross-session resume). Local-only
   commands carry `enablement: !virtualWorkspace`. <- FUNC-026, FUNC-004
 - [ ] Empty workspace: `viewsWelcome` content pointing at the implemented
   create-project command. <- FUNC-192
-- [ ] Languages through `func init`: JavaScript, TypeScript, Python (v2; offer
-  the Python extension's environment creation instead of creating a venv
-  directly), C# .NET isolated, Java (Maven), PowerShell, custom handler.
+- [ ] Kept language goals through verified CLI v5 workloads: JavaScript,
+  TypeScript, Python v2, C# .NET isolated, Java, PowerShell, custom handler.
+  CLI owns project files and dependencies; reuse Python editor environment
+  APIs where the CLI leaves selection/creation to the editor.
   <- FUNC-218, FUNC-219, FUNC-220, FUNC-221, FUNC-223, FUNC-224, FUNC-225
+- [ ] Gallery-backed project creation through CLI v5 `func quickstart`.
+  The CLI owns the shared catalog, fetch, and scaffolding; the gallery webview
+  remains deferred. Confirm generated projects work with the monorepo's
+  initialization, runtime v4 F5, and azd deployment contracts. Existing
+  project configuration is not silently rewritten. <- FUNC-026, FUNC-208
 - Deferred: Go scaffolding and Java add-function, per the confirmed reviewer
-  decision in [TRIAGE.md](TRIAGE.md). Java project creation uses the official
-  Maven archetype. <- FUNC-226, FUNC-223, FUNC-028, FUNC-235, FUNC-236
-- [ ] Create function: pick template and name from `func new`, prompt only for
-  the settings the template requires, then open the created file.
+  decision in [TRIAGE.md](TRIAGE.md).
+  <- FUNC-226, FUNC-028, FUNC-235, FUNC-236
+- [ ] Create function: thin CLI v5 `func new` integration; CLI owns discovery,
+  template-specific requirements, validation, and generation. Open created
+  files and refresh the tree; no extension-owned template/form engine.
   <- FUNC-028, FUNC-235, FUNC-236
+- [ ] Preserve user-owned files and avoid destructive `--force` generation.
+  Propagate cancellation and failures through shared process/action services.
 - [ ] Unit tests with `respondToPrompts()` and a mocked `IProcessExecutor`.
 
 ## Slice 6 -- Creation and deployment (azd + Bicep)

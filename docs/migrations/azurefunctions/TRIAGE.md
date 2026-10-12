@@ -17,18 +17,30 @@ by editing this file and reconfirming with the reviewer.
 | **Signed off by** | Brandon Waterloo (@bwateratmsft) |
 | **Date** | 2026-09-24 |
 | **Review** | Excel review workbook; 30 rows overridden, 241 accepted as recommended (blank decision = agreement). |
-| **Last confirmed** | 2026-09-29; PR review moved FUNC-055 to Reuse (`azd pipeline config`) and FUNC-168 back to Migrate (remote Functions group node), added optional `launch.json` generation to FUNC-030, and clarified that `local.settings.json` stays. Earlier, 2026-09-24: F5 design review moved FUNC-203 through FUNC-207 to Drop. |
+| **Last confirmed** | 2026-10-12; reviewer confirmed CLI v5 scaffolding ownership, including gallery-backed creation through `func quickstart`; dispositions are unchanged. Earlier, 2026-09-29: PR review moved FUNC-055 to Reuse (`azd pipeline config`) and FUNC-168 back to Migrate (remote Functions group node), added optional `launch.json` generation to FUNC-030, and clarified that `local.settings.json` stays. Earlier, 2026-09-24: F5 design review moved FUNC-203 through FUNC-207 to Drop. |
 
 ## Granularity
 
 ### Confirmed scaffolding scope
 
-The reviewer approved: "Use the official Maven archetype for Java projects;
-defer Java add-function and Go scaffolding." FUNC-223 uses the official Java
-Maven archetype. The Java sub-scope of FUNC-028, FUNC-235, and FUNC-236 is
-deferred; their other supported languages remain Adapt. FUNC-226 is Defer.
-Core Tools 4.15.2 excludes Java from `func init` and `func new`; its native
-Go preview is not the custom-handler scaffolding covered by this migration.
+The reviewer approved: "Let's leave scaffolding to the v5 func CLI."
+Project creation delegates to `func init` or gallery-backed `func quickstart`;
+function creation delegates to `func new`. The CLI owns template discovery,
+template-specific requirements and validation, generated files, dependencies,
+and project configuration. The extension retains thin entry points, folder
+selection, tool acquisition, cancellation/error handling, and editor/workspace
+integration.
+
+Kept language goals use verified CLI v5 workloads, including Java project
+creation. Packaged capabilities must be verified before implementation; a
+missing capability requires a scope decision, not bespoke scaffolding.
+The Java sub-scope of FUNC-028, FUNC-235, and FUNC-236 remains deferred;
+their other supported languages remain Adapt. FUNC-226 (Go) and FUNC-208
+(gallery webview) remain Defer. Gallery-backed creation does not restore
+separately deferred binding, Durable, MCP, or container integrations.
+
+CLI v5 is distinct from Functions runtime v4. Runtime scope remains v4;
+the implemented F5 path acquires Core Tools v4 independently of scaffolding.
 
 One row per contributed or code-only command; per contributed setting; per
 read-but-not-contributed setting family; per tree node type (trigger, state,
@@ -43,10 +55,10 @@ problem matcher and pattern; per manifest-level contract; per orphan.
 | Disposition | Count | Meaning in this record |
 |---|---:|---|
 | Migrate | 25 | Preserve the source capability using monorepo patterns |
-| Adapt | 37 | Preserve the user goal with intentionally different behavior or UX |
+| Adapt | 36 | Preserve the user goal with intentionally different behavior or UX |
 | Reuse | 19 | Satisfy the feature by wiring an existing monorepo capability |
 | Drop | 135 | Do not carry the source capability forward |
-| Defer | 55 | Retain the goal for later tracked work |
+| Defer | 56 | Retain the goal for later tracked work |
 | **Total** | **271** | |
 
 ## Cross-cutting decisions
@@ -67,8 +79,12 @@ problem matcher and pattern; per manifest-level contract; per orphan.
   `local.settings.json` (written by `func init`, read by `func host start` and
   local execute). Remote app settings are owned by IaC, so there is no upload,
   download, encrypt, decrypt, or tree node for the file.
-- **Scaffolding delegates to Core Tools.** Project and function creation wrap
-  `func init` / `func new`; the template subsystem is not carried forward.
+- **Scaffolding delegates to CLI v5.** Project and function creation wrap
+  `func init` / `func new`; gallery-backed projects use `func quickstart`.
+  The CLI owns the catalog and generation pipeline; the source template
+  subsystem and gallery webview are not carried forward in this phase.
+  Shared tool acquisition keeps scaffolding's CLI version/workloads separate
+  from the implemented Core Tools v4 F5 path.
 - **F5 without `tasks.json` / `launch.json`.** A contributed `azure-functions`
   debug type builds the project, starts the host in-process, and resolves to the
   language debugger's attach configuration. `launch.json` is optional: F5
@@ -130,9 +146,9 @@ Judgment-call groups (`JC-*`) mark rows the reviewer was asked to weigh as a set
 | FUNC-023 | 0 Extension | Output channel "Azure Functions" + diagnostic collection | **Drop** | Target uses the shared output channel. |  |  |
 | FUNC-024 | 0 Extension | Global error handler suppressing Report Issue | **Drop** | Target framework handles error UI per command. |  |  |
 | FUNC-025 | 0 Extension | Experimentation service | **Drop** | No product experiments planned. |  |  |
-| FUNC-026 | 1.1 Local project | `azureFunctions.createNewProject` | **Adapt** | High usage. Rebuild as a thin wrapper over Core Tools `func init` (v4 only), not the source template subsystem. |  | JC-SCAFFOLD |
+| FUNC-026 | 1.1 Local project | `azureFunctions.createNewProject` | **Adapt** | High usage. Thin CLI v5 `func init` / gallery-backed `func quickstart` integration; CLI owns scaffolding. Functions runtime v4 only. | Confirmed reviewer decision. | JC-SCAFFOLD |
 | FUNC-027 | 1.1 Local project | `azureFunctions.createNewProjectWithDockerfile` | **Defer** | Cancel-dominant; tied to the containerized-hosting decision. |  | JC-CONTAINER |
-| FUNC-028 | 1.1 Local project | `azureFunctions.createFunction` | **Adapt** | High usage. Rebuild over Core Tools `func new` templates. |  | JC-SCAFFOLD |
+| FUNC-028 | 1.1 Local project | `azureFunctions.createFunction` | **Adapt** | High usage. Delegate discovery, validation, and generation to CLI v5 `func new`; Java add-function remains deferred. | Confirmed reviewer decision. | JC-SCAFFOLD |
 | FUNC-029 | 1.1 Local project | `azureFunctions.addBinding` | **Drop** | Only `function.json` projects; near-zero successes per telemetry. |  |  |
 | FUNC-030 | 1.1 Local project | `azureFunctions.initProjectForVSCode` | **Adapt** | Debugging needs no generated `tasks.json` / `launch.json`. Generating an `azure-functions` `launch.json` entry is optional and exposes the configurable options. Init otherwise writes only non-debug workspace files (for example `.vscode/extensions.json` recommendations), never project configuration in VS Code settings. | Adapt, but to the greatest extent possible, make debugging work without a tasks.json/launch.json needed. | JC-SCAFFOLD |
 | FUNC-031 | 1.1 Local project | `azureFunctions.installOrUpdateFuncCoreTools` | **Reuse** | `vscode-azure/installFunc` + FuncInstaller already exist; source failure rate is a reliability lesson. |  |  |
@@ -312,7 +328,7 @@ Judgment-call groups (`JC-*`) mark rows the reviewer was asked to weigh as a set
 | FUNC-205 | 4 Debug | Problem matcher `func-watch` | **Drop** | Host is started in-process by the Functions debug configuration provider; no `tasks.json` task or problem matcher is needed. | Override (recommended Adapt); reconfirmed after the F5 design review. | JC-LOCALDEV |
 | FUNC-206 | 4 Debug | Problem matchers per language (dotnet, java, node, python, golang, powershell watch) | **Drop** | Host is started in-process by the Functions debug configuration provider; no `tasks.json` task or problem matcher is needed. | Can we reuse existing problem matchers from other extensions? I hope we don't have our own defined? Override (recommended Adapt); reconfirmed after the F5 design review. | JC-LOCALDEV |
 | FUNC-207 | 4 Debug | Problem pattern `func` | **Drop** | Host is started in-process by the Functions debug configuration provider; no `tasks.json` task or problem matcher is needed. | Override (recommended Adapt); reconfirmed after the F5 design review. | JC-LOCALDEV |
-| FUNC-208 | 5 Wizards | Template Gallery webview panel (preview) | **Defer** | Powers that be will want this back. | Override (recommended Drop). | JC-SCAFFOLD |
+| FUNC-208 | 5 Wizards | Template Gallery webview panel (preview) | **Defer** | Visual gallery remains later work; gallery-backed project creation delegates to CLI v5 `func quickstart` under FUNC-026. | Override (recommended Drop); confirmed CLI ownership. | JC-SCAFFOLD |
 | FUNC-209 | 5 Wizards | Open from portal (URI handler, `onUri`) | **Drop** | Experimental, gated off, no usage in window. |  |  |
 | FUNC-210 | 4 Debug | Node debug provider (attach 9229) | **Adapt** | F5 for JS/TS. |  | JC-LOCALDEV |
 | FUNC-211 | 4 Debug | Python debug provider (`python` + `debugpy`, 9091) | **Adapt** | F5 for Python. |  | JC-LOCALDEV |
@@ -322,25 +338,25 @@ Judgment-call groups (`JC-*`) mark rows the reviewer was asked to weigh as a set
 | FUNC-215 | 4 Debug | Pre-debug validation (Core Tools, worker runtime, emulator and connection checks) | **Adapt** | Keep a small subset: Core Tools present, `FUNCTIONS_WORKER_RUNTIME`, `AzureWebJobsStorage` / Azurite. |  | JC-LOCALDEV |
 | FUNC-216 | 4 Debug | Func host task tracking (port, terminal error capture, start/stop events) | **Adapt** | Needed for local execute/listing and pickProcess. |  | JC-LOCALDEV |
 | FUNC-217 | 4 Debug | Core Tools lifecycle (detect, brew/npm install, signature check) | **Reuse** | ToolService / FuncInstaller. |  |  |
-| FUNC-218 | 5 Wizards | Language: JavaScript (Node v4 model) | **Adapt** | Keep; via `func init`. |  | JC-SCAFFOLD |
-| FUNC-219 | 5 Wizards | Language: TypeScript (Node v4 model) | **Adapt** | Keep; via `func init`. |  | JC-SCAFFOLD |
-| FUNC-220 | 5 Wizards | Language: Python (v2 model) + interpreter pick + venv create | **Adapt** | Keep; via `func init` plus venv creation. |  | JC-SCAFFOLD |
-| FUNC-221 | 5 Wizards | Language: C# .NET isolated | **Adapt** | Keep; via `func init --worker-runtime dotnet-isolated`. |  | JC-SCAFFOLD |
+| FUNC-218 | 5 Wizards | Language: JavaScript (Node v4 model) | **Adapt** | Keep; verified CLI v5 Node workload owns scaffolding. |  | JC-SCAFFOLD |
+| FUNC-219 | 5 Wizards | Language: TypeScript (Node v4 model) | **Adapt** | Keep; verified CLI v5 Node workload owns scaffolding. |  | JC-SCAFFOLD |
+| FUNC-220 | 5 Wizards | Language: Python (v2 model) + interpreter pick + venv create | **Adapt** | CLI v5 owns scaffolding; reuse Python extension environment APIs where the CLI leaves environment selection/creation to the editor. |  | JC-SCAFFOLD |
+| FUNC-221 | 5 Wizards | Language: C# .NET isolated | **Adapt** | Keep; verified CLI v5 .NET workload owns isolated-project scaffolding. |  | JC-SCAFFOLD |
 | FUNC-222 | 5 Wizards | Language: C# .NET in-process | **Drop** | In-process model is retiring; isolated only. |  | JC-LANG |
-| FUNC-223 | 5 Wizards | Language: Java (Maven; Gradle preview) | **Adapt** | Use the official Maven archetype for project creation; Java add-function is deferred. | Confirmed reviewer decision. | JC-SCAFFOLD |
-| FUNC-224 | 5 Wizards | Language: PowerShell | **Adapt** | Keep; via `func init`. |  | JC-SCAFFOLD |
-| FUNC-225 | 5 Wizards | Language: Custom Handler | **Adapt** | Keep; via `func init`. |  | JC-SCAFFOLD |
-| FUNC-226 | 5 Wizards | Language: Go (preview) | **Defer** | Core Tools native Go preview does not implement the signed custom-handler scaffold. | Confirmed reviewer decision. | JC-LANG |
+| FUNC-223 | 5 Wizards | Language: Java (Maven; Gradle preview) | **Adapt** | CLI v5 Java workload owns project creation, subject to packaged-capability verification; Java add-function remains deferred. | Confirmed reviewer decision. | JC-SCAFFOLD |
+| FUNC-224 | 5 Wizards | Language: PowerShell | **Adapt** | Keep; delegate scaffolding to a verified CLI v5 workload. Missing packaged support requires a scope decision. |  | JC-SCAFFOLD |
+| FUNC-225 | 5 Wizards | Language: Custom Handler | **Adapt** | Keep; delegate scaffolding to verified CLI v5 capability. Missing packaged support requires a scope decision. |  | JC-SCAFFOLD |
+| FUNC-226 | 5 Wizards | Language: Go (preview) | **Defer** | Go scaffolding awaits a separate scope decision and native-worker integration verification. | Confirmed reviewer decision. | JC-LANG |
 | FUNC-227 | 5 Wizards | Language: Ballerina (hidden) | **Drop** | Hidden behind a setting. |  | JC-LANG |
 | FUNC-228 | 5 Wizards | Language: Self-hosted MCP server | **Defer** | MCP scope decision. |  | JC-AGENT |
 | FUNC-229 | 5 Wizards | Languages via settings/API only: C# script, F#, F# script | **Drop** | Not reachable from UI. |  | JC-LANG |
 | FUNC-230 | 5 Wizards | Legacy programming models (Node v3, Python v1) | **Drop** | Latest models only. |  | JC-LANG |
 | FUNC-231 | 5 Wizards | Runtime versions ~1/~2/~3 and v1-only behavior | **Drop** | Out of scope: v4 only. |  |  |
-| FUNC-232 | 5 Wizards | Source template subsystem (CentralTemplateProvider, feeds, backup templates) | **Drop** | Core Tools `func new` owns templates. |  | JC-SCAFFOLD |
+| FUNC-232 | 5 Wizards | Source template subsystem (CentralTemplateProvider, feeds, backup templates) | **Drop** | CLI v5 owns catalogs and template generation. |  | JC-SCAFFOLD |
 | FUNC-233 | 5 Wizards | HTTP triggers from OpenAPI spec (autorest) | **Drop** | Preview, niche, external tool. |  |  |
 | FUNC-234 | 5 Wizards | Durable storage type prompt + durable project configure | **Defer** | Follows DTS/durable decisions. |  | JC-DTS |
-| FUNC-235 | 5 Wizards | Per-template setting prompts + local app setting pick/create | **Adapt** | Follows createFunction; keep only what `func new` needs. |  | JC-SCAFFOLD |
-| FUNC-236 | 5 Wizards | Post-function-create (open file, extension bundle/extensions.csproj, host config) | **Adapt** | Keep "open created file"; the rest follows Core Tools. |  | JC-SCAFFOLD |
+| FUNC-235 | 5 Wizards | Per-template setting prompts + local app setting pick/create | **Adapt** | CLI v5 owns template-specific requirements and validation; thin integration only, no extension-owned form engine or connection wizard. Java add-function remains deferred. | Confirmed reviewer decision. | JC-SCAFFOLD |
+| FUNC-236 | 5 Wizards | Post-function-create (open file, extension bundle/extensions.csproj, host config) | **Adapt** | Open created files and refresh the workspace; CLI v5 owns dependencies and generated project configuration. Java add-function remains deferred. | Confirmed reviewer decision. | JC-SCAFFOLD |
 | FUNC-237 | 5 Wizards | Connection family: Durable Task Scheduler | **Defer** | DTS as a unit. |  | JC-DTS |
 | FUNC-238 | 5 Wizards | Connection family: Netherite (Event Hubs) | **Drop** | Niche durable backend; DTS is the recommended backend. |  | JC-DTS |
 | FUNC-239 | 5 Wizards | Connection family: SQL durable backend | **Drop** | Niche durable backend. |  | JC-DTS |
