@@ -17,7 +17,7 @@ by editing this file and reconfirming with the reviewer.
 | **Signed off by** | Brandon Waterloo (@bwateratmsft) |
 | **Date** | 2026-09-24 |
 | **Review** | Excel review workbook; 30 rows overridden, 241 accepted as recommended (blank decision = agreement). |
-| **Last confirmed** | 2026-10-12; reviewer confirmed CLI v5 scaffolding ownership, including gallery-backed creation through `func quickstart`; dispositions are unchanged. Earlier, 2026-09-29: PR review moved FUNC-055 to Reuse (`azd pipeline config`) and FUNC-168 back to Migrate (remote Functions group node), added optional `launch.json` generation to FUNC-030, and clarified that `local.settings.json` stays. Earlier, 2026-09-24: F5 design review moved FUNC-203 through FUNC-207 to Drop. |
+| **Last confirmed** | 2026-10-12; reviewer approved native Go debugging and its Go/Delve validation (FUNC-140, FUNC-141, FUNC-195: Adapt), and confirmed CLI v5 scaffolding ownership including gallery-backed creation through `func quickstart`. Go scaffolding and deployment integration remain deferred. Earlier, 2026-09-29: PR review moved FUNC-055 to Reuse (`azd pipeline config`) and FUNC-168 back to Migrate (remote Functions group node), added optional `launch.json` generation to FUNC-030, and clarified that `local.settings.json` stays. Earlier, 2026-09-24: F5 design review moved FUNC-203 through FUNC-207 to Drop. |
 
 ## Granularity
 
@@ -42,6 +42,15 @@ separately deferred binding, Durable, MCP, or container integrations.
 CLI v5 is distinct from Functions runtime v4. Runtime scope remains v4;
 the implemented F5 path acquires Core Tools v4 independently of scaffolding.
 
+### Confirmed Go debugging scope
+
+The reviewer approved: "Let's add the Go debugging support".
+Native Go projects (`FUNCTIONS_WORKER_RUNTIME=native` and `go.mod`) use the
+shared F5 flow with Go/Delve validation, debug-friendly compilation, the Go
+extension's debugger, loopback-only transport, and owned-process cleanup.
+Custom handlers are not included. Go scaffolding (FUNC-226), add-function,
+and native Go provisioning/deployment integration remain outside this scope.
+
 One row per contributed or code-only command; per contributed setting; per
 read-but-not-contributed setting family; per tree node type (trigger, state,
 and access tokens on a function node are composed tokens on one node type);
@@ -55,10 +64,10 @@ problem matcher and pattern; per manifest-level contract; per orphan.
 | Disposition | Count | Meaning in this record |
 |---|---:|---|
 | Migrate | 25 | Preserve the source capability using monorepo patterns |
-| Adapt | 36 | Preserve the user goal with intentionally different behavior or UX |
+| Adapt | 39 | Preserve the user goal with intentionally different behavior or UX |
 | Reuse | 19 | Satisfy the feature by wiring an existing monorepo capability |
 | Drop | 135 | Do not carry the source capability forward |
-| Defer | 56 | Retain the goal for later tracked work |
+| Defer | 53 | Retain the goal for later tracked work |
 | **Total** | **271** | |
 
 ## Cross-cutting decisions
@@ -260,8 +269,8 @@ Judgment-call groups (`JC-*`) mark rows the reviewer was asked to weigh as a set
 | FUNC-137 | 2 Settings | `stopFuncTaskPostDebug` | **Defer** | See if we need it if we go to the v5 Func tools. | Override (recommended Migrate). | JC-LOCALDEV |
 | FUNC-138 | 2 Settings | `showDeployConfirmation` | **Drop** | azd deploy has its own flow. |  | JC-DEPLOY |
 | FUNC-139 | 2 Settings | `validateFuncCoreTools` | **Drop** | Validation done by the installer. | Override (recommended Migrate). | JC-LOCALDEV |
-| FUNC-140 | 2 Settings | `validateDelve` | **Defer** | Follows Go debugging (FUNC-195). |  | JC-LOCALDEV |
-| FUNC-141 | 2 Settings | `validateGo` | **Defer** | Follows Go projects. |  | JC-LOCALDEV |
+| FUNC-140 | 2 Settings | `validateDelve` | **Adapt** | Validate Delve before native Go debugging; no separate validation toggle. | Confirmed reviewer decision. | JC-LOCALDEV |
+| FUNC-141 | 2 Settings | `validateGo` | **Adapt** | Validate Go 1.24+ before native Go debugging; packaging/deployment integration is separate. | Confirmed reviewer decision. | JC-LOCALDEV |
 | FUNC-142 | 2 Settings | `validateEmulators` | **Defer** | See if we need it if we go to the v5 Func tools. | Override (recommended Migrate). | JC-LOCALDEV |
 | FUNC-143 | 2 Settings | `requestTimeout` | **Drop** | Template/feed requests are not migrated. |  |  |
 | FUNC-144 | 2 Settings | `hostStartTimeout` | **Defer** | See if we need it if we go to the v5 Func tools. | Override (recommended Migrate). |  |
@@ -315,7 +324,7 @@ Judgment-call groups (`JC-*`) mark rows the reviewer was asked to weigh as a set
 | FUNC-192 | 3 Tree | "Create Function Project..." hint (empty workspace) | **Adapt** | Workspace-view empty state or welcome content pointing at create project. |  | JC-SCAFFOLD |
 | FUNC-193 | 3 Tree | DTS scheduler + task hub nodes | **Defer** | DTS as a unit (azutils already has a DTS task-hub logical type). |  | JC-DTS |
 | FUNC-194 | 3 Tree | DTS emulators group + emulator + hub + Docker-error nodes | **Defer** | DTS emulator as a unit; would join the Emulators workspace group. |  | JC-DTS |
-| FUNC-195 | 4 Debug | Go debug provider (Delve attach) + Go toolchain validation | **Defer** | Go is preview; follow the language matrix. |  | JC-LANG |
+| FUNC-195 | 4 Debug | Go debug provider (Delve attach) + Go toolchain validation | **Adapt** | Native Go F5 through the shared owned-host lifecycle and Go extension, with debug compilation, loopback Delve, validation, and cleanup. | Confirmed reviewer decision. | JC-LANG |
 | FUNC-196 | 3 Tree | Functions Host Exceptions Debugger view (`funcHostDebugView`) + host/stopped/error/no-host nodes | **Defer** | Own view in the debug container; follows the F5 loop decision. |  | JC-LOCALDEV |
 | FUNC-197 | 3 Tree | Orphan icon `azFuncProxy.svg` | **Drop** | Dead asset. |  |  |
 | FUNC-198 | 3 Tree | Tree refresh (file watchers on function.json/local.settings.json, func-task events) | **Migrate** | Needed by the local function tree; use workspace index watchers. |  |  |

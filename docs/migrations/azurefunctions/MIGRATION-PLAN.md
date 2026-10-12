@@ -364,6 +364,18 @@ Resolution flow for one session:
 - [x] .NET isolated attach using the worker PID reported by
   `--dotnet-isolated-debug`, instead of a process picker.
   <- FUNC-033, FUNC-269
+- [ ] Native Go debugging: validate Go 1.24+ and Delve using the Go extension's
+  resource-scoped public tool API; compile `bin/app` (`app.exe` on Windows)
+  with `-gcflags=all=-N -l`, and start the native worker under headless Delve.
+  Reuse worker executable/argument overrides and the owned host's loopback
+  ports/readiness/process-tree cleanup. Return a Go remote DAP attach config;
+  custom handlers are excluded. Wire Go recommendations, native-runtime
+  initialization, debugger language contribution, and the workspace Debug action.
+  <- FUNC-140, FUNC-141, FUNC-195
+- [ ] Go behavioral coverage: prerequisites/build errors, paths with spaces,
+  skipped builds, loopback attach, readiness failure/cancellation/cleanup, and
+  initialization/tree capabilities. Live Go attach smoke check remains part
+  of Slice 7. <- FUNC-140, FUNC-141, FUNC-195
 - [x] Host process and tracking: build steps, start, readiness, port, terminal
   errors, stop on session end, and start/stop events for local listing and
   execute. <- FUNC-216
@@ -571,8 +583,8 @@ External facts: `https://json.schemastore.org/function.json` and `https://json.s
   host start timeout. <- FUNC-137, FUNC-142, FUNC-144
 - [ ] Storage emulator: storage connection prompts, Azurite settings and
   integration. <- FUNC-164, FUNC-176, FUNC-267
-- [ ] Go debugging, toolchain validation, and scaffolding.
-  <- FUNC-140, FUNC-141, FUNC-195, FUNC-226
+- [ ] Go scaffolding and native Go provisioning/deployment integration.
+  <- FUNC-226
 - [ ] Template Gallery and resource-backed binding settings (with their SDKs).
   <- FUNC-208, FUNC-240, FUNC-265
 
