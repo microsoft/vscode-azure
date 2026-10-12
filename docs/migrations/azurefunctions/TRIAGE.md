@@ -17,7 +17,7 @@ by editing this file and reconfirming with the reviewer.
 | **Signed off by** | Brandon Waterloo (@bwateratmsft) |
 | **Date** | 2026-09-24 |
 | **Review** | Excel review workbook; 30 rows overridden, 241 accepted as recommended (blank decision = agreement). |
-| **Last confirmed** | 2026-10-12; reviewer dropped source agent metadata (FUNC-007: Drop), consistent with the dropped agent discovery/wizard/benchmark handlers. MCP support remains independently deferred. Reviewer deferred CLI scaffolding (`func init`, `func new`, `func quickstart`) and its dependent language/welcome/template flows (FUNC-026, FUNC-028, FUNC-192, FUNC-218 through FUNC-221, FUNC-223 through FUNC-225, FUNC-235, FUNC-236: Defer). CLI v5 ownership remains the direction for future scaffolding. Native Go debugging and Go/Delve validation remain Adapt (FUNC-140, FUNC-141, FUNC-195); Go scaffolding and deployment integration remain deferred. Earlier, 2026-09-29: PR review moved FUNC-055 to Reuse (`azd pipeline config`) and FUNC-168 back to Migrate (remote Functions group node), added optional `launch.json` generation to FUNC-030, and clarified that `local.settings.json` stays. Earlier, 2026-09-24: F5 design review moved FUNC-203 through FUNC-207 to Drop. |
+| **Last confirmed** | 2026-10-12; reviewer dropped source agent metadata (FUNC-007: Drop), consistent with the dropped agent discovery/wizard/benchmark handlers. MCP support remains independently deferred. Reviewer deferred CLI scaffolding (`func init`, `func new`, `func quickstart`) and its dependent language/welcome/template flows (FUNC-026, FUNC-028, FUNC-192, FUNC-218 through FUNC-221, FUNC-223 through FUNC-225, FUNC-235, FUNC-236: Defer). CLI v5 ownership remains the direction for future scaffolding. Native Go debugging and Go/Delve validation remain Adapt (FUNC-140, FUNC-141, FUNC-195); Go scaffolding and provisioning/runtime selection remain deferred. Go code deployment uses the shared azd route. Earlier, 2026-09-29: PR review moved FUNC-055 to Reuse (`azd pipeline config`) and FUNC-168 back to Migrate (remote Functions group node), added optional `launch.json` generation to FUNC-030, and clarified that `local.settings.json` stays. Earlier, 2026-09-24: F5 design review moved FUNC-203 through FUNC-207 to Drop. |
 
 ## Granularity
 
@@ -48,7 +48,10 @@ Native Go projects (`FUNCTIONS_WORKER_RUNTIME=native` and `go.mod`) use the
 shared F5 flow with Go/Delve validation, debug-friendly compilation, the Go
 extension's debugger, loopback-only transport, and owned-process cleanup.
 Custom handlers are not included. Go scaffolding (FUNC-226), add-function,
-and native Go provisioning/deployment integration remain outside this scope.
+and native Go provisioning/runtime selection remain outside this scope.
+Go code deployment uses the shared azd route with a version supporting Go
+Functions; the provisioning/runtime-selection gap is tracked in
+[#366](https://github.com/microsoft/vscode-azure/issues/366).
 
 One row per contributed or code-only command; per contributed setting; per
 read-but-not-contributed setting family; per tree node type (trigger, state,
