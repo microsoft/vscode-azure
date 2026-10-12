@@ -82,9 +82,10 @@ wrapper file for the current operation surface.
 | `DeploymentClient` | `@azure/arm-resourcesdeployments` | Subscription | `ArmDeploymentDataProvider`, for deployment status and operations |
 | `AcrClient` | `@azure/arm-containerregistry` | Subscription | ACR data provider and commands |
 | `WebAppClient` | `@azure/arm-appservice` | Subscription | Web App / Function App / Logic App nodes and their settings |
-| `FunctionsHostClient` | Shared data-plane REST pipeline | Loopback port or HTTPS host + lazy master key | Functions host listing, readiness, and invocation |
 | `LogsQueryClient` | Shared data-plane REST pipeline | Subscription cloud and identity | Resource-context and workspace log queries |
 | `SubscriptionClient` | `@azure/arm-resources-subscriptions` | `EnvironmentLike` | `AzureAccountDataProvider`, plus `ChooseLocationStep` |
+
+Product-specific host contracts are documented in [Azure Functions](products/functions.md).
 
 `SubscriptionClient` is scoped by environment rather than by subscription because
 listing tenants and subscriptions happens *before* any specific subscription is

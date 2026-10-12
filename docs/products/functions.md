@@ -179,6 +179,10 @@ project subtree. Workspace refresh invalidates the complete workspace tree.
 ## Local actions and host ownership
 
 The local tree reuses Execute Function, Copy Function URL, Enable, and Disable.
+Local actions require a file project in an open, trusted workspace; workspace
+menus are gated independently of the same commands' remote resource actions.
+Programmatic calls validate the project, and invocation rechecks it after the
+input prompt.
 Execute and HTTP URL copying require a ready host registered for the exact
 project URI and port. `LocalFunctionsHostTracker` owns registrations, not host
 processes: disposal of an older registration cannot remove its replacement.

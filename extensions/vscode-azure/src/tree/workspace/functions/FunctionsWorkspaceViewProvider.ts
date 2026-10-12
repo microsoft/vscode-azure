@@ -56,7 +56,7 @@ export class FunctionsWorkspaceViewProvider implements ViewProvider<string> {
         const node = this.dataTree.get(key);
 
         if (!isFunctionsProjectNode(node) && !isLocalFunctionsNode(node)) {
-            throw new Error(`Functions workspace node with key ${key} not found in cache`);
+            throw new Error(this.ctx.code.l10n.t('The Functions workspace item is not available. Refresh the workspace view.'));
         }
         this.executor.setTelProp('nodeType', node.type);
         const item = new this.ctx.code.TreeItem(node.label, isFunctionsProjectNode(node)

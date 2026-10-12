@@ -7,6 +7,7 @@ import { createMockFunctionsHostClient } from '@microsoft/vscode-azure-azutils/t
 import { DataItemTree } from '@microsoft/vscode-azure-utils';
 import { addWorkspaceFolder, createMockCodeContext, createTestActionExecutor, ManualDebounceScheduler } from '@microsoft/vscode-azure-utils/testing';
 import { FunctionsProjectReader } from '../../../../src/functions/FunctionsProjectReader';
+import { FunctionsProjectSelector } from '../../../../src/functions/FunctionsProjectSelector';
 import { LocalFunctionSettings } from '../../../../src/functions/LocalFunctionSettings';
 import { LocalFunctionTarget } from '../../../../src/functions/LocalFunctionTarget';
 import { LocalFunctionsHostTracker } from '../../../../src/functions/host/LocalFunctionsHostTracker';
@@ -37,7 +38,8 @@ export function createLocalFunctions() {
     const tree = new DataItemTree<WorkspaceNode>(code, 'local-functions-test', executor, node => node.id, Infinity);
     tree.registerProvider(provider);
     const view = new FunctionsWorkspaceViewProvider(context.ctx, executor, tree, hosts);
-    const target = new LocalFunctionTarget(code, tree, hosts, createHost, settings);
+    const projects = new FunctionsProjectSelector(context.ctx, index, tree);
+    const target = new LocalFunctionTarget(code, tree, hosts, createHost, settings, projects);
     const remoteSelection = createTestResourceSelector({ codeContext: context });
     const addProject = (runtime = 'node', hostConfig: unknown = { version: '2.0' }) => {
         const hostUri = code.Uri.joinPath(folder, 'host.json');

@@ -25,7 +25,7 @@ import { respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { createLocalFunctions } from '../../tree/workspace/functions/mockLocalFunctions';
 
 let localFixtures: ReturnType<typeof createLocalFunctions>[] = [];
-function setup(authLevel: string | undefined = 'function') {
+function setup(authLevel: string | undefined = 'function', isTrusted = true) {
     const fn = makeFunctionAppFunction({ authLevel });
     const app = fn.azureResource;
     const selection = createTestResourceSelector({ nodes: [app, fn] });
@@ -41,6 +41,8 @@ function setup(authLevel: string | undefined = 'function') {
     const settings = new WebAppSettingsAdapter(code, () => client);
     const localFixture = createLocalFunctions();
     localFixtures.push(localFixture);
+    mock.property(selection.codeContext.mock.workspace, 'isTrusted', isTrusted);
+    mock.property(localFixture.m.workspace, 'isTrusted', isTrusted);
     const local = localFixture.target;
     return { ...selection, fn, app, client, code, settings, local, key: AzureNodeId.from(fn).toString(), appKey: AzureNodeId.from(app).toString() };
 }
@@ -59,6 +61,23 @@ describe('Remote function commands (unit)', () => {
         expect(write.mock.calls[0].arguments[0]).to.equal('https://my-functions.azurewebsites.net/api/HttpTrigger?custom=value');
         expect(s.client.webApps.listFunctionKeys.mock.callCount()).to.equal(0);
         expect(s.client.webApps.listHostKeys.mock.callCount()).to.equal(0);
+    });
+
+    it('allows remote invocation, URL copying, and state updates in an untrusted workspace', async () => {
+        const s = setup('anonymous', false);
+        const host = createMockFunctionsHostClient();
+        const write = mock.method(s.code.env.clipboard, 'writeText', (_text: string) => Promise.resolve());
+        const prompts = respondToPrompts(s.codeContext.mock, [{ input: 'remote input' }]);
+        await new ExecuteFunction(s.ctx, s.selector, () => s.client, () => host, s.local).execute(s.key);
+        await new CopyFunctionUrl(s.code, s.selector, () => s.client, s.local).execute(s.key);
+        const state = new SetFunctionState(s.code, s.selector, s.settings, s.cache, s.local);
+        await state.execute(false, s.key);
+        expect(s.client.settings[`AzureWebJobs.${s.fn.functionName}.Disabled`]).to.equal('false');
+        await state.execute(true, s.key);
+        expect(s.client.settings[`AzureWebJobs.${s.fn.functionName}.Disabled`]).to.equal('true');
+        expect(host.invoke.mock.calls[0].arguments).to.deep.equal([s.fn.functionName, 'remote input']);
+        expect(write.mock.calls[0].arguments[0]).to.equal('https://my-functions.azurewebsites.net/api/HttpTrigger?custom=value');
+        prompts.assertAllConsumed();
     });
 
     it('uses the default function key and URL-encodes it without exposing it in notifications', async () => {
