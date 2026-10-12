@@ -18,11 +18,12 @@ with the reviewer.
 
 ## How to read this plan
 
-- Slices are ordered bottom-up: models and clients, then trees, commands,
-  local development, scaffolding, creation/deploy, and manifest cleanup. Each
-  slice must lint, build, and test before the next starts.
-- Each slice opens with its mapping record: pattern, target files, precedent,
-  shared-primitive sweep, activation, external facts, and tree contract. Sweep
+- Active slices are ordered bottom-up: models and clients, then trees,
+  commands, local development, creation/deploy, and manifest cleanup.
+  Slice 5 scaffolding is deferred. Each implementation slice must lint,
+  build, and test before the next starts.
+- Each active implementation slice opens with its mapping record: pattern,
+  target files, precedent, shared-primitive sweep, activation, external facts, and tree contract. Sweep
   lines record the searches made while planning; Phase 5 re-runs the sweep
   immediately before each slice is written.
 - Context values below are new names derived from the command set; source
@@ -256,8 +257,8 @@ Tree contract:  Local project node: revealInExplorer, refreshWorkspace (invalid:
 ```
 
 **Action dependencies approved by the reviewer:** Slice 4 owns initialization
-and debugging; Slice 5 owns creation/welcome actions. Missing-runtime state
-offers initialization. The process owner populates the ready-host registration
+and debugging; creation/welcome actions are deferred with Slice 5.
+Missing-runtime state offers initialization. The process owner populates the ready-host registration
 after HTTP readiness and releases it when the host stops.
 
 - [x] List functions directly under the project node (no group node): from
@@ -415,53 +416,30 @@ Existing projects' source-generated `tasks.json` / `launch.json` (task type
 untouched: no compatibility registrations and no rewrite prompt. Users delete
 them or re-initialize.
 
-## Slice 5 -- Project and function scaffolding
+## Slice 5 -- Project and function scaffolding (deferred)
 
-```
-Pattern:        ManagedCommand + thin CLI v5 integration (`func init`, `func new`, `func quickstart`) through IProcessExecutor
-Target files:   extensions/vscode-azure/src/commands/functions/{CreateFunctionProject,CreateFunction}.ts + steps/
-Precedent:      SWA `swa init` wrapping (CLI owns detection); CreateFunctionApp steps (PickRuntimeStep)
-Sweep:          reused ToolService/FuncInstaller, IProcessExecutor, CommandLineBuilder, workspace folder pick steps,
-                PickRuntimeStep/runtimesAndVersions. Searched "func init", "func new", "templates", "venv",
-                "createEnvironment": none exist -> new steps under commands/functions/steps.
-Activation:     none (palette + view commands)
-External facts: Pin distributed CLI v5/workload versions; verify kept-language init support, `func new` JSON
-                listing, noninteractive prompt options and completion/file results, plus `func quickstart`
-                providers and result shapes. Verify Python editor environment APIs where needed.
-                Source evidence: Azure/azure-functions-core-tools at a0bdc299fa685fa530236c108f4715977c96a8f2
-                (InitCommand.cs, NewCommand.cs, QuickstartCommand.cs, QuickstartManifestOptions.cs,
-                JavaProjectInitializer.cs). Source support is not proof of packaged availability.
-```
+Project creation (`func init`), add-function (`func new`), and gallery-backed
+quickstarts (`func quickstart`) are outside the active migration scope.
+The dependent language flows, template requirements/post-create integration,
+and create-project welcome action are tracked under
+[Deferred](#deferred----tracked-not-built).
 
-- [ ] Acquire verified CLI v5/workloads through shared tool services independently
-  of the Core Tools v4 F5 acquisition contract. Missing packaged capabilities
-  require a scope decision; do not implement bespoke scaffolding.
-  <- FUNC-021, FUNC-031, FUNC-217
-- [ ] Create project: pick folder and supported language, run CLI v5 `func init`, open the
-  folder in the current window only (no cross-session resume). Local-only
-  commands carry `enablement: !virtualWorkspace`. <- FUNC-026, FUNC-004
-- [ ] Empty workspace: `viewsWelcome` content pointing at the implemented
-  create-project command. <- FUNC-192
-- [ ] Kept language goals through verified CLI v5 workloads: JavaScript,
-  TypeScript, Python v2, C# .NET isolated, Java, PowerShell, custom handler.
-  CLI owns project files and dependencies; reuse Python editor environment
-  APIs where the CLI leaves selection/creation to the editor.
-  <- FUNC-218, FUNC-219, FUNC-220, FUNC-221, FUNC-223, FUNC-224, FUNC-225
-- [ ] Gallery-backed project creation through CLI v5 `func quickstart`.
-  The CLI owns the shared catalog, fetch, and scaffolding; the gallery webview
-  remains deferred. Confirm generated projects work with the monorepo's
-  initialization, runtime v4 F5, and azd deployment contracts. Existing
-  project configuration is not silently rewritten. <- FUNC-026, FUNC-208
-- Deferred: Go scaffolding and Java add-function, per the confirmed reviewer
-  decision in [TRIAGE.md](TRIAGE.md).
-  <- FUNC-226, FUNC-028, FUNC-235, FUNC-236
-- [ ] Create function: thin CLI v5 `func new` integration; CLI owns discovery,
-  template-specific requirements, validation, and generation. Open created
-  files and refresh the tree; no extension-owned template/form engine.
-  <- FUNC-028, FUNC-235, FUNC-236
-- [ ] Preserve user-owned files and avoid destructive `--force` generation.
-  Propagate cancellation and failures through shared process/action services.
-- [ ] Unit tests with `respondToPrompts()` and a mocked `IProcessExecutor`.
+Future integration uses thin `ManagedCommand` entry points and shared
+`ToolService` / `IProcessExecutor` services. CLI v5 owns catalogs, requirements,
+validation, generated files, dependencies, and project configuration; the
+extension owns folder selection, editor integration, cancellation/errors, and
+preserving user-owned files. CLI v5 workload acquisition must be independent
+of the implemented Core Tools v4 F5 contract. Shared tool support
+(FUNC-021, FUNC-031, FUNC-217), local-only gates (FUNC-004), and initialization
+of existing projects (FUNC-030, FUNC-190) remain in scope.
+
+Before future implementation, verify distributed CLI v5/workload versions,
+language support, machine-readable discovery, noninteractive prompts, result
+shapes, and compatibility with runtime v4 F5 and azd deployment.
+Source evidence is Azure/azure-functions-core-tools at
+`a0bdc299fa685fa530236c108f4715977c96a8f2` (`InitCommand.cs`, `NewCommand.cs`,
+`QuickstartCommand.cs`, `QuickstartManifestOptions.cs`,
+`JavaProjectInitializer.cs`); source support does not prove packaged availability.
 
 ## Slice 6 -- Creation and deployment (azd + Bicep)
 
@@ -572,6 +550,13 @@ External facts: `https://json.schemastore.org/function.json` and `https://json.s
 
 ## Deferred -- tracked, not built
 
+- [ ] Project/function scaffolding and gallery-backed quickstarts through
+  CLI v5 `func init` / `func new` / `func quickstart`: create-project welcome
+  content, JavaScript, TypeScript, Python environment/project creation,
+  .NET isolated, Java (including add-function), PowerShell, custom handlers,
+  and template requirements/post-create integration. <- FUNC-026, FUNC-028,
+  FUNC-192, FUNC-218, FUNC-219, FUNC-220, FUNC-221, FUNC-223, FUNC-224,
+  FUNC-225, FUNC-235, FUNC-236
 - [ ] Deployment slots: deploy to slot, create/delete/swap, slot settings,
   slot tree nodes (Flex has no slots). <- FUNC-048, FUNC-069, FUNC-070, FUNC-071,
   FUNC-078, FUNC-178, FUNC-179
@@ -596,7 +581,7 @@ External facts: `https://json.schemastore.org/function.json` and `https://json.s
   integration. <- FUNC-164, FUNC-176, FUNC-267
 - [ ] Go scaffolding and native Go provisioning/deployment integration.
   <- FUNC-226
-- [ ] Template Gallery and resource-backed binding settings (with their SDKs).
+- [ ] Template Gallery webview and resource-backed binding settings (with their SDKs).
   <- FUNC-208, FUNC-240, FUNC-265
 
 ## Dropped -- recorded for parity

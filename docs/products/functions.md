@@ -136,7 +136,8 @@ recommendations and an explanation of the supported debugging runtimes.
 The debugger schema and snippets expose `projectPath`, `hostArgs`, `env`,
 `hostPort`, `debugPort`, and `skipBuild`; standard `preLaunchTask` and
 `postDebugTask` options also apply. Existing project tasks/configurations are
-untouched. Project/function scaffolding is tracked in Slice 5.
+untouched. Project/function scaffolding and gallery-backed quickstarts are
+deferred; Slice 5 records their future CLI v5 ownership.
 
 ## Local workspace tree
 
@@ -203,7 +204,8 @@ displayed in a local settings tree. See the
 and [disable-function setting](https://learn.microsoft.com/en-us/azure/azure-functions/disable-function).
 
 The project tree offers initialization when its worker runtime is missing and
-debugging for supported runtimes. Project/function creation is tracked in Slice 5.
+debugging for supported runtimes. Project/function creation is deferred in Slice 5;
+initialization configures existing projects, not new source/template generation.
 
 ## Remote resources tree
 
