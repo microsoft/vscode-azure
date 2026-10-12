@@ -551,7 +551,7 @@ External facts: `https://json.schemastore.org/function.json` and `https://json.s
   settings are Drop or Defer in [TRIAGE.md](TRIAGE.md). <- FUNC-140, FUNC-141
 - [x] Product doc `docs/products/functions.md` (tree, commands, F5, creation,
   deploy constraints); framework docs get at most a link.
-- [ ] Full `pnpm run lint` / `build` / `test` sweep before the PR.
+- [x] Full `pnpm run lint` / `build` / `test` sweep before the PR.
 
 ## Deferred -- tracked, not built
 
@@ -656,7 +656,7 @@ families are covered by that catalog.
 
 This is implementation and wiring coverage, not live debugger certification.
 The live attach-path checkbox in Slice 4 remains open and user-owned.
-The full repository pre-PR lint/build/test sweep in Slice 7 also remains open.
+The full repository pre-PR lint/build/test results are recorded below.
 
 ### Kept-feature evidence
 
@@ -799,7 +799,22 @@ host-start API is dropped.
 - Product behavior is documented in [Functions](../../products/functions.md).
   Framework client documentation links to the product host contract.
   Go/Delve validation is an adapted behavior, not a contributed setting.
-- Extension lint and build passed; its tests passed with 1364 passing and
-  four pending. The new changes are confined to the extension and docs;
-  unchanged utils/azutils checks and live debugger sessions were not rerun.
-  This does not close the full repository pre-PR sweep.
+- Repository lint, build, and tests passed across all three workspaces;
+  see the full sweep results below. Live debugger sessions remain separate.
+
+### Full pre-PR sweep -- 2026-10-12
+
+The root commands `pnpm run lint`, `pnpm run build`, and `pnpm run test`
+all exited successfully against source commit `99dc1ece`. No source fixes
+were required.
+
+| Workspace | Lint | Build | Passing tests | Pending tests |
+|---|---|---|---:|---:|
+| `packages/utils` | Passed | Passed | 592 | 12 |
+| `packages/azutils` | Passed | Passed | 423 | 0 |
+| `extensions/vscode-azure` | Passed | Passed | 1364 | 4 |
+| Total | Passed | Passed | 2379 | 16 |
+
+Pending tests are not executed by this sweep. Live language debugger,
+storage/emulator, and cross-platform smoke checks remain user-owned under
+Slice 4; the automated gates do not certify those manual paths.
