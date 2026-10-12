@@ -17,7 +17,7 @@ by editing this file and reconfirming with the reviewer.
 | **Signed off by** | Brandon Waterloo (@bwateratmsft) |
 | **Date** | 2026-09-24 |
 | **Review** | Excel review workbook; 30 rows overridden, 241 accepted as recommended (blank decision = agreement). |
-| **Last confirmed** | 2026-10-12; reviewer deferred CLI scaffolding (`func init`, `func new`, `func quickstart`) and its dependent language/welcome/template flows (FUNC-026, FUNC-028, FUNC-192, FUNC-218 through FUNC-221, FUNC-223 through FUNC-225, FUNC-235, FUNC-236: Defer). CLI v5 ownership remains the direction for future scaffolding. Native Go debugging and Go/Delve validation remain Adapt (FUNC-140, FUNC-141, FUNC-195); Go scaffolding and deployment integration remain deferred. Earlier, 2026-09-29: PR review moved FUNC-055 to Reuse (`azd pipeline config`) and FUNC-168 back to Migrate (remote Functions group node), added optional `launch.json` generation to FUNC-030, and clarified that `local.settings.json` stays. Earlier, 2026-09-24: F5 design review moved FUNC-203 through FUNC-207 to Drop. |
+| **Last confirmed** | 2026-10-12; reviewer dropped source agent metadata (FUNC-007: Drop), consistent with the dropped agent discovery/wizard/benchmark handlers. MCP support remains independently deferred. Reviewer deferred CLI scaffolding (`func init`, `func new`, `func quickstart`) and its dependent language/welcome/template flows (FUNC-026, FUNC-028, FUNC-192, FUNC-218 through FUNC-221, FUNC-223 through FUNC-225, FUNC-235, FUNC-236: Defer). CLI v5 ownership remains the direction for future scaffolding. Native Go debugging and Go/Delve validation remain Adapt (FUNC-140, FUNC-141, FUNC-195); Go scaffolding and deployment integration remain deferred. Earlier, 2026-09-29: PR review moved FUNC-055 to Reuse (`azd pipeline config`) and FUNC-168 back to Migrate (remote Functions group node), added optional `launch.json` generation to FUNC-030, and clarified that `local.settings.json` stays. Earlier, 2026-09-24: F5 design review moved FUNC-203 through FUNC-207 to Drop. |
 
 ## Granularity
 
@@ -65,8 +65,8 @@ problem matcher and pattern; per manifest-level contract; per orphan.
 | Migrate | 25 | Preserve the source capability using monorepo patterns |
 | Adapt | 27 | Preserve the user goal with intentionally different behavior or UX |
 | Reuse | 19 | Satisfy the feature by wiring an existing monorepo capability |
-| Drop | 135 | Do not carry the source capability forward |
-| Defer | 65 | Retain the goal for later tracked work |
+| Drop | 136 | Do not carry the source capability forward |
+| Defer | 64 | Retain the goal for later tracked work |
 | **Total** | **271** | |
 
 ## Cross-cutting decisions
@@ -100,9 +100,9 @@ problem matcher and pattern; per manifest-level contract; per orphan.
   `tasks.json` is generated, and no task type, problem matcher, or
   process-pick command is contributed. Existing projects' source-generated
   `tasks.json` / `launch.json` are left untouched; users delete them or re-initialize.
-- **No exported API or agent contract.** The source's exported API and
-  `agent.*` commands have no monorepo consumer. External consumers exist (see
-  [Known external consumers](#known-external-consumers)); they are dropped
+- **No exported API or agent contract.** The source's exported API,
+  `agentMetadata`, and `agent.*` commands have no monorepo consumer. External
+  consumers exist (see [Known external consumers](#known-external-consumers)); they are dropped
   anyway, and the owning teams are told before the source extension is retired.
 - Telemetry informed these decisions qualitatively; see
   [INVENTORY.md Section 9](INVENTORY.md#9-usage-summary-telemetry). No raw counts are recorded here.
@@ -134,7 +134,7 @@ Judgment-call groups (`JC-*`) mark rows the reviewer was asked to weigh as a set
 | FUNC-004 | 0 Extension | virtualWorkspaces limited capability + `!virtualWorkspace` enablement gates | **Migrate** | Keep the gate on every retained local-only command (create project, deploy, debug). |  |  |
 | FUNC-005 | 0 Extension | x-azResources azure/workspace branches + onFetch/onResolve activation | **Drop** | Azure Resources host contract; replaced by providers in `registerTrees`. |  |  |
 | FUNC-006 | 0 Extension | x-azResources Create Resource entries (Function App, DTS) | **Drop** | Host create-resource picker contract; target palette create commands cover the goal. |  |  |
-| FUNC-007 | 0 Extension | agentMetadata contract for the @azure Copilot agent | **Defer** | External consumer (@azure agent) keys on `azureFunctions.*` ids; needs a monorepo-level agent contract first. |  | JC-AGENT |
+| FUNC-007 | 0 Extension | agentMetadata contract for the @azure Copilot agent | **Drop** | Agent discovery, wizard execution, and benchmark integration are out of scope alongside FUNC-104 through FUNC-107. | Reviewer: "Ahh--yeah, then we can drop that one too." | JC-AGENT |
 | FUNC-008 | 0 Extension | jsonValidation `function.json` schema | **Migrate** | Zero activation cost; `function.json` is still used by v4 script-model languages (PowerShell, JS v3, Python v1). |  |  |
 | FUNC-009 | 0 Extension | jsonValidation `host.json` schema | **Migrate** | Zero activation cost; every Functions project has `host.json`. |  |  |
 | FUNC-010 | 0 Extension | API `revealTreeItem` | **Drop** | No monorepo consumer; no telemetry in window. |  | JC-API |

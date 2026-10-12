@@ -576,8 +576,9 @@ External facts: `https://json.schemastore.org/function.json` and `https://json.s
 - [ ] Containerized (Container Apps-hosted) Function Apps: Dockerfile
   projects, nodes, creation. Coordinate with the Container Apps migration.
   <- FUNC-027, FUNC-181, FUNC-250
-- [ ] Agent and MCP surfaces pending a monorepo-wide agent contract.
-  <- FUNC-007, FUNC-101, FUNC-228, FUNC-254
+- [ ] MCP project creation, key retrieval, and deployed server integration,
+  tracked in [#361](https://github.com/microsoft/vscode-azure/issues/361).
+  <- FUNC-101, FUNC-228, FUNC-254
 - [ ] Host exceptions debugger view and its commands. <- FUNC-095, FUNC-096,
   FUNC-097, FUNC-098, FUNC-099, FUNC-196
 - [ ] Revisit with Core Tools v5: stop host after debug, emulator validation,
@@ -616,8 +617,8 @@ External facts: `https://json.schemastore.org/function.json` and `https://json.s
   the debug provider): FUNC-203, FUNC-204, FUNC-205, FUNC-206, FUNC-207.
 - Settings sync, secrets, and system-assigned identity: FUNC-073, FUNC-074,
   FUNC-079, FUNC-080, FUNC-083, FUNC-183, FUNC-189.
-- Agent deploy commands and MCP project setting: FUNC-104, FUNC-105,
-  FUNC-106, FUNC-107, FUNC-160.
+- Agent metadata/deployment commands and MCP project setting: FUNC-007,
+  FUNC-104, FUNC-105, FUNC-106, FUNC-107, FUNC-160.
 - Source settings: FUNC-111, FUNC-112, FUNC-113, FUNC-114, FUNC-115,
   FUNC-116, FUNC-117, FUNC-118, FUNC-119, FUNC-120, FUNC-123, FUNC-124,
   FUNC-125, FUNC-126, FUNC-127, FUNC-128, FUNC-129, FUNC-130, FUNC-131,
@@ -654,8 +655,8 @@ families are covered by that catalog.
 | Migrate | 25 | Landed and wired |
 | Adapt | 27 | Landed with the approved target behavior |
 | Reuse | 19 | 18 wired; one conditional shared capability (`FUNC-258`) |
-| Drop | 135 | Source-specific feature absent; exact ID partition recorded under Dropped |
-| Defer | 65 | Exact ID partition tracked under Deferred |
+| Drop | 136 | Source-specific feature absent; exact ID partition recorded under Dropped |
+| Defer | 64 | Exact ID partition tracked under Deferred |
 | Total | 271 | No missing or duplicate IDs |
 
 This is implementation and wiring coverage, not live debugger certification.
@@ -747,7 +748,7 @@ registration in `commands/registerCommands.ts`, and tree composition in
 ### Drop and Defer evidence
 
 The ID lists in the two preceding sections were compared mechanically with
-the current triage: 135 Drop and 65 Defer IDs, each present exactly once in
+the current triage: 136 Drop and 64 Defer IDs, each present exactly once in
 its appropriate section. Dropped source behavior is checked at its public
 boundary, not by asserting that an equivalent shared capability is absent.
 For example, internal host startup survives F5 while the source exported
@@ -778,7 +779,7 @@ host-start API is dropped.
   [#364](https://github.com/microsoft/vscode-azure/issues/364), visual
   gallery/binding tooling by [#365](https://github.com/microsoft/vscode-azure/issues/365).
   CLI scaffolding, the gallery panel, native Go provisioning/runtime selection,
-  Durable/DTS, slots, identity management, containerized Functions, agent/MCP
+  Durable/DTS, slots, identity management, containerized Functions, MCP
   integration, host exceptions UI, and expanded emulator/v5 options are not
   exposed as completed migration features.
 
