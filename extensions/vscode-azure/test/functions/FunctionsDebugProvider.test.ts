@@ -33,7 +33,7 @@ describe('Functions debug provider (unit)', () => {
         expect(s.spawn.mock.callCount()).to.equal(0);
     });
 
-    for (const [runtime, type] of [['node', 'pwa-node'], ['python', 'debugpy'], ['java', 'java'], ['powershell', 'PowerShell'], ['dotnet-isolated', 'coreclr']]) {
+    for (const [runtime, type] of [['node', 'pwa-node'], ['python', 'debugpy'], ['java', 'java'], ['powershell', 'PowerShell'], ['dotnet-isolated', 'coreclr'], ['native', 'go']]) {
         it(`returns ${runtime} attach coordinates owned by the selected project`, async () => {
             const s = setup(runtime);
             mock.method(s.preparation, 'hostDirectory', () => Promise.resolve(s.folder));
@@ -55,6 +55,14 @@ describe('Functions debug provider (unit)', () => {
             if (runtime === 'python') { expect(config?.connect).to.deep.equal({ host: '127.0.0.1', port: 9229 }); }
             if (runtime === 'powershell') { expect(config?.customPipeName).to.equal('owned-pipe'); }
             if (runtime === 'dotnet-isolated') { expect(config?.processId).to.equal('1234'); }
+            if (runtime === 'native') {
+                expect(config?.mode).to.equal('remote');
+                expect(config?.debugAdapter).to.equal('dlv-dap');
+                expect(config?.host).to.equal('127.0.0.1');
+                expect(config?.port).to.equal(9229);
+                expect(config?.cwd).to.equal(s.folder.fsPath);
+                expect(start.mock.calls[0].arguments[0].runtime).to.equal('native');
+            }
         });
     }
 
@@ -93,6 +101,43 @@ describe('Functions debug provider (unit)', () => {
         expect((await s.preparation.workerEnvironment(s.folder, 'node', 9001, 'pipe')).languageWorkers__node__arguments).to.equal('--inspect-brk=127.0.0.1:9001');
         expect((await s.preparation.workerEnvironment(s.folder, 'java', 9002, 'pipe')).languageWorkers__java__arguments).to.include('address=127.0.0.1:9002');
         expect((await s.preparation.workerEnvironment(s.folder, 'powershell', 9003, 'owned-pipe')).PSWorkerCustomPipeName).to.equal('owned-pipe');
+    });
+
+    it('starts Go with the owned Delve executable, loopback port, and worker argument separator', async () => {
+        const s = setup('native');
+        s.m.fs.addFile(s.code.Uri.joinPath(s.folder, 'bin', process.platform === 'win32' ? 'app.exe' : 'app'), 'binary');
+        const start = mock.method(s.owners, 'start', async (request: FunctionsHostStart) => {
+            const env = await request.prepare(9004, 'unused');
+            expect(env.languageWorkers__native__defaultExecutablePath).to.equal(s.code.Uri.file('/Go Tools/dlv').fsPath);
+            expect(env.languageWorkers__native__arguments).to.include('"--listen=127.0.0.1:9004"');
+            expect(env.languageWorkers__native__arguments).to.include('"--continue"');
+            expect(env.languageWorkers__native__arguments).to.match(/ "--"$/);
+            expect(env.PATH).to.include(s.code.Uri.file('/Go Tools').fsPath).and.include('project-path');
+            return { id: 'go-owned', hostPort: 7072, debugPort: 9004, pipe: 'unused' };
+        });
+        const config = await s.debugProvider.resolveDebugConfigurationWithSubstitutedVariables(undefined, { ...s.config, env: { ['PATH']: 'project-path' } });
+        expect(start.mock.callCount()).to.equal(1);
+        expect(config?.type).to.equal('go');
+        expect(config?.__azureFunctionsHostId).to.equal('go-owned');
+    });
+
+    it('reports missing Go debug binaries and protected argument overrides without starting a host', async () => {
+        const s = setup('native');
+        const start = mock.method(s.owners, 'start', async (request: FunctionsHostStart) => {
+            await request.prepare(9004, 'unused');
+            return { id: 'owned', hostPort: 7072, debugPort: 9004, pipe: 'unused' };
+        });
+        expect(await s.debugProvider.resolveDebugConfigurationWithSubstitutedVariables(undefined, s.config)).to.be.undefined;
+        expect(s.m.window.showErrorMessage.mock.calls.at(-1)?.arguments[0]).to.include('Build the Go Functions project');
+        expect(s.spawn.mock.callCount()).to.equal(2);
+        expect(start.mock.callCount()).to.equal(1);
+        start.mock.resetCalls();
+        for (const key of ['languageWorkers__native__arguments__0', 'languageWorkers:native:arguments', 'languageWorkers:native:defaultExecutablePath']) {
+            expect(await s.debugProvider.resolveDebugConfigurationWithSubstitutedVariables(undefined, {
+                ...s.config, env: { [key]: 'unowned' },
+            })).to.be.undefined;
+        }
+        expect(start.mock.callCount()).to.equal(0);
     });
 
     it('runs the built-in build only when neither skipBuild nor preLaunchTask replaces it', async () => {

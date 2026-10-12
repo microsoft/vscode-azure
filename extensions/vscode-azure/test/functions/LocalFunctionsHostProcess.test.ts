@@ -106,6 +106,50 @@ describe('Local Functions host ownership (unit)', () => {
         await s.owner.stop(host.id);
         expect(s.terminateTree.mock.callCount()).to.equal(1);
     });
+
+    it('preserves the prepared Go binary and stops the owned host/Delve/worker tree on cancellation', async () => {
+        const port = await new LocalFunctionsNetwork().reserve();
+        const debugPort = port.port;
+        await port.release();
+        const marker = `[host] API server listening at: 127.0.0.1:${debugPort}\n`;
+        const s = setup({ stdoutChunks: [marker.slice(0, 12), marker.slice(12)] });
+        const token = new MockCancellationToken();
+        const host = await s.owner.start({
+            ...s.request, runtime: 'native', debugPort,
+            prepare: port => Promise.resolve({
+                ['languageWorkers__native__defaultExecutablePath']: '/tools/dlv',
+                ['languageWorkers__native__arguments']: `exec bin/app --headless --continue --listen=127.0.0.1:${port} --`,
+            }),
+        }, token);
+        const args = s.spawn.mock.calls[0].arguments[1];
+        expect(args).to.include('--no-build');
+        expect(args).to.not.include('--dotnet-isolated-debug');
+        expect(s.spawn.mock.calls[0].arguments[2]?.env?.languageWorkers__native__arguments).to.include(`127.0.0.1:${host.debugPort}`);
+        token.cancel();
+        await s.owner.stop(host.id);
+        expect(s.terminateTree.mock.callCount()).to.equal(1);
+        expect(s.tracker.get(s.request.project)).to.be.undefined;
+    });
+
+    it('does not return a Go attachment for an unrelated listener or a marker for another port', async () => {
+        const s = setup({ stdout: 'API server listening at: 127.0.0.1:0\n' });
+        const token = new MockCancellationToken();
+        const start = s.owner.start({ ...s.request, runtime: 'native' }, token);
+        const rejected = expect(start).to.be.rejectedWith(CancellationError);
+        await waitFor(() => s.spawn.mock.callCount() === 1);
+        await waitFor(() => s.client.getStatus.mock.callCount() > 0);
+        token.cancel();
+        await rejected;
+        expect(s.terminateTree.mock.callCount()).to.equal(1);
+    });
+
+    it('reports Go/Delve startup failure and closes only its owned host', async () => {
+        const s = setup({ keepAlive: false, exitCode: 1 });
+        mock.method(s.network, 'listening', () => Promise.resolve(false));
+        await expect(s.owner.start({ ...s.request, runtime: 'native' })).to.be.rejectedWith('Functions host failed');
+        expect(s.tracker.get(s.request.project)).to.be.undefined;
+        expect(s.spawn.mock.callCount()).to.equal(1);
+    });
 });
 
 describe('Functions host terminal (unit)', () => {

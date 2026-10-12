@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ExternalError, ICodeContext, readText, Roots, showMessage, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
+import { ExternalError, fileExists, ICodeContext, readText, Roots, showMessage, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { applyEdits, findNodeAtLocation, getNodeValue, modify, parseTree } from 'jsonc-parser';
 import type * as vscode from 'vscode';
@@ -30,15 +30,20 @@ export class InitializeFunctionsProject implements ManagedCommand {
 
     public async execute(target?: string | vscode.Uri): Promise<void> {
         const project = await this.projects.select(undefined, target);
+        const goProject = await fileExists(this.ctx.code, this.ctx.code.Uri.joinPath(project, 'go.mod'));
         let runtime = (await this.settings.read(project)).values.FUNCTIONS_WORKER_RUNTIME?.trim().toLowerCase();
         if (!runtime) {
-            runtime = (await showSmartQuickPick(this.ctx, ['node', 'python', 'dotnet-isolated', 'java', 'powershell', 'custom']
-                .map(data => ({ label: data, data })), { title: this.ctx.code.l10n.t('Select the project worker runtime') })).data;
+            runtime = (await showSmartQuickPick(this.ctx, ['node', 'python', 'dotnet-isolated', 'java', 'powershell', 'custom', ...(goProject ? ['native'] : [])]
+                .map(data => ({ label: data === 'native' ? this.ctx.code.l10n.t('Go (native worker)') : data, data })),
+            { title: this.ctx.code.l10n.t('Select the project worker runtime') })).data;
             await this.settings.setWorkerRuntime(project, runtime);
+        }
+        if (runtime === 'native' && !goProject) {
+            throw new ExternalError(this.ctx.code.l10n.t('Native worker initialization requires a Go Functions project with go.mod.'));
         }
         const recommendations: Record<string, readonly string[]> = {
             node: [], python: ['ms-python.python', 'ms-python.debugpy'], java: ['redhat.java', 'vscjava.vscode-java-debug'],
-            ['dotnet-isolated']: ['ms-dotnettools.csharp'], powershell: ['ms-vscode.PowerShell'], custom: [],
+            ['dotnet-isolated']: ['ms-dotnettools.csharp'], powershell: ['ms-vscode.PowerShell'], custom: [], native: ['golang.Go'],
         };
         const workspace = this.ctx.code.workspace.getWorkspaceFolder(project);
         if (!workspace) { throw new ExternalError(this.ctx.code.l10n.t('Open the Functions project in a workspace folder before initializing it.')); }
@@ -54,7 +59,7 @@ export class InitializeFunctionsProject implements ManagedCommand {
         this.tree.invalidate(Roots);
         if (!isFunctionsDebugRuntime(runtime)) {
             await showMessage(this.ctx.code, this.ctx.code.l10n.t(
-                'Functions project initialized. Local debugging supports Node.js, Python, Java, PowerShell, and .NET isolated projects.',
+                'Functions project initialized. Local debugging supports Node.js, Python, Java, PowerShell, .NET isolated, and native Go projects.',
             ), {});
             return;
         }

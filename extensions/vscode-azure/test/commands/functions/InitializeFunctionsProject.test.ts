@@ -95,6 +95,28 @@ describe('Initialize Functions project (integration)', () => {
         expect(extensions.recommendations).to.include(ExtensionId);
     });
 
+    it('initializes native Go recommendations and exposes F5 in the workspace tree', async () => {
+        const s = setup('native');
+        const prompts = respondToPrompts(s.m, [{ button: 'Add launch.json Configuration' }]);
+        await s.command.execute(s.folder);
+        prompts.assertAllConsumed();
+        const extensions = parse(await readText(s.code, s.code.Uri.joinPath(s.folder, '.vscode', 'extensions.json')) ?? '');
+        expect(extensions.recommendations).to.include('golang.Go');
+        const launch = parse(await readText(s.code, s.code.Uri.joinPath(s.folder, '.vscode', 'launch.json')) ?? '');
+        expect(launch.configurations[0].type).to.equal('azure-functions');
+        const [project] = await s.tree.getChildren();
+        expect(s.view.getTreeItem(project.id).contextValue).to.include(DebugFunctionsProject.ContextValue);
+    });
+
+    it('selects the native worker runtime when initializing an existing Go module', async () => {
+        const s = setup('');
+        s.m.fs.addFile(s.code.Uri.joinPath(s.folder, 'go.mod'), 'module app\n\ngo 1.24\n');
+        const prompts = respondToPrompts(s.m, [{ pick: 'Go (native worker)' }, 'cancel']);
+        await s.command.execute(s.folder);
+        prompts.assertAllConsumed();
+        expect((await s.settings.read(s.folder)).values.FUNCTIONS_WORKER_RUNTIME).to.equal('native');
+    });
+
     it('preserves duplicate-property files and refreshes project state when the optional launch offer is dismissed', async () => {
         const s = setup('');
         const extensions = s.code.Uri.joinPath(s.folder, '.vscode', 'extensions.json');

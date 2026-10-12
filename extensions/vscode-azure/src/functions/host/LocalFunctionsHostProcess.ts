@@ -46,6 +46,7 @@ interface OwnedHost {
     error?: Error;
     stopError?: Error;
     workerPid?: number;
+    debuggerReady?: boolean;
 }
 
 /** Owns host tasks and their subprocesses; only an HTTP-ready owned host enters the project registry. */
@@ -97,7 +98,7 @@ export class LocalFunctionsHostProcess implements Disposable {
         const abort = new AbortController();
         const terminal = new FunctionsHostTerminal(() => {
             if (!abort.signal.aborted) {
-                this.launch(host, request, hostPort.port, env);
+                this.launch(host, request, hostPort.port, debugPort.port, env);
             }
         }, () => { abort.abort(); });
         const host: OwnedHost = { id, project: request.project, abort, terminal, subscriptions: [] };
@@ -141,7 +142,9 @@ export class LocalFunctionsHostProcess implements Disposable {
             while (Date.now() < deadline) {
                 this.checkRunning(host);
                 const ready = host.process && (request.runtime === 'dotnet-isolated' ? !!host.workerPid
-                    : request.runtime === 'powershell' ? !!host.registration : await this.network.listening(debugPort.port));
+                    : request.runtime === 'powershell' ? !!host.registration
+                        : request.runtime === 'native' ? host.debuggerReady && await this.network.listening(debugPort.port)
+                            : await this.network.listening(debugPort.port));
                 this.checkRunning(host);
                 if (ready) {
                     return { id, hostPort: hostPort.port, debugPort: debugPort.port, pipe, workerPid: host.workerPid };
@@ -191,10 +194,13 @@ export class LocalFunctionsHostProcess implements Disposable {
         }
     }
 
-    private launch(host: OwnedHost, request: FunctionsHostStart, port: number, env: Readonly<Record<string, string>>): void {
+    private launch(host: OwnedHost, request: FunctionsHostStart, port: number, debugPort: number, env: Readonly<Record<string, string>>): void {
         const args = ['host', 'start', ...request.hostArgs, '--address', '127.0.0.1', '--port', String(port)];
         if (request.runtime === 'dotnet-isolated') {
             args.push('--no-build', '--dotnet-isolated-debug', '--enable-json-output');
+        }
+        if (request.runtime === 'native') {
+            args.push('--no-build');
         }
         const buffers = { stdout: '', stderr: '' };
         host.process = this.processes.spawn({
@@ -202,11 +208,16 @@ export class LocalFunctionsHostProcess implements Disposable {
             killTreeOnCancel: true,
             onOutput: (text, stream) => {
                 host.terminal.write(text);
-                if (request.runtime === 'dotnet-isolated') {
+                if (request.runtime === 'dotnet-isolated' || request.runtime === 'native') {
                     const lines = (buffers[stream] + text).split(/\r?\n/);
                     buffers[stream] = (lines.pop() ?? '').slice(-16_384);
                     for (const line of lines) {
-                        host.workerPid ??= workerProcessId(line);
+                        if (request.runtime === 'dotnet-isolated') {
+                            host.workerPid ??= workerProcessId(line);
+                        } else {
+                            const listener = /(?:^|\s)API server listening at: 127\.0\.0\.1:(\d+)\s*$/.exec(line);
+                            if (listener && Number(listener[1]) === debugPort) { host.debuggerReady = true; }
+                        }
                     }
                 }
             },
@@ -225,7 +236,9 @@ export class LocalFunctionsHostProcess implements Disposable {
                     this.output.warn(this.code.l10n.t('[functions] Owned process-tree termination failed.'));
                 }
                 if (!host.abort.signal.aborted && !CancellationError.test(error)) {
-                    host.error = new ExternalError(this.code.l10n.t('The Functions host failed. See its terminal for details.'));
+                    host.error = new ExternalError(request.runtime === 'native'
+                        ? this.code.l10n.t('The Functions host failed. Native Go requires a full Core Tools v4 installation with native worker assets. See its terminal for details.')
+                        : this.code.l10n.t('The Functions host failed. See its terminal for details.'));
                     host.terminal.write(`${host.error.message}\n`);
                     this.output.warn(this.code.l10n.t('[functions] Owned host process failed.'));
                 }

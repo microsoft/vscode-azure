@@ -42,8 +42,8 @@ other callers retain their existing cancellation behavior.
 
 ## F5 and project initialization
 
-The `azure-functions` debugger supports Node.js, Python, Java, PowerShell, and
-.NET isolated projects in trusted, non-virtual workspace folders. Initial and
+The `azure-functions` debugger supports Node.js, Python, Java, PowerShell,
+.NET isolated, and native Go projects in trusted, non-virtual workspace folders. Initial and
 dynamic configuration providers discover indexed `host.json` projects, including
 nested projects. F5 and the local project's Debug action share the same provider;
 neither requires `tasks.json` or `launch.json`. Multiple projects prompt for a
@@ -62,6 +62,7 @@ one packaged app under `target/azure-functions`.
 | Java | `mvn package` | Maven and a matching JDK; Java debugger extension |
 | PowerShell | Start the worker with a session-specific pipe | PowerShell extension |
 | .NET isolated | `dotnet build` | Matching .NET SDK; C# extension (`coreclr`) |
+| Native Go (preview) | `go build -gcflags="all=-N -l" -o bin/app .` (`app.exe` on Windows) | Go 1.24+; Go extension (`golang.Go`); Delve (`dlv`) |
 
 Builds run as visible in-code tasks, using the existing `$tsc` and `$msCompile`
 matchers where applicable. Python uses the owning extensions' public
@@ -72,12 +73,40 @@ Project settings and launch environment overrides take precedence over Python
 environment defaults; the owned debugger arguments and interpreter take precedence
 over those overrides.
 
+Native Go projects require `FUNCTIONS_WORKER_RUNTIME=native` and `go.mod`.
+Go and Delve paths come from the Go extension's resource-scoped public
+[tool execution API](https://github.com/golang/vscode-go/blob/master/extension/src/export.d.ts),
+including workspace-specific tool paths. Both tools are checked before host
+acquisition. The built-in build disables optimizations and inlining; a
+replacement `preLaunchTask` or `skipBuild` must leave a debug-friendly
+`bin/app` (`bin/app.exe` on Windows). Core Tools starts with `--no-build` so
+it cannot overwrite that binary with an optimized build.
+
+The native worker executable is headless
+[Delve](https://github.com/go-delve/delve/blob/master/Documentation/usage/dlv_exec.md)
+running `dlv exec` for the compiled application. `--continue` lets the worker
+initialize while the Go extension connects with a remote `dlv-dap` attach
+request. Delve listens only on the reserved IPv4 loopback port and belongs to
+the host process tree, so host cleanup also terminates Delve and its target.
+Attach readiness requires that the owned worker output reports Delve listening
+on that exact loopback port, as well as a successful loopback probe.
+Native worker executable/argument overrides in project settings are rejected;
+use `debugPort` for its transport and `preLaunchTask` for a replacement build.
+The extension neither searches for unrelated Go processes nor adopts/kills
+existing Delve servers. Native Go scaffolding and azd provisioning/deployment
+integration are separate migration work; custom handlers are not debugged.
+
 Pre-debug validation requires runtime v4 settings, storage configuration, and
 saved local settings. `UseDevelopmentStorage=true` requires Azurite on its three
 default loopback ports; automatic emulator startup and custom proxy validation
 are outside this flow. Identity-based storage settings are accepted. Core Tools
 acquisition requires `>=4.15.2 <5.0.0`, following the
 [v4 host-start contract](https://github.com/Azure/azure-functions-core-tools/blob/4.15.2/src/Cli/func/Actions/HostActions/StartHostAction.cs).
+Native Go compilation/output and `--no-build` behavior follow
+[GoHelpers](https://github.com/Azure/azure-functions-core-tools/blob/4.15.2/src/Cli/func/Helpers/GoHelpers.cs).
+Go requires the full Core Tools distribution containing
+`workers/native/worker.config.json`; the minified distribution omits language
+workers and cannot start a native Go host.
 
 `LocalFunctionsHostProcess` starts an owned custom task on IPv4 loopback with
 available host/debugger ports, or explicit validated `hostPort`/`debugPort`

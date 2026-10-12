@@ -327,6 +327,8 @@ Activation:     only the implicit events VS Code generates for a contributed `de
 External facts: verified VS Code provider ordering against 7f1c8a96ce99bcffba134a7db3ef9b1f57d30ca0;
                 Core Tools host arguments/PID output against tag 4.15.2; Python environment public API;
                 Python Debugger launcher/path public API against 061023c85cf721731569c2d0d670c129fc1f45c4.
+                Native Go uses the Go extension's public tool API, Core Tools 4.15.2 native worker configuration
+                and GoHelpers, and headless Delve's remote DAP protocol.
                 Source links and per-language prerequisites are in docs/products/functions.md.
 ```
 
@@ -337,7 +339,7 @@ Resolution flow for one session:
    the Functions project from the workspace index (remembered per workspace
    when a folder has several).
 2. Pre-debug validation; failures are `ExternalError`s.
-3. Build with in-code tasks (`npm run build`, `dotnet build`, `mvn package`,
+3. Build with in-code tasks (`npm run build`, `dotnet build`, `mvn package`, `go build`,
    dependency install), using VS Code's own `$tsc` / `$msCompile` matchers.
    Skip this build when `skipBuild` or a replacement `preLaunchTask` applies.
 4. Start `func host start` in an in-code pseudoterminal task with the worker
@@ -364,7 +366,7 @@ Resolution flow for one session:
 - [x] .NET isolated attach using the worker PID reported by
   `--dotnet-isolated-debug`, instead of a process picker.
   <- FUNC-033, FUNC-269
-- [ ] Native Go debugging: validate Go 1.24+ and Delve using the Go extension's
+- [x] Native Go debugging: validate Go 1.24+ and Delve using the Go extension's
   resource-scoped public tool API; compile `bin/app` (`app.exe` on Windows)
   with `-gcflags=all=-N -l`, and start the native worker under headless Delve.
   Reuse worker executable/argument overrides and the owned host's loopback
@@ -372,7 +374,7 @@ Resolution flow for one session:
   custom handlers are excluded. Wire Go recommendations, native-runtime
   initialization, debugger language contribution, and the workspace Debug action.
   <- FUNC-140, FUNC-141, FUNC-195
-- [ ] Go behavioral coverage: prerequisites/build errors, paths with spaces,
+- [x] Go behavioral coverage: prerequisites/build errors, paths with spaces,
   skipped builds, loopback attach, readiness failure/cancellation/cleanup, and
   initialization/tree capabilities. Live Go attach smoke check remains part
   of Slice 7. <- FUNC-140, FUNC-141, FUNC-195
@@ -397,7 +399,16 @@ Resolution flow for one session:
   the real index/tree; shared integration test terminating a real parent/worker
   process tree.
 - [ ] Live language attach-path smoke checks during Slice 7. The automated tests
-  cover all five configuration/API paths, not live language debugger sessions.
+  cover all six configuration/API paths, not live language debugger sessions.
+
+Native Go protocol validation on Windows used the full Core Tools 4.15.2
+distribution, Go 1.26.2, Delve 1.27.2, and Go worker SDK v0.7.0-preview.
+The exact host/worker invocation passed remote DAP attach, a verified HTTP
+handler breakpoint, variable inspection, continue, and an HTTP response with
+a project path containing repeated spaces. A binary hash check confirmed
+that `--no-build` preserves the prepared debug binary. This protocol smoke
+uses a DAP client, not the VS Code Go extension UI; live VS Code sessions,
+storage/emulator integration, and Linux/macOS smoke checks remain in Slice 7.
 
 Existing projects' source-generated `tasks.json` / `launch.json` (task type
 `func`, `$func-watch`, `${command:azureFunctions.pickProcess}`) are left

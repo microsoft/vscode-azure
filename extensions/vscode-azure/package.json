@@ -27,7 +27,7 @@
             {
                 "type": "azure-functions",
                 "label": "%debug.functions.label%",
-                "languages": ["javascript", "typescript", "python", "java", "powershell", "csharp"],
+                "languages": ["javascript", "typescript", "python", "java", "powershell", "csharp", "go"],
                 "configurationAttributes": {
                     "launch": {
                         "required": [],

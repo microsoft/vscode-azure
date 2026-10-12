@@ -71,7 +71,7 @@ export class FunctionsDebugProvider implements vscode.DebugConfigurationProvider
             }
             const project = await this.projects.select(folder, path);
             const env = stringRecord(config.env, this.code);
-            if (Object.keys(env).some(key => /^(?:languageWorkers__.*__(?:arguments|defaultExecutablePath)|PSWorkerCustomPipeName|FUNCTIONS_WORKER_PROCESS_COUNT)$/i.test(key))) {
+            if (Object.keys(env).some(key => /^(?:languageWorkers(?:__|:).*(?:__|:)(?:arguments(?:(?:__|:).*)?|defaultExecutablePath)|PSWorkerCustomPipeName|FUNCTIONS_WORKER_PROCESS_COUNT)$/i.test(key))) {
                 throw new ExternalError(this.code.l10n.t('env cannot override the owned worker debugger or process settings. Use debugPort instead.'));
             }
             const args: unknown = config.hostArgs;
@@ -84,7 +84,7 @@ export class FunctionsDebugProvider implements vscode.DebugConfigurationProvider
             }
             const hostPort = portOption(config.hostPort, this.code);
             const debugPort = portOption(config.debugPort, this.code);
-            const runtime = await this.preparation.validate(project, env);
+            const runtime = await this.preparation.validate(project, env, token);
             const executable = await this.preparation.executable(project, token);
             const cwd = config.skipBuild === true || config.preLaunchTask
                 ? await this.preparation.hostDirectory(project, runtime)
@@ -111,6 +111,9 @@ export class FunctionsDebugProvider implements vscode.DebugConfigurationProvider
             if (runtime === 'python') { return { ...common, type: 'debugpy', connect: { host: '127.0.0.1', port: host.debugPort }, justMyCode: true }; }
             if (runtime === 'java') { return { ...common, type: 'java', hostName: '127.0.0.1', port: host.debugPort }; }
             if (runtime === 'powershell') { return { ...common, type: 'PowerShell', customPipeName: host.pipe, runspaceId: 1 }; }
+            if (runtime === 'native') {
+                return { ...common, type: 'go', mode: 'remote', debugAdapter: 'dlv-dap', host: '127.0.0.1', port: host.debugPort, cwd: project.fsPath };
+            }
             return { ...common, type: 'coreclr', processId: String(host.workerPid), justMyCode: true };
         });
     }
