@@ -27,14 +27,23 @@ export class LocalFunctionSettings {
 
     /** Preserves comments, unrelated values, Host, and ConnectionStrings when editing a disable flag. */
     public async setDisabled(project: vscode.Uri, functionName: string, disabled: boolean): Promise<void> {
+        await this.writeValue(project, `AzureWebJobs.${functionName}.Disabled`, String(disabled));
+    }
+
+    /** Sets the worker runtime without replacing unrelated local settings or comments. */
+    public async setWorkerRuntime(project: vscode.Uri, runtime: string): Promise<void> {
+        await this.writeValue(project, 'FUNCTIONS_WORKER_RUNTIME', runtime);
+    }
+
+    private async writeValue(project: vscode.Uri, key: string, value: string): Promise<void> {
         const uri = this.code.Uri.joinPath(project, 'local.settings.json');
         const document = this.code.workspace.textDocuments.find(doc => doc.uri.toString() === uri.toString());
         if (document?.isDirty) {
-            throw new ExternalError(this.code.l10n.t('Save local.settings.json before changing function state.'));
+            throw new ExternalError(this.code.l10n.t('Save local.settings.json before editing function settings.'));
         }
         const text = await readText(this.code, uri) ?? '{}';
         this.parse(text);
-        const edits = modify(text, ['Values', `AzureWebJobs.${functionName}.Disabled`], String(disabled), {
+        const edits = modify(text, ['Values', key], value, {
             formattingOptions: { insertSpaces: true, tabSize: 4, eol: text.includes('\r\n') ? '\r\n' : '\n' },
         });
         await this.code.workspace.fs.writeFile(uri, new TextEncoder().encode(applyEdits(text, edits)));

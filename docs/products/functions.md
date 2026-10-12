@@ -37,8 +37,77 @@ The shared Core Tools installer supports an explicit v4-only acquisition range
 through the official `azure-functions-core-tools@4` npm package, while its default
 acquisition policy accepts v5 preview. Tool acquisition remains user-action driven.
 `IProcessExecutor` can deliver decoded stdout/stderr chunks without retaining
-long-running process output; this is the process seam for local host ownership.
-Debugging and scaffolding remain tracked in Slices 4 and 5.
+long-running process output. Owned hosts opt into process-tree cancellation;
+other callers retain their existing cancellation behavior.
+
+## F5 and project initialization
+
+The `azure-functions` debugger supports Node.js, Python, Java, PowerShell, and
+.NET isolated projects in trusted, non-virtual workspace folders. Initial and
+dynamic configuration providers discover indexed `host.json` projects, including
+nested projects. F5 and the local project's Debug action share the same provider;
+neither requires `tasks.json` or `launch.json`. Multiple projects prompt for a
+selection, remembering the last choice per workspace.
+
+The initial resolution hook normalizes the configuration. VS Code substitutes
+variables and runs a configured `preLaunchTask` before the substituted-variable
+hook selects, validates, builds, and starts the project. `preLaunchTask` replaces
+the built-in build; `skipBuild: true` also bypasses it. Java still requires exactly
+one packaged app under `target/azure-functions`.
+
+| Runtime | Built-in preparation | Debugger prerequisite |
+|---|---|---|
+| Node.js | Install missing dependencies with `npm ci` or `npm install`; run the package's build script when present | Built-in JavaScript debugger (`pwa-node`) |
+| Python | Install `requirements.txt` with the selected interpreter | Python and Python Debugger extensions; selected interpreter |
+| Java | `mvn package` | Maven and a matching JDK; Java debugger extension |
+| PowerShell | Start the worker with a session-specific pipe | PowerShell extension |
+| .NET isolated | `dotnet build` | Matching .NET SDK; C# extension (`coreclr`) |
+
+Builds run as visible in-code tasks, using the existing `$tsc` and `$msCompile`
+matchers where applicable. Python uses the owning extensions' public
+[environment API](https://github.com/microsoft/vscode-python/blob/main/src/client/api/types.ts)
+and [debugpy launcher API](https://github.com/microsoft/vscode-python-debugger/blob/061023c85cf721731569c2d0d670c129fc1f45c4/src/extension/api.ts),
+including the selected executable rather than a guessed `python` command.
+Project settings and launch environment overrides take precedence over Python
+environment defaults; the owned debugger arguments and interpreter take precedence
+over those overrides.
+
+Pre-debug validation requires runtime v4 settings, storage configuration, and
+saved local settings. `UseDevelopmentStorage=true` requires Azurite on its three
+default loopback ports; automatic emulator startup and custom proxy validation
+are outside this flow. Identity-based storage settings are accepted. Core Tools
+acquisition requires `>=4.15.2 <5.0.0`, following the
+[v4 host-start contract](https://github.com/Azure/azure-functions-core-tools/blob/4.15.2/src/Cli/func/Actions/HostActions/StartHostAction.cs).
+
+`LocalFunctionsHostProcess` starts an owned custom task on IPv4 loopback with
+available host/debugger ports, or explicit validated `hostPort`/`debugPort`
+options. Node, Python, and Java attach through their worker port; PowerShell uses
+its unique pipe; .NET isolated uses the structured worker PID emitted by
+`--dotnet-isolated-debug --enable-json-output`. Workers are restricted to one per
+host. Protected transport, worker-debugger, and process-count options cannot be
+overridden through `hostArgs` or `env`.
+
+Paused workers expose their debugger before the host can finish initialization.
+Attach readiness has a 120-second bound; HTTP readiness is polled independently
+and can remain pending while startup code is paused at a breakpoint. Only an
+owned host reporting HTTP state `Running` enters `LocalFunctionsHostTracker`.
+Task/terminal closure, cancellation, attach failure, session termination, and
+service disposal stop the owned process tree and remove its registration.
+Readiness and shutdown failures are surfaced without copying settings or host
+response bodies into the output channel.
+
+Initialize Project for VS Code selects a missing worker runtime and appends
+workspace extension recommendations. Supported runtimes offer an optional
+`azure-functions` launch entry for customization or compound launches. JSONC
+comments, existing entries, and unrelated properties are preserved; malformed,
+duplicate-property, and dirty files are rejected. Initialization refreshes the
+selected project without evicting unrelated projects. Custom handlers receive
+recommendations and an explanation of the supported debugging runtimes.
+
+The debugger schema and snippets expose `projectPath`, `hostArgs`, `env`,
+`hostPort`, `debugPort`, and `skipBuild`; standard `preLaunchTask` and
+`postDebugTask` options also apply. Existing project tasks/configurations are
+untouched. Project/function scaffolding is tracked in Slice 5.
 
 ## Local workspace tree
 
@@ -83,8 +152,8 @@ The local tree reuses Execute Function, Copy Function URL, Enable, and Disable.
 Execute and HTTP URL copying require a ready host registered for the exact
 project URI and port. `LocalFunctionsHostTracker` owns registrations, not host
 processes: disposal of an older registration cannot remove its replacement.
-Starting Core Tools, waiting for readiness, and populating this registry belong
-to the [local development slice](../migrations/azurefunctions/MIGRATION-PLAN.md#slice-4----local-development-f5).
+`LocalFunctionsHostProcess` starts Core Tools, waits for readiness, and populates
+this registry for debugging.
 An arbitrary process on the default port is not treated as this project's host.
 
 Local execution submits raw input through `FunctionsHostClient` without Azure
@@ -104,8 +173,8 @@ displayed in a local settings tree. See the
 [local settings contract](https://learn.microsoft.com/en-us/azure/azure-functions/functions-develop-local#local-settings-file)
 and [disable-function setting](https://learn.microsoft.com/en-us/azure/azure-functions/disable-function).
 
-Initialization actions and project/function creation are tracked in Slices 4 and
-5 respectively; the local tree contributes only implemented actions.
+The project tree offers initialization when its worker runtime is missing and
+debugging for supported runtimes. Project/function creation is tracked in Slice 5.
 
 ## Remote resources tree
 

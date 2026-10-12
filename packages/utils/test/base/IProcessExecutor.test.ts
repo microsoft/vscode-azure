@@ -4,68 +4,20 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ProcessError } from '@azure/core-process';
-import { ChildProcess } from 'node:child_process';
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { Readable } from 'node:stream';
 import { mock, type Mock } from 'node:test';
 import type * as vscode from 'vscode';
 import { URI as Uri } from 'vscode-uri';
 import { command, type CommandLineArgs } from '../../src/base/CommandLineBuilder';
 import { delay } from '../../src/base/delay';
-import { ProcessExecutor, type ResolveExecutableFn, type SpawnFn } from '../../src/base/IProcessExecutor';
+import { ProcessExecutor, type ResolveExecutableFn } from '../../src/base/IProcessExecutor';
 import { CancellationError } from '../../src/vscode/CancellationError';
 import { EventEmitter } from '../../src/vscode/EventEmitter';
-import { createMockVsCode } from '../vscode/MockVsCode';
-
-/** Wraps a list of lines as a readable stream, mimicking a child's stdio. */
-function lineStream(lines: readonly string[]): Readable {
-    return Readable.from(lines.map((line) => `${line}\n`));
-}
-
-/**
- * Creates a mock {@linkcode SpawnFn} returning a fake {@linkcode ChildProcess}:
- * `stdout`/`stderr` readables plus a deferred `'close'` (or `'error'`) event.
- *
- * @param options - `exitCode` defaults to `0`. When `spawnError` is set the
- *   factory throws it synchronously, mimicking a command that cannot be
- *   resolved. When `emitError` is set the child emits it as an `'error'` event.
- */
-function createMockSpawn(options?: {
-    stdout?: string;
-    stderr?: string;
-    stderrLines?: readonly string[];
-    exitCode?: number | null;
-    signalName?: NodeJS.Signals | null;
-    spawnError?: Error;
-    emitError?: Error;
-}): Mock<SpawnFn> {
-    const { stdout = '', stderr = '', stderrLines, exitCode = 0, signalName = null, spawnError, emitError } = options ?? {};
-
-    return mock.fn<SpawnFn>((): ChildProcess => {
-        if (spawnError) {
-            throw spawnError;
-        }
-
-        const child = new ChildProcess();
-        Object.defineProperties(child, {
-            stdout: { value: Readable.from(stdout ? [stdout] : []) },
-            stderr: { value: stderrLines ? lineStream(stderrLines) : Readable.from(stderr ? [stderr] : []) },
-        });
-
-        // Let the caller attach listeners before the process "finishes".
-        setImmediate(() => {
-            if (emitError) {
-                child.emit('error', emitError);
-            } else {
-                child.emit('close', exitCode, signalName);
-            }
-        });
-
-        return child;
-    });
-}
+import { createMockVsCode, getMockTaskExecution } from '../vscode/MockVsCode';
+import { createMockProcessExecutor, createMockSpawn } from './mockProcess';
+import { waitFor } from '../waitFor';
 
 describe('ProcessExecutor (unit)', () => {
     describe('background execution', () => {
@@ -363,13 +315,76 @@ describe('ProcessExecutor (unit)', () => {
         });
     });
 
-    describe('foreground execution', () => {
-        async function getTaskExecution(m: ReturnType<typeof createMockVsCode>): Promise<vscode.TaskExecution> {
-            // Yield to let spawn's async internals call executeTask
+    describe('owned process-tree cancellation', () => {
+        afterEach(() => { mock.restoreAll(); });
+
+        it('waits for descendant termination before completing cancellation', async () => {
+            const m = createMockVsCode();
+            const s = createMockProcessExecutor(m.vscode, { keepAlive: true });
+            const terminated = Promise.withResolvers<undefined>();
+            const settled = mock.fn();
+            s.terminateTree.mock.mockImplementation(() => {
+                s.spawn.mock.calls[0].result?.emit('close', 0, null);
+                return terminated.promise;
+            });
+            const abort = new AbortController();
+            const process = s.executor.spawn({ execution: 'background', command: ['owned'], killTreeOnCancel: true }, abort.signal);
+            void process.then(settled, settled);
+            abort.abort();
             await delay(0);
-            expect(m.tasks.executeTask.mock.callCount()).to.equal(1);
-            return m.tasks.executeTask.mock.calls[0].result as Promise<vscode.TaskExecution>;
-        }
+            expect(settled.mock.callCount()).to.equal(0);
+            terminated.resolve(undefined);
+            await expect(process).to.be.rejectedWith(CancellationError);
+            expect(s.terminateTree.mock.calls[0].arguments[0]).to.equal(s.spawn.mock.calls[0].result?.pid);
+        });
+
+        it('surfaces tree-termination failures instead of reporting ordinary cancellation', async () => {
+            const s = createMockProcessExecutor(createMockVsCode().vscode, { keepAlive: true });
+            s.terminateTree.mock.mockImplementation(() => Promise.reject(new Error('termination failed')));
+            const abort = new AbortController();
+            const process = s.executor.spawn({ execution: 'background', command: ['owned'], killTreeOnCancel: true }, abort.signal);
+            const rejected = expect(process).to.be.rejectedWith('termination failed');
+            abort.abort();
+            try { await rejected; }
+            finally { s.spawn.mock.calls[0].result?.emit('close', 0, null); }
+        });
+
+        it('does not spawn an owned process when cancellation precedes startup', async () => {
+            const s = createMockProcessExecutor(createMockVsCode().vscode);
+            const abort = new AbortController();
+            abort.abort();
+            await expect(s.executor.spawn({ execution: 'background', command: ['owned'], killTreeOnCancel: true }, abort.signal))
+                .to.be.rejectedWith(CancellationError);
+            expect(s.spawn.mock.callCount()).to.equal(0);
+        });
+    });
+
+    describe('owned process-tree termination (integration)', () => {
+        it('stops a real child worker as well as its directly spawned parent', async () => {
+            const executor = new ProcessExecutor(createMockVsCode().vscode);
+            const output = mock.fn((_text: string, _stream: 'stdout' | 'stderr') => undefined);
+            const abort = new AbortController();
+            const running = executor.spawn({
+                execution: 'background', killTreeOnCancel: true, onOutput: output,
+                command: [process.execPath, '-e', `const {spawn}=require('node:child_process'); const worker=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'ignore'}); console.log(worker.pid); setInterval(()=>{},1000);`],
+            }, abort.signal);
+            const rejected = expect(running).to.be.rejectedWith(CancellationError);
+            const stdout = () => output.mock.calls.filter(call => call.arguments[1] === 'stdout').map(call => call.arguments[0]).join('');
+            try {
+                await waitFor(() => /^\d+\s*$/.test(stdout()));
+                const pid = Number(stdout().trim());
+                abort.abort();
+                await rejected;
+                expect(() => process.kill(pid, 0)).to.throw();
+            } finally {
+                abort.abort();
+                await running.catch(() => undefined);
+            }
+        });
+    });
+
+    describe('foreground execution', () => {
+        const getTaskExecution = getMockTaskExecution;
 
         it('should create a task and resolve on exit code 0', async () => {
             const m = createMockVsCode();

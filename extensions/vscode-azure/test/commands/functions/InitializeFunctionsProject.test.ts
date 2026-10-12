@@ -1,0 +1,111 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import { readText } from '@microsoft/vscode-azure-utils';
+import { respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
+import { parse } from 'jsonc-parser';
+import { mock } from 'node:test';
+import { ExtensionId } from '../../../src/constants';
+import { InitializeFunctionsProject } from '../../../src/commands/functions/InitializeFunctionsProject';
+import { createFunctionsDebugFixture } from '../../functions/mockFunctionsDebug';
+import { isFunctionsProjectNode } from '../../../src/tree/workspace/WorkspaceNode';
+import { DebugFunctionsProject } from '../../../src/commands/functions/DebugFunctionsProject';
+
+describe('Initialize Functions project (integration)', () => {
+    const fixtures: ReturnType<typeof createFunctionsDebugFixture>[] = [];
+    function setup(runtime = 'node') {
+        const s = createFunctionsDebugFixture(runtime);
+        fixtures.push(s);
+        const command = new InitializeFunctionsProject(s.context.ctx, s.projects, s.settings, s.tree);
+        return { ...s, command };
+    }
+    afterEach(() => { fixtures.splice(0).forEach(s => { s.dispose(); }); mock.restoreAll(); });
+
+    it('preserves recommendations and comments and offers a launch entry without changing existing tasks', async () => {
+        const s = setup('python');
+        const extensions = s.code.Uri.joinPath(s.folder, '.vscode', 'extensions.json');
+        const launch = s.code.Uri.joinPath(s.folder, '.vscode', 'launch.json');
+        const tasks = s.code.Uri.joinPath(s.folder, '.vscode', 'tasks.json');
+        s.m.fs.addFile(extensions, '{ // recommendations\n "recommendations": [/* existing recommendation */ "existing.extension"], "unwantedRecommendations": ["unwanted.extension"] }');
+        s.m.fs.addFile(launch, '{ // launch options\n "version":"0.2.0", "configurations":[{ /* existing debugger */ "type":"node","name":"existing","request":"launch"}], "compounds":[] }');
+        s.m.fs.addFile(tasks, '{ "tasks": [{ "type": "func" }] }');
+        const prompts = respondToPrompts(s.m, [{ button: 'Add launch.json Configuration' }]);
+        await s.command.execute(s.folder);
+        prompts.assertAllConsumed();
+        const text = await readText(s.code, extensions);
+        expect(text).to.include('// recommendations');
+        expect(text).to.include('/* existing recommendation */');
+        expect(parse(text ?? '').recommendations).to.include('existing.extension').and.include('ms-python.debugpy');
+        expect(parse(text ?? '').unwantedRecommendations).to.deep.equal(['unwanted.extension']);
+        const launchText = await readText(s.code, launch);
+        expect(launchText).to.include('// launch options');
+        expect(launchText).to.include('/* existing debugger */');
+        expect(parse(launchText ?? '').configurations).to.have.length(2);
+        expect(parse(launchText ?? '').configurations[1].projectPath).to.equal(s.folder.fsPath);
+        expect(await readText(s.code, tasks)).to.equal('{ "tasks": [{ "type": "func" }] }');
+    });
+
+    it('initializes a missing runtime and writes a runnable optional configuration without duplicates', async () => {
+        const s = setup('');
+        const nested = s.code.Uri.joinPath(s.folder, 'nested', 'host.json');
+        s.m.fs.addFile(nested, '{}');
+        const roots = await s.tree.getChildren();
+        const [before] = roots;
+        const unrelated = roots.find(node => isFunctionsProjectNode(node) && node.resourceUri.toString() === nested.toString());
+        expect(unrelated).to.exist;
+        expect(isFunctionsProjectNode(before) && before.initialized).to.be.false;
+        const first = respondToPrompts(s.m, [{ pick: 'node' }, { button: 'Add launch.json Configuration' }]);
+        await s.command.execute(s.folder);
+        first.assertAllConsumed();
+        expect((await s.settings.read(s.folder)).values.FUNCTIONS_WORKER_RUNTIME).to.equal('node');
+        const refreshed = await s.tree.getChildren();
+        const [after] = refreshed;
+        expect(refreshed).to.include(unrelated);
+        expect(isFunctionsProjectNode(after) && after.initialized).to.be.true;
+        expect(s.view.getTreeItem(after.id).contextValue).to.include(DebugFunctionsProject.ContextValue);
+        const next = respondToPrompts(s.m, [{ button: 'Add launch.json Configuration' }]);
+        await s.command.execute(s.folder);
+        next.assertAllConsumed();
+        const launch = parse(await readText(s.code, s.code.Uri.joinPath(s.folder, '.vscode', 'launch.json')) ?? '');
+        expect(launch.configurations).to.have.length(1);
+        expect(launch.configurations[0].type).to.equal('azure-functions');
+        expect(launch.configurations[0].request).to.equal('launch');
+    });
+
+    it('refuses malformed or dirty workspace files rather than replacing user edits', async () => {
+        const s = setup();
+        const extensions = s.code.Uri.joinPath(s.folder, '.vscode', 'extensions.json');
+        s.m.fs.addFile(extensions, '{ invalid');
+        await expect(s.command.execute(s.folder)).to.be.rejectedWith('valid JSON object');
+        expect(await readText(s.code, extensions)).to.equal('{ invalid');
+        s.m.fs.addFile(extensions, '{}');
+        const document = await s.code.workspace.openTextDocument(extensions);
+        mock.property(document, 'isDirty', true);
+        await expect(s.command.execute(s.folder)).to.be.rejectedWith('Save');
+        expect(await readText(s.code, extensions)).to.equal('{}');
+    });
+
+    it('initializes custom-handler recommendations and explains which runtimes support local debugging', async () => {
+        const s = setup('custom');
+        await s.command.execute(s.folder);
+        expect(s.m.window.showInformationMessage.mock.calls[0].arguments[0]).to.include('Local debugging supports');
+        const extensions = parse(await readText(s.code, s.code.Uri.joinPath(s.folder, '.vscode', 'extensions.json')) ?? '');
+        expect(extensions.recommendations).to.include(ExtensionId);
+    });
+
+    it('preserves duplicate-property files and refreshes project state when the optional launch offer is dismissed', async () => {
+        const s = setup('');
+        const extensions = s.code.Uri.joinPath(s.folder, '.vscode', 'extensions.json');
+        s.m.fs.addFile(extensions, '{ "recommendations": [], "recommendations": ["existing"] }');
+        respondToPrompts(s.m, [{ pick: 'node' }]);
+        await expect(s.command.execute(s.folder)).to.be.rejectedWith('duplicate properties');
+        s.m.fs.addFile(extensions, '{}');
+        await s.tree.getChildren();
+        respondToPrompts(s.m, ['cancel']);
+        await s.command.execute(s.folder);
+        const [project] = await s.tree.getChildren();
+        expect(isFunctionsProjectNode(project) && project.initialized).to.be.true;
+    });
+});

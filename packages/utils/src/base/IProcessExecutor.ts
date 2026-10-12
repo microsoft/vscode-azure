@@ -9,6 +9,7 @@ import type { ChildProcess } from 'node:child_process';
 import * as readline from 'node:readline';
 import type { Readable } from 'node:stream';
 import type * as vscode from 'vscode';
+import treeKill from 'tree-kill';
 import { CancellationError } from '../vscode/CancellationError';
 import { createShellTask } from '../vscode/createShellTask';
 import type { IVsCode } from '../vscode/IVsCode';
@@ -30,6 +31,9 @@ export type SpawnFn = (command: string, args?: readonly string[], options?: Spaw
  * Exposed so tests can inject a resolver without replacing the module.
  */
 export type ResolveExecutableFn = typeof resolveExecutable;
+
+/** Terminates a directly owned process and its descendants; rejects if termination fails. */
+export type KillProcessTreeFn = (pid: number) => Promise<void>;
 
 /**
  * Shared options for all process execution modes.
@@ -66,6 +70,8 @@ export interface BackgroundProcessOptions extends ProcessExecutorOptions {
      * The callback must not throw. Results and process errors contain no captured output.
      */
     readonly onOutput?: (text: string, stream: 'stdout' | 'stderr') => void;
+    /** Forcefully terminates the owned process tree on cancellation, and waits for that operation to finish. */
+    readonly killTreeOnCancel?: boolean;
 }
 
 /**
@@ -91,6 +97,8 @@ export interface BackgroundJsonLinesProcessOptions extends ProcessExecutorOption
  * Returns `Promise<void>` because task output is not capturable.
  */
 export interface ForegroundProcessOptions extends ProcessExecutorOptions {
+    /** VS Code problem matchers applied to the generated build task. */
+    readonly problemMatchers?: string | string[];
     readonly execution: 'foreground';
     /** Display name passed to the {@linkcode vscode.Task Task} constructor. Shown in the task list and terminal tab. */
     readonly name: string;
@@ -199,12 +207,14 @@ export interface IProcessExecutor {
  * @param resolveExecutableFn - Optional override for
  *   `@azure/core-process`'s {@linkcode resolveExecutable}, primarily for
  *   injecting a mock in unit tests. Defaults to the real implementation.
+ * @param killProcessTreeFn - Optional process-tree termination seam for tests.
  */
 export class ProcessExecutor implements IProcessExecutor {
     public constructor(
         private readonly code: IVsCode,
         private readonly spawnFn: SpawnFn = spawn,
         private readonly resolveExecutableFn: ResolveExecutableFn = resolveExecutable,
+        private readonly killProcessTreeFn: KillProcessTreeFn = killProcessTree,
     ) { }
 
     public async spawn(options: ForegroundProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<void>;
@@ -242,7 +252,7 @@ export class ProcessExecutor implements IProcessExecutor {
             ...options,
             scope: options.workspaceFolder,
             presentationOptions: options.focus ? { focus: true } : undefined,
-        });
+        }, this.resolveExecutableFn);
 
         const taskExecution = await this.code.tasks.executeTask(task);
 
@@ -294,9 +304,11 @@ export class ProcessExecutor implements IProcessExecutor {
         }
 
         const { signal, disposable } = toAbortSignal(cancellation);
+        const killTreeOnCancel = 'killTreeOnCancel' in options && options.killTreeOnCancel === true;
 
         let child: ChildProcess;
         try {
+            if (killTreeOnCancel && signal?.aborted) { throw new CancellationError(); }
             child = this.spawnFn(executable, args, {
                 cwd: options.cwd?.fsPath,
                 // The child environment replaces `process.env` rather than
@@ -308,7 +320,7 @@ export class ProcessExecutor implements IProcessExecutor {
                 // batch-specific argument escaping is applied automatically once
                 // the resolved target turns out to be a batch file.
                 allowWindowsBatchFiles: true,
-                signal,
+                signal: killTreeOnCancel ? undefined : signal,
             });
         } catch (e) {
             disposable.dispose();
@@ -324,7 +336,17 @@ export class ProcessExecutor implements IProcessExecutor {
         // nothing ever drains stdout.
         const output = 'onOutput' in options ? options.onOutput : undefined;
         const stdout = readAll(child.stdout, output ? text => { output(text, 'stdout'); } : undefined);
-
+        let termination: Promise<void> | undefined;
+        const { promise: terminationFailed, reject: rejectTermination } = Promise.withResolvers<never>();
+        const onAbort = () => {
+            const pid = child.pid;
+            if (pid && child.exitCode === null && child.signalCode === null) {
+                termination ??= new Promise<void>((resolve, reject) => {
+                    void this.killProcessTreeFn(pid).then(resolve, reject);
+                });
+                void termination.catch(rejectTermination);
+            }
+        };
         // JSON-lines mode streams stderr line-by-line rather than buffering it,
         // so the caller can observe progress while the process is still running.
         if ('jsonLines' in options && options.jsonLines) {
@@ -354,10 +376,17 @@ export class ProcessExecutor implements IProcessExecutor {
         }
 
         let result: ProcessResult;
+        const completed = finish(child, stdout, readAll(child.stderr, output ? text => { output(text, 'stderr'); } : undefined), signal);
+        if (killTreeOnCancel && signal) {
+            signal.addEventListener('abort', onAbort, { once: true });
+            if (signal.aborted) { onAbort(); }
+        }
         try {
-            result = await finish(child, stdout, readAll(child.stderr, output ? text => { output(text, 'stderr'); } : undefined), signal);
+            result = await Promise.race([completed, terminationFailed]);
         } finally {
+            signal?.removeEventListener('abort', onAbort);
             disposable.dispose();
+            await termination;
         }
 
         if (options.parseJson) {
@@ -367,6 +396,12 @@ export class ProcessExecutor implements IProcessExecutor {
 
         return result;
     }
+}
+
+function killProcessTree(pid: number): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+        treeKill(pid, 'SIGKILL', error => { if (error) { reject(error); } else { resolve(); } });
+    });
 }
 
 /**

@@ -23,6 +23,35 @@
         }
     },
     "contributes": {
+        "debuggers": [
+            {
+                "type": "azure-functions",
+                "label": "%debug.functions.label%",
+                "languages": ["javascript", "typescript", "python", "java", "powershell", "csharp"],
+                "configurationAttributes": {
+                    "launch": {
+                        "required": [],
+                        "properties": {
+                            "projectPath": { "type": "string", "description": "%debug.functions.projectPath%" },
+                            "hostArgs": { "type": "array", "items": { "type": "string" }, "description": "%debug.functions.hostArgs%" },
+                            "env": { "type": "object", "additionalProperties": { "type": "string" }, "description": "%debug.functions.env%" },
+                            "hostPort": { "type": "integer", "minimum": 1, "maximum": 65535, "description": "%debug.functions.hostPort%" },
+                            "debugPort": { "type": "integer", "minimum": 1, "maximum": 65535, "description": "%debug.functions.debugPort%" },
+                            "skipBuild": { "type": "boolean", "default": false, "description": "%debug.functions.skipBuild%" }
+                        }
+                    }
+                },
+                "initialConfigurations": [
+                    { "type": "azure-functions", "request": "launch", "name": "%debug.functions.label%" }
+                ],
+                "configurationSnippets": [
+                    {
+                        "label": "%debug.functions.label%",
+                        "body": { "type": "azure-functions", "request": "launch", "name": "%debug.functions.label%", "projectPath": "^\"\\${workspaceFolder}\"" }
+                    }
+                ]
+            }
+        ],
         "commands": [
             {
                 "command": "vscode-azure/resources/refresh",
@@ -130,6 +159,18 @@
                 "enablement": "isWorkspaceTrusted && !virtualWorkspace",
                 "category": "%commands.category.azure%",
                 "title": "%commands.vscode-azure/functions/deploy%"
+            },
+            {
+                "command": "vscode-azure/functions/debugProject",
+                "enablement": "isWorkspaceTrusted && !virtualWorkspace",
+                "category": "%commands.category.azure%",
+                "title": "%commands.vscode-azure/functions/debugProject%"
+            },
+            {
+                "command": "vscode-azure/functions/initializeProject",
+                "enablement": "isWorkspaceTrusted && !virtualWorkspace",
+                "category": "%commands.category.azure%",
+                "title": "%commands.vscode-azure/functions/initializeProject%"
             },
             {
                 "command": "vscode-azure/webApp/start",
@@ -435,6 +476,16 @@
                 }
             ],
             "view/item/context": [
+                {
+                    "command": "vscode-azure/functions/debugProject",
+                    "when": "view == vscode-azure/workspace && viewItem =~ /\\bdebugFunctionsProject\\b/i && !virtualWorkspace",
+                    "group": "3_actions@0"
+                },
+                {
+                    "command": "vscode-azure/functions/initializeProject",
+                    "when": "view == vscode-azure/workspace && viewItem =~ /\\binitializeFunctionsProject\\b/i && !virtualWorkspace",
+                    "group": "3_actions@4"
+                },
                 {
                     "command": "vscode-azure/webApp/start",
                     "when": "view == vscode-azure/resources && viewItem =~ /\\bstartWebApp\\b/i",

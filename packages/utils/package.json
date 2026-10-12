@@ -46,6 +46,7 @@
     },
     "dependencies": {
         "@azure/core-process": "^1.0.0",
+        "tree-kill": "^1.2.2",
         "vscode-uri": "catalog:"
     },
     "devDependencies": {

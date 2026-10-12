@@ -255,11 +255,10 @@ Tree contract:  Local project node: revealInExplorer, refreshWorkspace (invalid:
                 Hint and invalid nodes: no actions except refresh.
 ```
 
-**Action dependencies approved by the reviewer:** initialization actions remain
-in Slice 4 and creation/welcome actions remain in Slice 5. Slice 3 exposes
-missing-runtime state without contributing a command whose implementation is
-pending. The ready-host registration seam is implemented here; Slice 4's process
-owner must populate it after readiness and release it when the host stops.
+**Action dependencies approved by the reviewer:** Slice 4 owns initialization
+and debugging; Slice 5 owns creation/welcome actions. Missing-runtime state
+offers initialization. The process owner populates the ready-host registration
+after HTTP readiness and releases it when the host stops.
 
 - [x] List functions directly under the project node (no group node): from
   `function.json` for script-model projects, from build output for precompiled
@@ -315,56 +314,64 @@ Target files:   extensions/vscode-azure/src/functions/debug/* (debug configurati
                 extensions/vscode-azure/src/functions/host/* (host process, host tracking, pre-debug validation)
 Precedent:      Container Tools debug providers (resolve to another debug type); tools/FuncInstaller + ToolService (Core
                 Tools discovery). SWA debugging builds on this (#339).
-Sweep:          reused IProcessExecutor (packages/utils), createShellTask (packages/utils), CommandLineBuilder,
-                ToolService/FuncInstaller, IWorkspaceIndexService, ExternalError. Searched
+Sweep:          reused IProcessExecutor (packages/utils), createShellTask (packages/utils), ToolService/FuncInstaller,
+                IWorkspaceIndexService, LocalFunctionSettings, JsoncSettingsFormat, ExternalError,
+                createMockCodeContext/createMockVsCode, respondToPrompts, and the shared Functions index/tree fixtures.
+                Extended shared process execution with opt-in tree-kill cancellation and foreground resolver injection;
+                extracted createMockSpawn/createMockProcessExecutor and reused getMockTaskExecution.
+                Searched
                 "registerDebugConfigurationProvider", "DebugConfigurationProviderTriggerKind", "onDidTerminateDebugSession",
                 "CustomExecution": none exist -> new product code under functions/debug and functions/host.
 Activation:     only the implicit events VS Code generates for a contributed `debuggers` entry; justify any explicit
                 onDebug* entry in this record before adding it.
-External facts: implicit activation for contributed debuggers; attach settings for node (`--inspect`), debugpy, java
-                (jdwp), PowerShell, and coreclr; `languageWorkers__<runtime>__arguments` env names; Core Tools
-                `--dotnet-isolated-debug` / `--enable-json-output` worker PID output; host readiness signal
-                (`/admin/host/status` or log line); Python extension environment and launcher APIs -- verify each against
-                the pinned source and the owning extension's or Core Tools' docs.
+External facts: verified VS Code provider ordering against 7f1c8a96ce99bcffba134a7db3ef9b1f57d30ca0;
+                Core Tools host arguments/PID output against tag 4.15.2; Python environment public API;
+                Python Debugger launcher/path public API against 061023c85cf721731569c2d0d670c129fc1f45c4.
+                Source links and per-language prerequisites are in docs/products/functions.md.
 ```
 
 Resolution flow for one session:
 
-1. Pick the Functions project from the workspace index (remembered per
-   workspace when a folder has several).
+1. The initial hook normalizes the configuration; VS Code substitutes variables
+   and runs any configured `preLaunchTask`. The substituted-variable hook picks
+   the Functions project from the workspace index (remembered per workspace
+   when a folder has several).
 2. Pre-debug validation; failures are `ExternalError`s.
 3. Build with in-code tasks (`npm run build`, `dotnet build`, `mvn package`,
    dependency install), using VS Code's own `$tsc` / `$msCompile` matchers.
+   Skip this build when `skipBuild` or a replacement `preLaunchTask` applies.
 4. Start `func host start` in an in-code pseudoterminal task with the worker
    debug arguments in its environment and a free debug port.
-5. Wait for host readiness.
+5. Wait for worker attach coordinates, bounded to 120 seconds. Paused workers
+   attach before full HTTP readiness; poll HTTP independently and register the
+   owned host only after its status is Running.
 6. Return the attach configuration of the language's debug type; stop the host
-   when the session ends.
+   on attach failure, session end, task/terminal closure, or cancellation.
 
-- [ ] Contribute the `azure-functions` debugger (languages for the kept
+- [x] Contribute the `azure-functions` debugger (languages for the kept
   runtimes) and register its provider for initial and dynamic configurations,
   so projects appear in the Run and Debug dropdown with no `launch.json`.
   <- FUNC-030
-- [ ] `initProjectForVSCode` writes no `tasks.json` and no project
+- [x] `initProjectForVSCode` writes no `tasks.json` and no project
   configuration in VS Code settings; it writes non-debug workspace files such
   as `.vscode/extensions.json` recommendations, and offers (never forces) the
   optional `launch.json` entry below. <- FUNC-030
-- [ ] Wire the local project initialization action and its initialization
+- [x] Wire the local project initialization action and its initialization
   state to the implemented initialization flow. <- FUNC-190
-- [ ] Attach configurations for Node, Python (via the Python extension's
+- [x] Attach configurations for Node, Python (via the Python extension's
   launcher), Java, and PowerShell, with free debug ports.
   <- FUNC-210, FUNC-211, FUNC-212, FUNC-214, FUNC-268
-- [ ] .NET isolated attach using the worker PID reported by
+- [x] .NET isolated attach using the worker PID reported by
   `--dotnet-isolated-debug`, instead of a process picker.
   <- FUNC-033, FUNC-269
-- [ ] Host process and tracking: build steps, start, readiness, port, terminal
+- [x] Host process and tracking: build steps, start, readiness, port, terminal
   errors, stop on session end, and start/stop events for local listing and
   execute. <- FUNC-216
-- [ ] Pre-debug validation: Core Tools present, `FUNCTIONS_WORKER_RUNTIME`,
+- [x] Pre-debug validation: Core Tools present, `FUNCTIONS_WORKER_RUNTIME`,
   `AzureWebJobsStorage` / emulator reachable. <- FUNC-215
-- [ ] Wire shared Core Tools install/update and version checks; no
+- [x] Wire shared Core Tools install/update and version checks; no
   activation-time prompts. <- FUNC-021, FUNC-031, FUNC-217
-- [ ] Optional `launch.json` generation: an `azure-functions` entry
+- [x] Optional `launch.json` generation: an `azure-functions` entry
   (`{ "type": "azure-functions", "request": "launch", ... }`) produced by the
   provider's initial configurations (Run and Debug "create a launch.json file"),
   `configurationSnippets`, and the init offer. The debugger's
@@ -373,8 +380,12 @@ Resolution flow for one session:
   `preLaunchTask` that replaces the built-in build. Entries also serve compound
   launches. Omitted options fall back to the no-`launch.json` defaults.
   <- FUNC-030
-- [ ] Unit tests for configuration resolution and host tracking; integration
-  test for the attach path where the precedent allows.
+- [x] Unit tests for configuration resolution, build preparation, host tracking,
+  cancellation, and readiness failures; initialization integration tests against
+  the real index/tree; shared integration test terminating a real parent/worker
+  process tree.
+- [ ] Live language attach-path smoke checks during Slice 7. The automated tests
+  cover all five configuration/API paths, not live language debugger sessions.
 
 Existing projects' source-generated `tasks.json` / `launch.json` (task type
 `func`, `$func-watch`, `${command:azureFunctions.pickProcess}`) are left
@@ -545,8 +556,8 @@ External facts: `https://json.schemastore.org/function.json` and `https://json.s
   host start timeout. <- FUNC-137, FUNC-142, FUNC-144
 - [ ] Storage emulator: storage connection prompts, Azurite settings and
   integration. <- FUNC-164, FUNC-176, FUNC-267
-- [ ] Go debugging and toolchain validation (Go scaffolding is Slice 5).
-  <- FUNC-140, FUNC-141, FUNC-195
+- [ ] Go debugging, toolchain validation, and scaffolding.
+  <- FUNC-140, FUNC-141, FUNC-195, FUNC-226
 - [ ] Template Gallery and resource-backed binding settings (with their SDKs).
   <- FUNC-208, FUNC-240, FUNC-265
 

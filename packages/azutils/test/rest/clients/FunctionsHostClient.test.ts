@@ -31,7 +31,7 @@ describe('FunctionsHostClient (unit)', () => {
         const functions = await client.listFunctions();
 
         expect(functions[0].name).to.equal('timer');
-        expect(httpClient.requests[0].url).to.equal('http://localhost:7071/admin/functions');
+        expect(httpClient.requests[0].url).to.equal('http://127.0.0.1:7071/admin/functions');
         expect(httpClient.requests[0].headers.get('x-functions-key')).to.be.undefined;
         expect(httpClient.requests[0].allowInsecureConnection).to.be.true;
     });
@@ -58,7 +58,7 @@ describe('FunctionsHostClient (unit)', () => {
         await client.invoke('name/with space', { message: 'hello' });
 
         expect(httpClient.requests[0].method).to.equal('POST');
-        expect(httpClient.requests[0].url).to.equal('http://localhost:8080/admin/functions/name%2Fwith%20space');
+        expect(httpClient.requests[0].url).to.equal('http://127.0.0.1:8080/admin/functions/name%2Fwith%20space');
         const body = httpClient.requests[0].body;
         if (typeof body !== 'string') {
             throw new Error('Expected a serialized JSON request body.');
@@ -133,7 +133,7 @@ describe('FunctionsHostClient (unit)', () => {
             await client.invoke('fn', 'input');
 
             expect(httpClient.requests[0].method).to.equal('POST');
-            expect(httpClient.requests[0].url).to.equal('http://localhost:7071/admin/functions/fn');
+            expect(httpClient.requests[0].url).to.equal('http://127.0.0.1:7071/admin/functions/fn');
         });
     }
 

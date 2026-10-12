@@ -7,6 +7,13 @@ import { FunctionsHostClient, IFunctionsHostClientProvider, ILogsQueryClientProv
 import { IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
 import { CreateFunctionApp } from '../commands/functions/CreateFunctionApp';
 import { DeployFunctionApp } from '../commands/functions/DeployFunctionApp';
+import { DebugFunctionsProject } from '../commands/functions/DebugFunctionsProject';
+import { InitializeFunctionsProject } from '../commands/functions/InitializeFunctionsProject';
+import { FunctionsProjectSelector } from '../functions/FunctionsProjectSelector';
+import { FunctionsDebugPreparation } from '../functions/debug/FunctionsDebugPreparation';
+import { FunctionsDebugProvider } from '../functions/debug/FunctionsDebugProvider';
+import { LocalFunctionsNetwork } from '../functions/host/LocalFunctionsNetwork';
+import { LocalFunctionsHostProcess } from '../functions/host/LocalFunctionsHostProcess';
 import { CopyFunctionUrl } from '../commands/functions/CopyFunctionUrl';
 import { DeleteFunction } from '../commands/functions/DeleteFunction';
 import { ExecuteFunction } from '../commands/functions/ExecuteFunction';
@@ -45,6 +52,11 @@ export function registerFunctions(registrar: ProductRegistrar): void {
         container.bind(LocalFunctionTarget).toSelf();
         container.bind(FunctionsProjectReader).toSelf();
         container.bind(LocalFunctionsHostTracker).toSelf().inSingletonScope().onActivation(pushDisposable);
+        container.bind(FunctionsProjectSelector).toSelf().inSingletonScope();
+        container.bind(FunctionsDebugPreparation).toSelf().inSingletonScope();
+        container.bind(LocalFunctionsNetwork).toSelf().inSingletonScope();
+        container.bind(LocalFunctionsHostProcess).toSelf().inSingletonScope().onActivation(pushDisposable);
+        container.bind(FunctionsDebugProvider).toSelf().inSingletonScope().onActivation(pushDisposable);
         container.bind(FunctionAppLogStream).toSelf().inSingletonScope().onActivation(pushDisposable);
     });
 
@@ -53,6 +65,9 @@ export function registerFunctions(registrar: ProductRegistrar): void {
     registrar.registerResourceViewProvider(WebAppViewProvider);
     registrar.registerCommand('vscode-azure/functions/createNew', CreateFunctionApp, 'createNew');
     registrar.registerCommand('vscode-azure/functions/deploy', DeployFunctionApp);
+    registrar.registerCommand('vscode-azure/functions/debugProject', DebugFunctionsProject);
+    registrar.registerCommand('vscode-azure/functions/initializeProject', InitializeFunctionsProject);
+    registrar.registerActivation(container => { container.get(FunctionsDebugProvider).register(); });
     registrar.registerCommand('vscode-azure/webApp/start', WebAppLifecycle, 'start');
     registrar.registerCommand('vscode-azure/webApp/stop', WebAppLifecycle, 'stop');
     registrar.registerCommand('vscode-azure/webApp/restart', WebAppLifecycle, 'restart');

@@ -11,6 +11,8 @@ import { RevealInExplorer } from '../../../commands/tree/RevealInExplorer';
 import { RefreshWorkspaceView } from '../../../commands/tree/RefreshWorkspaceView';
 import { CopyFunctionUrl } from '../../../commands/functions/CopyFunctionUrl';
 import { DeployFunctionApp } from '../../../commands/functions/DeployFunctionApp';
+import { DebugFunctionsProject } from '../../../commands/functions/DebugFunctionsProject';
+import { InitializeFunctionsProject } from '../../../commands/functions/InitializeFunctionsProject';
 import { ExecuteFunction } from '../../../commands/functions/ExecuteFunction';
 import { SetFunctionState } from '../../../commands/functions/SetFunctionState';
 import { LocalFunctionsHostTracker } from '../../../functions/host/LocalFunctionsHostTracker';
@@ -18,6 +20,7 @@ import { IWorkspaceViewDataTree } from '../../../services';
 import { combineContextValues } from '../../contextValueHelpers';
 import { getResourceTypeIconUri } from '../../iconPath';
 import { FunctionsProjectKeyPrefix, isFunctionsProjectNode, isLocalFunctionsNode, isLocalFunctionNode } from '../WorkspaceNode';
+import { isFunctionsDebugRuntime } from '../../../functions/debug/FunctionsDebugPreparation';
 
 /** Renders local Functions projects, their direct function leaves, and listing hints or errors. */
 @injectable()
@@ -66,7 +69,8 @@ export class FunctionsWorkspaceViewProvider implements ViewProvider<string> {
             item.iconPath = node.error ? new this.ctx.code.ThemeIcon('warning') : getResourceTypeIconUri(this.ctx, FunctionAppLogicalType);
             item.tooltip = node.error ?? node.resourceUri.fsPath;
             if (!node.error) {
-                item.contextValue = combineContextValues(RevealInExplorer.ContextValue, RefreshWorkspaceView.ContextValue, DeployFunctionApp.ContextValue);
+                item.contextValue = combineContextValues(RevealInExplorer.ContextValue, RefreshWorkspaceView.ContextValue, DeployFunctionApp.ContextValue,
+                    InitializeFunctionsProject.ContextValue, isFunctionsDebugRuntime(node.runtime) ? DebugFunctionsProject.ContextValue : '');
             }
         } else if (isLocalFunctionNode(node)) {
             const running = !!this.hosts.get(dirname(node.project.resourceUri));

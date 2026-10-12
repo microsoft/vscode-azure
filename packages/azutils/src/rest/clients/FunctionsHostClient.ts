@@ -75,7 +75,7 @@ export class FunctionsHostClient implements IFunctionsHostClient {
             if (!Number.isInteger(target.port) || target.port < 1 || target.port > 65535) {
                 throw new TypeError(ctx.code.l10n.t('The Functions host port must be an integer from 1 to 65535.'));
             }
-            endpoint = `http://localhost:${target.port}`;
+            endpoint = `http://127.0.0.1:${target.port}`;
         } else {
             if (!URL.canParse(target.endpoint)) {
                 throw new TypeError(ctx.code.l10n.t('The remote Functions host endpoint must be an HTTPS origin.'));
