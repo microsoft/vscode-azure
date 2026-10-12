@@ -406,9 +406,9 @@ External facts: `func init` worker-runtime / language flags for each kept langua
   the Python extension's environment creation instead of creating a venv
   directly), C# .NET isolated, Java (Maven), PowerShell, custom handler.
   <- FUNC-218, FUNC-219, FUNC-220, FUNC-221, FUNC-223, FUNC-224, FUNC-225
-- [ ] Go: scaffold as a custom handler if Core Tools supports it without the
-  source template feed; otherwise amend [TRIAGE.md](TRIAGE.md) and reconfirm.
-  <- FUNC-226
+- Deferred: Go scaffolding and Java add-function, per the confirmed reviewer
+  decision in [TRIAGE.md](TRIAGE.md). Java project creation uses the official
+  Maven archetype. <- FUNC-226, FUNC-223, FUNC-028, FUNC-235, FUNC-236
 - [ ] Create function: pick template and name from `func new`, prompt only for
   the settings the template requires, then open the created file.
   <- FUNC-028, FUNC-235, FUNC-236

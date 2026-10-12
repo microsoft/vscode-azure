@@ -21,6 +21,15 @@ by editing this file and reconfirming with the reviewer.
 
 ## Granularity
 
+### Confirmed scaffolding scope
+
+The reviewer approved: "Use the official Maven archetype for Java projects;
+defer Java add-function and Go scaffolding." FUNC-223 uses the official Java
+Maven archetype. The Java sub-scope of FUNC-028, FUNC-235, and FUNC-236 is
+deferred; their other supported languages remain Adapt. FUNC-226 is Defer.
+Core Tools 4.15.2 excludes Java from `func init` and `func new`; its native
+Go preview is not the custom-handler scaffolding covered by this migration.
+
 One row per contributed or code-only command; per contributed setting; per
 read-but-not-contributed setting family; per tree node type (trigger, state,
 and access tokens on a function node are composed tokens on one node type);
@@ -318,10 +327,10 @@ Judgment-call groups (`JC-*`) mark rows the reviewer was asked to weigh as a set
 | FUNC-220 | 5 Wizards | Language: Python (v2 model) + interpreter pick + venv create | **Adapt** | Keep; via `func init` plus venv creation. |  | JC-SCAFFOLD |
 | FUNC-221 | 5 Wizards | Language: C# .NET isolated | **Adapt** | Keep; via `func init --worker-runtime dotnet-isolated`. |  | JC-SCAFFOLD |
 | FUNC-222 | 5 Wizards | Language: C# .NET in-process | **Drop** | In-process model is retiring; isolated only. |  | JC-LANG |
-| FUNC-223 | 5 Wizards | Language: Java (Maven; Gradle preview) | **Adapt** | Keep Maven; Gradle is preview. |  | JC-SCAFFOLD |
+| FUNC-223 | 5 Wizards | Language: Java (Maven; Gradle preview) | **Adapt** | Use the official Maven archetype for project creation; Java add-function is deferred. | Confirmed reviewer decision. | JC-SCAFFOLD |
 | FUNC-224 | 5 Wizards | Language: PowerShell | **Adapt** | Keep; via `func init`. |  | JC-SCAFFOLD |
 | FUNC-225 | 5 Wizards | Language: Custom Handler | **Adapt** | Keep; via `func init`. |  | JC-SCAFFOLD |
-| FUNC-226 | 5 Wizards | Language: Go (preview) | **Adapt** | Powers that be will want this back. | Override (recommended Defer). | JC-LANG |
+| FUNC-226 | 5 Wizards | Language: Go (preview) | **Defer** | Core Tools native Go preview does not implement the signed custom-handler scaffold. | Confirmed reviewer decision. | JC-LANG |
 | FUNC-227 | 5 Wizards | Language: Ballerina (hidden) | **Drop** | Hidden behind a setting. |  | JC-LANG |
 | FUNC-228 | 5 Wizards | Language: Self-hosted MCP server | **Defer** | MCP scope decision. |  | JC-AGENT |
 | FUNC-229 | 5 Wizards | Languages via settings/API only: C# script, F#, F# script | **Drop** | Not reachable from UI. |  | JC-LANG |
