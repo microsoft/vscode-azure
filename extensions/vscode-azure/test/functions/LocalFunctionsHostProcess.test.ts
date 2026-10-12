@@ -26,10 +26,11 @@ describe('Local Functions host ownership (unit)', () => {
         const tracker = new LocalFunctionsHostTracker();
         const network = new LocalFunctionsNetwork();
         mock.method(network, 'listening', () => Promise.resolve(true));
-        const owner = new LocalFunctionsHostProcess(m.vscode, processes, () => client, tracker, network, new MockOutputChannel('functions'));
+        const output = new MockOutputChannel('functions');
+        const owner = new LocalFunctionsHostProcess(m.vscode, processes, () => client, tracker, network, output);
         owners.push(owner);
         const request = { project, cwd: project, executable: 'func', runtime: 'node', hostArgs: [], prepare: () => Promise.resolve({}) };
-        return { m, owner, request, spawn, client, tracker, network, terminateTree };
+        return { m, owner, request, spawn, client, tracker, network, terminateTree, output };
     }
 
     it('registers the exact owned port only after HTTP Running and removes it on stop', async () => {
@@ -71,6 +72,66 @@ describe('Local Functions host ownership (unit)', () => {
         await expect(s.owner.start(s.request)).to.be.rejectedWith('host rejected its readiness request');
         expect(s.terminateTree.mock.callCount()).to.equal(1);
         expect(s.tracker.get(s.request.project)).to.be.undefined;
+    });
+
+    it('stops the owned process when debugger readiness reaches its 120-second deadline', async () => {
+        const s = setup();
+        const now = Date.now();
+        const clock = mock.method(Date, 'now', () => now + 120_000);
+        clock.mock.mockImplementationOnce(() => now, 0);
+        clock.mock.mockImplementationOnce(() => now + 119_900, 1);
+        const listening = mock.method(s.network, 'listening', () => Promise.resolve(false));
+        const ended = mock.fn();
+        const subscription = s.m.taskEndEmitter.event(ended);
+        s.client.getStatus.mock.mockImplementation(() => Promise.resolve({ state: 'Starting' }));
+        await expect(s.owner.start(s.request)).to.be.rejectedWith('worker did not expose its debugger');
+        expect(listening.mock.callCount()).to.equal(1);
+        expect(s.terminateTree.mock.callCount()).to.equal(1);
+        expect(s.tracker.get(s.request.project)).to.be.undefined;
+        const execution = await s.m.tasks.executeTask.mock.calls[0].result;
+        if (!execution) { throw new Error('Expected the owned host task.'); }
+        expect(ended.mock.calls[0].arguments[0]).to.deep.equal({ execution });
+        subscription.dispose();
+    });
+
+    for (const failure of ['preparation', 'task launch'] as const) {
+        it(`releases both ports and permits another start after ${failure} fails`, async () => {
+            const s = setup();
+            const reserve = mock.method(s.network, 'reserve', s.network.reserve.bind(s.network));
+            const prepare = mock.fn(s.request.prepare);
+            if (failure === 'preparation') {
+                prepare.mock.mockImplementationOnce(() => Promise.reject(new Error('Preparation failed.')), 0);
+            } else {
+                s.m.tasks.executeTask.mock.mockImplementationOnce(() => Promise.reject(new Error('Task launch failed.')), 0);
+            }
+            await expect(s.owner.start({ ...s.request, prepare })).to.be.rejectedWith(
+                failure === 'preparation' ? 'Preparation failed.' : 'Task launch failed.',
+            );
+            expect(s.spawn.mock.callCount()).to.equal(0);
+            expect(s.tracker.get(s.request.project)).to.be.undefined;
+            for (const call of reserve.mock.calls) {
+                const reservation = await call.result;
+                if (!reservation) { throw new Error('Expected a reserved host or debugger port.'); }
+                const port = await s.network.reserve(reservation.port);
+                await port.release();
+            }
+            const host = await s.owner.start(s.request);
+            expect(s.spawn.mock.callCount()).to.equal(1);
+            await s.owner.stop(host.id);
+        });
+    }
+
+    it('surfaces process-tree termination failure through stop and removes the ready registration', async () => {
+        const s = setup();
+        const warning = mock.method(s.output, 'warn');
+        const host = await s.owner.start(s.request);
+        await waitFor(() => !!s.tracker.get(s.request.project));
+        s.terminateTree.mock.mockImplementationOnce(() => Promise.reject(new Error('Tree termination denied.')), 0);
+        await expect(s.owner.stop(host.id)).to.be.rejectedWith('Could not terminate the owned Functions process tree');
+        expect(s.terminateTree.mock.callCount()).to.equal(1);
+        expect(s.tracker.get(s.request.project)).to.be.undefined;
+        expect(warning.mock.calls[0].arguments[0]).to.equal('[functions] Owned process-tree termination failed.');
+        s.spawn.mock.calls[0].result?.emit('close', 0, null);
     });
 
     it('cancels before a custom task opens without launching a process', async () => {

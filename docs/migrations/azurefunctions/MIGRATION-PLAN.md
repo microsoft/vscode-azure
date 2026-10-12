@@ -823,3 +823,15 @@ were required.
 Pending tests are not executed by this sweep. Live language debugger,
 storage/emulator, and cross-platform smoke checks remain user-owned under
 Slice 4; the automated gates do not certify those manual paths.
+
+### Coverage audit validation -- 2026-10-12
+
+Behavioral tests cover the Debug Project command's project selection and launch
+configuration, host debugger-readiness timeout and failure cleanup, and
+post-deployment endpoint service scoping, empty results, and discovery failures.
+The coverage additions require no production-code changes.
+
+The full root lint, build, and test sweep passed with these tests: utils has
+592 passing and 12 pending; azutils has 423 passing; the extension has 1378
+passing and 4 pending. Total: 2393 passing and 16 pending. Live checks remain
+separate from automated coverage.

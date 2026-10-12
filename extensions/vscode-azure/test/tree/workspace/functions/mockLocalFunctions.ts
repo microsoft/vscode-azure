@@ -56,7 +56,7 @@ export function createLocalFunctions() {
     };
     return {
         m, code, context, folder, executor, scheduler, index, hosts, host, createHost,
-        settings, reader, provider, tree, view, target, addProject, addFunction, selector: remoteSelection.selector,
+        settings, reader, provider, tree, view, projects, target, addProject, addFunction, selector: remoteSelection.selector,
         resourceCache: remoteSelection.cache,
         dispose: () => {
             tree.dispose();
