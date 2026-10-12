@@ -20,15 +20,16 @@
         "package": "pnpm -r --parallel run package",
         "test": "pnpm -r run test",
         "clean": "pnpm -r --parallel run clean",
-        "link-test-cache": "node ./scripts/linkTestCache.mjs",
+        "link-test-cache": "azext-link-test-cache --extension-dir ./extensions/vscode-azure --replace",
         "all": "pnpm clean && pnpm lint && pnpm build && pnpm package && pnpm test"
     },
     "packageManager": "pnpm@11.8.0",
     "engines": {
+        "node": ">=24",
         "vscode": "^1.123.0"
     },
     "devDependencies": {
-        "@microsoft/vscode-azext-eng": "^1.1.0-alpha.6",
+        "@microsoft/vscode-azext-eng": "^1.2.0",
         "@types/node": "~24",
         "@types/vscode": "1.120.0",
         "@typescript/native": "npm:typescript@7.0.2"

@@ -112,13 +112,13 @@ export class MockFileSystem {
         const prefix = uri.path.endsWith('/') ? uri.path : `${uri.path}/`;
         const entries = new Map<string, vscode.FileType>();
         for (const path of this.directories) {
-            this.addDirectChild(entries, prefix, path, 2);
+            this.addDirectChild(entries, prefix, path, MockFileType.Directory);
         }
         for (const path of this.files.keys()) {
-            this.addDirectChild(entries, prefix, path, 1);
+            this.addDirectChild(entries, prefix, path, MockFileType.File);
         }
         for (const [path, targetType] of this.symbolicLinks) {
-            this.addDirectChild(entries, prefix, path, 64 | targetType);
+            this.addDirectChild(entries, prefix, path, MockFileType.SymbolicLink | targetType);
         }
         return Promise.resolve([...entries]);
     });
@@ -165,25 +165,27 @@ export class MockFileSystem {
     }
 }
 
+/* eslint-disable @typescript-eslint/no-unsafe-enum-assignment -- numeric stand-ins avoid a runtime dependency on vscode */
 /** Test stand-in for {@linkcode vscode.FileType}. */
-export const MockFileType = {
+export const MockFileType: typeof vscode.FileType = {
     Unknown: 0,
     File: 1,
     Directory: 2,
     SymbolicLink: 64,
-} satisfies typeof vscode.FileType;
+};
 
 /** Test stand-in for {@linkcode vscode.FilePermission}. */
-export const MockFilePermission = {
+export const MockFilePermission: typeof vscode.FilePermission = {
     Readonly: 1,
-} satisfies typeof vscode.FilePermission;
+};
 
 /** Test stand-in for {@linkcode vscode.FileChangeType}. */
-export const MockFileChangeType = {
+export const MockFileChangeType: typeof vscode.FileChangeType = {
     Changed: 1,
     Created: 2,
     Deleted: 3,
-} satisfies typeof vscode.FileChangeType;
+};
+/* eslint-enable @typescript-eslint/no-unsafe-enum-assignment */
 
 /**
  * Test stand-in for {@linkcode vscode.FileSystemError}.

@@ -12,23 +12,13 @@
  * VS Code. Type-only imports are allowed.
  */
 
-import { azExtEslintStrictTypeChecked } from '@microsoft/vscode-azext-eng/eslint'; // Other configurations exist
+import { azExtEslintStrictTypeChecked, importRestrictionsRuleConfig } from '@microsoft/vscode-azext-eng/eslint';
 import { defineConfig } from 'eslint/config';
 
 export default defineConfig([
     azExtEslintStrictTypeChecked,
     {
         ignores: ['test/**'],
-        rules: {
-            '@typescript-eslint/no-restricted-imports': ['error', {
-                paths: [
-                    {
-                        name: 'vscode',
-                        message: 'VSCode should only be used for typings in this package. Pass it down from the caller as IVsCode.',
-                        allowTypeImports: true,
-                    },
-                ],
-            }],
-        },
+        ...importRestrictionsRuleConfig({ typeOnlyModules: ['vscode'] }),
     },
 ]);

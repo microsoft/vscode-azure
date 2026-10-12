@@ -13,8 +13,7 @@
  * E2E credential override separately from the main extension bundle.
  */
 
-import { autoEsbuildOrWatch, autoSelectEsbuildConfig } from '@microsoft/vscode-azext-eng/esbuild';
-import { copy } from 'esbuild-plugin-copy';
+import { autoEsbuildOrWatch, autoSelectEsbuildConfig, copyPlugin } from '@microsoft/vscode-azext-eng/esbuild';
 
 const { extensionConfig, telemetryConfig } = autoSelectEsbuildConfig();
 
@@ -30,11 +29,12 @@ extensionConfig.alias = {
 // Copy Azure resource type icons into dist/azureIcons/ so they are bundled
 // with the extension and cleaned up automatically by `pnpm run clean`.
 extensionConfig.plugins.push(
-    copy({
+    copyPlugin({
         assets: [
             {
-                from: '../../packages/azutils/resources/azureIcons/**/*.svg',
+                from: '../../packages/azutils/resources/azureIcons',
                 to: './azureIcons',
+                include: '**/*.svg',
             },
         ],
     }),

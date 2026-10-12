@@ -9,16 +9,11 @@
  * folder and emitted as HTML.
  */
 
-import { azExtTestConfig } from '@microsoft/vscode-azext-eng/vscode-test'; // Other configurations exist
+import { createVscodeTestConfig } from '@microsoft/vscode-azext-eng/vscode-test';
 import { defineConfig } from '@vscode/test-cli';
 
-// The vscode-test runner defaults mocha to the TDD interface (suite/test), but
-// the rest of the repo (and @types/mocha) uses the BDD interface (describe/it).
-// Force BDD so the global describe/it are available without importing them.
-azExtTestConfig.mocha.ui = 'bdd';
-
 export default defineConfig({
-    tests: [azExtTestConfig],
+    tests: [createVscodeTestConfig({ mocha: { ui: 'bdd' } })],
     coverage: {
         include: [
             '**/extensions/vscode-azure/src/**',
