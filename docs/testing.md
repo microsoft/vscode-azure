@@ -512,16 +512,6 @@ When source maps are available, coverage from the bundled extension can be remap
 
 ## Test Configuration
 
-Extension test configuration lives in `.vscode-test.mjs`:
-
-```javascript
-import { createVscodeTestConfig } from '@microsoft/vscode-azext-eng/vscode-test';
-import { defineConfig } from '@vscode/test-cli';
-
-export default defineConfig({
-    tests: [createVscodeTestConfig({ mocha: { ui: 'bdd' } })],
-    // Coverage options are specific to the extension's source and test paths.
-});
-```
+Extension test configuration lives in [`.vscode-test.mjs`](../extensions/vscode-azure/.vscode-test.mjs).
 
 Package test configuration lives in each package's `package.json` under the `mocha` key. Specs are `test/**/*.test.ts`, and Mocha runs them directly as TypeScript via Node's `--experimental-transform-types` plus the shared `@microsoft/vscode-azext-eng/mocha` loader.
