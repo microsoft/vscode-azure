@@ -88,7 +88,6 @@ describe('CreateFunctionApp (unit)', () => {
             { input: 'my-app' },                // ProjectNameStep
             { pick: 'Node.js' },                // PickRuntimeStep
             { pick: '24' },                     // PickRuntimeVersionStep
-            { pick: 'Flex Consumption' },       // PickHostingPlanStep
         ]);
 
         await cmd.execute('createNew');
@@ -115,7 +114,6 @@ describe('CreateFunctionApp (unit)', () => {
             { input: 'my-app' },
             { pick: 'Node.js' },
             { pick: '24' },
-            { pick: 'Flex Consumption' },
         ]);
 
         await cmd.execute('deploy');
@@ -149,7 +147,7 @@ describe('CreateFunctionApp (unit)', () => {
         respondToPrompts(mockResult, [
             // ProjectNameStep skipped (environmentName hydrated)
             // ChooseSubscription / ChooseLocation skipped (hydrated values)
-            // PickRuntime / PickHostingPlan skipped (hasInfra)
+            // PickRuntime skipped (hasInfra)
             { pick: 'Yes' },                            // ConfirmProvisionStep
         ]);
 
@@ -159,6 +157,29 @@ describe('CreateFunctionApp (unit)', () => {
         expect(fs.copy.mock.callCount()).to.equal(0);
         expect(azd.envNew.mock.callCount()).to.equal(0);
         expect(azd.provision.mock.callCount()).to.equal(1);
+    });
+
+    it('deploys a selected nested folder using its detected runtime and chosen version', async () => {
+        const { cmd, mockResult, fs, azd } = createCommand();
+        const target = MockUri.file('/workspace/nested');
+        fs.addDirectory(target);
+        fs.addFile(MockUri.file('/workspace/nested/local.settings.json'), '{"Values":{"FUNCTIONS_WORKER_RUNTIME":"node"}}');
+        const prompts = respondToPrompts(mockResult, [
+            { pick: '24' },
+            { pick: 'sub-1' },
+            { pick: 'East US' },
+            { input: 'my-app' },
+        ]);
+        await cmd.execute('deploy', target);
+        prompts.assertAllConsumed();
+        expect(azd.deploy.mock.calls[0].arguments[0].path).to.equal('/workspace/nested');
+        const parameters = fs.writeFile.mock.calls.find(call => call.arguments[0].path === '/workspace/nested/infra/main.parameters.json');
+        if (!parameters) {
+            throw new Error('Expected generated Function App parameters');
+        }
+        const content = JSON.parse(new TextDecoder().decode(parameters.arguments[1]));
+        expect(content.parameters.functionWorkerRuntime.value).to.equal('node');
+        expect(content.parameters.runtimeVersion.value).to.equal('24');
     });
 
     it('should skip provisioning when user picks No on ConfirmProvisionStep', async () => {
@@ -199,7 +220,6 @@ describe('CreateFunctionApp (unit)', () => {
             { input: 'my-app' },
             { pick: 'Node.js' },
             { pick: '24' },
-            { pick: 'Flex Consumption' },
         ]);
 
         await cmd.execute('createNew');

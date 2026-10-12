@@ -127,6 +127,7 @@
             },
             {
                 "command": "vscode-azure/functions/deploy",
+                "enablement": "isWorkspaceTrusted && !virtualWorkspace",
                 "category": "%commands.category.azure%",
                 "title": "%commands.vscode-azure/functions/deploy%"
             },
@@ -455,6 +456,11 @@
                     "group": "3_actions@1"
                 },
                 {
+                    "command": "vscode-azure/functions/deploy",
+                    "when": "(view == vscode-azure/resources || view == vscode-azure/workspace) && viewItem =~ /\\bdeployFunctionApp\\b/i && !virtualWorkspace",
+                    "group": "3_actions@0"
+                },
+                {
                     "command": "vscode-azure/functions/copyUrl",
                     "when": "view == vscode-azure/resources && viewItem =~ /\\bcopyFunctionUrl\\b/i",
                     "group": "1_browse@1"
@@ -602,6 +608,11 @@
             ],
             "explorer/context": [
                 {
+                    "command": "vscode-azure/functions/deploy",
+                    "when": "explorerResourceIsFolder && !virtualWorkspace",
+                    "group": "navigation"
+                },
+                {
                     "command": "vscode-azure/azdUp",
                     "when": "resourceFilename =~ /^azure\\.ya?ml$/i",
                     "group": "navigation"
@@ -740,6 +751,14 @@
             }
         },
         "jsonValidation": [
+            {
+                "fileMatch": "function.json",
+                "url": "https://json.schemastore.org/function.json"
+            },
+            {
+                "fileMatch": "host.json",
+                "url": "https://json.schemastore.org/host.json"
+            },
             {
                 "fileMatch": "staticwebapp.config.json",
                 "url": "https://json.schemastore.org/staticwebapp.config.json"

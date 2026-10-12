@@ -3,7 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ISubscriptionClientProvider, type AzureSubscription } from '@microsoft/vscode-azure-azutils';
+import { ISubscriptionClientProvider, IWebAppClientProvider, type AzureSubscription } from '@microsoft/vscode-azure-azutils';
+import { createMockWebAppClient } from '@microsoft/vscode-azure-azutils/testing';
 import { createActionContext, IActionContext, ICodeContext, IOutputChannel, IVsCode } from '@microsoft/vscode-azure-utils';
 import { Container } from 'inversify';
 import { IAzdService } from '../../src/azd/AzdService';
@@ -50,6 +51,7 @@ export function createWizardCommandContainer(mocks: WizardCommandMocks): Contain
     container.bind(IVsCode).toConstantValue(mocks.ctx.code);
     container.bind(IOutputChannel).toConstantValue(mocks.output);
     container.bind(IAzdService).toConstantValue(mocks.azd);
+    container.bind(IWebAppClientProvider).toConstantValue(() => createMockWebAppClient());
     container.bind(ITempDirManager).toConstantValue(mocks.tempManager ?? new TempDirManager(mocks.ctx));
     container.bind(IAzureViewDataTree).toConstantValue(mocks.dataTree);
     container.bind(ISubscriptionResolver).toConstantValue(mocks.subscriptionResolver ?? (() => Promise.resolve(undefined)));

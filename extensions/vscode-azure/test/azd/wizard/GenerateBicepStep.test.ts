@@ -11,7 +11,7 @@ import { GenerateBicepStep } from '../../../src/azd/wizard/GenerateBicepStep';
 interface TestBicepContext extends AzdWizardContext {
     readonly functionWorkerRuntime?: string;
     readonly runtimeVersion?: string;
-    readonly appServicePlanSkuName?: string;
+    readonly azdServiceName?: string;
 }
 
 describe('GenerateBicepStep (unit)', () => {
@@ -68,13 +68,13 @@ describe('GenerateBicepStep (unit)', () => {
     describe('execute', () => {
         it('should create infra directory and write files', async () => {
             const { ctx, fs } = createCtxWithFs();
-            const step = new GenerateBicepStep<TestBicepContext>(ctx, 'functionApp', ['functionWorkerRuntime', 'runtimeVersion', 'appServicePlanSkuName']);
+            const step = new GenerateBicepStep<TestBicepContext>(ctx, 'functionApp', ['functionWorkerRuntime', 'runtimeVersion', 'azdServiceName']);
 
             const context = {
                 iacFolder: MockUri.file('/project'),
                 functionWorkerRuntime: 'node',
                 runtimeVersion: '20',
-                appServicePlanSkuName: 'FC1',
+                azdServiceName: 'api',
             } as TestBicepContext;
 
             await step.execute(context);
@@ -90,7 +90,7 @@ describe('GenerateBicepStep (unit)', () => {
             expect(params.parameters.location.value).to.equal('${AZURE_LOCATION}');
             expect(params.parameters.functionWorkerRuntime.value).to.equal('node');
             expect(params.parameters.runtimeVersion.value).to.equal('20');
-            expect(params.parameters.appServicePlanSkuName.value).to.equal('FC1');
+            expect(params.parameters.azdServiceName.value).to.equal('api');
 
             const paramsUri = fs.writeFile.mock.calls[0].arguments[0];
             expect(paramsUri.path).to.equal('/project/infra/main.parameters.json');
@@ -98,7 +98,7 @@ describe('GenerateBicepStep (unit)', () => {
 
         it('should omit undefined parameter keys', async () => {
             const { ctx, fs } = createCtxWithFs();
-            const step = new GenerateBicepStep<TestBicepContext>(ctx, 'functionApp', ['functionWorkerRuntime', 'runtimeVersion', 'appServicePlanSkuName']);
+            const step = new GenerateBicepStep<TestBicepContext>(ctx, 'functionApp', ['functionWorkerRuntime', 'runtimeVersion', 'azdServiceName']);
 
             const context = {
                 iacFolder: MockUri.file('/project'),
@@ -110,7 +110,7 @@ describe('GenerateBicepStep (unit)', () => {
             const paramsContent = Buffer.from(fs.writeFile.mock.calls[0].arguments[1]).toString();
             const params = JSON.parse(paramsContent);
             expect(params.parameters.functionWorkerRuntime.value).to.equal('node');
-            expect(params.parameters).to.not.have.property('appServicePlanSkuName');
+            expect(params.parameters).to.not.have.property('azdServiceName');
         });
 
         it('should copy the whole template directory into infra', async () => {

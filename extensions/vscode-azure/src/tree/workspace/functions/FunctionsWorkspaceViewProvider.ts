@@ -10,6 +10,7 @@ import { inject, injectable } from 'inversify';
 import { RevealInExplorer } from '../../../commands/tree/RevealInExplorer';
 import { RefreshWorkspaceView } from '../../../commands/tree/RefreshWorkspaceView';
 import { CopyFunctionUrl } from '../../../commands/functions/CopyFunctionUrl';
+import { DeployFunctionApp } from '../../../commands/functions/DeployFunctionApp';
 import { ExecuteFunction } from '../../../commands/functions/ExecuteFunction';
 import { SetFunctionState } from '../../../commands/functions/SetFunctionState';
 import { LocalFunctionsHostTracker } from '../../../functions/host/LocalFunctionsHostTracker';
@@ -65,7 +66,7 @@ export class FunctionsWorkspaceViewProvider implements ViewProvider<string> {
             item.iconPath = node.error ? new this.ctx.code.ThemeIcon('warning') : getResourceTypeIconUri(this.ctx, FunctionAppLogicalType);
             item.tooltip = node.error ?? node.resourceUri.fsPath;
             if (!node.error) {
-                item.contextValue = combineContextValues(RevealInExplorer.ContextValue, RefreshWorkspaceView.ContextValue);
+                item.contextValue = combineContextValues(RevealInExplorer.ContextValue, RefreshWorkspaceView.ContextValue, DeployFunctionApp.ContextValue);
             }
         } else if (isLocalFunctionNode(node)) {
             const running = !!this.hosts.get(dirname(node.project.resourceUri));

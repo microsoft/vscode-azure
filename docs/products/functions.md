@@ -1,5 +1,45 @@
 # Azure Functions
 
+## Creation and deployment
+
+Function App creation uses the pinned `avm/ptn/app/function-app:0.1.0` pattern
+module with Flex Consumption FC1, managed identity, storage, Application Insights,
+Log Analytics, and role assignments. Runtime and version selection use the shared
+wizard. Workspace deployment detects `FUNCTIONS_WORKER_RUNTIME` from the selected
+service's local settings, then selects its runtime version. Relative azd service
+paths resolve against the selected IaC folder.
+
+Deploy is available from a local Functions project, an Explorer folder, or the
+command palette in a trusted, non-virtual workspace. A nested project targets its
+own folder. The azd wizard hydrates existing infrastructure and environments
+instead of replacing their configuration.
+
+Remote Deploy requires an `azd-service-name` tag and an indexed azd project whose
+active environment reports the selected app's ARM ID under that service's
+`target.resourceIds`. Matching is case-insensitive for ARM IDs. A service name
+alone cannot establish a target. Unmatched apps explain the requirement and offer
+workspace deployment; dismissing the offer makes no deployment. A match runs
+`azd deploy <service>` through the shared deployment step and activity tracking.
+The external contract is
+[azd's show result](https://github.com/Azure/azure-dev/blob/main/cli/azd/pkg/contracts/show.go).
+
+Completion lists management-plane HTTP invocation templates, preserving actual
+routes rather than constructing `/api/<name>` URLs. Authentication query parameters
+are excluded, and keys are not retrieved. Copy Function URL remains the action for
+authenticated URLs. Missing endpoints and failed endpoint discovery are reported
+without changing a completed deployment's status.
+
+`function.json` and `host.json` receive the published SchemaStore schemas.
+
+## Local development tools
+
+The shared Core Tools installer supports an explicit v4-only acquisition range
+through the official `azure-functions-core-tools@4` npm package, while its default
+acquisition policy accepts v5 preview. Tool acquisition remains user-action driven.
+`IProcessExecutor` can deliver decoded stdout/stderr chunks without retaining
+long-running process output; this is the process seam for local host ownership.
+Debugging and scaffolding remain tracked in Slices 4 and 5.
+
 ## Local workspace tree
 
 `FunctionsWorkspaceDataProvider` discovers projects through the shared workspace

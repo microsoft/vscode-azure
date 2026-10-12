@@ -9,9 +9,6 @@ param environmentName string
 @description('Azure region for all resources.')
 param location string
 
-@description('The SKU of the App Service Plan that hosts the Function App (e.g. FC1, EP1, S1).')
-param appServicePlanSkuName string = 'FC1'
-
 @description('The runtime stack of the Function App (e.g. dotnet-isolated, node, python).')
 param functionWorkerRuntime string = 'dotnet-isolated'
 
@@ -37,7 +34,7 @@ module functionApp 'br/public:avm/ptn/app/function-app:0.1.0' = {
   name: 'functionApp'
   params: {
     functionAppName: '${environmentName}-func'
-    appServicePlanSkuName: appServicePlanSkuName
+    appServicePlanSkuName: 'FC1'
     functionWorkerRuntime: functionWorkerRuntime
     runtimeVersion: runtimeVersion
     tags: tags

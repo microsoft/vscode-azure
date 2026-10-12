@@ -421,50 +421,51 @@ Pattern:        Wizard + AzdJob (createNew / deploy), shared azd steps, Generate
 Target files:   extensions/vscode-azure/src/commands/functions/CreateFunctionApp.ts + steps/
                 extensions/vscode-azure/src/commands/functions/DeployFunctionApp.ts (node deploy)
                 extensions/vscode-azure/resources/templates/functionApp/main.bicep
-Precedent:      existing CreateFunctionApp, SWA creation (detection skips prompts), AzdDeployStep, ShowEndpointUrlStep
+Precedent:      existing CreateFunctionApp, SWA creation (detection skips prompts), AzdDeployStep
 Sweep:          reused SelectIacFolderStep, HydrateAzdInfo, HydratableChooseSubscription/Location, ProjectName,
                 PickRuntimeStep, ConfirmProvision, GenerateBicepStep, GenerateAzureYaml, CreateAzdEnv, AzdProvisionStep,
-                AzdDeployStep, ShowEndpointUrlStep, AzdService (service map by azd-service-name), activity tree
-                (CodeDeploymentDataProvider), DeleteAzureResource, ExternalError.
+                AzdDeployStep, AzdService (service map and target ARM IDs), activity tree
+                (CodeDeploymentDataProvider), DeleteAzureResource, ExternalError, IWebAppClientProvider,
+                parseAzureResourceId, ISubscriptionResolver, OpenUrl.
+                ShowFunctionEndpointsStep lists management-plane HTTP invocation templates.
 Activation:     none
 External facts: azd service lookup by `azd-service-name` tag, verified against the azure.yaml v1.0 schema
                 (`services.*.resourceName` description) on 2026-09-24; pattern-module parameters/outputs per the
-                provisioning decision below.
-Wizard:         SelectIacFolder -> HydrateAzdInfo -> subscription -> location -> ProjectName -> PickRuntime (skipped when
+                provisioning decision below. The azd show contract in cli/azd/pkg/contracts/show.go verifies
+                services.*.target.resourceIds; remote deploy requires an exact case-insensitive ARM ID match.
+Wizard:         SelectIacFolder -> HydrateAzdInfo -> DetectFunctionRuntime -> subscription -> location -> ProjectName -> PickRuntime (skipped when
                 the project language is detected) -> ConfirmProvision; execute GenerateBicep -> GenerateAzureYaml ->
-                CreateAzdEnv -> AzdProvision (+ AzdDeploy -> ShowEndpointUrl for the deploy job). No hosting-plan,
+                CreateAzdEnv -> AzdProvision (+ AzdDeploy -> ShowFunctionEndpoints for the deploy job). No hosting-plan,
                 authentication, or Flex sizing prompts: Flex FC1, managed identity, and module defaults answer them.
 ```
 
-- [ ] Close creation gaps against the source flow; no advanced/existing-
+- [x] Close creation gaps against the source flow; no advanced/existing-
   resource variant. <- FUNC-057
-- [ ] Delete `PickHostingPlanStep`, its test, and the non-FC1
-  `AppServicePlanSku` values; stop passing `appServicePlanSkuName` to
-  `GenerateBicepStep` so the template's FC1 default applies (users change
-  plans in the Bicep).
+- [x] Provisioning fixes the module's `appServicePlanSkuName` to FC1.
+  `GenerateBicepStep` writes only runtime, version, and service-name parameters.
   <- FUNC-241 (FC1 from the existing template default; Premium/App Service
   removal per FUNC-242)
-- [ ] Managed identity only: no secrets or connection strings, no prompt
+- [x] Managed identity only: no secrets or connection strings, no prompt
   (the module's user-assigned identity and `AzureWebJobsStorage__credential`).
   <- FUNC-246
-- [ ] Skip `PickRuntimeStep` when the workspace project's language is
+- [x] Skip `PickRuntimeStep` when the workspace project's language is
   detected. <- FUNC-247
-- [ ] Flex instance memory / maximum instance count as module defaults, not
+- [x] Flex instance memory / maximum instance count as module defaults, not
   prompts. <- FUNC-248
-- [ ] Provisioning topology through the function-app pattern module (see
+- [x] Provisioning topology through the function-app pattern module (see
   below). <- FUNC-249
-- [ ] Workspace deploy (`vscode-azure/functions/deploy` / azd from the
+- [x] Workspace deploy (`vscode-azure/functions/deploy` / azd from the
   project node). <- FUNC-047
-- [ ] Node deploy for azd-tagged apps only: match the app's `azd-service-name`
-  to a workspace `azure.yaml` service and run `azd deploy <service>`; otherwise
+- [x] Node deploy for azd-tagged apps only: match the app's `azd-service-name`
+  and ARM ID to the active workspace azd service and run `azd deploy <service>`; otherwise
   explain and offer workspace deploy. <- FUNC-046
-- [ ] `explorer/context` Deploy on a folder routes to workspace deploy.
+- [x] `explorer/context` Deploy on a folder routes to workspace deploy.
   <- FUNC-202
-- [ ] Completion reported in the activity log; `ShowEndpointUrlStep` lists
+- [x] Completion reported in the activity log; `ShowFunctionEndpointsStep` lists
   HTTP trigger URLs. <- FUNC-255, FUNC-256
-- [ ] Deleting a containerized Function App uses shared delete (applies once
+- [x] Deleting a containerized Function App uses shared delete (applies once
   containerized apps return from Deferred). <- FUNC-258
-- [ ] Unit tests with `respondToPrompts()`; Bicep build of the consumer.
+- [x] Unit tests with `respondToPrompts()`; Bicep build of the consumer.
 
 ### Provisioning decision
 
@@ -484,9 +485,9 @@ module does not cover it).
 - **Parameter map:** `environmentName` -> `functionAppName` (`<env>-func`);
   wizard runtime -> `functionWorkerRuntime`, `runtimeVersion`; `azdServiceName`
   -> `functionAppTags['azd-service-name']`; `appServicePlanSkuName` fixed to
-  `FC1` (the consumer parameter is removed); `autoGeneratedDomainNameLabelScope`
-  and portal CORS unchanged. `functionAppDefaultHostname` feeds
-  `ShowEndpointUrlStep`.
+  `FC1`; the template specifies `autoGeneratedDomainNameLabelScope` and portal
+  CORS. `ShowFunctionEndpointsStep` uses the deployed ARM IDs from `azd show`
+  to list actual HTTP invocation templates.
 
 - [x] Pin the published `br/public` module in the templates. <- FUNC-249
 
@@ -502,7 +503,7 @@ External facts: `https://json.schemastore.org/function.json` and `https://json.s
                 the source manifest at the pinned SHA; both returned HTTP 200 on 2026-09-24.
 ```
 
-- [ ] `jsonValidation` for `function.json` and `host.json`. <- FUNC-008, FUNC-009
+- [x] `jsonValidation` for `function.json` and `host.json`. <- FUNC-008, FUNC-009
 - [ ] `enablement: !virtualWorkspace` on every retained local-only command.
   <- FUNC-004
 - [ ] Project detection stays on `functionsDetector`; no

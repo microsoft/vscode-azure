@@ -4,7 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { bySubscription } from '@microsoft/vscode-azure-azutils';
-import { IOutputChannel, IVsCode, Wizard, type ExecuteStep, Everything } from '@microsoft/vscode-azure-utils';
+import { dirname, IOutputChannel, IVsCode, Wizard, type ExecuteStep, Everything } from '@microsoft/vscode-azure-utils';
+import type * as vscode from 'vscode';
 import { Container, inject, injectable } from 'inversify';
 import { AzdDeployStep } from '../../azd/wizard/AzdDeployStep';
 import { AzdProvisionStep } from '../../azd/wizard/AzdProvisionStep';
@@ -17,12 +18,12 @@ import { HydratableChooseLocationStep, HydratableChooseSubscriptionStep } from '
 import { HydrateAzdInfoStep } from '../../azd/wizard/HydrateAzdInfoStep';
 import { ProjectNameStep } from '../../azd/wizard/ProjectNameStep';
 import { SelectIacFolderStep } from '../../azd/wizard/SelectIacFolderStep';
-import { ShowEndpointUrlStep } from '../../azd/wizard/ShowEndpointUrlStep';
 import { IAzureViewDataTree } from '../../services';
 import type { ManagedCommand } from '../ManagedCommand';
 import type { CreateFunctionAppContext } from './CreateFunctionAppContext';
-import { PickHostingPlanStep } from './steps/PickHostingPlanStep';
+import { DetectFunctionRuntimeStep } from './steps/DetectFunctionRuntimeStep';
 import { PickRuntimeStep } from './steps/PickRuntimeStep';
+import { ShowFunctionEndpointsStep } from './steps/ShowFunctionEndpointsStep';
 
 /**
  * Walks the user through creating an Azure Function App. Supports two
@@ -45,22 +46,22 @@ export class CreateFunctionApp implements ManagedCommand {
     ) { }
 
     /** @inheritdoc */
-    public async execute(job: AzdJob): Promise<void> {
+    public async execute(job: AzdJob, target?: vscode.Uri): Promise<void> {
         const get = this.container.get.bind(this.container);
 
         const promptSteps = [
             get(SelectIacFolderStep),
             get(HydrateAzdInfoStep),
+            get(DetectFunctionRuntimeStep),
             get(HydratableChooseSubscriptionStep),
             get(HydratableChooseLocationStep),
             get(ProjectNameStep),
             get(PickRuntimeStep),
-            get(PickHostingPlanStep),
             get(ConfirmProvisionStep),
         ];
 
         const executeSteps: ExecuteStep<CreateFunctionAppContext>[] = [
-            get(IGenerateBicepStepFactory)<CreateFunctionAppContext>('functionApp', ['functionWorkerRuntime', 'runtimeVersion', 'appServicePlanSkuName', 'azdServiceName']),
+            get(IGenerateBicepStepFactory)<CreateFunctionAppContext>('functionApp', ['functionWorkerRuntime', 'runtimeVersion', 'azdServiceName']),
             get(GenerateAzureYamlStep),
             get(CreateAzdEnvStep),
             get(AzdProvisionStep),
@@ -68,13 +69,15 @@ export class CreateFunctionApp implements ManagedCommand {
 
         if (job === 'deploy') {
             executeSteps.push(get(AzdDeployStep));
-            executeSteps.push(get(ShowEndpointUrlStep));
+            executeSteps.push(get(ShowFunctionEndpointsStep));
         }
 
         const wizard = new Wizard<CreateFunctionAppContext>(
             this.output,
             {
                 job,
+                iacFolder: target ? (await this.code.workspace.fs.stat(target)).type === this.code.FileType.Directory
+                    ? target : dirname(target) : undefined,
                 resourceDisplayName: this.code.l10n.t('Function App'),
                 provision: true, // Provisioning is assumed unless an environment exists, in which case the user will be prompted to confirm
                 deploy: job === 'deploy', // Only deploy if the deploy job is selected

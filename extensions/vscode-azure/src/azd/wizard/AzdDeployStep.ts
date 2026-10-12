@@ -31,13 +31,14 @@ export class AzdDeployStep<TContext extends AzdWizardContext> extends ExecuteSte
         return context.deploy === true && !!context.iacFolder;
     }
 
-    public async execute(context: Readonly<TContext>): Promise<void> {
+    /** Deploys every service unless an explicit service name is supplied by a node action. */
+    public async execute(context: Readonly<TContext>, service?: string): Promise<void> {
         const handle = this.codeProvider.trackDeployment({ title: 'azd deploy' });
 
         void this.code.commands.executeCommand(`${ActivityTreeViewId}.focus`);
 
         try {
-            await this.azd.deploy(context.iacFolder!); // eslint-disable-line @typescript-eslint/no-non-null-assertion
+            await this.azd.deploy(context.iacFolder!, service); // eslint-disable-line @typescript-eslint/no-non-null-assertion
             handle.complete('Completed');
         } catch (e) {
             handle.complete('Failed', e);

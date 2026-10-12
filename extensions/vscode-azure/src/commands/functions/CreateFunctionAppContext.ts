@@ -12,11 +12,7 @@ export interface CreateFunctionAppContext extends AzdWizardContext, PickContext<
     readonly resourceDisplayName: string;
     readonly functionWorkerRuntime?: FunctionWorkerRuntime;
     readonly runtimeVersion?: string;
-    readonly appServicePlanSkuName?: AppServicePlanSku;
 }
-
-/** SKU values offered by {@linkcode PickHostingPlanStep}. */
-export type AppServicePlanSku = 'FC1' | 'EP1' | 'S1';
 
 /** Runtime stacks offered by {@linkcode PickRuntimeStep}. */
 export type FunctionWorkerRuntime = 'dotnet-isolated' | 'node' | 'python' | 'java' | 'powershell' | 'custom';

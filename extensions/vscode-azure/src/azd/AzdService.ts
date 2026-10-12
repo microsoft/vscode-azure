@@ -112,10 +112,11 @@ export interface IAzdService {
     /**
      * Runs `azd deploy` as a visible VS Code task.
      *
+     * Supplying a service name scopes deployment; omitting it deploys all configured services.
      * Resolves when the task completes successfully.
      * Rejects on non-zero exit.
      */
-    deploy(cwd: vscode.Uri): Promise<void>;
+    deploy(cwd: vscode.Uri, service?: string): Promise<void>;
 
     /**
      * Runs `azd pipeline config` as a visible VS Code task, interactively
@@ -183,6 +184,10 @@ export interface AzdShowResult {
 
 /** A single service entry from {@linkcode AzdShowResult.services}. */
 export interface AzdServiceDescriptor extends Record<string, unknown> {
+    /** Deployed ARM resources for the currently selected azd environment. */
+    readonly target?: {
+        readonly resourceIds?: readonly string[];
+    };
     /** Ingress URL for the deployed service, if available. */
     readonly ingressUrl?: string;
     /** Project containing the source code for this service. */
@@ -420,13 +425,13 @@ export class AzdService implements IAzdService {
     }
 
     /** @inheritdoc */
-    public async deploy(cwd: vscode.Uri): Promise<void> {
+    public async deploy(cwd: vscode.Uri, service?: string): Promise<void> {
         const authEnv = await this.authServer.getEnv();
 
         try {
             await this.processExecutor.spawn({
                 execution: 'foreground',
-                command: command(this.getAzdCommand()).arg('deploy'),
+                command: command(this.getAzdCommand()).arg('deploy', ...(service ? [service] : [])),
                 cwd,
                 env: authEnv,
                 name: 'azd deploy',
