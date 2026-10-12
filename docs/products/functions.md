@@ -93,8 +93,9 @@ on that exact loopback port, as well as a successful loopback probe.
 Native worker executable/argument overrides in project settings are rejected;
 use `debugPort` for its transport and `preLaunchTask` for a replacement build.
 The extension neither searches for unrelated Go processes nor adopts/kills
-existing Delve servers. Native Go scaffolding and azd provisioning/deployment
-integration are separate migration work; custom handlers are not debugged.
+existing Delve servers. Native Go scaffolding and provisioning/runtime selection
+are separate migration work; code deployment uses the shared azd route with an
+azd version supporting Go Functions. Custom handlers are not debugged.
 
 Pre-debug validation requires runtime v4 settings, storage configuration, and
 saved local settings. `UseDevelopmentStorage=true` requires Azurite on its three

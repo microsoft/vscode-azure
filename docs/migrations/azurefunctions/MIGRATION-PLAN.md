@@ -584,7 +584,11 @@ External facts: `https://json.schemastore.org/function.json` and `https://json.s
   host start timeout. <- FUNC-137, FUNC-142, FUNC-144
 - [ ] Storage emulator: storage connection prompts, Azurite settings and
   integration. <- FUNC-164, FUNC-176, FUNC-267
-- [ ] Go scaffolding and native Go provisioning/deployment integration.
+- [ ] Go scaffolding, tracked in
+  [#364](https://github.com/microsoft/vscode-azure/issues/364), and native Go
+  provisioning/runtime selection, tracked in
+  [#366](https://github.com/microsoft/vscode-azure/issues/366).
+  Code deployment uses the existing azd route.
   <- FUNC-226
 - [ ] Template Gallery webview and resource-backed binding settings (with their SDKs),
   tracked in [#365](https://github.com/microsoft/vscode-azure/issues/365).
@@ -773,7 +777,7 @@ host-start API is dropped.
   surface for every signed Defer ID. Scaffolding is tracked by
   [#364](https://github.com/microsoft/vscode-azure/issues/364), visual
   gallery/binding tooling by [#365](https://github.com/microsoft/vscode-azure/issues/365).
-  CLI scaffolding, the gallery panel, native Go provisioning/deployment,
+  CLI scaffolding, the gallery panel, native Go provisioning/runtime selection,
   Durable/DTS, slots, identity management, containerized Functions, agent/MCP
   integration, host exceptions UI, and expanded emulator/v5 options are not
   exposed as completed migration features.
