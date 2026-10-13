@@ -341,9 +341,7 @@ export class ProcessExecutor implements IProcessExecutor {
         const onAbort = () => {
             const pid = child.pid;
             if (pid && child.exitCode === null && child.signalCode === null) {
-                termination ??= new Promise<void>((resolve, reject) => {
-                    void this.killProcessTreeFn(pid).then(resolve, reject);
-                });
+                termination ??= Promise.resolve().then(() => this.killProcessTreeFn(pid));
                 void termination.catch(rejectTermination);
             }
         };

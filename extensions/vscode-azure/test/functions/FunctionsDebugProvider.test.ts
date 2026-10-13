@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { addMockExtension, addWorkspaceFolder, MockCancellationToken, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
+import { delimiter } from 'node:path';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
 import type { FunctionsHostStart } from '../../src/functions/host/LocalFunctionsHostProcess';
@@ -66,33 +67,43 @@ describe('Functions debug provider (unit)', () => {
         });
     }
 
-    it('uses the selected interpreter and safely quotes the debugger package path with spaces', async () => {
-        const s = setup('python');
-        const python = s.code.Uri.joinPath(s.folder, '.venv', 'Scripts', 'python.exe');
-        addMockExtension(s.m, 'ms-python.python', {
-            ready: Promise.resolve(),
-            environments: {
-                getActiveEnvironmentPath: () => ({ path: python.fsPath }),
-                resolveEnvironment: () => Promise.resolve({ executable: { uri: python } }),
-                getEnvironmentVariables: () => ({ ['CUSTOM_PYTHON_ENV']: 'configured' }),
-            },
+    for (const [platform, pathName, expectedPath] of [
+        ['win32', 'Path', 'launch-path'], ['win32', 'pAtH', 'launch-path'],
+        ['linux', 'PATH', 'launch-path'], ['linux', 'Path', 'environment-path'],
+    ] as const) {
+        it(`uses the selected Python interpreter, quoted debugger path, and ${platform} ${pathName} precedence`, async () => {
+            mock.property(process, 'platform', platform);
+            const s = setup('python');
+            const python = s.code.Uri.joinPath(s.folder, '.venv', 'Scripts', 'python.exe');
+            addMockExtension(s.m, 'ms-python.python', {
+                ready: Promise.resolve(),
+                environments: {
+                    getActiveEnvironmentPath: () => ({ path: python.fsPath }),
+                    resolveEnvironment: () => Promise.resolve({ executable: { uri: python } }),
+                    getEnvironmentVariables: () => ({ ['CUSTOM_PYTHON_ENV']: 'configured', ['PATH']: 'environment-path' }),
+                },
+            });
+            const launcher = mock.fn(() => Promise.resolve(['"C:\\Python Debugger\\debugpy"', '--listen', '127.0.0.1:9001', '--wait-for-client']));
+            addMockExtension(s.m, 'ms-python.debugpy', {
+                debug: { getRemoteLauncherCommand: launcher, getDebuggerPackagePath: () => Promise.resolve('C:\\Python Debugger\\debugpy') },
+            });
+            const env = await s.preparation.workerEnvironment(s.folder, 'python', 9001, 'pipe');
+            expect(env.languageWorkers__python__defaultExecutablePath).to.equal(python.fsPath);
+            expect(env.languageWorkers__python__arguments).to.equal('"C:\\Python Debugger\\debugpy" "--listen" "127.0.0.1:9001" "--wait-for-client"');
+            expect(env.CUSTOM_PYTHON_ENV).to.equal('configured');
+            expect(env.PATH).to.contain('environment-path');
+            expect(launcher.mock.calls[0].arguments).to.deep.equal(['127.0.0.1', 9001, true]);
+            const overridden = await s.preparation.workerEnvironment(s.folder, 'python', 9001, 'pipe', {
+                ['CUSTOM_PYTHON_ENV']: 'launch', [pathName]: 'launch-path',
+            });
+            expect(overridden.CUSTOM_PYTHON_ENV).to.equal('launch');
+            expect(overridden.PATH).to.equal(`${s.code.Uri.joinPath(s.folder, '.venv', 'Scripts').fsPath}${delimiter}${expectedPath}`);
+            if (platform === 'win32') {
+                expect(Object.keys(overridden).filter(key => key.toLowerCase() === 'path')).to.deep.equal(['PATH']);
+            }
+            expect(overridden.languageWorkers__python__defaultExecutablePath).to.equal(python.fsPath);
         });
-        const launcher = mock.fn(() => Promise.resolve(['"C:\\Python Debugger\\debugpy"', '--listen', '127.0.0.1:9001', '--wait-for-client']));
-        addMockExtension(s.m, 'ms-python.debugpy', {
-            debug: { getRemoteLauncherCommand: launcher, getDebuggerPackagePath: () => Promise.resolve('C:\\Python Debugger\\debugpy') },
-        });
-        const env = await s.preparation.workerEnvironment(s.folder, 'python', 9001, 'pipe');
-        expect(env.languageWorkers__python__defaultExecutablePath).to.equal(python.fsPath);
-        expect(env.languageWorkers__python__arguments).to.equal('"C:\\Python Debugger\\debugpy" "--listen" "127.0.0.1:9001" "--wait-for-client"');
-        expect(env.CUSTOM_PYTHON_ENV).to.equal('configured');
-        expect(launcher.mock.calls[0].arguments).to.deep.equal(['127.0.0.1', 9001, true]);
-        const overridden = await s.preparation.workerEnvironment(s.folder, 'python', 9001, 'pipe', {
-            ['CUSTOM_PYTHON_ENV']: 'launch', ['PATH']: 'launch-path',
-        });
-        expect(overridden.CUSTOM_PYTHON_ENV).to.equal('launch');
-        expect(overridden.PATH).to.contain('launch-path');
-        expect(overridden.languageWorkers__python__defaultExecutablePath).to.equal(python.fsPath);
-    });
+    }
 
     it('sets language worker debugging arguments and unique PowerShell pipe names', async () => {
         const s = setup();

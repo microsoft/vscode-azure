@@ -68,6 +68,10 @@ export class FunctionsWorkspaceDataProvider implements DataProvider<WorkspaceNod
         @inject(LocalFunctionsHostTracker) hosts: LocalFunctionsHostTracker,
     ) {
         this.disposables.push(hosts.onDidChange(folder => {
+            if (!this.projects.length) {
+                this.changeEmitter.fire({ target: Roots });
+                return;
+            }
             for (const project of this.projects) {
                 if (dirname(project.resourceUri).toString() === folder.toString()) {
                     this.changeEmitter.fire({ target: project });
@@ -85,11 +89,6 @@ export class FunctionsWorkspaceDataProvider implements DataProvider<WorkspaceNod
             }
         };
         this.disposables.push(watcher, watcher.onDidCreate(changed), watcher.onDidChange(changed), watcher.onDidDelete(changed));
-        this.disposables.push(hosts.onDidChange(() => {
-            if (!this.projects.length) {
-                this.changeEmitter.fire({ target: Roots });
-            }
-        }));
     }
 
     /** @inheritdoc */

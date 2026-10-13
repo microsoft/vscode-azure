@@ -338,16 +338,21 @@ describe('ProcessExecutor (unit)', () => {
             expect(s.terminateTree.mock.calls[0].arguments[0]).to.equal(s.spawn.mock.calls[0].result?.pid);
         });
 
-        it('surfaces tree-termination failures instead of reporting ordinary cancellation', async () => {
-            const s = createMockProcessExecutor(createMockVsCode().vscode, { keepAlive: true });
-            s.terminateTree.mock.mockImplementation(() => Promise.reject(new Error('termination failed')));
-            const abort = new AbortController();
-            const process = s.executor.spawn({ execution: 'background', command: ['owned'], killTreeOnCancel: true }, abort.signal);
-            const rejected = expect(process).to.be.rejectedWith('termination failed');
-            abort.abort();
-            try { await rejected; }
-            finally { s.spawn.mock.calls[0].result?.emit('close', 0, null); }
-        });
+        for (const failure of ['throw', 'reject']) {
+            it(`surfaces a tree-termination ${failure} instead of reporting ordinary cancellation`, async () => {
+                const s = createMockProcessExecutor(createMockVsCode().vscode, { keepAlive: true });
+                s.terminateTree.mock.mockImplementation(() => {
+                    if (failure === 'throw') { throw new Error('termination failed'); }
+                    return Promise.reject(new Error('termination failed'));
+                });
+                const abort = new AbortController();
+                const process = s.executor.spawn({ execution: 'background', command: ['owned'], killTreeOnCancel: true }, abort.signal);
+                const rejected = expect(process).to.be.rejectedWith('termination failed');
+                abort.abort();
+                try { await rejected; }
+                finally { s.spawn.mock.calls[0].result?.emit('close', 0, null); }
+            });
+        }
 
         it('does not spawn an owned process when cancellation precedes startup', async () => {
             const s = createMockProcessExecutor(createMockVsCode().vscode);

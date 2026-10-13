@@ -71,7 +71,9 @@ and [debugpy launcher API](https://github.com/microsoft/vscode-python-debugger/b
 including the selected executable rather than a guessed `python` command.
 Project settings and launch environment overrides take precedence over Python
 environment defaults; the owned debugger arguments and interpreter take precedence
-over those overrides.
+over those overrides. The selected interpreter's directory leads `PATH`, with
+case-insensitive environment variable names on Windows and case-sensitive names
+on other platforms.
 
 Native Go projects require `FUNCTIONS_WORKER_RUNTIME=native` and `go.mod`.
 Go and Delve paths come from the Go extension's resource-scoped public

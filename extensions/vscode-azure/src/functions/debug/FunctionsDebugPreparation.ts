@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { CancellationError, dirname, ExternalError, fileExists, IProcessExecutor, IVsCode, readText } from '@microsoft/vscode-azure-utils';
+import { CancellationError, CaselessMap, dirname, ExternalError, fileExists, IProcessExecutor, IVsCode, readText } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { delimiter } from 'node:path';
 import type * as vscode from 'vscode';
@@ -127,19 +127,17 @@ export class FunctionsDebugPreparation {
         if (runtime === 'node') {
             const text = await readText(this.code, this.code.Uri.joinPath(project, 'package.json'));
             if (!text) { throw new ExternalError(this.code.l10n.t('The Node.js Functions project must contain package.json before debugging.')); }
-            if (text) {
-                let manifest: unknown;
-                try { manifest = JSON.parse(text); } catch {
-                    throw new ExternalError(this.code.l10n.t('package.json must contain valid JSON before debugging.'));
-                }
-                const installed = await fileExists(this.code, this.code.Uri.joinPath(project, 'node_modules'));
-                if (!installed) {
-                    await this.run(project, ['npm', await readText(this.code, this.code.Uri.joinPath(project, 'package-lock.json')) ? 'ci' : 'install'], env, token);
-                }
-                if (manifest && typeof manifest === 'object' && 'scripts' in manifest && manifest.scripts
-                    && typeof manifest.scripts === 'object' && 'build' in manifest.scripts && typeof manifest.scripts.build === 'string') {
-                    command = ['npm', 'run', 'build']; matcher = '$tsc';
-                }
+            let manifest: unknown;
+            try { manifest = JSON.parse(text); } catch {
+                throw new ExternalError(this.code.l10n.t('package.json must contain valid JSON before debugging.'));
+            }
+            const installed = await fileExists(this.code, this.code.Uri.joinPath(project, 'node_modules'));
+            if (!installed) {
+                await this.run(project, ['npm', await readText(this.code, this.code.Uri.joinPath(project, 'package-lock.json')) ? 'ci' : 'install'], env, token);
+            }
+            if (manifest && typeof manifest === 'object' && 'scripts' in manifest && manifest.scripts
+                && typeof manifest.scripts === 'object' && 'build' in manifest.scripts && typeof manifest.scripts.build === 'string') {
+                command = ['npm', 'run', 'build']; matcher = '$tsc';
             }
         }
         if (runtime === 'python' && await readText(this.code, this.code.Uri.joinPath(project, 'requirements.txt'))) {
@@ -206,10 +204,13 @@ export class FunctionsDebugPreparation {
             }
             // The launch command's first argument can be pre-quoted by the Python extension.
             args[0] = debuggerPath;
+            const entries = [...Object.entries(variables), ...Object.entries(env)].filter((entry): entry is [string, string] => typeof entry[1] === 'string');
+            const environment = process.platform === 'win32' ? new CaselessMap(entries) : new Map(entries);
+            const path = environment.get('PATH');
+            environment.delete('PATH');
             return {
-                ...variables,
-                ...Object.fromEntries(Object.entries(env).filter((entry): entry is [string, string] => typeof entry[1] === 'string')),
-                ['PATH']: `${dirname(this.code.Uri.file(python)).fsPath}${delimiter}${env.PATH ?? variables.PATH ?? process.env.PATH ?? ''}`,
+                ...Object.fromEntries(environment),
+                ['PATH']: `${dirname(this.code.Uri.file(python)).fsPath}${delimiter}${path ?? process.env.PATH ?? ''}`,
                 ['languageWorkers__python__defaultExecutablePath']: python,
                 ['languageWorkers__python__arguments']: args.map(quoteWorkerArgument).join(' '),
             };

@@ -3,7 +3,9 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { isFunctionsProjectNode } from '../../../../src/tree/workspace/WorkspaceNode';
+import { Roots, type DataProviderChangeEvent } from '@microsoft/vscode-azure-utils';
+import { mock } from 'node:test';
+import { isFunctionsProjectNode, type WorkspaceNode } from '../../../../src/tree/workspace/WorkspaceNode';
 import { makeAzdProjectNode, makeFunctionsProjectNode } from '../mockWorkspaceNode';
 import { createLocalFunctions } from './mockLocalFunctions';
 
@@ -28,6 +30,21 @@ describe('FunctionsWorkspaceDataProvider (unit)', () => {
     });
 
     describe('getChildren', () => {
+        it('refreshes roots for a host change before discovery and only the owning project afterward', async () => {
+            const s = createProvider();
+            s.addProject();
+            s.m.fs.addFile(s.code.Uri.joinPath(s.folder, 'other', 'host.json'), '{}');
+            const changed = mock.fn<(event: DataProviderChangeEvent<WorkspaceNode>) => void>();
+            const subscription = s.provider.onDidChange(changed);
+            const registration = s.hosts.register(s.folder, 7071);
+            expect(changed.mock.calls.map(call => call.arguments[0])).to.deep.equal([{ target: Roots }]);
+            const [project] = await s.provider.getChildren();
+            changed.mock.resetCalls();
+            registration.dispose();
+            expect(changed.mock.calls.map(call => call.arguments[0])).to.deep.equal([{ target: project }]);
+            subscription.dispose();
+        });
+
         it('returns empty when there are no workspace folders', async () => {
             const { provider } = createProvider();
             expect(await provider.getChildren()).to.deep.equal([]);
