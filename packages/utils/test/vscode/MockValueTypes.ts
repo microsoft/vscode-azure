@@ -132,6 +132,13 @@ export const MockConfigurationTarget = {
     WorkspaceFolder: 3,
 } satisfies typeof vscode.ConfigurationTarget;
 
+/** Test stand-in for {@linkcode vscode.ExtensionMode}. */
+export const MockExtensionMode = {
+    Production: 1,
+    Development: 2,
+    Test: 3,
+} satisfies typeof vscode.ExtensionMode;
+
 /** Test stand-in for {@linkcode vscode.TaskScope}. */
 export const MockTaskScope = {
     Global: 1,

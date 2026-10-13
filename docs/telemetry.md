@@ -92,12 +92,15 @@ Providers like `ArmDeploymentDataProvider` that run their own async loops (e.g. 
 
 ## `ITelemetryReporter`
 
-A thin wrapper around `@vscode/extension-telemetry`. Behavior depends on environment:
+A thin wrapper around `@vscode/extension-telemetry`. Development and test extension
+modes use a silent no-op reporter unless verbose logging is requested.
+
+In production mode, behavior depends on environment:
 
 | `DEBUGTELEMETRY` env | Behavior |
 |----------------------|----------|
 | unset / `'0'` / `'false'` | Real telemetry via Application Insights |
-| `'v'` / `'verbose'` | Logs to console (`DEBUGTELEMETRY: "eventName" Properties: {...}`) |
+| `'v'` / `'verbose'` | Logs to console (`DEBUGTEL: extensionId/eventName`, properties, and measurements) |
 | any other truthy value | Silent no-op |
 
 During tests (`VSCODE_RUNNING_TESTS=1`), telemetry is suppressed.
