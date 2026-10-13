@@ -516,7 +516,8 @@ Extension test configuration lives in [`.vscode-test.mjs`](../extensions/vscode-
 
 Package test configuration lives in [utils' `.mocharc.cjs`](../packages/utils/.mocharc.cjs)
 and [azutils' `.mocharc.cjs`](../packages/azutils/.mocharc.cjs). Both use the shared
-`createNodeMochaConfig` factory with `test/**/*.test.ts` specs. Mocha runs tests
+`createNodeMochaConfig` factory, which discovers `**/*.test.{ts,mts,cts}` and ignores
+`node_modules`. Mocha runs tests
 directly as TypeScript via Node's `--experimental-transform-types` plus the shared
 `@microsoft/vscode-azext-eng/mocha` loader. The `test` and `testcov` scripts discover
 these files automatically.

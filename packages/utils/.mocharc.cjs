@@ -5,6 +5,4 @@
 
 const { createNodeMochaConfig } = require('@microsoft/vscode-azext-eng/mocha/config');
 
-module.exports = createNodeMochaConfig({
-    spec: ['test/**/*.test.ts'],
-});
+module.exports = createNodeMochaConfig();
