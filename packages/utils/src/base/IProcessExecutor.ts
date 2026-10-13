@@ -6,6 +6,7 @@
 import { isProcessError, ProcessError, resolveExecutable, spawn, type SpawnOptions } from '@azure/core-process';
 import type { ServiceIdentifier } from 'inversify';
 import type { ChildProcess } from 'node:child_process';
+import { on } from 'node:events';
 import * as readline from 'node:readline';
 import type { Readable } from 'node:stream';
 import type * as vscode from 'vscode';
@@ -65,11 +66,17 @@ export interface BackgroundProcessOptions extends ProcessExecutorOptions {
     readonly execution: 'background';
     readonly parseJson?: false;
     readonly jsonLines?: false;
-    /**
-     * Receives decoded output chunks as they arrive instead of retaining stdout/stderr.
-     * The callback must not throw. Results and process errors contain no captured output.
-     */
-    readonly onOutput?: (text: string, stream: 'stdout' | 'stderr') => void;
+    readonly streamOutput?: false;
+    /** Forcefully terminates the owned process tree on cancellation, and waits for that operation to finish. */
+    readonly killTreeOnCancel?: boolean;
+}
+
+/** Streams decoded stdout/stderr chunks instead of capturing process output. */
+export interface BackgroundStreamingProcessOptions extends ProcessExecutorOptions {
+    readonly execution: 'background';
+    readonly streamOutput: true;
+    readonly parseJson?: false;
+    readonly jsonLines?: false;
     /** Forcefully terminates the owned process tree on cancellation, and waits for that operation to finish. */
     readonly killTreeOnCancel?: boolean;
 }
@@ -121,6 +128,25 @@ export interface ProcessResult {
 }
 
 /**
+ * Live process output and its independently observable completion.
+ *
+ * Consume {@linkcode stdout} and {@linkcode stderr} concurrently while awaiting
+ * {@linkcode completed}; unread output applies backpressure and can prevent
+ * the process from exiting. Breaking out of either generator discards that
+ * channel's remaining output without terminating the process.
+ *
+ * Results and process errors contain no captured stdout/stderr. Process failures,
+ * cancellation, and termination failures are reported by {@linkcode completed},
+ * and terminate both generators. Stream I/O errors can also reject a generator.
+ * Use the spawn cancellation signal to stop the process.
+ */
+export interface StreamingProcessResult {
+    readonly stdout: AsyncGenerator<string>;
+    readonly stderr: AsyncGenerator<string>;
+    readonly completed: Promise<ProcessResult>;
+}
+
+/**
  * Captured output from a background process with stdout parsed as JSON.
  */
 export interface JsonProcessResult<T> extends ProcessResult {
@@ -161,7 +187,7 @@ export const IProcessExecutor: ServiceIdentifier<IProcessExecutor> = Symbol.for(
  * mode:
  *
  * - `'background'` -- runs via `@azure/core-process` and captures
- *   stdout/stderr. Supports optional JSON parsing and JSON-lines streaming.
+ *   stdout/stderr. Supports optional raw output streaming, JSON parsing, and JSON-lines streaming.
  * - `'foreground'` -- runs as a {@linkcode vscode.Task Task} visible in the
  *   integrated terminal. Returns `Promise<void>` since task output is not
  *   capturable.
@@ -188,6 +214,8 @@ export interface IProcessExecutor {
     spawn<TOut = unknown, TLines = unknown>(options: BackgroundJsonLinesProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<JsonLinesProcessResult<TOut, TLines>>;
     /** Runs a background process and parses stdout as JSON. */
     spawn<T = unknown>(options: BackgroundJsonProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<JsonProcessResult<T>>;
+    /** Starts a background process and returns its output generator and completion promise. */
+    spawn(options: BackgroundStreamingProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<StreamingProcessResult>;
     /** Runs a background process and captures raw stdout and stderr. */
     spawn(options: BackgroundProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<ProcessResult>;
 
@@ -220,11 +248,12 @@ export class ProcessExecutor implements IProcessExecutor {
     public async spawn(options: ForegroundProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<void>;
     public async spawn<TOut = unknown, TLines = unknown>(options: BackgroundJsonLinesProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<JsonLinesProcessResult<TOut, TLines>>;
     public async spawn<T = unknown>(options: BackgroundJsonProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<JsonProcessResult<T>>;
+    public async spawn(options: BackgroundStreamingProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<StreamingProcessResult>;
     public async spawn(options: BackgroundProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<ProcessResult>;
     public async spawn(
-        options: ForegroundProcessOptions | BackgroundJsonLinesProcessOptions | BackgroundJsonProcessOptions | BackgroundProcessOptions,
+        options: ForegroundProcessOptions | BackgroundJsonLinesProcessOptions | BackgroundJsonProcessOptions | BackgroundStreamingProcessOptions | BackgroundProcessOptions,
         cancellation?: vscode.CancellationToken | AbortSignal,
-    ): Promise<void | ProcessResult | JsonProcessResult<unknown> | JsonLinesProcessResult> {
+    ): Promise<void | ProcessResult | JsonProcessResult<unknown> | JsonLinesProcessResult | StreamingProcessResult> {
         if (options.execution === 'foreground') {
             return this.spawnForeground(options, cancellation);
         } else {
@@ -295,9 +324,9 @@ export class ProcessExecutor implements IProcessExecutor {
     }
 
     private async spawnBackground(
-        options: BackgroundProcessOptions | BackgroundJsonProcessOptions | BackgroundJsonLinesProcessOptions,
+        options: BackgroundProcessOptions | BackgroundStreamingProcessOptions | BackgroundJsonProcessOptions | BackgroundJsonLinesProcessOptions,
         cancellation?: vscode.CancellationToken | AbortSignal,
-    ): Promise<ProcessResult | JsonProcessResult<unknown> | JsonLinesProcessResult> {
+    ): Promise<ProcessResult | JsonProcessResult<unknown> | JsonLinesProcessResult | StreamingProcessResult> {
         const [executable, ...args] = argsToStrings(options.command);
         if (!executable) {
             throw new Error('A command line must include at least the executable as its first element.');
@@ -327,15 +356,12 @@ export class ProcessExecutor implements IProcessExecutor {
             throw asCancellation(e, signal);
         }
 
-        // Buffering starts here, before the caller gets control, because
-        // attaching the `'data'` handler is what puts the stream into flowing
-        // mode. An undrained stdout fills its OS pipe and blocks the child in
-        // `write()`. In JSON-lines mode that deadlocks rather than merely
-        // stalls: the blocked child stops emitting stderr, so the caller's loop
-        // over `jsonLines` never ends, so `completed` is never awaited, so
-        // nothing ever drains stdout.
-        const output = 'onOutput' in options ? options.onOutput : undefined;
-        const stdout = readAll(child.stdout, output ? text => { output(text, 'stdout'); } : undefined);
+        // Captured stdout must drain immediately so it cannot block the child
+        // while the caller consumes live stderr in JSON-lines mode.
+        const outputAbort = 'streamOutput' in options && options.streamOutput ? new AbortController() : undefined;
+        const stdoutOutput = outputAbort ? readChunks(child.stdout, outputAbort.signal) : undefined;
+        const stderrOutput = outputAbort ? readChunks(child.stderr, outputAbort.signal) : undefined;
+        const stdout = outputAbort ? Promise.resolve('') : readAll(child.stdout);
         let termination: Promise<void> | undefined;
         const { promise: terminationFailed, reject: rejectTermination } = Promise.withResolvers<never>();
         const onAbort = () => {
@@ -373,20 +399,30 @@ export class ProcessExecutor implements IProcessExecutor {
             };
         }
 
-        let result: ProcessResult;
-        const completed = finish(child, stdout, readAll(child.stderr, output ? text => { output(text, 'stderr'); } : undefined), signal);
+        const exited = finish(child, stdout, outputAbort ? Promise.resolve('') : readAll(child.stderr), signal);
         if (killTreeOnCancel && signal) {
             signal.addEventListener('abort', onAbort, { once: true });
             if (signal.aborted) { onAbort(); }
         }
-        try {
-            result = await Promise.race([completed, terminationFailed]);
-        } finally {
-            signal?.removeEventListener('abort', onAbort);
-            disposable.dispose();
-            await termination;
+        const completed = (async () => {
+            try {
+                return await Promise.race([exited, terminationFailed]);
+            } catch (error) {
+                outputAbort?.abort();
+                throw error;
+            } finally {
+                signal?.removeEventListener('abort', onAbort);
+                disposable.dispose();
+                await termination;
+            }
+        })();
+        if (stdoutOutput && stderrOutput) {
+            // The original promise remains observable even if output is consumed first.
+            void completed.catch(() => undefined);
+            return { stdout: stdoutOutput, stderr: stderrOutput, completed };
         }
 
+        const result = await completed;
         if (options.parseJson) {
             const json: unknown = JSON.parse(result.stdout);
             return { ...result, json };
@@ -475,14 +511,14 @@ function asCancellation(e: unknown, signal: AbortSignal | undefined): unknown {
 }
 
 /**
- * Consumes a child stream, buffering it only when no output callback is supplied.
+ * Buffers a child stream to a string.
  *
  * @remarks
  * A stream error resolves with whatever was buffered rather than rejecting:
  * the child's `'error'`/`'close'` event is the authoritative failure signal, and
  * rejecting here would race it.
  */
-function readAll(stream: Readable | null, onOutput?: (text: string) => void): Promise<string> {
+function readAll(stream: Readable | null): Promise<string> {
     if (!stream) {
         return Promise.resolve('');
     }
@@ -491,16 +527,32 @@ function readAll(stream: Readable | null, onOutput?: (text: string) => void): Pr
 
     return new Promise<string>((resolve) => {
         let buffer = '';
-        stream.on('data', (chunk: string) => {
-            if (onOutput) {
-                onOutput(chunk);
-            } else {
-                buffer += chunk;
-            }
-        });
+        stream.on('data', (chunk: string) => { buffer += chunk; });
         stream.once('end', () => { resolve(buffer); });
         stream.once('error', () => { resolve(buffer); });
     });
+}
+
+/** Uses native event-iterator backpressure; abandoning a channel drains its remaining bytes. */
+function readChunks(stream: Readable | null, signal: AbortSignal): AsyncGenerator<string> {
+    stream?.setEncoding('utf8');
+    const chunks = stream ? on(stream, 'data', {
+        close: ['end', 'close'], signal, highWaterMark: 1, lowWaterMark: 1,
+    }) : undefined;
+    async function* output(): AsyncGenerator<string> {
+        if (!stream || !chunks) { return; }
+        try {
+            for await (const [text] of chunks) {
+                if (typeof text !== 'string') { throw new TypeError('Expected decoded process output.'); }
+                yield text;
+            }
+        } catch (error: unknown) {
+            if (!(signal.aborted && error instanceof Error && error.name === 'AbortError')) { throw error; }
+        } finally {
+            stream.resume();
+        }
+    }
+    return output();
 }
 
 /**

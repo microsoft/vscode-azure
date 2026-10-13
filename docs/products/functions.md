@@ -36,8 +36,9 @@ without changing a completed deployment's status.
 The shared Core Tools installer supports an explicit v4-only acquisition range
 through the official `azure-functions-core-tools@4` npm package, while its default
 acquisition policy accepts v5 preview. Tool acquisition remains user-action driven.
-`IProcessExecutor` can deliver decoded stdout/stderr chunks without retaining
-long-running process output. Owned hosts opt into process-tree cancellation;
+`IProcessExecutor` exposes decoded stdout/stderr chunks through separate async generators
+and a separate process-completion promise, without retaining long-running output.
+Owned hosts consume both generators concurrently and opt into process-tree cancellation;
 other callers retain their existing cancellation behavior.
 
 ## F5 and project initialization

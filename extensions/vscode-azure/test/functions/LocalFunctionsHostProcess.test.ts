@@ -65,6 +65,18 @@ describe('Local Functions host ownership (unit)', () => {
         expect(s.tracker.get(s.request.project)).to.be.undefined;
     });
 
+    it('stops the owned process and reports a failed output stream', async () => {
+        const s = setup({ keepStreamsOpen: true });
+        mock.method(s.network, 'listening', () => Promise.resolve(false));
+        const starting = s.owner.start(s.request);
+        const rejected = expect(starting).to.be.rejectedWith('host output stream failed');
+        await waitFor(() => s.spawn.mock.callCount() === 1);
+        s.spawn.mock.calls[0].result?.stdout?.destroy(new Error('Output pipe failed'));
+        await rejected;
+        expect(s.terminateTree.mock.callCount()).to.equal(1);
+        expect(s.tracker.get(s.request.project)).to.be.undefined;
+    });
+
     it('reports a rejected readiness request and terminates the owned process tree', async () => {
         const s = setup();
         mock.method(s.network, 'listening', () => Promise.resolve(false));

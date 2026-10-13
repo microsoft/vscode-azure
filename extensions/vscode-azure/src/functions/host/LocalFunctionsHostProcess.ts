@@ -205,23 +205,37 @@ export class LocalFunctionsHostProcess implements Disposable {
         const buffers = { stdout: '', stderr: '' };
         host.process = this.processes.spawn({
             execution: 'background', command: [request.executable, ...args], cwd: request.cwd, env,
-            killTreeOnCancel: true,
-            onOutput: (text, stream) => {
-                host.terminal.write(text);
-                if (request.runtime === 'dotnet-isolated' || request.runtime === 'native') {
-                    const lines = (buffers[stream] + text).split(/\r?\n/);
-                    buffers[stream] = (lines.pop() ?? '').slice(-16_384);
-                    for (const line of lines) {
-                        if (request.runtime === 'dotnet-isolated') {
-                            host.workerPid ??= workerProcessId(line);
-                        } else {
-                            const listener = /(?:^|\s)API server listening at: 127\.0\.0\.1:(\d+)\s*$/.exec(line);
-                            if (listener && Number(listener[1]) === debugPort) { host.debuggerReady = true; }
+            killTreeOnCancel: true, streamOutput: true,
+        }, host.abort.signal).then(async process => {
+            const consume = async (stream: 'stdout' | 'stderr') => {
+                for await (const text of process[stream]) {
+                    host.terminal.write(text);
+                    if (request.runtime === 'dotnet-isolated' || request.runtime === 'native') {
+                        const lines = (buffers[stream] + text).split(/\r?\n/);
+                        buffers[stream] = (lines.pop() ?? '').slice(-16_384);
+                        for (const line of lines) {
+                            if (request.runtime === 'dotnet-isolated') {
+                                host.workerPid ??= workerProcessId(line);
+                            } else {
+                                const listener = /(?:^|\s)API server listening at: 127\.0\.0\.1:(\d+)\s*$/.exec(line);
+                                if (listener && Number(listener[1]) === debugPort) { host.debuggerReady = true; }
+                            }
                         }
                     }
                 }
-            },
-        }, host.abort.signal).then(
+            };
+            try {
+                await Promise.all([consume('stdout'), consume('stderr')]);
+            } catch (error: unknown) {
+                host.abort.abort();
+                host.error ??= new ExternalError(this.code.l10n.t('The Functions host output stream failed. See its terminal for details.'));
+                host.terminal.write(`${host.error.message}\n`);
+                this.output.warn(this.code.l10n.t('[functions] Owned host output stream failed.'));
+                throw error;
+            } finally {
+                await process.completed;
+            }
+        }).then(
             () => {
                 if (!host.abort.signal.aborted) {
                     host.error = new ExternalError(this.code.l10n.t('The Functions host exited. See its terminal for details.'));
