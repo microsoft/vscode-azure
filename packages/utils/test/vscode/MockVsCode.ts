@@ -16,7 +16,7 @@ import { MockQuickPick } from './input/MockQuickPick';
 import { MockFileChangeType, MockFilePermission, MockFileSystem, MockFileSystemError, MockFileType } from './MockFileSystem';
 import { MockOutputChannel } from './MockOutputChannel';
 import { MockUri } from './MockUri';
-import { MockConfigurationTarget, MockMarkdownString, MockProgressLocation, MockRelativePattern, MockShellExecution, MockTask, MockTaskScope, MockThemeColor, MockThemeIcon, MockTreeItemCollapsibleState } from './MockValueTypes';
+import { MockConfigurationTarget, MockExtensionMode, MockMarkdownString, MockProgressLocation, MockRelativePattern, MockShellExecution, MockTask, MockTaskScope, MockThemeColor, MockThemeIcon, MockTreeItemCollapsibleState } from './MockValueTypes';
 import { MockTreeItem } from './tree/MockTreeItem';
 
 /**
@@ -465,6 +465,7 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         TreeItem: MockTreeItem,
         TreeItemCollapsibleState: MockTreeItemCollapsibleState,
         ConfigurationTarget: MockConfigurationTarget,
+        ExtensionMode: MockExtensionMode,
         FileType: MockFileType,
         FilePermission: MockFilePermission,
         FileChangeType: MockFileChangeType,
@@ -550,6 +551,7 @@ export interface MockCodeContextResult {
 export function createMockCodeContext(): MockCodeContextResult {
     const mockResult = createMockVsCode();
     const extensionContext = {
+        extensionMode: MockExtensionMode.Test,
         workspaceState: new MockMemento(),
         globalState: Object.assign(new MockMemento(), {
             setKeysForSync: () => { /* noop */ },

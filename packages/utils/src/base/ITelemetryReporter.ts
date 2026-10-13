@@ -5,7 +5,7 @@
 
 import type { TelemetryReporter } from '@vscode/extension-telemetry';
 import type { ServiceIdentifier } from 'inversify';
-import type { IExtensionContext } from '../vscode/IVsCode';
+import type { ICodeContext } from '../vscode/IVsCode';
 
 export const ITelemetryReporter: ServiceIdentifier<ITelemetryReporter> = Symbol.for('ITelemetryReporter');
 /**
@@ -20,31 +20,35 @@ export type ITelemetryReporter = Pick<TelemetryReporter, 'sendTelemetryErrorEven
  * - When `DEBUGTELEMETRY` / `VSCODE_RUNNING_TESTS` is set to a truthy
  *   non-verbose value, returns a {@linkcode NullTelemetryReporter}.
  * - When set to `v` / `verbose`, returns a console-logging debug reporter.
- * - Otherwise, constructs a real reporter using the `aiKey` from the
- *   extension's `package.json`.
+ * - Development and test extension modes return a {@linkcode NullTelemetryReporter}
+ *   unless verbose logging is requested.
+ * - Otherwise, constructs a real reporter using the `aiKey` from the extension's
+ *   `package.json`.
  *
  * @throws When a real reporter is needed but the extension manifest has no `aiKey`.
  */
 export function createTelemetryReporter(
-    context: Readonly<IExtensionContext>,
+    context: Readonly<ICodeContext>,
     reporterCtor: new (connectionString: string) => ITelemetryReporter,
 ): ITelemetryReporter {
-    /* c8 ignore next 2 */
+    const { code, extensionContext } = context;
     const debugTelemetry = process.env.DEBUGTELEMETRY?.toLowerCase() ?? process.env.VSCODE_RUNNING_TESTS?.toLowerCase();
-    if (!debugTelemetry || debugTelemetry === '0' || debugTelemetry === 'false') {
-        const aiKey = (context.extension.packageJSON as { aiKey?: string }).aiKey;
+    if (debugTelemetry === 'v' || debugTelemetry === 'verbose') {
+        return new DebugTelemetryReporter(extensionContext.extension.id);
+    }
 
-        if (!aiKey) {
-            throw new Error('AI key is required for telemetry reporter');
-        }
-
-        return new reporterCtor(aiKey);
-        /* c8 ignore next 5 */
-    } else if (debugTelemetry === 'v' || debugTelemetry === 'verbose') {
-        return new DebugTelemetryReporter(context.extension.id);
-    } else {
+    if (extensionContext.extensionMode !== code.ExtensionMode.Production ||
+        (debugTelemetry && debugTelemetry !== '0' && debugTelemetry !== 'false')) {
         return new NullTelemetryReporter();
     }
+
+    const aiKey = (extensionContext.extension.packageJSON as { aiKey?: string }).aiKey;
+
+    if (!aiKey) {
+        throw new Error('AI key is required for telemetry reporter');
+    }
+
+    return new reporterCtor(aiKey);
 }
 
 /* c8 ignore start */

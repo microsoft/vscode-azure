@@ -137,7 +137,7 @@ function setUpContainer(extensionContext: IExtensionContext, products: ProductRe
     }).inSingletonScope().onActivation(pushDisposable);
 
     container.bind(ITelemetryReporter).toDynamicValue(context => {
-        return createTelemetryReporter(context.get(IExtensionContext), TelemetryReporter);
+        return createTelemetryReporter(context.get(ICodeContext), TelemetryReporter);
     }).inSingletonScope().onActivation(pushDisposable);
 
     container.bind(ICommandRegistry).toDynamicValue(context => {
