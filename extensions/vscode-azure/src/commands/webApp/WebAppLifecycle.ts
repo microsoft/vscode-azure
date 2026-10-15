@@ -48,6 +48,7 @@ export class WebAppLifecycle implements ManagedCommand {
             location: this.code.ProgressLocation.Notification,
             title: messages[0],
         }, client.webApps[action](getResourceGroupName(app.id), app.name));
+        app.site = await client.webApps.get(getResourceGroupName(app.id), app.name);
         this.tree.invalidate(app);
         void showMessage(this.code, messages[1]);
     }
