@@ -18,9 +18,9 @@
         "LICENSE.md",
         "dist",
         "resources",
-        "!dist/*/test/**/*.test.*",
-        "!dist/**/*.map",
-        "!dist/**/*.tsbuildinfo"
+        "!*.test.*",
+        "!*.map",
+        "!*.tsbuildinfo"
     ],
     "module": "dist/esm/src/index.js",
     "types": "dist/esm/src/index.d.ts",
