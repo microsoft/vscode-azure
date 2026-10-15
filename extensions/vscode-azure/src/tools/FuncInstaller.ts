@@ -6,6 +6,7 @@
 import { command, IOutputChannel, IProcessExecutor, IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
+import { intersects } from 'semver';
 import type { ToolId } from './ToolService';
 import type { ToolInstallOptions, ToolInstaller } from './ToolInstaller';
 import {
@@ -21,10 +22,9 @@ import {
 export const FuncCommand = 'func';
 
 /**
- * v5 is in preview and is what we install, so accept it and anything newer.
+ * The default acquisition policy accepts v5 preview and newer versions.
  *
- * A v4 install found on the machine does not satisfy this, and is offered to
- * the install script for an upgrade instead.
+ * Consumers requiring v4 supply their own version range.
  */
 const MinFuncVersion = '5.0.0-0';
 
@@ -100,7 +100,8 @@ export class FuncInstaller implements ToolInstaller {
     /**
      * Returns the install methods that apply to this system.
      *
-     * v5 is preview, so it ships only through the official install scripts --
+     * An explicit v4-only range uses the official npm package. The default v5
+     * preview policy uses the official install scripts --
      * the winget, Chocolatey, Homebrew, and npm packages all still carry v4.
      * That leaves one method per platform.
      *
@@ -108,6 +109,14 @@ export class FuncInstaller implements ToolInstaller {
      * so both are unverified and a `requireSignature` caller is refused.
      */
     private getInstallMethods(options: ToolInstallOptions): readonly ToolInstallMethod[] {
+        if (options.versionRange && intersects(options.versionRange, '>=4.0.0 <5.0.0')
+            && !intersects(options.versionRange, '>=5.0.0')) {
+            return [{
+                name: 'npm',
+                command: command('npm').arg('install', '-g', 'azure-functions-core-tools@4', '--unsafe-perm'),
+                verified: false,
+            }];
+        }
         // The scripts refuse to overwrite an existing install without --force.
         const force = options.current !== undefined;
 

@@ -515,6 +515,13 @@ describe('AzdService (unit)', () => {
     });
 
     describe('deploy', () => {
+        it('passes the selected service as a single argument', async () => {
+            const { service, spawnMock, fs } = createService(mock.fn(() => Promise.resolve()));
+            fs.addFile(MockUri.file('/project/azure.yaml'));
+            await service.deploy(MockUri.file('/project'), 'api');
+            const opts = spawnMock.mock.calls[0].arguments[0] as SpawnOpts;
+            expect(argsToStrings(opts.command)).to.deep.equal([AzdCommand, 'deploy', 'api']);
+        });
         it('should spawn foreground execution for deploy', async () => {
             const spawnFn = mock.fn(() => Promise.resolve());
             const { service, spawnMock, fs } = createService(spawnFn);

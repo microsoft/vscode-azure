@@ -20,7 +20,7 @@ const azdDetectorId = 'azd';
 const azdTagNamespace = 'azd';
 
 /** The `azure.yaml` / `azure.yml` file that marks an azd project. */
-const AzdProjectFileTag = createTag(azdTagNamespace, StandardTagNames.projectFile);
+export const AzdProjectFileTag = createTag(azdTagNamespace, StandardTagNames.projectFile);
 
 /** Tags the `azure.yaml` of every azd project. */
 export const azdDetector: WorkspaceDetector = {

@@ -7,8 +7,7 @@ import { AzureChinaCloud, AzurePublicCloud, AzureUSGovernment, type ContainerApp
 import { createMockContainerAppsClient, makeContainerApp, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
 import { CancellationError, ExternalError } from '@microsoft/vscode-azure-utils';
 import { createMockVsCode, createTestActionExecutor, waitFor } from '@microsoft/vscode-azure-utils/testing';
-import { mock, type Mock } from 'node:test';
-import type * as vscode from 'vscode';
+import { mock } from 'node:test';
 import { ContainerAppLogStreamService, type LogStreamTarget } from '../../../../src/tree/resources/containerApps/ContainerAppLogStream';
 
 const LogStreamEndpoint = 'https://myapp.eastus.azurecontainerapps.io/logstream';
@@ -19,46 +18,13 @@ const Clouds = [
     { environment: AzureChinaCloud, suffix: 'azurecontainerapps.cn' },
 ];
 
-interface TestTerminal {
-    readonly name: string;
-    readonly pty: vscode.Pseudoterminal;
-    readonly writes: string[];
-    readonly show: Mock<() => void>;
-    readonly dispose: Mock<() => void>;
-}
-
 function makeTarget(app: GenericResource, logStreamEndpoint = LogStreamEndpoint): LogStreamTarget {
     return { app, revisionName: 'rev1', replicaName: 'replica1', containerName: 'api', logStreamEndpoint };
 }
 
 /** Builds a service with test terminals that expose their pseudoterminal lifecycle. */
 function createService(client = createMockContainerAppsClient(), openOnShow = true) {
-    const terminals: TestTerminal[] = [];
-    const createTerminal = mock.fn((options: vscode.ExtensionTerminalOptions): vscode.Terminal => {
-        const writes: string[] = [];
-        options.pty.onDidWrite(value => {
-            writes.push(value);
-        });
-
-        const terminal: TestTerminal = {
-            name: options.name,
-            pty: options.pty,
-            writes,
-            show: mock.fn(() => {
-                if (openOnShow) {
-                    options.pty.open(undefined);
-                }
-            }),
-            dispose: mock.fn(() => {
-                options.pty.close();
-            }),
-        };
-        terminals.push(terminal);
-        return terminal as unknown as vscode.Terminal;
-    });
-    const { vscode: code } = createMockVsCode({
-        window: { createTerminal } as unknown as typeof vscode.window,
-    });
+    const { vscode: code, terminals } = createMockVsCode(undefined, { openTerminalsOnShow: openOnShow });
     const { executor } = createTestActionExecutor();
     return {
         service: new ContainerAppLogStreamService(code, executor, () => client),

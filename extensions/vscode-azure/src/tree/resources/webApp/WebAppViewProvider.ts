@@ -7,6 +7,8 @@ import { AzureNodeId, getNodeType } from '@microsoft/vscode-azure-azutils';
 import { IActionExecutor, ICodeContext, type ITreeItem, type ViewProvider } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzureViewDataTree } from '../../../services';
+import { WebAppLifecycle } from '../../../commands/webApp/WebAppLifecycle';
+import { resourceContextValue } from '../../contextValueHelpers';
 import { createGenericResourceTreeItem } from '../GenericAzureViewProvider';
 import { isWebApp } from './WebApp';
 
@@ -50,12 +52,14 @@ export class WebAppViewProvider implements ViewProvider<string> {
         }
 
         this.executor.setTelProp('nodeType', getNodeType(resource));
-        return createGenericResourceTreeItem(
+        const item = createGenericResourceTreeItem(
             this.ctx,
             resource,
             key,
             this.ctx.code.TreeItemCollapsibleState.Collapsed,
         );
+        item.contextValue = resourceContextValue(resource, ...WebAppLifecycle.contextValues(resource.site?.state));
+        return item;
     }
 
     /** @inheritdoc */

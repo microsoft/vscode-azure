@@ -7,6 +7,7 @@ import { AzureNodeId } from '@microsoft/vscode-azure-azutils';
 import { makeContainerApp } from '@microsoft/vscode-azure-azutils/testing';
 import { mock } from 'node:test';
 import { RevealContainerAppEnvironment } from '../../../src/commands/containerApps/RevealContainerAppEnvironment';
+import { RevealResource } from '../../../src/commands/tree/RevealResource';
 import { createTestResourceSelector } from '../../tree/resources/testResourceSelector';
 
 const EnvironmentId = '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/OtherRG/providers/Microsoft.App/managedEnvironments/MyEnv';
@@ -21,7 +22,7 @@ function createCommand(environmentId: string | undefined, revealImpl?: () => Pro
     const command = new RevealContainerAppEnvironment(
         mockResult.vscode,
         selector,
-        { reveal } as never,
+        new RevealResource({ reveal } as never),
     );
 
     return { command, reveal, key: AzureNodeId.from(app).toString() };

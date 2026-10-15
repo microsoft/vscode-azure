@@ -69,6 +69,16 @@ describe('AzdDeployStep (unit)', () => {
     });
 
     describe('execute', () => {
+        it('should forward an explicitly selected service to azd.deploy', async () => {
+            const { azd, step, completeFn } = createStep();
+            const context = { deploy: true, iacFolder: MockUri.file('/project') } as AzdWizardContext;
+
+            await step.execute(context, 'api');
+
+            expect(azd.deploy.mock.calls[0].arguments).to.deep.equal([context.iacFolder, 'api']);
+            expect(completeFn.mock.calls[0].arguments[0]).to.equal('Completed');
+        });
+
         it('should focus the activity view', async () => {
             const { step, mockCode } = createStep();
 

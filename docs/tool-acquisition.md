@@ -85,6 +85,13 @@ carry v4. Its default range is `>=5.0.0-0`, prerelease-inclusive so the preview
 actually satisfies it, and a v4 install found on the machine is handed to the
 script for an upgrade (`-Force` / `--force`) rather than accepted.
 
+The caller's explicit `versionRange` is forwarded to `ToolInstaller.install`.
+A v4-only `func` range selects the official `azure-functions-core-tools@4` npm
+package on every platform. That method is unverified and refuses
+`requireSignature`. Omitting the range retains the default v5 preview policy.
+Concurrent requests share the initiating caller's install method and each
+verify the resulting executable against their own range.
+
 `swa` ships only as an npm package, so it has no Windows package-manager entry
 at all.
 

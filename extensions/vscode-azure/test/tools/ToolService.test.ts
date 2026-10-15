@@ -132,6 +132,21 @@ describe('ToolService (unit)', () => {
         expect(install.mock.callCount()).to.equal(0);
     });
 
+    it('should forward the requested version range to the installer and verify the installed version', async () => {
+        const versions = new Map([['/tools/azd', '1.25.0']]);
+        const install = mock.fn((_options: ToolInstallOptions) => {
+            versions.set('/tools/azd', '1.30.0');
+            return Promise.resolve();
+        });
+        const { installer } = createInstaller(versions, { install });
+        const service = createService(installer, '/tools/azd', ['/tools/azd']);
+
+        const result = await service.acquire(request({ versionRange: '>=1.30.0 <2.0.0' }));
+
+        expect(install.mock.calls[0].arguments[0].versionRange).to.equal('>=1.30.0 <2.0.0');
+        expect(result.executablePath).to.equal('/tools/azd');
+    });
+
     it('should throw when the tool is still unusable after installing', async () => {
         const { installer } = createInstaller(new Map());
         const service = createService(installer);
