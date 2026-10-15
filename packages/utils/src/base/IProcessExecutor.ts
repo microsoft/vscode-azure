@@ -478,7 +478,13 @@ export class ProcessExecutor implements IProcessExecutor {
             onAbort = () => {
                 const pid = child.pid;
                 const leaderExited = child.exitCode !== null || child.signalCode !== null;
-                if (!pid || (process.platform === 'win32' && leaderExited)) {
+                if (!pid) {
+                    return;
+                }
+                if (process.platform === 'win32' && leaderExited) {
+                    terminationFailed.reject(new Error(this.code.l10n.t(
+                        'Cannot terminate the process tree after its launcher has exited on Windows.',
+                    )));
                     return;
                 }
 
@@ -623,6 +629,12 @@ function readChunks(stream: Readable | null, signal: AbortSignal): AsyncGenerato
         lowWaterMark: 1,
     }) : undefined;
 
+    async function close(): Promise<void> {
+        await chunks?.return?.();
+        // An early consumer exit must not leave the child blocked writing.
+        stream?.resume();
+    }
+
     async function* output(): AsyncGenerator<string> {
         if (!stream || !chunks) {
             return;
@@ -643,12 +655,23 @@ function readChunks(stream: Readable | null, signal: AbortSignal): AsyncGenerato
                 throw error;
             }
         } finally {
-            // An early consumer exit must not leave the child blocked writing.
-            stream.resume();
+            await close();
         }
     }
 
-    return output();
+    const iterator = output();
+    const returnOutput = iterator.return.bind(iterator);
+    const throwOutput = iterator.throw.bind(iterator);
+    // A generator closed before its first next() never enters its finally block.
+    iterator.return = async value => {
+        await close();
+        return returnOutput(value);
+    };
+    iterator.throw = async error => {
+        await close();
+        return throwOutput(error);
+    };
+    return iterator;
 }
 
 /**
