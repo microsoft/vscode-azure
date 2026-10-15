@@ -103,7 +103,10 @@ and send it in the `x-functions-key` header. Redirects are disabled.
 
 `listFunctions()` returns the complete, unpaged host collection, `getStatus()`
 reads host readiness, and `invoke()` queues execution without waiting for the
-function to finish. Operations accept cancellation and transport options, reject
+function to finish. Invocation strings are passed through; other inputs are
+JSON-serialized into the host's string-valued `input` field. Serialization errors
+or values that produce no JSON text reject before authentication or transport.
+Operations accept cancellation and transport options, reject
 non-2xx responses, and validate metadata and status response shapes.
 
 ### `ResourceClient` and resource metadata

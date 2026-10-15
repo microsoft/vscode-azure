@@ -52,7 +52,7 @@ describe('FunctionsHostClient (unit)', () => {
         expect(httpClient.requests[0].url).to.equal('https://app.azurewebsites.net/admin/host/status');
     });
 
-    it('should send an encoded function name and preserve JSON invocation input', async () => {
+    it('should send an encoded function name and serialize object invocation input', async () => {
         const { client, httpClient } = createClient({ port: 8080 }, req => makeResponse(req, 202, ''));
 
         await client.invoke('name/with space', { message: 'hello' });
@@ -63,8 +63,46 @@ describe('FunctionsHostClient (unit)', () => {
         if (typeof body !== 'string') {
             throw new Error('Expected a serialized JSON request body.');
         }
-        expect(JSON.parse(body)).to.deep.equal({ input: { message: 'hello' } });
+        expect(JSON.parse(body)).to.deep.equal({ input: JSON.stringify({ message: 'hello' }) });
     });
+
+    for (const input of ['', 'hello', '{"message":"hello"}', [1, { message: 'hello' }], 42, false, null]) {
+        it(`should send host input text for ${JSON.stringify(input)}`, async () => {
+            const { client, httpClient } = createClient({ port: 7071 }, req => makeResponse(req, 202, ''));
+
+            await client.invoke('fn', input);
+
+            const body = httpClient.requests[0].body;
+            if (typeof body !== 'string') {
+                throw new Error('Expected a serialized JSON request body.');
+            }
+            expect(JSON.parse(body)).to.deep.equal({ input: typeof input === 'string' ? input : JSON.stringify(input) });
+        });
+    }
+
+    const circularInput: Record<string, unknown> = {};
+    circularInput.self = circularInput;
+    for (const { name, input } of [
+        { name: 'undefined', input: undefined },
+        { name: 'function', input: () => undefined },
+        { name: 'symbol', input: Symbol('input') },
+        { name: 'bigint', input: 1n },
+        { name: 'circular object', input: circularInput },
+        { name: 'object whose toJSON returns undefined', input: { toJSON: () => undefined } },
+    ]) {
+        it(`should reject ${name} input before authentication or transport`, async () => {
+            const getMasterKey = mock.fn(() => Promise.resolve('secret-host-key'));
+            const { client, httpClient } = createClient(
+                { endpoint: 'https://app.azurewebsites.net', getMasterKey },
+                req => makeResponse(req, 202, ''),
+            );
+
+            await expect(client.invoke('fn', input)).to.be.rejectedWith(TypeError);
+
+            expect(getMasterKey.mock.callCount()).to.equal(0);
+            expect(httpClient.requests).to.have.length(0);
+        });
+    }
 
     it('should preserve host error information for readiness checks', async () => {
         const { client } = createClient({ port: 7071 }, req => makeResponse(req, 200, JSON.stringify({
