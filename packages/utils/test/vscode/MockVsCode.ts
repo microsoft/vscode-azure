@@ -7,6 +7,8 @@ import { minimatch } from 'minimatch';
 import { mock, type Mock } from 'node:test';
 import type * as vscode from 'vscode';
 import { Disposable } from '../../src/vscode/Disposable';
+import { delay } from '../../src/base/delay';
+import { waitFor } from '../waitFor';
 import { EventEmitter } from '../../src/vscode/EventEmitter';
 import type { ICodeContext, IExtensionContext, IVsCode } from '../../src/vscode/IVsCode';
 import { MockMemento } from './config/MockMemento';
@@ -15,9 +17,18 @@ import { MockInputBox } from './input/MockInputBox';
 import { MockQuickPick } from './input/MockQuickPick';
 import { MockFileChangeType, MockFilePermission, MockFileSystem, MockFileSystemError, MockFileType } from './MockFileSystem';
 import { MockOutputChannel } from './MockOutputChannel';
+import { MockTerminal } from './MockTerminal';
 import { MockUri } from './MockUri';
-import { MockConfigurationTarget, MockExtensionMode, MockMarkdownString, MockProgressLocation, MockRelativePattern, MockShellExecution, MockTask, MockTaskScope, MockThemeColor, MockThemeIcon, MockTreeItemCollapsibleState } from './MockValueTypes';
+import { MockConfigurationTarget, MockCustomExecution, MockDebugConfigurationProviderTriggerKind, MockExtensionMode, MockMarkdownString, MockProgressLocation, MockRelativePattern, MockShellExecution, MockTask, MockTaskRevealKind, MockTaskScope, MockThemeColor, MockThemeIcon, MockTreeItemCollapsibleState } from './MockValueTypes';
 import { MockTreeItem } from './tree/MockTreeItem';
+
+/** Controls pseudoterminal opening in shared VS Code fixtures. */
+export interface MockVsCodeOptions {
+    /** Whether showing a terminal opens its pseudoterminal. Defaults to true. */
+    readonly openTerminalsOnShow?: boolean;
+    /** Whether executing a custom task opens its pseudoterminal. Defaults to true. */
+    readonly openTaskTerminalsOnExecute?: boolean;
+}
 
 /**
  * Maps each method of a `vscode` namespace to its `node:test` {@linkcode Mock}
@@ -72,6 +83,9 @@ export interface MockVsCodeResult {
 
     /** All {@linkcode MockInputBox} instances created so far, in creation order. */
     readonly inputBoxes: readonly MockInputBox[];
+
+    /** Pseudoterminals created through the mock window, in creation order. */
+    readonly terminals: readonly MockTerminal[];
 
     /**
      * The backing store for `workspace.getConfiguration()`. Keyed by
@@ -153,6 +167,16 @@ export interface MockVsCodeResult {
 
     /** The mock `tasks` namespace. */
     readonly tasks: MockedNamespace<typeof vscode.tasks>;
+    /** Signals custom task completion for host ownership tests. */
+    readonly taskEndEmitter: EventEmitter<vscode.TaskEndEvent>;
+    /** Debug registration and launch calls, with inspectable mock call records. */
+    readonly debug: MockedNamespace<typeof vscode.debug>;
+    /** Installed extensions lookup, with inspectable mock call records. */
+    readonly extensions: MockedNamespace<typeof vscode.extensions>;
+    /** Extension fixtures keyed by their extension ID. */
+    readonly installedExtensions: Map<string, vscode.Extension<unknown>>;
+    /** Signals debug session termination. */
+    readonly debugSessionEndEmitter: EventEmitter<vscode.DebugSession>;
 
     /**
      * Fire this emitter to simulate a task process ending.
@@ -197,9 +221,19 @@ export interface MockVsCodeResult {
  * expect(mock.quickPicks).to.have.lengthOf(1);
  * ```
  */
-export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult {
+export function createMockVsCode(
+    overrides?: Partial<IVsCode>,
+    terminalOptions?: MockVsCodeOptions,
+): MockVsCodeResult {
     const quickPicks: MockQuickPick<vscode.QuickPickItem>[] = [];
     const inputBoxes: MockInputBox[] = [];
+    const terminals: MockTerminal[] = [];
+    const createTerminal = mock.fn((options: vscode.ExtensionTerminalOptions) => {
+        const terminal = new MockTerminal(options);
+        terminal.openOnShow = terminalOptions?.openTerminalsOnShow ?? true;
+        terminals.push(terminal);
+        return terminal;
+    });
 
     const createQuickPick = mock.fn(() => {
         const qp = new MockQuickPick<vscode.QuickPickItem>();
@@ -323,6 +357,10 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         registerCommand,
     };
     const env = {
+        clipboard: {
+            readText: mock.fn(() => Promise.resolve('')),
+            writeText: mock.fn((_text: string) => Promise.resolve()),
+        },
         appHost: 'desktop',
         language: 'en',
         openExternal,
@@ -338,6 +376,7 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
     );
 
     const window = {
+        createTerminal,
         createQuickPick,
         createInputBox,
         createOutputChannel,
@@ -352,6 +391,8 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
     const configChangeEmitter = new EventEmitter<{ affectsConfiguration(section: string): boolean }>();
     const workspaceFoldersChangeEmitter = new EventEmitter<vscode.WorkspaceFoldersChangeEvent>();
     const taskProcessEndEmitter = new EventEmitter<vscode.TaskProcessEndEvent>();
+    const taskEndEmitter = new EventEmitter<vscode.TaskEndEvent>();
+    const debugSessionEndEmitter = new EventEmitter<vscode.DebugSession>();
 
     const textDocuments: vscode.TextDocument[] = [];
     const textDocumentContentProviders = new Map<string, vscode.TextDocumentContentProvider>();
@@ -394,6 +435,7 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
             const document = {
                 uri,
                 isUntitled: false,
+                isDirty: false,
                 languageId: languageFromPath(uri.path),
                 getText: () => content,
             } as unknown as vscode.TextDocument;
@@ -428,7 +470,9 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
     );
 
     const workspace = {
+        isTrusted: true,
         createFileSystemWatcher,
+        textDocuments,
         findFiles,
         getConfiguration,
         getWorkspaceFolder,
@@ -442,8 +486,20 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
     };
 
     const executeTask = mock.fn(
-        (task: vscode.Task) => {
-            const execution = { task, terminate: mock.fn() } as unknown as vscode.TaskExecution;
+        async (task: vscode.Task) => {
+            let terminal: vscode.Pseudoterminal | undefined;
+            let ended = false;
+            const end = () => {
+                if (!ended) { ended = true; taskEndEmitter.fire({ execution }); }
+            };
+            const execution: vscode.TaskExecution = {
+                task, terminate: mock.fn(() => { terminal?.close(); end(); }),
+            };
+            if (task.execution instanceof MockCustomExecution && terminalOptions?.openTaskTerminalsOnExecute !== false) {
+                terminal = await task.execution.callback(task.definition);
+                terminal.onDidClose?.(end);
+                terminal.open(undefined);
+            }
             return Promise.resolve(execution);
         },
     );
@@ -451,6 +507,17 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
     const tasks = {
         executeTask,
         onDidEndTaskProcess: taskProcessEndEmitter.event,
+        onDidEndTask: taskEndEmitter.event,
+    };
+    const debug = {
+        registerDebugConfigurationProvider: mock.fn((_type: string, _provider: vscode.DebugConfigurationProvider, _trigger?: vscode.DebugConfigurationProviderTriggerKind) => Disposable.None),
+        registerDebugAdapterTrackerFactory: mock.fn((_type: string, _factory: vscode.DebugAdapterTrackerFactory) => Disposable.None),
+        onDidTerminateDebugSession: debugSessionEndEmitter.event,
+        startDebugging: mock.fn((_folder: vscode.WorkspaceFolder | undefined, _config: string | vscode.DebugConfiguration) => Promise.resolve(true)),
+    };
+    const installedExtensions = new Map<string, vscode.Extension<unknown>>();
+    const extensions = {
+        getExtension: mock.fn(<T>(id: string) => installedExtensions.get(id) as vscode.Extension<T> | undefined),
     };
 
     const mockVsCode = {
@@ -458,6 +525,8 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         commands,
         env,
         tasks,
+        debug,
+        extensions,
         window,
         workspace,
         l10n: { t },
@@ -475,6 +544,9 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         ThemeColor: MockThemeColor,
         MarkdownString: MockMarkdownString,
         ShellExecution: MockShellExecution,
+        CustomExecution: MockCustomExecution,
+        TaskRevealKind: MockTaskRevealKind,
+        DebugConfigurationProviderTriggerKind: MockDebugConfigurationProviderTriggerKind,
         RelativePattern: MockRelativePattern,
         Task: MockTask,
         TaskScope: MockTaskScope,
@@ -486,6 +558,7 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         vscode: mockVsCode,
         quickPicks,
         inputBoxes,
+        terminals,
         settings,
         registeredCommands,
         fs,
@@ -501,6 +574,11 @@ export function createMockVsCode(overrides?: Partial<IVsCode>): MockVsCodeResult
         workspaceFoldersChangeEmitter,
         tasks,
         taskProcessEndEmitter,
+        taskEndEmitter,
+        debug,
+        extensions,
+        installedExtensions,
+        debugSessionEndEmitter,
         textDocuments,
         shownDocuments,
     } as unknown as MockVsCodeResult;
@@ -516,6 +594,26 @@ function languageFromPath(path: string): string | undefined {
     }
 
     return undefined;
+}
+
+/** Installs an activated extension API fixture into the mock extension registry. */
+export function addMockExtension<T>(m: MockVsCodeResult, id: string, api: T): vscode.Extension<T> {
+    const extension: vscode.Extension<T> = {
+        id, extensionUri: m.vscode.Uri.file(`/extensions/${id}`), extensionPath: `/extensions/${id}`,
+        isActive: true, packageJSON: {}, extensionKind: 2, exports: api,
+        activate: mock.fn(() => Promise.resolve(api)),
+    };
+    m.installedExtensions.set(id, extension);
+    return extension;
+}
+
+/** Waits for a task execution and lets its caller subscribe to completion before a test fires the end event. */
+export async function getMockTaskExecution(m: MockVsCodeResult, index = 0): Promise<vscode.TaskExecution> {
+    await waitFor(() => m.tasks.executeTask.mock.callCount() > index, 'task execution');
+    await delay(0);
+    const execution = await m.tasks.executeTask.mock.calls[index].result;
+    if (!execution) { throw new Error('The task execution fixture did not return an execution.'); }
+    return execution;
 }
 
 /**
@@ -548,8 +646,8 @@ export interface MockCodeContextResult {
  * expect(await resultPromise).to.equal('hello');
  * ```
  */
-export function createMockCodeContext(): MockCodeContextResult {
-    const mockResult = createMockVsCode();
+export function createMockCodeContext(terminalOptions?: MockVsCodeOptions): MockCodeContextResult {
+    const mockResult = createMockVsCode(undefined, terminalOptions);
     const extensionContext = {
         extensionMode: MockExtensionMode.Test,
         workspaceState: new MockMemento(),

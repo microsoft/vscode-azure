@@ -4,68 +4,21 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ProcessError } from '@azure/core-process';
-import { ChildProcess } from 'node:child_process';
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { Readable } from 'node:stream';
 import { mock, type Mock } from 'node:test';
 import type * as vscode from 'vscode';
 import { URI as Uri } from 'vscode-uri';
 import { command, type CommandLineArgs } from '../../src/base/CommandLineBuilder';
 import { delay } from '../../src/base/delay';
-import { ProcessExecutor, type ResolveExecutableFn, type SpawnFn } from '../../src/base/IProcessExecutor';
+import { ProcessExecutor, type ResolveExecutableFn } from '../../src/base/IProcessExecutor';
 import { CancellationError } from '../../src/vscode/CancellationError';
 import { EventEmitter } from '../../src/vscode/EventEmitter';
-import { createMockVsCode } from '../vscode/MockVsCode';
-
-/** Wraps a list of lines as a readable stream, mimicking a child's stdio. */
-function lineStream(lines: readonly string[]): Readable {
-    return Readable.from(lines.map((line) => `${line}\n`));
-}
-
-/**
- * Creates a mock {@linkcode SpawnFn} returning a fake {@linkcode ChildProcess}:
- * `stdout`/`stderr` readables plus a deferred `'close'` (or `'error'`) event.
- *
- * @param options - `exitCode` defaults to `0`. When `spawnError` is set the
- *   factory throws it synchronously, mimicking a command that cannot be
- *   resolved. When `emitError` is set the child emits it as an `'error'` event.
- */
-function createMockSpawn(options?: {
-    stdout?: string;
-    stderr?: string;
-    stderrLines?: readonly string[];
-    exitCode?: number | null;
-    signalName?: NodeJS.Signals | null;
-    spawnError?: Error;
-    emitError?: Error;
-}): Mock<SpawnFn> {
-    const { stdout = '', stderr = '', stderrLines, exitCode = 0, signalName = null, spawnError, emitError } = options ?? {};
-
-    return mock.fn<SpawnFn>((): ChildProcess => {
-        if (spawnError) {
-            throw spawnError;
-        }
-
-        const child = new ChildProcess();
-        Object.defineProperties(child, {
-            stdout: { value: Readable.from(stdout ? [stdout] : []) },
-            stderr: { value: stderrLines ? lineStream(stderrLines) : Readable.from(stderr ? [stderr] : []) },
-        });
-
-        // Let the caller attach listeners before the process "finishes".
-        setImmediate(() => {
-            if (emitError) {
-                child.emit('error', emitError);
-            } else {
-                child.emit('close', exitCode, signalName);
-            }
-        });
-
-        return child;
-    });
-}
+import { createMockVsCode, getMockTaskExecution } from '../vscode/MockVsCode';
+import { createMockProcessExecutor, createMockSpawn } from './mockProcess';
+import { collectAsync } from '../../src/data/collectAsync';
+import { waitFor } from '../waitFor';
 
 describe('ProcessExecutor (unit)', () => {
     describe('background execution', () => {
@@ -100,6 +53,71 @@ describe('ProcessExecutor (unit)', () => {
 
             expect(result.json).to.deep.equal({ key: 'value' });
             expect(result.stdout).to.equal('{"key":"value"}');
+        });
+
+        it('streams both output channels without retaining process output', async () => {
+            const { vscode: code } = createMockVsCode();
+            const executor = new ProcessExecutor(code, createMockSpawn({ stdout: 'host ready', stderr: 'worker message' }));
+            const result = await executor.spawn({
+                execution: 'background', command: ['func', 'host', 'start'], streamOutput: true,
+            });
+
+            const [stdout, stderr] = await Promise.all([collectAsync(result.stdout), collectAsync(result.stderr)]);
+            expect(stdout).to.deep.equal(['host ready']);
+            expect(stderr).to.deep.equal(['worker message']);
+            await result.completed;
+        });
+
+        it('reports process failure while streaming output', async () => {
+            const { vscode: code } = createMockVsCode();
+            const executor = new ProcessExecutor(code, createMockSpawn({ stderr: 'host failure', exitCode: 2 }));
+            const result = await executor.spawn({
+                execution: 'background', command: ['func'], streamOutput: true,
+            });
+            const [stdout, stderr] = await Promise.all([collectAsync(result.stdout), collectAsync(result.stderr)]);
+            expect(stdout).to.deep.equal([]);
+            expect(stderr).to.deep.equal(['host failure']);
+            const error: ProcessError = await expect(result.completed).to.be.rejectedWith(ProcessError);
+            expect(error.code).to.equal(2);
+            expect(error.stdout).to.equal('');
+            expect(error.stderr).to.equal('');
+            expect(error.message).to.not.contain('host failure');
+        });
+
+        it('pauses unread output and preserves chunk order within each channel', async () => {
+            const spawn = createMockSpawn({ stdoutChunks: ['first', 'second', 'third'], stderrLines: ['error one', 'error two'] });
+            const executor = new ProcessExecutor(createMockVsCode().vscode, spawn);
+            const result = await executor.spawn({ execution: 'background', command: ['func'], streamOutput: true });
+            await waitFor(() => spawn.mock.calls[0].result?.stdout?.isPaused() === true);
+            const [stdout, stderr] = await Promise.all([collectAsync(result.stdout), collectAsync(result.stderr)]);
+            expect(stdout).to.deep.equal(['first', 'second', 'third']);
+            expect(stderr).to.deep.equal(['error one\n', 'error two\n']);
+            await result.completed;
+        });
+
+        it('drains remaining output when the consumer stops early', async () => {
+            const executor = new ProcessExecutor(createMockVsCode().vscode, createMockSpawn({
+                stdoutChunks: ['first', 'second', 'third'], stderrLines: ['error one', 'error two'],
+            }));
+            const result = await executor.spawn({ execution: 'background', command: ['func'], streamOutput: true });
+            for await (const text of result.stdout) {
+                expect(text).to.equal('first');
+                break;
+            }
+            expect(await collectAsync(result.stderr)).to.deep.equal(['error one\n', 'error two\n']);
+            await result.completed;
+        });
+
+        it('decodes UTF-8 characters split across output chunks', async () => {
+            const bytes = Buffer.from('a\u20acb');
+            const executor = new ProcessExecutor(createMockVsCode().vscode, createMockSpawn({
+                stdoutChunks: [bytes.subarray(0, 2), bytes.subarray(2)],
+            }));
+            const result = await executor.spawn({ execution: 'background', command: ['func'], streamOutput: true });
+            const [stdout, stderr] = await Promise.all([collectAsync(result.stdout), collectAsync(result.stderr)]);
+            expect(stdout.join('')).to.equal('a\u20acb');
+            expect(stderr).to.deep.equal([]);
+            await result.completed;
         });
 
         it('should throw ProcessError on non-zero exit code', async () => {
@@ -336,15 +354,184 @@ describe('ProcessExecutor (unit)', () => {
 
             expect(lines).to.deep.equal([{ valid: true }]);
         });
+
+        it('reports a JSONL process failure through completion after yielding its progress', async () => {
+            const executor = new ProcessExecutor(createMockVsCode().vscode, createMockSpawn({
+                stdout: '{}', stderrLines: ['{"step":1}'], exitCode: 2,
+            }));
+            const result = await executor.spawn({
+                execution: 'background', command: ['test-cmd'], parseJson: true, jsonLines: true,
+            });
+            expect(await collectAsync(result.jsonLines)).to.deep.equal([{ step: 1 }]);
+            await expect(result.completed).to.be.rejectedWith(ProcessError).and.eventually.have.property('code', 2);
+        });
+
+        it('reports malformed JSON stdout through JSONL completion', async () => {
+            const executor = new ProcessExecutor(createMockVsCode().vscode, createMockSpawn({
+                stdout: 'not JSON', stderrLines: ['{"step":1}'],
+            }));
+            const result = await executor.spawn({
+                execution: 'background', command: ['test-cmd'], parseJson: true, jsonLines: true,
+            });
+            expect(await collectAsync(result.jsonLines)).to.deep.equal([{ step: 1 }]);
+            await expect(result.completed).to.be.rejectedWith(SyntaxError);
+        });
+    });
+
+    describe('owned process-tree cancellation', () => {
+        afterEach(() => { mock.restoreAll(); });
+
+        for (const platform of ['win32', 'linux', 'darwin'] as const) {
+            for (const owned of [true, false]) {
+                it(`uses ${platform} process isolation only for owned launches (${owned})`, async () => {
+                    mock.property(process, 'platform', platform);
+                    const s = createMockProcessExecutor(createMockVsCode().vscode);
+                    await s.executor.spawn({ execution: 'background', command: ['owned'], killTreeOnCancel: owned });
+                    expect(s.spawn.mock.calls[0].arguments[2]?.detached).to.equal(owned && platform !== 'win32');
+                });
+            }
+        }
+
+        for (const code of [undefined, 'ESRCH', 'EPERM']) {
+            it(`signals the owned POSIX group and handles ${code ?? 'successful termination'}`, async () => {
+                mock.property(process, 'platform', 'linux');
+                const spawn = createMockSpawn({ keepAlive: true, pid: 1234 });
+                const kill = mock.method(process, 'kill', () => {
+                    if (code) { throw Object.assign(new Error('Group termination failed'), { code }); }
+                    return true;
+                });
+                const executor = new ProcessExecutor(createMockVsCode().vscode, spawn);
+                const abort = new AbortController();
+                const running = executor.spawn({ execution: 'background', command: ['owned'], killTreeOnCancel: true }, abort.signal);
+                const rejected = code === 'EPERM'
+                    ? expect(running).to.be.rejectedWith('Group termination failed')
+                    : expect(running).to.be.rejectedWith(CancellationError);
+                abort.abort();
+                await waitFor(() => kill.mock.callCount() === 1);
+                spawn.mock.calls[0].result?.emit('close', 0, null);
+                await rejected;
+                expect(kill.mock.calls[0].arguments).to.deep.equal([-1234, 'SIGKILL']);
+            });
+        }
+
+        it('signals the POSIX group after its leader exits while a worker still holds the pipes', async () => {
+            mock.property(process, 'platform', 'linux');
+            const spawn = createMockSpawn({ keepAlive: true, keepStreamsOpen: true, pid: 1234 });
+            const kill = mock.method(process, 'kill', () => true);
+            const executor = new ProcessExecutor(createMockVsCode().vscode, spawn);
+            const abort = new AbortController();
+            const running = executor.spawn({ execution: 'background', command: ['owned'], killTreeOnCancel: true }, abort.signal);
+            const rejected = expect(running).to.be.rejectedWith(CancellationError);
+            const child = spawn.mock.calls[0].result;
+            if (!child) { throw new Error('Expected the owned child process.'); }
+            mock.property(child, 'exitCode', 0);
+            child.emit('exit', 0, null);
+            abort.abort();
+            await waitFor(() => kill.mock.callCount() === 1);
+            child.stdout?.push(null);
+            child.stderr?.push(null);
+            child.emit('close', 0, null);
+            await rejected;
+            expect(kill.mock.calls[0].arguments).to.deep.equal([-1234, 'SIGKILL']);
+        });
+
+        it('ends a waiting output generator when tree termination fails before the child closes', async () => {
+            const s = createMockProcessExecutor(createMockVsCode().vscode, { keepAlive: true, keepStreamsOpen: true });
+            s.terminateTree.mock.mockImplementation(() => Promise.reject(new Error('termination failed')));
+            const abort = new AbortController();
+            const running = await s.executor.spawn({
+                execution: 'background', command: ['owned'], streamOutput: true, killTreeOnCancel: true,
+            }, abort.signal);
+            const output = Promise.all([collectAsync(running.stdout), collectAsync(running.stderr)]);
+            const rejected = expect(running.completed).to.be.rejectedWith('termination failed');
+            abort.abort();
+            try {
+                await rejected;
+                expect(await output).to.deep.equal([[], []]);
+            } finally {
+                s.spawn.mock.calls[0].result?.emit('close', 0, null);
+            }
+        });
+
+        it('waits for descendant termination before completing cancellation', async () => {
+            const m = createMockVsCode();
+            const s = createMockProcessExecutor(m.vscode, { keepAlive: true });
+            const kill = mock.method(s.executor, 'killProcessTree');
+            const terminated = Promise.withResolvers<undefined>();
+            const settled = mock.fn();
+            s.terminateTree.mock.mockImplementation(() => {
+                s.spawn.mock.calls[0].result?.emit('close', 0, null);
+                return terminated.promise;
+            });
+            const abort = new AbortController();
+            const process = s.executor.spawn({ execution: 'background', command: ['owned'], killTreeOnCancel: true }, abort.signal);
+            void process.then(settled, settled);
+            abort.abort();
+            await delay(0);
+            expect(settled.mock.callCount()).to.equal(0);
+            terminated.resolve(undefined);
+            await expect(process).to.be.rejectedWith(CancellationError);
+            expect(s.terminateTree.mock.calls[0].arguments[0]).to.equal(s.spawn.mock.calls[0].result?.pid);
+            expect(kill.mock.calls[0].arguments).to.deep.equal([s.spawn.mock.calls[0].result?.pid]);
+        });
+
+        for (const failure of ['throw', 'reject']) {
+            it(`surfaces a tree-termination ${failure} instead of reporting ordinary cancellation`, async () => {
+                const s = createMockProcessExecutor(createMockVsCode().vscode, { keepAlive: true });
+                s.terminateTree.mock.mockImplementation(() => {
+                    if (failure === 'throw') { throw new Error('termination failed'); }
+                    return Promise.reject(new Error('termination failed'));
+                });
+                const abort = new AbortController();
+                const process = s.executor.spawn({ execution: 'background', command: ['owned'], killTreeOnCancel: true }, abort.signal);
+                const rejected = expect(process).to.be.rejectedWith('termination failed');
+                abort.abort();
+                try { await rejected; }
+                finally { s.spawn.mock.calls[0].result?.emit('close', 0, null); }
+            });
+        }
+
+        it('does not spawn an owned process when cancellation precedes startup', async () => {
+            const s = createMockProcessExecutor(createMockVsCode().vscode);
+            const abort = new AbortController();
+            abort.abort();
+            await expect(s.executor.spawn({ execution: 'background', command: ['owned'], killTreeOnCancel: true }, abort.signal))
+                .to.be.rejectedWith(CancellationError);
+            expect(s.spawn.mock.callCount()).to.equal(0);
+        });
+    });
+
+    describe('owned process-tree termination (integration)', () => {
+        it('stops a real child worker as well as its directly spawned parent', async () => {
+            const executor = new ProcessExecutor(createMockVsCode().vscode);
+            const abort = new AbortController();
+            const running = await executor.spawn({
+                execution: 'background', killTreeOnCancel: true, streamOutput: true,
+                command: [process.execPath, '-e', `const {spawn}=require('node:child_process'); const worker=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'ignore'}); console.log(worker.pid); setInterval(()=>{},1000);`],
+            }, abort.signal);
+            const rejected = expect(running.completed).to.be.rejectedWith(CancellationError);
+            try {
+                const stderr = collectAsync(running.stderr);
+                const first = await running.stdout.next();
+                if (first.done) { throw new Error('Expected the owned worker PID on stdout.'); }
+                const pid = Number(first.value.trim());
+                expect(pid).to.be.greaterThan(0);
+                const remainder = collectAsync(running.stdout);
+                abort.abort();
+                await rejected;
+                expect(await remainder).to.deep.equal([]);
+                expect(await stderr).to.deep.equal([]);
+                expect(() => process.kill(pid, 0)).to.throw();
+            } finally {
+                abort.abort();
+                await Promise.all([running.stdout.return(undefined), running.stderr.return(undefined)]);
+                await running.completed.catch(() => undefined);
+            }
+        });
     });
 
     describe('foreground execution', () => {
-        async function getTaskExecution(m: ReturnType<typeof createMockVsCode>): Promise<vscode.TaskExecution> {
-            // Yield to let spawn's async internals call executeTask
-            await delay(0);
-            expect(m.tasks.executeTask.mock.callCount()).to.equal(1);
-            return m.tasks.executeTask.mock.calls[0].result as Promise<vscode.TaskExecution>;
-        }
+        const getTaskExecution = getMockTaskExecution;
 
         it('should create a task and resolve on exit code 0', async () => {
             const m = createMockVsCode();
@@ -506,6 +693,39 @@ describe('ProcessExecutor (unit)', () => {
             m.taskProcessEndEmitter.fire({ execution: taskExecution, exitCode: 0 });
             await promise;
         });
+    });
+
+    describe('killProcessTree', () => {
+        afterEach(() => { mock.restoreAll(); });
+
+        it('forwards an owned PID and waits for termination', async () => {
+            const terminated = Promise.withResolvers<undefined>();
+            const terminate = mock.fn((_pid: number) => terminated.promise);
+            const executor = new ProcessExecutor(createMockVsCode().vscode, createMockSpawn(), undefined, terminate);
+            const settled = mock.fn();
+            const killing = executor.killProcessTree(1234);
+            void killing.then(settled, settled);
+            await delay(0);
+            expect(terminate.mock.calls[0].arguments).to.deep.equal([1234]);
+            expect(settled.mock.callCount()).to.equal(0);
+            terminated.resolve(undefined);
+            await killing;
+        });
+
+        it('propagates termination failure', async () => {
+            const terminate = mock.fn(() => Promise.reject(new Error('Termination denied')));
+            const executor = new ProcessExecutor(createMockVsCode().vscode, createMockSpawn(), undefined, terminate);
+            await expect(executor.killProcessTree(1234)).to.be.rejectedWith('Termination denied');
+        });
+
+        for (const pid of [0, 1, -1, -1234, 2.5, NaN, Infinity, 0x80000000]) {
+            it(`rejects unsafe process ID ${pid} before invoking termination`, async () => {
+                const terminate = mock.fn(() => Promise.resolve());
+                const executor = new ProcessExecutor(createMockVsCode().vscode, createMockSpawn(), undefined, terminate);
+                await expect(executor.killProcessTree(pid)).to.be.rejectedWith(RangeError);
+                expect(terminate.mock.callCount()).to.equal(0);
+            });
+        }
     });
 
     describe('resolveExecutable', () => {
@@ -685,6 +905,33 @@ describe('ProcessExecutor (integration)', () => {
     });
 
     describe('hard cases', () => {
+        it('streams both channels beyond the OS pipe buffer without truncation or deadlock', async () => {
+            const size = 1024 * 1024;
+            const executor = new ProcessExecutor(createMockVsCode().vscode);
+            const result = await executor.spawn({
+                execution: 'background', streamOutput: true,
+                command: [process.execPath, '-e', `process.stdout.write('o'.repeat(${size})); process.stderr.write('e'.repeat(${size}));`],
+            });
+            const [stdout, stderr] = await Promise.all([collectAsync(result.stdout), collectAsync(result.stderr)]);
+            expect(stdout.join('')).to.equal('o'.repeat(size));
+            expect(stderr.join('')).to.equal('e'.repeat(size));
+            await result.completed;
+        });
+
+        it('lets a large-output process finish after its output generator is closed early', async () => {
+            const executor = new ProcessExecutor(createMockVsCode().vscode);
+            const result = await executor.spawn({
+                execution: 'background', streamOutput: true,
+                command: [process.execPath, '-e', `process.stdout.write('o'.repeat(1024 * 1024)); process.stderr.write('e'.repeat(1024 * 1024));`],
+            });
+            for await (const text of result.stdout) {
+                expect(text.length).to.be.greaterThan(0);
+                break;
+            }
+            expect((await collectAsync(result.stderr)).join('')).to.equal('e'.repeat(1024 * 1024));
+            await result.completed;
+        });
+
         it('should pass arguments verbatim without shell interpretation or quoting corruption', async () => {
             const { vscode: code } = createMockVsCode();
             const executor = new ProcessExecutor(code);
