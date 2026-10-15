@@ -1,10 +1,11 @@
-!dist
-dist/*/test/**
+dist/*/test/**/*.test.*
 node_modules/
 .eslint*
 src
+test
 tsconfig.*
 *.tgz
 *.map
 vscode.ts
 eslint.config.mjs
+.mocharc.*
