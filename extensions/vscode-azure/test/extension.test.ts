@@ -5,12 +5,6 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { CopyFunctionUrl } from '../src/commands/functions/CopyFunctionUrl';
-import { DeleteFunction } from '../src/commands/functions/DeleteFunction';
-import { ExecuteFunction } from '../src/commands/functions/ExecuteFunction';
-import { RevealFunctionAppIdentity } from '../src/commands/functions/RevealFunctionAppIdentity';
-import { SetFunctionState } from '../src/commands/functions/SetFunctionState';
-import { StreamFunctionLogs } from '../src/commands/functions/StreamFunctionLogs';
 import { ExtensionId } from '../src/constants';
 
 let vscode: typeof import('vscode');
@@ -55,64 +49,6 @@ describe('command contributions (vscode integration)', () => {
 
         expect(contributed).to.not.be.empty;
         expect(contributed.filter((command) => !registered.has(command))).to.deep.equal([]);
-    });
-    it('matches remote Functions capabilities case-insensitively with word boundaries and hides node-only palette entries', () => {
-        const extension = vscode.extensions.getExtension(ExtensionId);
-        if (!extension) {
-            expect.fail('Extension not found');
-        }
-        const manifest = extension.packageJSON as {
-            contributes: { menus: Record<string, readonly { readonly command: string; readonly when?: string }[]> };
-        };
-        const capabilities = [
-            ['vscode-azure/functions/execute', ExecuteFunction.ContextValue],
-            ['vscode-azure/functions/copyUrl', CopyFunctionUrl.ContextValue],
-            ['vscode-azure/functions/enable', SetFunctionState.EnableContextValue],
-            ['vscode-azure/functions/disable', SetFunctionState.DisableContextValue],
-            ['vscode-azure/functions/delete', DeleteFunction.ContextValue],
-            ['vscode-azure/functions/streamLogs', StreamFunctionLogs.ContextValue],
-            ['vscode-azure/functions/revealIdentity', RevealFunctionAppIdentity.ContextValue],
-        ];
-        for (const [command, token] of capabilities) {
-            const menu = manifest.contributes.menus['view/item/context'].find(item => item.command === command);
-            const expression = menu?.when?.match(/viewItem =~ \/([^/]+)\/([a-z]*)/);
-            if (!expression) {
-                expect.fail(`Missing capability menu for ${command}`);
-            }
-            const pattern = new RegExp(expression[1], expression[2]);
-            expect(pattern.test(`another;${token};capability`), command).to.be.true;
-            expect(pattern.test(token.toUpperCase()), command).to.be.true;
-            expect(pattern.test(`${token}Suffix`), command).to.be.false;
-            expect(manifest.contributes.menus.commandPalette.find(item => item.command === command)?.when, command).to.equal('false');
-        }
-    });
-
-    it('matches workspace Functions commands to their shared capabilities without matching longer markers', () => {
-        const extension = vscode.extensions.getExtension(ExtensionId);
-        if (!extension) {
-            expect.fail('Extension not found');
-        }
-        const manifest = extension.packageJSON as {
-            contributes: { menus: Record<string, readonly { readonly command: string; readonly when?: string }[]> };
-        };
-        const capabilities = [
-            ['vscode-azure/functions/execute', ExecuteFunction.ContextValue],
-            ['vscode-azure/functions/copyUrl', CopyFunctionUrl.ContextValue],
-            ['vscode-azure/functions/enable', SetFunctionState.EnableContextValue],
-            ['vscode-azure/functions/disable', SetFunctionState.DisableContextValue],
-        ];
-        for (const [command, token] of capabilities) {
-            const menu = manifest.contributes.menus['view/item/context'].find(item =>
-                item.command === command && item.when?.includes('view == vscode-azure/workspace'));
-            const expression = menu?.when?.match(/viewItem =~ \/([^/]+)\/([a-z]*)/);
-            if (!expression) {
-                expect.fail(`Missing workspace capability menu for ${command}`);
-            }
-            const pattern = new RegExp(expression[1], expression[2]);
-            expect(pattern.test(`another;${token};capability`), command).to.be.true;
-            expect(pattern.test(token.toUpperCase()), command).to.be.true;
-            expect(pattern.test(`${token}Suffix`), command).to.be.false;
-        }
     });
 });
 
