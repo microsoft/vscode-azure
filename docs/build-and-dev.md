@@ -138,6 +138,20 @@ pnpm --filter @microsoft/vscode-azure-utils run test -- --watch --extension ts
 
 The extension's `vscode-test` runner has no watch mode at all.
 
+## Running from the GitHub Copilot desktop app
+
+Review and accept `.github/github-app.yml` in the app, then click **Run**. The
+script bundles the extension and opens a new VS Code Extension Development Host
+window with Azure Resources disabled to avoid conflicts. The command uses `$PWD`
+to pass the current worktree's absolute extension path to VS Code; it works in
+PowerShell, Bash, and Zsh. Telemetry is automatically suppressed in extension
+development mode.
+
+Run `pnpm install` during setup and ensure the VS Code `code` command is on your
+`PATH`. The script builds once; run it again after source changes and reload the
+Extension Development Host window to load the updated bundle. For watch mode and
+debugging, use **Extension: Run** in VS Code instead.
+
 ## Running against mock data
 
 The **Extension: Run (Mock Data)** launch configuration sets `AZURE_MOCK_DATA=1`, which makes `main.js` apply [`test/override/mock.ts`](../extensions/vscode-azure/test/override/mock.ts) to the container after `setUpContainer` but before activation. It runs in its own `Azure Mock Data` settings profile, so a personal subscription filter cannot hide the mock data.

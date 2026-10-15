@@ -19,7 +19,7 @@ import { MockFileChangeType, MockFilePermission, MockFileSystem, MockFileSystemE
 import { MockOutputChannel } from './MockOutputChannel';
 import { MockTerminal } from './MockTerminal';
 import { MockUri } from './MockUri';
-import { MockConfigurationTarget, MockCustomExecution, MockDebugConfigurationProviderTriggerKind, MockMarkdownString, MockProgressLocation, MockRelativePattern, MockShellExecution, MockTask, MockTaskRevealKind, MockTaskScope, MockThemeColor, MockThemeIcon, MockTreeItemCollapsibleState } from './MockValueTypes';
+import { MockConfigurationTarget, MockCustomExecution, MockDebugConfigurationProviderTriggerKind, MockExtensionMode, MockMarkdownString, MockProgressLocation, MockRelativePattern, MockShellExecution, MockTask, MockTaskRevealKind, MockTaskScope, MockThemeColor, MockThemeIcon, MockTreeItemCollapsibleState } from './MockValueTypes';
 import { MockTreeItem } from './tree/MockTreeItem';
 
 /** Controls pseudoterminal opening in shared VS Code fixtures. */
@@ -534,6 +534,7 @@ export function createMockVsCode(
         TreeItem: MockTreeItem,
         TreeItemCollapsibleState: MockTreeItemCollapsibleState,
         ConfigurationTarget: MockConfigurationTarget,
+        ExtensionMode: MockExtensionMode,
         FileType: MockFileType,
         FilePermission: MockFilePermission,
         FileChangeType: MockFileChangeType,
@@ -648,6 +649,7 @@ export interface MockCodeContextResult {
 export function createMockCodeContext(terminalOptions?: MockVsCodeOptions): MockCodeContextResult {
     const mockResult = createMockVsCode(undefined, terminalOptions);
     const extensionContext = {
+        extensionMode: MockExtensionMode.Test,
         workspaceState: new MockMemento(),
         globalState: Object.assign(new MockMemento(), {
             setKeysForSync: () => { /* noop */ },
