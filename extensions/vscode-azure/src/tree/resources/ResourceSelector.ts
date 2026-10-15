@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { getNodeType, isGenericResource, isVirtualResource, nodeExperience, resourceExperience, type ConcreteAzureNode, type GenericResource, type NodeExperienceTree, type VirtualResource } from '@microsoft/vscode-azure-azutils';
-import { IActionExecutor, ICodeContext, IOutputChannel } from '@microsoft/vscode-azure-utils';
+import { CaselessSet, IActionExecutor, ICodeContext, IOutputChannel, type ICaselessSetReader } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
 import { inject, injectable } from 'inversify';
 import { IAzureViewDataTree, IAzureViewViewItemTree } from '../../services';
@@ -64,8 +64,8 @@ export interface SelectResourceOptions {
     readonly key?: string;
     /** Message overrides used when direct key resolution fails. */
     readonly messages?: ResolveMessages;
-    /** Restricts selection to this logical resource type, compared case-insensitively. */
-    readonly logicalType?: string;
+    /** Allowed logical types, compared case-insensitively; omitted accepts every type, an empty array none. */
+    readonly logicalTypes?: readonly string[];
     /** Picker title used when no key was supplied. */
     readonly title?: string;
 }
@@ -139,8 +139,8 @@ export class ResourceSelector {
      * Resolves a {@linkcode GenericResource} from a tree-item key, or prompts
      * the user to pick one from the resource tree.
      *
-     * Both paths honor {@linkcode SelectResourceOptions.logicalType logicalType},
-     * so a key naming a resource of another type is rejected rather than
+     * Both paths honor {@linkcode SelectResourceOptions.logicalTypes logicalTypes},
+     * so a key naming a resource outside those types is rejected rather than
      * silently accepted.
      *
      * @returns The resolved resource.
@@ -148,9 +148,10 @@ export class ResourceSelector {
      *   the user cancels the picker.
      */
     public async selectResource(options: SelectResourceOptions): Promise<GenericResource> {
+        const logicalTypes: ICaselessSetReader | undefined = options.logicalTypes ? new CaselessSet(options.logicalTypes) : undefined;
         const canHandle = (node: ConcreteAzureNode): node is GenericResource =>
             isGenericResource(node)
-            && (!options.logicalType || node.logicalType.toLowerCase() === options.logicalType.toLowerCase());
+            && (!logicalTypes || logicalTypes.has(node.logicalType));
         const notFound = this.ctx.code.l10n.t('Resource not found in the resources view. Try refreshing the resources view and running the command again.');
         return this.selectOrPrompt({
             key: options.key,
@@ -162,7 +163,7 @@ export class ResourceSelector {
             dataItemTree: this.cache,
             output: this.output,
             title: options.title,
-            logicalType: options.logicalType,
+            logicalTypes: options.logicalTypes,
         }));
     }
 
@@ -174,25 +175,17 @@ export class ResourceSelector {
         const canHandle = (node: ConcreteAzureNode): node is TNode =>
             isVirtualResource(node) && options.canHandle(node);
 
-        return this.selectNode({ ...options, canHandle });
-    }
-
-    /**
-     * Resolves a matching node from a tree-item key or prompts through the resource
-     * tree. Non-matching collapsed or expanded nodes remain navigable containers.
-     */
-    public async selectNode<TNode extends ConcreteAzureNode>(options: NarrowingResolveOptions<TNode>): Promise<TNode> {
         return this.selectOrPrompt(
-            options,
+            { ...options, canHandle },
             () => nodeExperience({
                 ...this.ctx,
                 tree: this.createPickerTree(),
                 dataItemTree: this.cache,
                 output: this.output,
                 title: this.ctx.code.l10n.t('Select Resource'),
-                canHandle: options.canHandle,
+                canHandle,
                 classify: (_key, treeItem, node) => {
-                    if (node && options.canHandle(node)) {
+                    if (node && canHandle(node)) {
                         return 'terminal';
                     }
 

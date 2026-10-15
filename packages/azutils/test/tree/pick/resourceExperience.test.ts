@@ -51,7 +51,7 @@ describe('resourceExperience (unit)', () => {
             ...ctx,
             tree,
             dataItemTree,
-            logicalType: 'Microsoft.Web/sites',
+            logicalTypes: ['Microsoft.Web/sites'],
             output,
         });
 
@@ -74,7 +74,7 @@ describe('resourceExperience (unit)', () => {
             ...ctx,
             tree,
             dataItemTree,
-            logicalType: 'Microsoft.Web/sites',
+            logicalTypes: ['Microsoft.Web/sites'],
             output,
         });
 
@@ -121,7 +121,7 @@ describe('resourceExperience (unit)', () => {
             ...ctx,
             tree,
             dataItemTree,
-            logicalType: 'Microsoft.Web/sites',
+            logicalTypes: ['Microsoft.Web/sites'],
             output,
         });
 
@@ -148,7 +148,7 @@ describe('resourceExperience (unit)', () => {
             ...ctx,
             tree,
             dataItemTree,
-            logicalType: 'Microsoft.Web/sites',
+            logicalTypes: ['Microsoft.Web/sites'],
             output,
         });
 
@@ -174,7 +174,7 @@ describe('resourceExperience (unit)', () => {
             ...ctx,
             tree,
             dataItemTree,
-            logicalType: 'Microsoft.Web/sites',
+            logicalTypes: ['Microsoft.Web/sites'],
             output,
         });
 
@@ -198,7 +198,7 @@ describe('resourceExperience (unit)', () => {
             ...ctx,
             tree,
             dataItemTree,
-            logicalType: 'Microsoft.Web/sites',
+            logicalTypes: ['Microsoft.Web/sites'],
             canPickMany: true,
             output,
         });
@@ -223,13 +223,71 @@ describe('resourceExperience (unit)', () => {
             ...ctx,
             tree,
             dataItemTree,
-            logicalType: 'Microsoft.Web/sites',
+            logicalTypes: ['Microsoft.Web/sites'],
             canPickMany: true,
             output,
         });
 
         expect(result.map(r => r.name)).to.deep.equal(['site1']);
         expect(mock.quickPicks[0].items.map(item => item.label)).to.deep.equal(['site1']);
+        tracker.assertAllConsumed();
+    });
+
+    it('should select resources across logical types case-insensitively', async () => {
+        const { ctx, mock } = createMockCodeContext();
+        const tree = createMockViewItemTree({ '': [site1Id, storageAccountId] });
+        const dataItemTree = createMockDataItemTree([site1, storageAccount]);
+        const tracker = respondToPrompts(mock, [{ pickMany: ['site1', 'sa1'] }]);
+
+        const result = await resourceExperience({
+            ...ctx, tree, dataItemTree, output,
+            logicalTypes: ['microsoft.web/SITES', 'MICROSOFT.STORAGE/storageAccounts'],
+            canPickMany: true,
+        });
+
+        expect(result).to.deep.equal([site1, storageAccount]);
+        tracker.assertAllConsumed();
+    });
+
+    it('should filter resources against every requested logical type', async () => {
+        const { ctx, mock } = createMockCodeContext();
+        const tree = createMockViewItemTree({ '': [site1Id, storageAccountId] });
+        const dataItemTree = createMockDataItemTree([site1, storageAccount]);
+        const tracker = respondToPrompts(mock, [{ pick: 'sa1' }]);
+
+        const result = await resourceExperience({
+            ...ctx, tree, dataItemTree, output,
+            logicalTypes: ['Microsoft.ContainerRegistry/registries', 'microsoft.storage/STORAGEACCOUNTS'],
+        });
+
+        expect(result).to.equal(storageAccount);
+        expect(mock.quickPicks[0].items.map(item => item.label)).to.deep.equal(['sa1']);
+        tracker.assertAllConsumed();
+    });
+
+    it('should navigate resource-type groups when multiple types are requested', async () => {
+        const { ctx, mock } = createMockCodeContext();
+        const webGroupId = 'azr://test-account@portal.azure.com/tenants/test-tenant/subscriptions/test-sub/~resourceType/Microsoft.Web%2Fsites';
+        const storageGroupId = 'azr://test-account@portal.azure.com/tenants/test-tenant/subscriptions/test-sub/~resourceType/Microsoft.Storage%2FstorageAccounts';
+        const tree = createMockViewItemTree({
+            '': [webGroupId, storageGroupId],
+            [webGroupId]: [site1Id],
+            [storageGroupId]: [storageAccountId],
+        });
+        const dataItemTree = createMockDataItemTree([site1, storageAccount]);
+        const tracker = respondToPrompts(mock, [
+            { pick: 'Microsoft.Storage%2FstorageAccounts $(chevron-right)' },
+            { pick: 'sa1' },
+        ]);
+
+        const result = await resourceExperience({
+            ...ctx, tree, dataItemTree, output,
+            logicalTypes: ['Microsoft.Web/sites', 'Microsoft.Storage/storageAccounts'],
+        });
+
+        expect(result).to.equal(storageAccount);
+        expect(mock.quickPicks[0].items.map(item => item.label))
+            .to.deep.equal(['Microsoft.Web%2Fsites $(chevron-right)', 'Microsoft.Storage%2FstorageAccounts $(chevron-right)']);
         tracker.assertAllConsumed();
     });
 });

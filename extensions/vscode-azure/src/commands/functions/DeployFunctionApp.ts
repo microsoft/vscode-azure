@@ -52,7 +52,7 @@ export class DeployFunctionApp implements ManagedCommand {
             await this.create.execute('deploy', dirname(project.resourceUri));
             return;
         }
-        const app = await this.selector.selectResource({ key: target, logicalType: FunctionAppLogicalType });
+        const app = await this.selector.selectResource({ key: target, logicalTypes: [FunctionAppLogicalType] });
         const service = Object.entries(app.tags ?? {}).find(([key]) => key.toLowerCase() === 'azd-service-name')?.[1];
         const matches: { label: string; folder: vscode.Uri }[] = [];
         if (service) {

@@ -150,7 +150,7 @@ describe('FunctionAppViewProvider (unit)', () => {
     it('allows the shared selector to resolve app and remote function nodes by their normal tree keys', async () => {
         const { app, fn, tree, key } = setup();
         const { selector } = createTestResourceSelector({ cache: tree });
-        expect(await selector.selectResource({ key: key(app), logicalType: FunctionAppLogicalType })).to.equal(app);
+        expect(await selector.selectResource({ key: key(app), logicalTypes: [FunctionAppLogicalType] })).to.equal(app);
         expect(selector.resolve({ key: key(fn), canHandle: isFunctionAppFunction })).to.equal(fn);
     });
 

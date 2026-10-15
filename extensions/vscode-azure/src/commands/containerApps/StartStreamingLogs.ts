@@ -52,7 +52,7 @@ export class StartStreamingLogs implements ManagedCommand {
         if (typeof target === 'object') {
             app = target.app;
         } else {
-            const resource = await this.selector.selectResource({ logicalType: ContainerAppResourceType, key: target });
+            const resource = await this.selector.selectResource({ logicalTypes: [ContainerAppResourceType], key: target });
             if (!isContainerApp(resource)) {
                 return;
             }

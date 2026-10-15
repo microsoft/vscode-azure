@@ -25,7 +25,7 @@ export class RevealFunctionAppIdentity implements ManagedCommand {
 
     /** Skips selection for a single identity and surfaces filtered or inaccessible reveal targets. */
     public async execute(key?: string): Promise<void> {
-        const app = await this.selector.selectResource({ key, logicalType: FunctionAppLogicalType });
+        const app = await this.selector.selectResource({ key, logicalTypes: [FunctionAppLogicalType] });
         const site = await this.createClient(app.subscription).webApps.get(getResourceGroupName(app.id), app.name);
         const ids = Object.keys(site.identity?.userAssignedIdentities ?? {});
         if (!ids.length) {

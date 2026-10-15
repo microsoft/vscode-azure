@@ -22,7 +22,7 @@ export class StreamFunctionLogs implements ManagedCommand {
 
     /** Uses shared selection; the service owns cancellation, discovery, and terminal lifetime. */
     public async execute(key?: string): Promise<void> {
-        const app = await this.selector.selectResource({ key, logicalType: FunctionAppLogicalType });
+        const app = await this.selector.selectResource({ key, logicalTypes: [FunctionAppLogicalType] });
         await this.streams.start(app);
     }
 }

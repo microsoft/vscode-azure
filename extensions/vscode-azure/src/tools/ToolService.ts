@@ -280,7 +280,6 @@ export class ToolService implements IToolService {
     ): Promise<void> {
         const key = `${installer.id}|${request.requireSignature ? 'verified' : 'any'}`;
         const shared = this.installs.getOrRun(key, () => installer.install({
-            versionRange: request.versionRange,
             current: found.satisfying ?? found.rejected,
             requireSignature: request.requireSignature,
             reveal: request.revealInstallTask,
