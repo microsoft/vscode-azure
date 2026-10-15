@@ -47,8 +47,11 @@ Owned processes can opt into process-tree cancellation with `killTreeOnCancel: t
 other callers retain direct-child cancellation. Owned processes start in a dedicated
 process group on macOS/Linux; cancellation sends `SIGKILL` to that group. Windows
 processes start normally and cancellation invokes
-`taskkill.exe /PID <host-pid> /T /F`. Descendants that leave the POSIX group are
-outside this cleanup boundary.
+`taskkill.exe /PID <host-pid> /T /F`. If the Windows launcher exits while descendants
+hold its output pipes open, cancellation rejects with a termination error and releases
+the output generators; it cannot terminate those surviving descendants through the
+exited launcher's PID. Descendants that leave the POSIX group are outside this cleanup
+boundary.
 
 `IProcessExecutor.killProcessTree(pid)` exposes the same termination operation
 for callers that own a target PID. On POSIX the PID must identify a dedicated

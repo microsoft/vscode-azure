@@ -108,6 +108,38 @@ describe('ProcessExecutor (unit)', () => {
             await result.completed;
         });
 
+        for (const method of ['return', 'throw'] as const) {
+            it(`drains both channels after ${method} before their first next call`, async () => {
+                const spawn = createMockSpawn({
+                    stdoutChunks: ['first', 'second', 'third'],
+                    stderrLines: ['error one', 'error two', 'error three'],
+                });
+                const executor = new ProcessExecutor(createMockVsCode().vscode, spawn);
+                const result = await executor.spawn({ execution: 'background', command: ['func'], streamOutput: true });
+                const child = spawn.mock.calls[0].result!;
+                await waitFor(() => child.stdout!.isPaused() && child.stderr!.isPaused());
+
+                for (const channel of ['stdout', 'stderr'] as const) {
+                    const stream = child[channel]!;
+                    expect(stream.listenerCount('data')).to.equal(1);
+                    if (method === 'return') {
+                        expect(await result[channel].return(undefined)).to.deep.equal({ value: undefined, done: true });
+                    } else {
+                        const error = new Error('Consumer stopped.');
+                        expect(await expect(result[channel].throw(error)).to.be.rejected).to.equal(error);
+                    }
+                    for (const event of ['data', 'end', 'close', 'error']) {
+                        expect(stream.listenerCount(event), `${channel} ${event} listeners`).to.equal(0);
+                    }
+                    expect(stream.isPaused()).to.equal(false);
+                    expect(await result[channel].next()).to.deep.equal({ value: undefined, done: true });
+                }
+
+                await waitFor(() => child.stdout!.readableEnded && child.stderr!.readableEnded);
+                await result.completed;
+            });
+        }
+
         it('decodes UTF-8 characters split across output chunks', async () => {
             const bytes = Buffer.from('a\u20acb');
             const executor = new ProcessExecutor(createMockVsCode().vscode, createMockSpawn({
@@ -434,6 +466,33 @@ describe('ProcessExecutor (unit)', () => {
             await rejected;
             expect(kill.mock.calls[0].arguments).to.deep.equal([-1234, 'SIGKILL']);
         });
+
+        for (const exitedBy of ['exitCode', 'signalCode'] as const) {
+            it(`rejects Windows cancellation and releases waiting output after the launcher exits by ${exitedBy}`, async () => {
+                mock.property(process, 'platform', 'win32');
+                const s = createMockProcessExecutor(createMockVsCode().vscode, { keepAlive: true, keepStreamsOpen: true });
+                const abort = new AbortController();
+                const running = await s.executor.spawn({
+                    execution: 'background', command: ['owned'], streamOutput: true, killTreeOnCancel: true,
+                }, abort.signal);
+                const output = Promise.all([collectAsync(running.stdout), collectAsync(running.stderr)]);
+                const rejected = expect(running.completed).to.be.rejectedWith('Cannot terminate the process tree after its launcher has exited on Windows.');
+                const child = s.spawn.mock.calls[0].result;
+                if (!child) { throw new Error('Expected the owned child process.'); }
+                mock.property(child, exitedBy, exitedBy === 'exitCode' ? 0 : 'SIGTERM');
+                child.emit('exit', child.exitCode, child.signalCode);
+                abort.abort();
+                try {
+                    await rejected;
+                    expect(await output).to.deep.equal([[], []]);
+                    expect(s.terminateTree.mock.callCount()).to.equal(0);
+                } finally {
+                    child.stdout?.push(null);
+                    child.stderr?.push(null);
+                    child.emit('close', child.exitCode, child.signalCode);
+                }
+            });
+        }
 
         it('ends a waiting output generator when tree termination fails before the child closes', async () => {
             const s = createMockProcessExecutor(createMockVsCode().vscode, { keepAlive: true, keepStreamsOpen: true });
@@ -931,6 +990,29 @@ describe('ProcessExecutor (integration)', () => {
             expect((await collectAsync(result.stderr)).join('')).to.equal('e'.repeat(1024 * 1024));
             await result.completed;
         });
+
+        for (const method of ['return', 'throw'] as const) {
+            it(`lets a large-output process finish after ${method} before either channel starts`, async () => {
+                const controller = new AbortController();
+                const executor = new ProcessExecutor(createMockVsCode().vscode);
+                const result = await executor.spawn({
+                    execution: 'background', streamOutput: true,
+                    ...evalNode(`process.stdout.write('o'.repeat(1024 * 1024)); process.stderr.write('e'.repeat(1024 * 1024));`),
+                }, controller.signal);
+                try {
+                    for (const channel of [result.stdout, result.stderr]) {
+                        if (method === 'return') {
+                            await channel.return(undefined);
+                        } else {
+                            await expect(channel.throw(new Error('Consumer stopped.'))).to.be.rejectedWith('Consumer stopped.');
+                        }
+                    }
+                    await result.completed;
+                } finally {
+                    controller.abort();
+                }
+            });
+        }
 
         it('should pass arguments verbatim without shell interpretation or quoting corruption', async () => {
             const { vscode: code } = createMockVsCode();
