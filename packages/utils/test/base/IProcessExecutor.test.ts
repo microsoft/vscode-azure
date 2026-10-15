@@ -456,6 +456,7 @@ describe('ProcessExecutor (unit)', () => {
         it('waits for descendant termination before completing cancellation', async () => {
             const m = createMockVsCode();
             const s = createMockProcessExecutor(m.vscode, { keepAlive: true });
+            const kill = mock.method(s.executor, 'killProcessTree');
             const terminated = Promise.withResolvers<undefined>();
             const settled = mock.fn();
             s.terminateTree.mock.mockImplementation(() => {
@@ -471,6 +472,7 @@ describe('ProcessExecutor (unit)', () => {
             terminated.resolve(undefined);
             await expect(process).to.be.rejectedWith(CancellationError);
             expect(s.terminateTree.mock.calls[0].arguments[0]).to.equal(s.spawn.mock.calls[0].result?.pid);
+            expect(kill.mock.calls[0].arguments).to.deep.equal([s.spawn.mock.calls[0].result?.pid]);
         });
 
         for (const failure of ['throw', 'reject']) {
@@ -691,6 +693,39 @@ describe('ProcessExecutor (unit)', () => {
             m.taskProcessEndEmitter.fire({ execution: taskExecution, exitCode: 0 });
             await promise;
         });
+    });
+
+    describe('killProcessTree', () => {
+        afterEach(() => { mock.restoreAll(); });
+
+        it('forwards an owned PID and waits for termination', async () => {
+            const terminated = Promise.withResolvers<undefined>();
+            const terminate = mock.fn((_pid: number) => terminated.promise);
+            const executor = new ProcessExecutor(createMockVsCode().vscode, createMockSpawn(), undefined, terminate);
+            const settled = mock.fn();
+            const killing = executor.killProcessTree(1234);
+            void killing.then(settled, settled);
+            await delay(0);
+            expect(terminate.mock.calls[0].arguments).to.deep.equal([1234]);
+            expect(settled.mock.callCount()).to.equal(0);
+            terminated.resolve(undefined);
+            await killing;
+        });
+
+        it('propagates termination failure', async () => {
+            const terminate = mock.fn(() => Promise.reject(new Error('Termination denied')));
+            const executor = new ProcessExecutor(createMockVsCode().vscode, createMockSpawn(), undefined, terminate);
+            await expect(executor.killProcessTree(1234)).to.be.rejectedWith('Termination denied');
+        });
+
+        for (const pid of [0, 1, -1, -1234, 2.5, NaN, Infinity, 0x80000000]) {
+            it(`rejects unsafe process ID ${pid} before invoking termination`, async () => {
+                const terminate = mock.fn(() => Promise.resolve());
+                const executor = new ProcessExecutor(createMockVsCode().vscode, createMockSpawn(), undefined, terminate);
+                await expect(executor.killProcessTree(pid)).to.be.rejectedWith(RangeError);
+                expect(terminate.mock.callCount()).to.equal(0);
+            });
+        }
     });
 
     describe('resolveExecutable', () => {

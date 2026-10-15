@@ -221,6 +221,17 @@ export interface IProcessExecutor {
     resolveExecutable(command: string): string | undefined;
     /** Tests whether a command is available on the system `PATH`. */
     isOnPath(command: string): boolean;
+    /**
+     * Forcefully terminates an owned POSIX process group or Windows process tree.
+     *
+     * On POSIX, {@linkcode pid} must identify the dedicated process group created
+     * by launching with `killTreeOnCancel: true`, not an arbitrary child PID.
+     * Callers must own the target and await process completion separately.
+     * A missing POSIX group is already stopped; other termination failures reject.
+     *
+     * @throws {RangeError} When the PID is outside the integer range 2..2147483647.
+     */
+    killProcessTree(pid: number): Promise<void>;
 }
 
 /**
@@ -240,7 +251,7 @@ export class ProcessExecutor implements IProcessExecutor {
         private readonly code: IVsCode,
         private readonly spawnFn: SpawnFn = spawn,
         private readonly resolveExecutableFn: ResolveExecutableFn = resolveExecutable,
-        private readonly killProcessTreeFn: KillProcessTreeFn = killProcessTree,
+        private readonly killProcessTreeFn?: KillProcessTreeFn,
     ) { }
 
     public async spawn(options: ForegroundProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<void>;
@@ -272,6 +283,32 @@ export class ProcessExecutor implements IProcessExecutor {
     /** @inheritdoc */
     public isOnPath(command: string): boolean {
         return !!this.resolveExecutable(command);
+    }
+
+    /** @inheritdoc */
+    public async killProcessTree(pid: number): Promise<void> {
+        // Negating 0 or 1 has special POSIX kill semantics, not group ownership.
+        if (!Number.isInteger(pid) || pid <= 1 || pid > 0x7fffffff) {
+            throw new RangeError(this.code.l10n.t('The process ID must be an integer between 2 and 2147483647.'));
+        }
+
+        if (this.killProcessTreeFn) {
+            await this.killProcessTreeFn(pid);
+            return;
+        }
+
+        if (process.platform === 'win32') {
+            await execFile('taskkill.exe', ['/PID', String(pid), '/T', '/F'], { windowsHide: true });
+            return;
+        }
+
+        try {
+            process.kill(-pid, 'SIGKILL');
+        } catch (error: unknown) {
+            if (!(error && typeof error === 'object' && 'code' in error && error.code === 'ESRCH')) {
+                throw error;
+            }
+        }
     }
 
     private async spawnForeground(options: ForegroundProcessOptions, cancellation?: vscode.CancellationToken | AbortSignal): Promise<void> {
@@ -447,7 +484,7 @@ export class ProcessExecutor implements IProcessExecutor {
 
                 // A POSIX group may outlive its leader while workers hold the
                 // pipes open. Signal the group even if the direct child exited.
-                termination ??= Promise.resolve().then(() => this.killProcessTreeFn(pid));
+                termination ??= Promise.resolve().then(() => this.killProcessTree(pid));
                 void termination.catch(terminationFailed.reject);
             };
 
@@ -474,20 +511,6 @@ export class ProcessExecutor implements IProcessExecutor {
             disposable.dispose();
             // Child closure can precede completion of process-tree termination.
             await termination;
-        }
-    }
-}
-
-async function killProcessTree(pid: number): Promise<void> {
-    if (process.platform === 'win32') {
-        await execFile('taskkill.exe', ['/PID', String(pid), '/T', '/F'], { windowsHide: true });
-        return;
-    }
-    try {
-        process.kill(-pid, 'SIGKILL');
-    } catch (error: unknown) {
-        if (!(error && typeof error === 'object' && 'code' in error && error.code === 'ESRCH')) {
-            throw error;
         }
     }
 }

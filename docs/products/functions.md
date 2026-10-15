@@ -46,6 +46,9 @@ Owned hosts start in a dedicated process group on macOS/Linux; cancellation send
 `SIGKILL` to that group. Windows hosts start normally and cancellation invokes
 `taskkill.exe /PID <host-pid> /T /F`. Descendants that leave the POSIX group are
 outside this cleanup boundary.
+`IProcessExecutor.killProcessTree(pid)` exposes the same termination operation
+for callers that own a target PID. On POSIX the PID must identify a dedicated
+process group; callers await process completion separately.
 
 ## F5 and project initialization
 

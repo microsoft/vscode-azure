@@ -67,7 +67,7 @@ function outputStream(chunks: readonly (string | Uint8Array)[], keepOpen = false
 
 /** Couples synthetic subprocess IDs with a mock tree terminator, so no fixture ID reaches a system kill operation. */
 export function createMockProcessExecutor(code: IVsCode, options?: Parameters<typeof createMockSpawn>[0]) {
-    const spawn = createMockSpawn({ ...options, pid: 1 });
+    const spawn = createMockSpawn({ ...options, pid: 1000 });
     const terminateTree = mock.fn((pid: number) => {
         const child = spawn.mock.calls.map(call => call.result).find(candidate => candidate?.pid === pid);
         if (!child) { return Promise.reject(new Error('The process fixture does not own this PID.')); }
