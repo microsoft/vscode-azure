@@ -60,7 +60,7 @@ describe('command contributions (vscode integration)', () => {
         expect(contributed.filter((command) => !registered.has(command))).to.deep.equal([]);
     });
 
-    it('should expose shared refresh for its context marker without matching longer markers', () => {
+    it('matches shared tree capabilities case-insensitively with word boundaries', () => {
         const extension = vscode.extensions.getExtension(ExtensionId);
         if (!extension) {
             expect.fail('Extension not found');
@@ -68,18 +68,26 @@ describe('command contributions (vscode integration)', () => {
         const manifest = extension.packageJSON as {
             contributes: { menus: Record<string, readonly { readonly command: string; readonly when?: string }[]> };
         };
-        const refreshMenus = manifest.contributes.menus['view/item/context'].filter(menu => menu.command === 'vscode-azure/resources/refresh');
-        const token = RefreshResourcesView.ContextValue;
-        expect(refreshMenus.some(menu => {
-            const expression = menu.when?.match(/viewItem =~ \/([^/]+)\/([a-z]*)/);
+        const capabilities = [
+            ['vscode-azure/resources/refresh', RefreshResourcesView.ContextValue],
+            ['vscode-azure/workspace/refresh', RefreshWorkspaceView.ContextValue],
+            ['vscode-azure/webApp/start', WebAppLifecycle.StartContextValue],
+            ['vscode-azure/webApp/stop', WebAppLifecycle.StopContextValue],
+            ['vscode-azure/webApp/restart', WebAppLifecycle.RestartContextValue],
+        ];
+        for (const [command, token] of capabilities) {
+            const menu = manifest.contributes.menus['view/item/context'].find(item => item.command === command);
+            const expression = menu?.when?.match(/viewItem =~ \/([^/]+)\/([a-z]*)/);
             if (!expression) {
-                return false;
+                expect.fail(`Missing capability menu for ${command}`);
             }
             const pattern = new RegExp(expression[1], expression[2]);
-            return pattern.test(`otherCapability;${token};additionalCapability`)
-                && pattern.test(token.toUpperCase())
-                && !pattern.test(`${token}Suffix`);
-        })).to.be.true;
+            expect(pattern.test(`another;${token};capability`), command).to.be.true;
+            expect(pattern.test(token.toUpperCase()), command).to.be.true;
+            expect(pattern.test(`${token}Suffix`), command).to.be.false;
+            expect(manifest.contributes.menus.commandPalette.find(item => item.command === command)?.when, command).to.equal('false');
+        }
+        expect(manifest.contributes.menus.commandPalette.find(item => item.command === 'vscode-azure/resources/reveal')?.when).to.equal('false');
     });
 
     it('matches remote Functions capabilities case-insensitively with word boundaries and hides node-only palette entries', () => {
@@ -91,9 +99,6 @@ describe('command contributions (vscode integration)', () => {
             contributes: { menus: Record<string, readonly { readonly command: string; readonly when?: string }[]> };
         };
         const capabilities = [
-            ['vscode-azure/webApp/start', WebAppLifecycle.StartContextValue],
-            ['vscode-azure/webApp/stop', WebAppLifecycle.StopContextValue],
-            ['vscode-azure/webApp/restart', WebAppLifecycle.RestartContextValue],
             ['vscode-azure/functions/execute', ExecuteFunction.ContextValue],
             ['vscode-azure/functions/copyUrl', CopyFunctionUrl.ContextValue],
             ['vscode-azure/functions/enable', SetFunctionState.EnableContextValue],
@@ -114,7 +119,6 @@ describe('command contributions (vscode integration)', () => {
             expect(pattern.test(`${token}Suffix`), command).to.be.false;
             expect(manifest.contributes.menus.commandPalette.find(item => item.command === command)?.when, command).to.equal('false');
         }
-        expect(manifest.contributes.menus.commandPalette.find(item => item.command === 'vscode-azure/resources/reveal')?.when).to.equal('false');
     });
 
     it('matches workspace Functions commands to their shared capabilities without matching longer markers', () => {
@@ -126,7 +130,6 @@ describe('command contributions (vscode integration)', () => {
             contributes: { menus: Record<string, readonly { readonly command: string; readonly when?: string }[]> };
         };
         const capabilities = [
-            ['vscode-azure/workspace/refresh', RefreshWorkspaceView.ContextValue],
             ['vscode-azure/functions/execute', ExecuteFunction.ContextValue],
             ['vscode-azure/functions/copyUrl', CopyFunctionUrl.ContextValue],
             ['vscode-azure/functions/enable', SetFunctionState.EnableContextValue],

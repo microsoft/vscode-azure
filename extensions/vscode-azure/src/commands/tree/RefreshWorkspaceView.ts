@@ -11,7 +11,7 @@ import type { ManagedCommand } from '../ManagedCommand';
 /** Invalidates the entire workspace data cache, forcing a refresh on next access. */
 @injectable()
 export class RefreshWorkspaceView implements ManagedCommand {
-    /** Capability available on local project, function, hint, and error nodes. */
+    /** Marks workspace tree items that support the shared refresh action. */
     public static readonly ContextValue = 'refreshWorkspace';
     public constructor(
         @inject(IWorkspaceViewDataTree) private readonly cache: IWorkspaceViewDataTree

@@ -14,6 +14,7 @@ import { WebAppSettingsAdapter } from '../../../../src/settings/adapters/WebAppS
 import { isSettingsNode } from '../../../../src/tree/resources/settings/SettingsNode';
 import { FunctionAppVirtualTypes, isFunctionAppFunction, type FunctionApp, type FunctionAppInvalidNode } from '../../../../src/tree/resources/webApp/FunctionApp';
 import { WebAppDataProvider } from '../../../../src/tree/resources/webApp/WebAppDataProvider';
+import type { WebApp } from '../../../../src/tree/resources/webApp/WebApp';
 import { getWebsiteUrl } from '../../../../src/tree/resources/websiteUrl';
 import { makeSettingsResource } from '../../../settings/mockSettings';
 import { makeFunctionAppFunctions } from './mockFunctionApp';
@@ -55,6 +56,23 @@ describe('WebAppDataProvider (unit)', () => {
     });
 
     for (const logicalType of [AppServiceLogicalType, LogicAppLogicalType]) {
+        it(`enriches the same ${logicalType} resource with site metadata and its website capability`, async () => {
+            const { provider, client } = setup({ defaultHostName: 'myapp.azurewebsites.net', site: { state: 'Stopped' } });
+            const app: WebApp = makeSettingsResource({ logicalType });
+            const key = AzureNodeId.from(app).toString();
+
+            await provider.enrich(app);
+
+            expect(app.site).to.include({ state: 'Stopped' });
+            expect(getWebsiteUrl(app)).to.equal('https://myapp.azurewebsites.net');
+            expect(AzureNodeId.from(app).toString()).to.equal(key);
+            expect(client.webApps.get.mock.calls[0].arguments).to.deep.equal(['MyRG', app.name]);
+
+            client.webApps.get.mock.mockImplementation(() => Promise.reject(new Error('Access denied')));
+            await expect(provider.enrich(app)).to.be.rejectedWith('Access denied');
+            expect(app.site).to.be.undefined;
+        });
+
         it(`contributes only settings for ${logicalType}`, async () => {
             const { provider, client } = setup();
             const pages = await collectPages(await provider.getChildren(makeSettingsResource({ logicalType })));

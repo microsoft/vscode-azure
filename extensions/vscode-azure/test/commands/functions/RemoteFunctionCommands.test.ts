@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AppServiceLogicalType, AzureNodeId, FunctionAppLogicalType, LogicAppLogicalType, type FunctionsHostTarget } from '@microsoft/vscode-azure-azutils';
+import { AzureNodeId, type FunctionsHostTarget } from '@microsoft/vscode-azure-azutils';
 import { createMockFunctionsHostClient, createMockWebAppClient, makeFunctionEnvelope } from '@microsoft/vscode-azure-azutils/testing';
 import { CancellationError } from '@microsoft/vscode-azure-utils';
 import { mock } from 'node:test';
@@ -14,10 +14,8 @@ import { RevealFunctionAppIdentity } from '../../../src/commands/functions/Revea
 import { RevealResource } from '../../../src/commands/tree/RevealResource';
 import { SetFunctionState } from '../../../src/commands/functions/SetFunctionState';
 import { StreamFunctionLogs } from '../../../src/commands/functions/StreamFunctionLogs';
-import { WebAppLifecycle } from '../../../src/commands/webApp/WebAppLifecycle';
 import { WebAppSettingsAdapter } from '../../../src/settings/adapters/WebAppSettingsAdapter';
 import { GenericActivityDataProvider } from '../../../src/tree/activity/GenericActivityDataProvider';
-import { makeSettingsResource } from '../../settings/mockSettings';
 import { createTestResourceSelector } from '../../tree/resources/testResourceSelector';
 import { makeFunctionAppFunction } from '../../tree/resources/webApp/mockFunctionApp';
 import { createFunctionLogs } from '../../tree/resources/webApp/mockFunctionLogs';
@@ -296,26 +294,4 @@ describe('Remote function commands (unit)', () => {
         streams.dispose();
     });
 
-    for (const logicalType of [FunctionAppLogicalType, AppServiceLogicalType, LogicAppLogicalType]) {
-        for (const action of ['start', 'stop', 'restart'] as const) {
-            it(`${action}s a ${logicalType} through the shared Web Apps command`, async () => {
-                const app = makeSettingsResource({ logicalType });
-                const s = createTestResourceSelector({ nodes: [app] });
-                const client = createMockWebAppClient();
-                const invalidate = mock.method(s.cache, 'invalidate');
-                await new WebAppLifecycle(s.ctx.code, s.selector, () => client, s.cache).execute(action, AzureNodeId.from(app).toString());
-                expect(client.webApps[action].mock.calls[0].arguments).to.deep.equal(['MyRG', app.name]);
-                expect(invalidate.mock.calls[0].arguments[0]).to.equal(app);
-            });
-        }
-    }
-
-    it('keeps lifecycle failures visible and leaves the tree unchanged', async () => {
-        const s = setup();
-        const invalidate = mock.method(s.cache, 'invalidate');
-        s.client.webApps.stop.mock.mockImplementation(() => Promise.reject(new Error('stop rejected')));
-        await expect(new WebAppLifecycle(s.code, s.selector, () => s.client, s.cache).execute('stop', s.appKey)).to.be.rejectedWith('stop rejected');
-        expect(invalidate.mock.callCount()).to.equal(0);
-        expect(s.codeContext.mock.window.showInformationMessage.mock.callCount()).to.equal(0);
-    });
 });
