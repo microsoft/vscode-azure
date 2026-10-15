@@ -73,15 +73,18 @@ The dedupe key includes a lowercased Azure account-and-tenant partition, the req
 
 The concrete wrappers live in `packages/azutils/src/rest/clients/`. Each exposes an
 interface (`IResourceClient`, `IDeploymentClient`, `ISubscriptionClient`, `IAcrClient`,
-`IWebAppClient`) that can be mocked in unit tests without the real Azure SDK; read the
-wrapper file for the current operation surface.
+`IWebAppClient`, `IFunctionsHostClient`, `ILogsQueryClient`) that can be mocked in
+unit tests without the real Azure SDK; read the wrapper file for the current
+operation surface.
 
 | Wrapper | Azure SDK | Scoped by | Consumed by |
 |---------|-----------|-----------|-------------|
-| `ResourceClient` | `@azure/arm-resources` | Subscription | Resource-group and resource listing in the resources tree |
+| `ResourceClient` | `@azure/arm-resources` | Subscription | Resource listing, live resource reads, and deletion |
 | `DeploymentClient` | `@azure/arm-resourcesdeployments` | Subscription | `ArmDeploymentDataProvider`, for deployment status and operations |
 | `AcrClient` | `@azure/arm-containerregistry` | Subscription | ACR data provider and commands |
 | `WebAppClient` | `@azure/arm-appservice` | Subscription | Web App / Function App / Logic App nodes and their settings |
+| `FunctionsHostClient` | Shared data-plane REST pipeline | Local host port or remote HTTPS origin | Function metadata, host readiness, and invocation |
+| `LogsQueryClient` | Shared data-plane REST pipeline | Subscription cloud and identity | Resource-context and workspace log queries |
 | `SubscriptionClient` | `@azure/arm-resources-subscriptions` | `EnvironmentLike` | `AzureAccountDataProvider`, plus `ChooseLocationStep` |
 
 `SubscriptionClient` is scoped by environment rather than by subscription because
@@ -91,12 +94,33 @@ shared across instances, since locations rarely change; the tenant and subscript
 listings return `AsyncIterable<Page<T>>` (via [`toPages`](#topages)) so a large
 tenant set streams into the tree lazily instead of being buffered.
 
+### `FunctionsHostClient` and host admin operations
+
+`FunctionsHostClient` accepts a local Core Tools port or a remote HTTPS origin with
+an asynchronous `getMasterKey` callback. Creation does not start a host or fetch
+keys. Local requests use `127.0.0.1`; remote requests obtain the master key lazily
+and send it in the `x-functions-key` header. Redirects are disabled.
+
+`listFunctions()` returns the complete, unpaged host collection, `getStatus()`
+reads host readiness, and `invoke()` queues execution without waiting for the
+function to finish. Invocation strings are passed through; other inputs are
+JSON-serialized into the host's string-valued `input` field. Serialization errors
+or values that produce no JSON text reject before authentication or transport.
+Operations accept cancellation and transport options, reject
+non-2xx responses, and validate metadata and status response shapes.
+
 ### `ResourceClient` and resource metadata
 
 `ResourceClient` is the one wrapper that does more than pass calls through. As
 resources come back from ARM, `attachMetadata()` turns raw SDK types into
 `GenericResource` by attaching `subscription` and `logicalType` -- it is passed to
 [`toPages`](#topages) as the per-item `map`, so every page is normalized on the way out.
+
+`resources.getById(resourceId, resourceType, options?)` reads live provider-specific
+properties and attaches the same metadata. It resolves the resource type's supported
+API version through the existing provider-metadata cache. Request options, including
+an abort signal, are forwarded to the resource GET. Consumers import the operation's
+SDK options from the wrapper's public exports.
 
 `logicalType()` is where an ARM type that covers several visually distinct products
 gets split -- `Microsoft.Web/sites` becomes a Function App, Logic App, or App Service
@@ -152,7 +176,7 @@ So `registerAzureClientProvider` (and the `bindAzureClientProvider` / `AzureClie
 
 ### Management-plane and data-plane clients
 
-The wrappers above are all **management plane**: they talk to ARM, so they share one request pipeline and are bound with `registerAzureClientProvider`.
+The Azure SDK wrappers above are **management plane**: they talk to ARM, so they share one request pipeline and are bound with `registerAzureClientProvider`. `FunctionsHostClient` and `LogsQueryClient` use the shared data-plane REST pipeline.
 
 A **data-plane** client talks to the service's own endpoint instead. It binds through the same `registerAzureClientProvider`, with any extra arguments that name the endpoint declared on the provider's identifier and appended to `create`'s parameters.
 
