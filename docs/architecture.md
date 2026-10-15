@@ -33,6 +33,30 @@ Framework-level building blocks with no Azure-specific knowledge:
 - **Process execution**: `ProcessExecutor`, `IProcessExecutor`, and shared shell-task construction
 - **Data utilities**: `InflightMap`, `Limiter`, `redactSecrets`
 
+#### Process output and lifetime
+
+`IProcessExecutor` exposes decoded stdout/stderr chunks through separate async generators
+and a separate process-completion promise, without retaining long-running output.
+The completion promise resolves without a value; failures reject it.
+Callers using `streamOutput: true` must consume both generators concurrently while
+observing completion; unread output applies backpressure and can prevent process exit.
+Breaking out of a generator discards that channel's remaining output without
+terminating the process.
+
+Owned processes can opt into process-tree cancellation with `killTreeOnCancel: true`;
+other callers retain direct-child cancellation. Owned processes start in a dedicated
+process group on macOS/Linux; cancellation sends `SIGKILL` to that group. Windows
+processes start normally and cancellation invokes
+`taskkill.exe /PID <host-pid> /T /F`. If the Windows launcher exits while descendants
+hold its output pipes open, cancellation rejects with a termination error and releases
+the output generators; it cannot terminate those surviving descendants through the
+exited launcher's PID. Descendants that leave the POSIX group are outside this cleanup
+boundary.
+
+`IProcessExecutor.killProcessTree(pid)` exposes the same termination operation
+for callers that own a target PID. On POSIX the PID must identify a dedicated
+process group; callers await process completion separately.
+
 ### `packages/azutils` — Azure Utilities
 
 Azure-specific models and helpers that build on `utils`:

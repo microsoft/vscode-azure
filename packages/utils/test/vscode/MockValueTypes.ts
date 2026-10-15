@@ -80,6 +80,11 @@ export class MockShellExecution implements vscode.ShellExecution {
     ) { }
 }
 
+/** Test stand-in exposing the pseudoterminal factory used by a custom task. */
+export class MockCustomExecution implements vscode.CustomExecution {
+    public constructor(public readonly callback: (definition: vscode.TaskDefinition) => Thenable<vscode.Pseudoterminal>) { }
+}
+
 /** Test stand-in for {@linkcode vscode.Task}. */
 export class MockTask implements vscode.Task {
     public isBackground = false;
@@ -156,6 +161,16 @@ export const MockTaskScope: typeof vscode.TaskScope = {
     Workspace: 2,
 };
 
+/** Test stand-in for the task terminal reveal policy. */
+export const MockTaskRevealKind = {
+    Always: 1, Silent: 2, Never: 3,
+} satisfies typeof vscode.TaskRevealKind;
+
+/** Test stand-in for initial versus dynamic debug configuration discovery. */
+export const MockDebugConfigurationProviderTriggerKind = {
+    Initial: 1, Dynamic: 2,
+} satisfies typeof vscode.DebugConfigurationProviderTriggerKind;
+
 /** Test stand-in for {@linkcode vscode.ProgressLocation}. */
 export const MockProgressLocation: typeof vscode.ProgressLocation = {
     SourceControl: 1,
@@ -175,6 +190,7 @@ type ForwardCheckMarkdownString = Satisfies<MockMarkdownString, vscode.MarkdownS
 type ReverseCheckMarkdownString = Satisfies<vscode.MarkdownString, MockMarkdownString>;
 type ForwardCheckShellExecution = Satisfies<MockShellExecution, vscode.ShellExecution>;
 type ReverseCheckShellExecution = Satisfies<vscode.ShellExecution, MockShellExecution>;
+type ForwardCheckCustomExecution = Satisfies<vscode.CustomExecution, MockCustomExecution>;
 type ForwardCheckTask = Satisfies<MockTask, vscode.Task>;
 type ReverseCheckTask = Satisfies<vscode.Task, MockTask>;
 type ForwardCheckRelativePattern = Satisfies<MockRelativePattern, vscode.RelativePattern>;

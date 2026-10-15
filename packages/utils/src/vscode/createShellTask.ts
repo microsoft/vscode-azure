@@ -50,12 +50,13 @@ export interface CreateShellTaskOptions {
  *
  * The resolved path is strongly quoted, since it may contain spaces.
  *
+ * @param resolver - Executable resolver; shared process execution forwards its injected resolver here.
  * @throws {Error} When the command vector does not contain an executable.
  * @throws {ProcessError} With code `ENOENT` when a bare command name is not
  *   found on `PATH`, or `ERR_INVALID_EXECUTABLE` when the name contains a NUL
  *   or newline.
  */
-export function createShellTask(code: IVsCode, options: CreateShellTaskOptions): vscode.Task {
+export function createShellTask(code: IVsCode, options: CreateShellTaskOptions, resolver: typeof resolveExecutable = resolveExecutable): vscode.Task {
     const [executable, ...args] = options.command;
     // Flattened before the check so a quoted empty string is rejected here
     // rather than by the resolver.
@@ -72,7 +73,7 @@ export function createShellTask(code: IVsCode, options: CreateShellTaskOptions):
     // `cwd` is deliberately not passed: a bare name never resolves against it,
     // and an explicit path keeps the caller's own spelling (see below), so the
     // resolver never needs it.
-    const resolved = resolveExecutable(name, {
+    const resolved = resolver(name, {
         // Resolved against the environment the task will actually run under,
         // since VS Code merges `env` over the parent environment. A caller that
         // overrides `PATH` must not have the executable looked up on a
