@@ -359,6 +359,60 @@ describe('ProcessExecutor (unit)', () => {
     describe('owned process-tree cancellation', () => {
         afterEach(() => { mock.restoreAll(); });
 
+        for (const platform of ['win32', 'linux', 'darwin'] as const) {
+            for (const owned of [true, false]) {
+                it(`uses ${platform} process isolation only for owned launches (${owned})`, async () => {
+                    mock.property(process, 'platform', platform);
+                    const s = createMockProcessExecutor(createMockVsCode().vscode);
+                    await s.executor.spawn({ execution: 'background', command: ['owned'], killTreeOnCancel: owned });
+                    expect(s.spawn.mock.calls[0].arguments[2]?.detached).to.equal(owned && platform !== 'win32');
+                });
+            }
+        }
+
+        for (const code of [undefined, 'ESRCH', 'EPERM']) {
+            it(`signals the owned POSIX group and handles ${code ?? 'successful termination'}`, async () => {
+                mock.property(process, 'platform', 'linux');
+                const spawn = createMockSpawn({ keepAlive: true, pid: 1234 });
+                const kill = mock.method(process, 'kill', () => {
+                    if (code) { throw Object.assign(new Error('Group termination failed'), { code }); }
+                    return true;
+                });
+                const executor = new ProcessExecutor(createMockVsCode().vscode, spawn);
+                const abort = new AbortController();
+                const running = executor.spawn({ execution: 'background', command: ['owned'], killTreeOnCancel: true }, abort.signal);
+                const rejected = code === 'EPERM'
+                    ? expect(running).to.be.rejectedWith('Group termination failed')
+                    : expect(running).to.be.rejectedWith(CancellationError);
+                abort.abort();
+                await waitFor(() => kill.mock.callCount() === 1);
+                spawn.mock.calls[0].result?.emit('close', 0, null);
+                await rejected;
+                expect(kill.mock.calls[0].arguments).to.deep.equal([-1234, 'SIGKILL']);
+            });
+        }
+
+        it('signals the POSIX group after its leader exits while a worker still holds the pipes', async () => {
+            mock.property(process, 'platform', 'linux');
+            const spawn = createMockSpawn({ keepAlive: true, keepStreamsOpen: true, pid: 1234 });
+            const kill = mock.method(process, 'kill', () => true);
+            const executor = new ProcessExecutor(createMockVsCode().vscode, spawn);
+            const abort = new AbortController();
+            const running = executor.spawn({ execution: 'background', command: ['owned'], killTreeOnCancel: true }, abort.signal);
+            const rejected = expect(running).to.be.rejectedWith(CancellationError);
+            const child = spawn.mock.calls[0].result;
+            if (!child) { throw new Error('Expected the owned child process.'); }
+            mock.property(child, 'exitCode', 0);
+            child.emit('exit', 0, null);
+            abort.abort();
+            await waitFor(() => kill.mock.callCount() === 1);
+            child.stdout?.push(null);
+            child.stderr?.push(null);
+            child.emit('close', 0, null);
+            await rejected;
+            expect(kill.mock.calls[0].arguments).to.deep.equal([-1234, 'SIGKILL']);
+        });
+
         it('ends a waiting output generator when tree termination fails before the child closes', async () => {
             const s = createMockProcessExecutor(createMockVsCode().vscode, { keepAlive: true, keepStreamsOpen: true });
             s.terminateTree.mock.mockImplementation(() => Promise.reject(new Error('termination failed')));

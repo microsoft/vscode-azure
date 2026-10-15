@@ -3,14 +3,13 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { isProcessError, ProcessError, resolveExecutable, spawn, type SpawnOptions } from '@azure/core-process';
+import { execFile, isProcessError, ProcessError, resolveExecutable, spawn, type SpawnOptions } from '@azure/core-process';
 import type { ServiceIdentifier } from 'inversify';
 import type { ChildProcess } from 'node:child_process';
 import { on } from 'node:events';
 import * as readline from 'node:readline';
 import type { Readable } from 'node:stream';
 import type * as vscode from 'vscode';
-import treeKill from 'tree-kill';
 import { CancellationError } from '../vscode/CancellationError';
 import { createShellTask } from '../vscode/createShellTask';
 import type { IVsCode } from '../vscode/IVsCode';
@@ -33,7 +32,7 @@ export type SpawnFn = (command: string, args?: readonly string[], options?: Spaw
  */
 export type ResolveExecutableFn = typeof resolveExecutable;
 
-/** Terminates a directly owned process and its descendants; rejects if termination fails. */
+/** Terminates an owned POSIX process group or Windows process tree; rejects if termination fails. */
 export type KillProcessTreeFn = (pid: number) => Promise<void>;
 
 /**
@@ -349,6 +348,7 @@ export class ProcessExecutor implements IProcessExecutor {
                 // batch-specific argument escaping is applied automatically once
                 // the resolved target turns out to be a batch file.
                 allowWindowsBatchFiles: true,
+                detached: killTreeOnCancel && process.platform !== 'win32',
                 signal: killTreeOnCancel ? undefined : signal,
             });
         } catch (e) {
@@ -366,7 +366,7 @@ export class ProcessExecutor implements IProcessExecutor {
         const { promise: terminationFailed, reject: rejectTermination } = Promise.withResolvers<never>();
         const onAbort = () => {
             const pid = child.pid;
-            if (pid && child.exitCode === null && child.signalCode === null) {
+            if (pid && (process.platform !== 'win32' || (child.exitCode === null && child.signalCode === null))) {
                 termination ??= Promise.resolve().then(() => this.killProcessTreeFn(pid));
                 void termination.catch(rejectTermination);
             }
@@ -432,10 +432,18 @@ export class ProcessExecutor implements IProcessExecutor {
     }
 }
 
-function killProcessTree(pid: number): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
-        treeKill(pid, 'SIGKILL', error => { if (error) { reject(error); } else { resolve(); } });
-    });
+async function killProcessTree(pid: number): Promise<void> {
+    if (process.platform === 'win32') {
+        await execFile('taskkill.exe', ['/PID', String(pid), '/T', '/F'], { windowsHide: true });
+        return;
+    }
+    try {
+        process.kill(-pid, 'SIGKILL');
+    } catch (error: unknown) {
+        if (!(error && typeof error === 'object' && 'code' in error && error.code === 'ESRCH')) {
+            throw error;
+        }
+    }
 }
 
 /**

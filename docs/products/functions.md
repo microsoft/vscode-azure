@@ -41,6 +41,11 @@ and a separate process-completion promise, without retaining long-running output
 Owned hosts consume both generators concurrently and opt into process-tree cancellation;
 other callers retain their existing cancellation behavior.
 
+Owned hosts start in a dedicated process group on macOS/Linux; cancellation sends
+`SIGKILL` to that group. Windows hosts start normally and cancellation invokes
+`taskkill.exe /PID <host-pid> /T /F`. Descendants that leave the POSIX group are
+outside this cleanup boundary.
+
 ## F5 and project initialization
 
 The `azure-functions` debugger supports Node.js, Python, Java, PowerShell,
