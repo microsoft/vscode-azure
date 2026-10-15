@@ -6,7 +6,7 @@
 import type * as vscode from 'vscode';
 import { CaselessMap, Disposable, EventEmitter, InflightMap, IVsCode, stringifyError, withDelayedProgress } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, unmanaged } from 'inversify';
-import { parseTree, printParseErrorCode } from 'jsonc-parser';
+import { parseTree, printParseErrorCode, type ParseError } from 'jsonc-parser';
 import { IAzureViewDataTree, type IAzureViewDataTree as AzureViewDataTree } from '../services';
 import { isSettingsNode, type SettingsNode } from '../tree/resources/settings/SettingsNode';
 import type { SettingsEntry, SettingsMap, SettingsSnapshot } from './SettingsModel';
@@ -45,7 +45,7 @@ export class JsoncSettingsFormat {
      * or a non-string value.
      */
     public parse(text: string): SettingsMap {
-        const errors: { error: number; offset: number; length: number }[] = [];
+        const errors: ParseError[] = [];
         const root = parseTree(text, errors, { allowTrailingComma: true, disallowComments: false });
 
         if (errors.length > 0) {

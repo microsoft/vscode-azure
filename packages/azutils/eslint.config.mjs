@@ -15,19 +15,12 @@
  * package without requiring it to be built first.
  */
 
-import { azExtEslintStrictTypeChecked } from '@microsoft/vscode-azext-eng/eslint'; // Other configurations exist
+import { azExtEslintStrictTypeChecked, explicitTsProjectRuleConfig } from '@microsoft/vscode-azext-eng/eslint';
 import { defineConfig } from 'eslint/config';
 
 export default defineConfig([
     azExtEslintStrictTypeChecked,
-    {
-        languageOptions: {
-            parserOptions: {
-                projectService: false,
-                project: './tsconfig.lint.json', // This tsconfig allows the linter to resolve the utils package without needing to build it first
-            },
-        },
-    },
+    explicitTsProjectRuleConfig('./tsconfig.lint.json'),
     {
         rules: {
             '@typescript-eslint/no-restricted-imports': ['error', {

@@ -10,14 +10,16 @@ import type * as vscode from 'vscode';
  * via {@linkcode ShellQuotedString} when a command runs as a VS Code task so the
  * editor knows how to quote it for the target shell.
  */
-export const ShellQuoting = {
+/* eslint-disable @typescript-eslint/no-unsafe-enum-assignment -- mirrors the enum without a runtime dependency on vscode */
+export const ShellQuoting: typeof vscode.ShellQuoting = {
     /** Character escaping (e.g. `\` on bash, `` ` `` on PowerShell). */
     Escape: 1,
     /** Strong quoting -- treats the value as a literal string. */
     Strong: 2,
     /** Weak quoting -- still allows some evaluation inside the quotes. */
     Weak: 3,
-} as const satisfies Record<string, vscode.ShellQuoting>;
+};
+/* eslint-enable @typescript-eslint/no-unsafe-enum-assignment */
 
 /** A shell-quoting style. Structurally identical to `vscode.ShellQuoting`. */
 export type ShellQuoting = vscode.ShellQuoting;

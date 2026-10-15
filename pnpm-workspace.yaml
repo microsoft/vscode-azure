@@ -4,11 +4,7 @@ packages:
   - extensions/vscode-azure
 
 minimumReleaseAge: 10080 # One week in minutes
-
 minimumReleaseAgeExclude:
-  # @microsoft/vscode-azext-eng 1.1.0-alpha.6 was published 2026-08-12 and is a first-party
-  # package we own, so we take it before it ages out. Remove this exclusion on or after
-  # 2026-08-20, once the one-week minimum release age has elapsed.
   - "@microsoft/vscode-azext-eng"
 
 allowBuilds:
@@ -23,22 +19,22 @@ overrides:
 publicHoistPattern:
   # All of these are hoisted so they can be used by all packages without explicitly declaring them in each package.json
   # NOTE: `typescript` is deliberately NOT hoisted here. The build compiler is TypeScript 7 (installed
-  # under the `@typescript/native` alias in package.json), which has no compiler API; hoisting a
-  # `typescript` package would let typescript-eslint resolve its peer to the API-less TS 7 and break
+  # under eng's transitive `@typescript/native` alias), whose compiler API is incompatible with
+  # typescript-eslint; hoisting it under `typescript` would displace eng's TS 6 API and break
   # linting. Once TS 7.1 ships its API and typescript-eslint adopts it, `typescript` can be declared/
   # hoisted normally again. See docs/build-and-dev.md ("TypeScript toolchain").
   - "*eslint*"
   - "*mocha*"
+  - "@typescript/native"
 
 catalog:
   "@types/semver": ^7.7.1
   "@vscode/extension-telemetry": ^1.5.2
   "@vscode/test-cli": ^0.0.15
   "@vscode/test-electron": ^3.0.0
-  esbuild: ^0.28.1
-  esbuild-plugin-copy: ^2.1.1
+  esbuild: ^0.28.2
   inversify: ^8.1.1
   semver: ^7.8.4
-  tsx: ^4.22.4
+  tsx: ^4.23.15
   vscode-uri: ^3.1.0
   zod: ^4.4.3
