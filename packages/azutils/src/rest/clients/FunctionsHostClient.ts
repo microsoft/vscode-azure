@@ -41,7 +41,11 @@ export interface FunctionsHostStatus {
 export interface IFunctionsHostClient {
     listFunctions(options?: OperationOptions): Promise<readonly HostFunction[]>;
     getStatus(options?: OperationOptions): Promise<FunctionsHostStatus>;
-    /** Acceptance queues execution; it does not wait for the function to finish. */
+    /**
+     * Acceptance queues execution; it does not wait for the function to finish.
+     * Strings are passed through; other inputs are JSON-serialized to host input text.
+     * Rejects before sending a request if serialization throws or produces no text.
+     */
     invoke(functionName: string, input: unknown, options?: OperationOptions): Promise<void>;
 }
 
@@ -113,15 +117,21 @@ export class FunctionsHostClient implements IFunctionsHostClient {
         return body;
     }
 
-    /** Queues a function invocation, preserving the input's JSON shape. */
+    /** Queues a function invocation with string input or JSON-serialized input text. */
     public async invoke(functionName: string, input: unknown, options?: OperationOptions): Promise<void> {
         if (!functionName) {
             throw new TypeError(this.ctx.code.l10n.t('A function name is required.'));
         }
+        const serializedInput = typeof input === 'string' ? input : JSON.stringify(input);
+        // JSON.stringify can return undefined for unsupported top-level values despite its return type.
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+        if (serializedInput === undefined) {
+            throw new TypeError(this.ctx.code.l10n.t('The function input must be a string or a JSON-serializable value.'));
+        }
         const response = await this.inner.pathUnchecked('/admin/functions/{name}', functionName).post({
             ...await this.requestOptions(options),
             contentType: 'application/json',
-            body: { input },
+            body: { input: serializedInput },
         });
         assertRestSuccess(this.ctx.code, response);
     }
