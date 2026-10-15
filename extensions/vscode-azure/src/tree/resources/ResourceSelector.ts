@@ -174,17 +174,25 @@ export class ResourceSelector {
         const canHandle = (node: ConcreteAzureNode): node is TNode =>
             isVirtualResource(node) && options.canHandle(node);
 
+        return this.selectNode({ ...options, canHandle });
+    }
+
+    /**
+     * Resolves a matching node from a tree-item key or prompts through the resource
+     * tree. Non-matching collapsed or expanded nodes remain navigable containers.
+     */
+    public async selectNode<TNode extends ConcreteAzureNode>(options: NarrowingResolveOptions<TNode>): Promise<TNode> {
         return this.selectOrPrompt(
-            { ...options, canHandle },
+            options,
             () => nodeExperience({
                 ...this.ctx,
                 tree: this.createPickerTree(),
                 dataItemTree: this.cache,
                 output: this.output,
                 title: this.ctx.code.l10n.t('Select Resource'),
-                canHandle,
+                canHandle: options.canHandle,
                 classify: (_key, treeItem, node) => {
-                    if (node && canHandle(node)) {
+                    if (node && options.canHandle(node)) {
                         return 'terminal';
                     }
 
