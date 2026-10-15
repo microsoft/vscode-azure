@@ -60,17 +60,17 @@ The extension uses **esbuild** to bundle all source (including packages) into a 
 
 ```bash
 pnpm --filter vscode-azure run build
-# Runs two commands in series:
+# Runs two commands in parallel:
 #   build:esbuild — node esbuild.mjs (produces dist/extension.bundle.js)
 #   build:check   — tsc --noEmit (type checking only)
 ```
 
 #### TypeScript toolchain (`tsc` vs. typescript-eslint)
 
-The build compiler is TypeScript 7, pulled in as an npm alias in the root `package.json`:
+The eng package supplies TypeScript 7 under an npm alias:
 
 ```jsonc
-"@typescript/native": "npm:typescript@7.0.2"  // provides the native `tsc` used by the build scripts
+"@typescript/native": "npm:typescript@7.0.2"
 ```
 
 TypeScript 7.0 ships the fast native compiler but not the compiler API used by
@@ -79,9 +79,11 @@ resolved locally by pnpm. pnpm resolves that dependency by package *name*, so pr
 TypeScript 7 under the name `typescript` at the workspace root would make the linter
 load an incompatible compiler API.
 The alias sidesteps this: the 7.0 compiler is installed under a *different* name (`@typescript/native`)
-so it provides `tsc` without occupying the `typescript` name. For the same reason, `typescript` is
+without occupying the `typescript` name. `publicHoistPattern` exposes this transitive alias at the
+workspace root, making its `tsc` binary available to each workspace's build scripts.
+For the same reason, `typescript` is
 intentionally **not** in `pnpm-workspace.yaml`'s `publicHoistPattern` and is **not** declared as a
-top-level dependency. The result: `tsc` is TypeScript 7, while `typescript-eslint` transparently uses
+top-level dependency. The result: builds use TypeScript 7, while `typescript-eslint` transparently uses
 eng's TypeScript 6 API.
 
 > **Future cleanup:** this alias-and-no-hoist arrangement is only needed because TypeScript 7.0 has no

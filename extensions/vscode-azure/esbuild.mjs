@@ -15,16 +15,16 @@
 
 import { autoEsbuildOrWatch, autoSelectEsbuildConfig, copyPlugin } from '@microsoft/vscode-azext-eng/esbuild';
 
-const { extensionConfig, telemetryConfig } = autoSelectEsbuildConfig();
+const configs = autoSelectEsbuildConfig();
+const extensionConfig = configs.extension;
 
 // These cause files in these packages to be resolved correctly by esbuild
-extensionConfig.alias = {
-    ...extensionConfig.alias,
+Object.assign(extensionConfig.alias ??= {}, {
     '@microsoft/vscode-azure-utils': '../../packages/utils/src/index.ts',
     '@microsoft/vscode-azure-utils/testing': '../../packages/utils/test/testing.ts',
     '@microsoft/vscode-azure-azutils': '../../packages/azutils/src/index.ts',
     '@microsoft/vscode-azure-azutils/testing': '../../packages/azutils/test/testing.ts',
-};
+});
 
 // Copy Azure resource type icons into dist/azureIcons/ so they are bundled
 // with the extension and cleaned up automatically by `pnpm run clean`.
@@ -56,4 +56,4 @@ extensionConfig.entryPoints.push({
     out: 'test/e2e.bundle',
 });
 
-await autoEsbuildOrWatch({ extensionConfig, telemetryConfig });
+await autoEsbuildOrWatch(configs);

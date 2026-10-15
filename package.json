@@ -31,7 +31,6 @@
     "devDependencies": {
         "@microsoft/vscode-azext-eng": "^1.2.0",
         "@types/node": "~24",
-        "@types/vscode": "1.120.0",
-        "@typescript/native": "npm:typescript@7.0.2"
+        "@types/vscode": "1.120.0"
     }
 }
