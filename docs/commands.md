@@ -91,7 +91,9 @@ Function App, and Logic App sites. `WebAppDataProvider` enriches each site's
 resource object with management-plane `site` metadata; `WebAppViewProvider`
 uses its state to expose stop/restart for running sites and start for stopped
 sites. Unknown or transitional states expose neither. A successful action
-invalidates only the selected site's subtree.
+invalidates only the selected site's subtree. The commands are also available
+from the Command Palette: `ResourceSelector.selectNode` prompts for a site
+matching the shared WebApp type guard when no tree-item key is supplied.
 
 ### Viewing resource properties
 

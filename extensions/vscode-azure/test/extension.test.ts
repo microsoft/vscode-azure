@@ -79,6 +79,8 @@ describe('command contributions (vscode integration)', () => {
             expect(pattern.test(`another;${token};capability`), command).to.be.true;
             expect(pattern.test(token.toUpperCase()), command).to.be.true;
             expect(pattern.test(`${token}Suffix`), command).to.be.false;
+        }
+        for (const command of ['vscode-azure/resources/refresh', 'vscode-azure/workspace/refresh']) {
             expect(manifest.contributes.menus.commandPalette.find(item => item.command === command)?.when, command).to.equal('false');
         }
         expect(manifest.contributes.menus.commandPalette.find(item => item.command === 'vscode-azure/resources/reveal')?.when).to.equal('false');

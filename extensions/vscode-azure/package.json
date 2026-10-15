@@ -256,18 +256,6 @@
                     "when": "false"
                 },
                 {
-                    "command": "vscode-azure/webApp/start",
-                    "when": "false"
-                },
-                {
-                    "command": "vscode-azure/webApp/stop",
-                    "when": "false"
-                },
-                {
-                    "command": "vscode-azure/webApp/restart",
-                    "when": "false"
-                },
-                {
                     "command": "vscode-azure/containerApps/verifyStart",
                     "when": "false"
                 },

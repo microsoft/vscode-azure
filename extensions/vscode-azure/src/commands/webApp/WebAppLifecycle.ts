@@ -37,7 +37,7 @@ export class WebAppLifecycle implements ManagedCommand {
 
     /** Executes the action supplied by command registration and refreshes only the selected site. */
     public async execute(action: 'start' | 'stop' | 'restart', key?: string): Promise<void> {
-        const app = this.selector.resolve({ key, canHandle: isWebApp });
+        const app = await this.selector.selectNode({ key, canHandle: isWebApp });
         const messages = {
             start: [this.code.l10n.t('Starting \'{0}\'...', app.name), this.code.l10n.t('Started \'{0}\'.', app.name)],
             stop: [this.code.l10n.t('Stopping \'{0}\'...', app.name), this.code.l10n.t('Stopped \'{0}\'.', app.name)],
