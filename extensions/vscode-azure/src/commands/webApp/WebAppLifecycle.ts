@@ -44,16 +44,21 @@ export class WebAppLifecycle implements ManagedCommand {
         if (!isWebApp(app)) {
             throw new Error(this.code.l10n.t('The selected item does not support this command.'));
         }
-        const messages = {
+        const actionMessages = {
             start: [this.code.l10n.t('Starting \'{0}\'...', app.name), this.code.l10n.t('Started \'{0}\'.', app.name)],
             stop: [this.code.l10n.t('Stopping \'{0}\'...', app.name), this.code.l10n.t('Stopped \'{0}\'.', app.name)],
             restart: [this.code.l10n.t('Restarting \'{0}\'...', app.name), this.code.l10n.t('Restarted \'{0}\'.', app.name)],
-        }[action];
+        };
+        const messages = actionMessages[action];
         const client = this.createClient(app.subscription);
-        await withDelayedProgress(this.code, {
-            location: this.code.ProgressLocation.Notification,
-            title: messages[0],
-        }, client.webApps[action](getResourceGroupName(app.id), app.name));
+        await withDelayedProgress(
+            this.code,
+            {
+                location: this.code.ProgressLocation.Notification,
+                title: messages[0],
+            },
+            client.webApps[action](getResourceGroupName(app.id), app.name),
+        );
         app.site = await client.webApps.get(getResourceGroupName(app.id), app.name);
         this.tree.invalidate(app);
         void showMessage(this.code, messages[1]);

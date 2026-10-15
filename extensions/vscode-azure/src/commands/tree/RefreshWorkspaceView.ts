@@ -13,6 +13,7 @@ import type { ManagedCommand } from '../ManagedCommand';
 export class RefreshWorkspaceView implements ManagedCommand {
     /** Marks workspace tree items that support the shared refresh action. */
     public static readonly ContextValue = 'refreshWorkspace';
+
     public constructor(
         @inject(IWorkspaceViewDataTree) private readonly cache: IWorkspaceViewDataTree
     ) { }
