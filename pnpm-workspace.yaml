@@ -4,6 +4,8 @@ packages:
   - extensions/vscode-azure
 
 minimumReleaseAge: 10080 # One week in minutes
+minimumReleaseAgeExclude:
+  - "@microsoft/vscode-azext-eng"
 
 allowBuilds:
   esbuild: true
