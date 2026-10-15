@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { getResourceGroupName, IWebAppClientProvider } from '@microsoft/vscode-azure-azutils';
+import { AppServiceLogicalType, FunctionAppLogicalType, getResourceGroupName, IWebAppClientProvider, LogicAppLogicalType } from '@microsoft/vscode-azure-azutils';
 import { IVsCode, showMessage, withDelayedProgress } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzureViewDataTree } from '../../services';
@@ -37,7 +37,13 @@ export class WebAppLifecycle implements ManagedCommand {
 
     /** Executes the action supplied by command registration and refreshes only the selected site. */
     public async execute(action: 'start' | 'stop' | 'restart', key?: string): Promise<void> {
-        const app = await this.selector.selectNode({ key, canHandle: isWebApp });
+        const app = await this.selector.selectResource({
+            key,
+            logicalTypes: [AppServiceLogicalType, FunctionAppLogicalType, LogicAppLogicalType],
+        });
+        if (!isWebApp(app)) {
+            throw new Error(this.code.l10n.t('The selected item does not support this command.'));
+        }
         const messages = {
             start: [this.code.l10n.t('Starting \'{0}\'...', app.name), this.code.l10n.t('Started \'{0}\'.', app.name)],
             stop: [this.code.l10n.t('Stopping \'{0}\'...', app.name), this.code.l10n.t('Stopped \'{0}\'.', app.name)],

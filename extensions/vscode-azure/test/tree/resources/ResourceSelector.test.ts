@@ -24,7 +24,7 @@ describe('ResourceSelector (unit)', () => {
         it('should resolve a resource from the cache when a key is provided', async () => {
             const { selector } = createTestResourceSelector({ nodes: [site1] });
 
-            const result = await selector.selectResource({ logicalType: 'Microsoft.Web/sites', key: site1Id });
+            const result = await selector.selectResource({ logicalTypes: ['Microsoft.Web/sites'], key: site1Id });
 
             expect(result.name).to.equal('site1');
             expect(result.logicalType).to.equal('Microsoft.Web/sites');
@@ -33,7 +33,7 @@ describe('ResourceSelector (unit)', () => {
         it('should not prompt the user when a key is provided', async () => {
             const { selector, codeContext } = createTestResourceSelector({ nodes: [site1] });
 
-            await selector.selectResource({ logicalType: 'Microsoft.Web/sites', key: site1Id });
+            await selector.selectResource({ logicalTypes: ['Microsoft.Web/sites'], key: site1Id });
 
             expect(codeContext.mock.quickPicks).to.have.length(0);
         });
@@ -41,7 +41,7 @@ describe('ResourceSelector (unit)', () => {
         it('should throw when a key is provided but the resource is not in the cache', async () => {
             const { selector } = createTestResourceSelector();
 
-            await expect(selector.selectResource({ logicalType: 'Microsoft.Web/sites', key: 'missing-key' }))
+            await expect(selector.selectResource({ logicalTypes: ['Microsoft.Web/sites'], key: 'missing-key' }))
                 .to.be.rejectedWith(/Resource not found/);
         });
 
@@ -50,7 +50,7 @@ describe('ResourceSelector (unit)', () => {
             // resource, and the caller fails somewhere further away instead.
             const { selector } = createTestResourceSelector({ nodes: [subscription] });
 
-            await expect(selector.selectResource({ logicalType: 'Microsoft.Web/sites', key: subId }))
+            await expect(selector.selectResource({ logicalTypes: ['Microsoft.Web/sites'], key: subId }))
                 .to.be.rejectedWith(/Resource not found/);
         });
 
@@ -59,14 +59,14 @@ describe('ResourceSelector (unit)', () => {
             // naming a web app cannot satisfy a request for a registry.
             const { selector } = createTestResourceSelector({ nodes: [site1] });
 
-            await expect(selector.selectResource({ logicalType: 'Microsoft.ContainerRegistry/registries', key: site1Id }))
+            await expect(selector.selectResource({ logicalTypes: ['Microsoft.ContainerRegistry/registries'], key: site1Id }))
                 .to.be.rejectedWith(/Resource not found/);
         });
 
         it('should match the logical type case-insensitively', async () => {
             const { selector } = createTestResourceSelector({ nodes: [site1] });
 
-            const result = await selector.selectResource({ logicalType: 'microsoft.web/SITES', key: site1Id });
+            const result = await selector.selectResource({ logicalTypes: ['microsoft.web/SITES'], key: site1Id });
 
             expect(result.name).to.equal('site1');
         });
@@ -83,10 +83,56 @@ describe('ResourceSelector (unit)', () => {
                 { pick: 'site1' },
             ]);
 
-            const result = await selector.selectResource({ logicalType: 'Microsoft.Web/sites' });
+            const result = await selector.selectResource({ logicalTypes: ['Microsoft.Web/sites'] });
 
             expect(result.name).to.equal('site1');
             expect(result.logicalType).to.equal('Microsoft.Web/sites');
+        });
+
+        it('should resolve any requested logical type case-insensitively', async () => {
+            const { selector } = createTestResourceSelector({ nodes: [site1] });
+
+            const result = await selector.selectResource({
+                key: site1Id,
+                logicalTypes: ['Microsoft.Storage/storageAccounts', 'microsoft.web/SITES'],
+            });
+
+            expect(result).to.equal(site1);
+        });
+
+        it('should reject a resource outside the requested logical types', async () => {
+            const { selector } = createTestResourceSelector({ nodes: [site1] });
+
+            await expect(selector.selectResource({
+                key: site1Id,
+                logicalTypes: ['Microsoft.Storage/storageAccounts', 'Microsoft.ContainerRegistry/registries'],
+            })).to.be.rejectedWith(/Resource not found/);
+        });
+
+        it('should accept any resource when logical types are omitted', async () => {
+            const { selector } = createTestResourceSelector({ nodes: [site1] });
+
+            expect(await selector.selectResource({ key: site1Id })).to.equal(site1);
+        });
+
+        it('should reject a resource when the allowed logical types are empty', async () => {
+            const { selector } = createTestResourceSelector({ nodes: [site1] });
+
+            await expect(selector.selectResource({ key: site1Id, logicalTypes: [] }))
+                .to.be.rejectedWith(/Resource not found/);
+        });
+
+        it('should apply all allowed types when prompting for a resource', async () => {
+            const viewTree = createMockViewItemTree({ '': [site1Id] }) as unknown as IAzureViewViewItemTree;
+            const { selector, codeContext } = createTestResourceSelector({ nodes: [site1], viewTree });
+            const tracker = respondToPrompts(codeContext.mock, [{ pick: 'site1' }]);
+
+            const result = await selector.selectResource({
+                logicalTypes: ['Microsoft.Storage/storageAccounts', 'microsoft.web/SITES'],
+            });
+
+            expect(result).to.equal(site1);
+            tracker.assertAllConsumed();
         });
     });
 
