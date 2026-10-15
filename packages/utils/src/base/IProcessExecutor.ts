@@ -15,7 +15,7 @@ import { createShellTask } from '../vscode/createShellTask';
 import type { IVsCode } from '../vscode/IVsCode';
 import { argsToStrings, type CommandLineArgs } from './CommandLineBuilder';
 import { mergeProcessEnv } from './mergeProcessEnv';
-import { toAbortSignal } from './toAbortSignal';
+import { toAbortSignal, type AbortSignalBridge } from './toAbortSignal';
 
 export * from './CommandLineBuilder';
 export { isProcessError, ProcessError } from '@azure/core-process';
@@ -134,10 +134,10 @@ export interface ProcessResult {
  * the process from exiting. Breaking out of either generator discards that
  * channel's remaining output without terminating the process.
  *
- * Completion resolves without a value; process errors contain no captured output. Process failures,
- * cancellation, and termination failures are reported by {@linkcode completed},
- * and terminate both generators. Stream I/O errors can also reject a generator.
- * Use the spawn cancellation signal to stop the process.
+ * Completion resolves without a value; process errors contain no captured output.
+ * Process failures, cancellation, and termination failures are reported by
+ * {@linkcode completed}, and terminate both generators. Stream I/O errors can
+ * also reject a generator. Use the spawn cancellation signal to stop the process.
  */
 export interface StreamingProcessResult {
     readonly stdout: AsyncGenerator<string>;
@@ -167,9 +167,8 @@ export interface JsonProcessResult<T> extends ProcessResult {
  * own output, and {@linkcode completed} then never settles. Stopping early is
  * safe: the remainder is discarded and the process runs to completion.
  *
- * The caller is also responsible for awaiting {@linkcode completed} or attaching
- * a `.catch()` handler. If the process fails and `completed` is never awaited,
- * the rejection will be unhandled.
+ * The caller must also await {@linkcode completed} to observe process and JSON
+ * parsing failures; consuming the generator alone does not report them.
  */
 export interface JsonLinesProcessResult<TOut = unknown, TLines = unknown> {
     readonly jsonLines: AsyncGenerator<TLines>;
@@ -336,7 +335,9 @@ export class ProcessExecutor implements IProcessExecutor {
 
         let child: ChildProcess;
         try {
-            if (killTreeOnCancel && signal?.aborted) { throw new CancellationError(); }
+            if (killTreeOnCancel && signal?.aborted) {
+                throw new CancellationError();
+            }
             child = this.spawnFn(executable, args, {
                 cwd: options.cwd?.fsPath,
                 // The child environment replaces `process.env` rather than
@@ -348,7 +349,11 @@ export class ProcessExecutor implements IProcessExecutor {
                 // batch-specific argument escaping is applied automatically once
                 // the resolved target turns out to be a batch file.
                 allowWindowsBatchFiles: true,
+                // POSIX descendants inherit this dedicated group. Windows uses
+                // taskkill's tree traversal without changing the launch mode.
                 detached: killTreeOnCancel && process.platform !== 'win32',
+                // Owned-tree cancellation must finish group/tree termination,
+                // rather than letting spawn abort only the direct child.
                 signal: killTreeOnCancel ? undefined : signal,
             });
         } catch (e) {
@@ -356,56 +361,120 @@ export class ProcessExecutor implements IProcessExecutor {
             throw asCancellation(e, signal);
         }
 
-        // Captured stdout must drain immediately so it cannot block the child
-        // while the caller consumes live stderr in JSON-lines mode.
-        const outputAbort = 'streamOutput' in options && options.streamOutput ? new AbortController() : undefined;
-        const stdoutOutput = outputAbort ? readChunks(child.stdout, outputAbort.signal) : undefined;
-        const stderrOutput = outputAbort ? readChunks(child.stderr, outputAbort.signal) : undefined;
-        const stdout = outputAbort ? Promise.resolve('') : readAll(child.stdout);
-        const jsonLines = 'jsonLines' in options && options.jsonLines
-            ? parseJsonLines(readLines(child.stderr)) : undefined;
-        const stderr = outputAbort || jsonLines ? Promise.resolve('') : readAll(child.stderr);
-        const exited = finish(child, stdout, stderr, signal);
-        let termination: Promise<void> | undefined;
-        const terminationFailed = killTreeOnCancel && signal ? Promise.withResolvers<never>() : undefined;
-        const onAbort = terminationFailed ? () => {
-            const pid = child.pid;
-            if (pid && (process.platform !== 'win32' || (child.exitCode === null && child.signalCode === null))) {
-                termination ??= Promise.resolve().then(() => this.killProcessTreeFn(pid));
-                void termination.catch(terminationFailed.reject);
+        let outputAbort: AbortController | undefined;
+        let streamedOutput: Pick<StreamingProcessResult, 'stdout' | 'stderr'> | undefined;
+        let jsonLines: AsyncGenerator | undefined;
+        let stdout: Promise<string>;
+        let stderr: Promise<string>;
+
+        if ('streamOutput' in options && options.streamOutput) {
+            outputAbort = new AbortController();
+            streamedOutput = {
+                stdout: readChunks(child.stdout, outputAbort.signal),
+                stderr: readChunks(child.stderr, outputAbort.signal),
+            };
+            // Raw output belongs to the generators, not captured results/errors.
+            stdout = Promise.resolve('');
+            stderr = Promise.resolve('');
+        } else {
+            // Drain captured stdout immediately. A full stdout pipe can block
+            // the child before it emits the stderr progress the caller awaits.
+            stdout = readAll(child.stdout);
+            if ('jsonLines' in options && options.jsonLines) {
+                jsonLines = parseJsonLines(readLines(child.stderr));
+                // JSONL stderr is consumed live and must not also be buffered.
+                stderr = Promise.resolve('');
+            } else {
+                stderr = readAll(child.stderr);
             }
-        } : undefined;
-        if (onAbort && signal) {
-            signal.addEventListener('abort', onAbort, { once: true });
-            if (signal.aborted) { onAbort(); }
-        }
-        const completed = (async () => {
-            try {
-                return await (terminationFailed ? Promise.race([exited, terminationFailed.promise]) : exited);
-            } catch (error) {
-                outputAbort?.abort();
-                throw error;
-            } finally {
-                if (onAbort) { signal?.removeEventListener('abort', onAbort); }
-                disposable.dispose();
-                await termination;
-            }
-        })();
-        if (stdoutOutput && stderrOutput) {
-            const streamed = completed.then(() => undefined);
-            // The original promise remains observable even if output is consumed first.
-            void streamed.catch(() => undefined);
-            return { stdout: stdoutOutput, stderr: stderrOutput, completed: streamed };
         }
 
-        const parsed = options.parseJson ? completed.then(result => ({
-            ...result, json: JSON.parse(result.stdout) as unknown,
-        })) : undefined;
-        if (jsonLines && parsed) {
-            void parsed.catch(() => undefined);
-            return { jsonLines, completed: parsed };
+        const completed = this.completeBackgroundProcess(
+            child,
+            finish(child, stdout, stderr, signal),
+            { signal, disposable },
+            killTreeOnCancel,
+            outputAbort,
+        );
+
+        if (streamedOutput) {
+            const streamed = completed.then(() => undefined);
+            // Consumers may drain output before awaiting completion. Mark its
+            // rejection handled without changing the promise they receive.
+            void streamed.catch(() => undefined);
+            return { ...streamedOutput, completed: streamed };
         }
-        return parsed ?? completed;
+
+        if (options.parseJson) {
+            const parsed = completed.then(result => ({
+                ...result,
+                json: JSON.parse(result.stdout) as unknown,
+            }));
+
+            if (jsonLines) {
+                // As with raw streaming, progress can be consumed before the
+                // caller observes process or JSON parsing failure.
+                void parsed.catch(() => undefined);
+                return { jsonLines, completed: parsed };
+            }
+
+            return parsed;
+        }
+
+        return completed;
+    }
+
+    /** Owns cancellation and cleanup independently of how the output is consumed. */
+    private async completeBackgroundProcess(
+        child: ChildProcess,
+        exited: Promise<ProcessResult>,
+        { signal, disposable }: AbortSignalBridge,
+        killTreeOnCancel: boolean,
+        outputAbort?: AbortController,
+    ): Promise<ProcessResult> {
+        let pending = exited;
+        let termination: Promise<void> | undefined;
+        let onAbort: (() => void) | undefined;
+
+        if (killTreeOnCancel && signal) {
+            const terminationFailed = Promise.withResolvers<never>();
+            onAbort = () => {
+                const pid = child.pid;
+                const leaderExited = child.exitCode !== null || child.signalCode !== null;
+                if (!pid || (process.platform === 'win32' && leaderExited)) {
+                    return;
+                }
+
+                // A POSIX group may outlive its leader while workers hold the
+                // pipes open. Signal the group even if the direct child exited.
+                termination ??= Promise.resolve().then(() => this.killProcessTreeFn(pid));
+                void termination.catch(terminationFailed.reject);
+            };
+
+            // A failed kill can leave the child alive indefinitely. Report the
+            // failure without waiting for a close event that may never arrive.
+            pending = Promise.race([exited, terminationFailed.promise]);
+            signal.addEventListener('abort', onAbort, { once: true });
+            if (signal.aborted) {
+                onAbort();
+            }
+        }
+
+        try {
+            return await pending;
+        } catch (error) {
+            // Wake generators waiting on idle pipes when the process cannot
+            // close, including when process-tree termination itself failed.
+            outputAbort?.abort();
+            throw error;
+        } finally {
+            if (onAbort) {
+                signal?.removeEventListener('abort', onAbort);
+            }
+            disposable.dispose();
+            // Child closure can precede completion of process-tree termination.
+            await termination;
+        }
     }
 }
 
@@ -521,22 +590,41 @@ function readAll(stream: Readable | null): Promise<string> {
 /** Uses native event-iterator backpressure; abandoning a channel drains its remaining bytes. */
 function readChunks(stream: Readable | null, signal: AbortSignal): AsyncGenerator<string> {
     stream?.setEncoding('utf8');
+
+    // Subscribe before returning control so fast startup output is not lost.
+    // Node pauses the source when its event queue exceeds the high-water mark.
     const chunks = stream ? on(stream, 'data', {
-        close: ['end', 'close'], signal, highWaterMark: 1, lowWaterMark: 1,
+        close: ['end', 'close'],
+        signal,
+        highWaterMark: 1,
+        lowWaterMark: 1,
     }) : undefined;
+
     async function* output(): AsyncGenerator<string> {
-        if (!stream || !chunks) { return; }
+        if (!stream || !chunks) {
+            return;
+        }
+
         try {
             for await (const [text] of chunks) {
-                if (typeof text !== 'string') { throw new TypeError('Expected decoded process output.'); }
+                if (typeof text !== 'string') {
+                    throw new TypeError('Expected decoded process output.');
+                }
                 yield text;
             }
         } catch (error: unknown) {
-            if (!(signal.aborted && error instanceof Error && error.name === 'AbortError')) { throw error; }
+            // Process/cancellation errors are reported through completed;
+            // unrelated stream errors still belong to the output consumer.
+            const cancelled = signal.aborted && error instanceof Error && error.name === 'AbortError';
+            if (!cancelled) {
+                throw error;
+            }
         } finally {
+            // An early consumer exit must not leave the child blocked writing.
             stream.resume();
         }
     }
+
     return output();
 }
 
