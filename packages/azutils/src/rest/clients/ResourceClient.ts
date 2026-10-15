@@ -6,7 +6,7 @@
 import { createResourceManagement, type ResourceManagementClientOptionalParams, type ResourceManagementContext } from '@azure/arm-resources/api';
 import { get as sdkGetProvider } from '@azure/arm-resources/api/providers';
 import { $delete as sdkDeleteResourceGroup, list as sdkListResourceGroups, type ResourceGroupsDeleteOptionalParams, type ResourceGroupsListOptionalParams } from '@azure/arm-resources/api/resourceGroups';
-import { deleteById as sdkDeleteById, list as sdkListResources, listByResourceGroup as sdkListByResourceGroup, type ResourcesDeleteByIdOptionalParams, type ResourcesListByResourceGroupOptionalParams, type ResourcesListOptionalParams } from '@azure/arm-resources/api/resources';
+import { deleteById as sdkDeleteById, getById as sdkGetById, list as sdkListResources, listByResourceGroup as sdkListByResourceGroup, type ResourcesDeleteByIdOptionalParams, type ResourcesGetByIdOptionalParams, type ResourcesListByResourceGroupOptionalParams, type ResourcesListOptionalParams } from '@azure/arm-resources/api/resources';
 import type { TokenCredential } from '@azure/core-auth';
 import { CaselessMap } from '@microsoft/vscode-azure-utils';
 import type { IActionExecutor, ICodeContext, Page, SyncFactory } from '@microsoft/vscode-azure-utils';
@@ -18,7 +18,7 @@ import { createArmRestSubscriptionClient } from '../createAzureClient';
 import { toPages } from '../toPages';
 
 export type { ResourceGroupsDeleteOptionalParams, ResourceGroupsListOptionalParams };
-export type { ResourcesDeleteByIdOptionalParams, ResourcesListByResourceGroupOptionalParams, ResourcesListOptionalParams };
+export type { ResourcesDeleteByIdOptionalParams, ResourcesGetByIdOptionalParams, ResourcesListByResourceGroupOptionalParams, ResourcesListOptionalParams };
 
 /** ARM and logical resource type for Azure Static Web Apps (`Microsoft.Web/staticSites`). */
 export const StaticWebAppResourceType = 'Microsoft.Web/staticSites';
@@ -29,6 +29,8 @@ export const ContainerAppResourceType = 'Microsoft.App/containerApps';
 export const ManagedEnvironmentResourceType = 'Microsoft.App/managedEnvironments';
 /** ARM and logical resource type for Container Registries. */
 export const AcrResourceType = 'Microsoft.ContainerRegistry/registries';
+/** ARM resource type for an Application Insights component. */
+export const ApplicationInsightsResourceType = 'Microsoft.Insights/components';
 
 /** ARM resource type string for App Service-family resources (`Microsoft.Web/sites`). */
 export const SiteType = 'Microsoft.Web/sites';
@@ -91,6 +93,8 @@ export interface IResourceClient {
          */
         list(options?: ResourcesListOptionalParams): AsyncIterable<Page<GenericResource>>;
         listByResourceGroup(resourceGroupName: string, options?: ResourcesListByResourceGroupOptionalParams): AsyncIterable<Page<GenericResource>>;
+        /** Reads provider-specific properties using the resource type's supported API version. */
+        getById(resourceId: string, resourceType: string, options?: ResourcesGetByIdOptionalParams): Promise<GenericResource>;
         deleteById(resourceId: string, resourceType: string, options?: ResourcesDeleteByIdOptionalParams): Promise<void>;
     };
     readonly providers: {
@@ -145,6 +149,10 @@ export class ResourceClient implements IResourceClient {
         return {
             list: (options) => this.listAllResources(options),
             listByResourceGroup: (resourceGroupName, options) => this.listResources(resourceGroupName, options),
+            getById: async (resourceId, resourceType, options) => attachMetadata(
+                await sdkGetById(this.inner, resourceId, await this.resolveApiVersion(resourceType), options),
+                this.subscription,
+            ),
             deleteById: (resourceId, resourceType, options) => this.deleteResourceById(resourceId, resourceType, options),
         };
     }
@@ -252,7 +260,7 @@ export class ResourceClient implements IResourceClient {
 
 function attachMetadata<T extends { type?: string; kind?: string }>(resource: T, subscription: AzureSubscription): T & GenericResource {
     if (!resource.type) {
-        throw new Error(`Resource is missing required field "type": ${JSON.stringify(resource)}`);
+        throw new Error('Resource is missing required field "type".');
     }
 
     return Object.assign(resource, {
