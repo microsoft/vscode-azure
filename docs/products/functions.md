@@ -36,19 +36,8 @@ without changing a completed deployment's status.
 The shared Core Tools installer supports an explicit v4-only acquisition range
 through the official `azure-functions-core-tools@4` npm package, while its default
 acquisition policy accepts v5 preview. Tool acquisition remains user-action driven.
-`IProcessExecutor` exposes decoded stdout/stderr chunks through separate async generators
-and a separate process-completion promise, without retaining long-running output.
-The completion promise resolves without a value; failures reject it.
-Owned hosts consume both generators concurrently and opt into process-tree cancellation;
-other callers retain their existing cancellation behavior.
-
-Owned hosts start in a dedicated process group on macOS/Linux; cancellation sends
-`SIGKILL` to that group. Windows hosts start normally and cancellation invokes
-`taskkill.exe /PID <host-pid> /T /F`. Descendants that leave the POSIX group are
-outside this cleanup boundary.
-`IProcessExecutor.killProcessTree(pid)` exposes the same termination operation
-for callers that own a target PID. On POSIX the PID must identify a dedicated
-process group; callers await process completion separately.
+Owned hosts consume both output generators concurrently and opt into
+[shared process-tree cancellation](../architecture.md#process-output-and-lifetime).
 
 ## F5 and project initialization
 
