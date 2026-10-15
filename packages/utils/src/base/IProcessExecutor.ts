@@ -134,7 +134,7 @@ export interface ProcessResult {
  * the process from exiting. Breaking out of either generator discards that
  * channel's remaining output without terminating the process.
  *
- * Results and process errors contain no captured stdout/stderr. Process failures,
+ * Completion resolves without a value; process errors contain no captured output. Process failures,
  * cancellation, and termination failures are reported by {@linkcode completed},
  * and terminate both generators. Stream I/O errors can also reject a generator.
  * Use the spawn cancellation signal to stop the process.
@@ -142,7 +142,7 @@ export interface ProcessResult {
 export interface StreamingProcessResult {
     readonly stdout: AsyncGenerator<string>;
     readonly stderr: AsyncGenerator<string>;
-    readonly completed: Promise<ProcessResult>;
+    readonly completed: Promise<void>;
 }
 
 /**
@@ -362,73 +362,50 @@ export class ProcessExecutor implements IProcessExecutor {
         const stdoutOutput = outputAbort ? readChunks(child.stdout, outputAbort.signal) : undefined;
         const stderrOutput = outputAbort ? readChunks(child.stderr, outputAbort.signal) : undefined;
         const stdout = outputAbort ? Promise.resolve('') : readAll(child.stdout);
+        const jsonLines = 'jsonLines' in options && options.jsonLines
+            ? parseJsonLines(readLines(child.stderr)) : undefined;
+        const stderr = outputAbort || jsonLines ? Promise.resolve('') : readAll(child.stderr);
+        const exited = finish(child, stdout, stderr, signal);
         let termination: Promise<void> | undefined;
-        const { promise: terminationFailed, reject: rejectTermination } = Promise.withResolvers<never>();
-        const onAbort = () => {
+        const terminationFailed = killTreeOnCancel && signal ? Promise.withResolvers<never>() : undefined;
+        const onAbort = terminationFailed ? () => {
             const pid = child.pid;
             if (pid && (process.platform !== 'win32' || (child.exitCode === null && child.signalCode === null))) {
                 termination ??= Promise.resolve().then(() => this.killProcessTreeFn(pid));
-                void termination.catch(rejectTermination);
+                void termination.catch(terminationFailed.reject);
             }
-        };
-        // JSON-lines mode streams stderr line-by-line rather than buffering it,
-        // so the caller can observe progress while the process is still running.
-        if ('jsonLines' in options && options.jsonLines) {
-            const completed = (async (): Promise<JsonProcessResult<unknown>> => {
-                try {
-                    // stderr is streamed rather than buffered, so it is not
-                    // captured on the completed result -- the caller consumes it
-                    // live via `jsonLines`.
-                    const out = await finish(child, stdout, Promise.resolve(''), signal);
-                    return { stdout: out.stdout, stderr: '', json: JSON.parse(out.stdout) as unknown };
-                } finally {
-                    disposable.dispose();
-                }
-            })();
-
-            // Mark the rejection as handled so a caller that only drains
-            // `jsonLines` (and never awaits `completed`) doesn't trigger an
-            // unhandled-rejection warning when the process fails. The original
-            // `completed` promise is still returned, so awaiting it observes the
-            // rejection normally.
-            void completed.catch(() => undefined);
-
-            return {
-                jsonLines: parseJsonLines(readLines(child.stderr)),
-                completed,
-            };
-        }
-
-        const exited = finish(child, stdout, outputAbort ? Promise.resolve('') : readAll(child.stderr), signal);
-        if (killTreeOnCancel && signal) {
+        } : undefined;
+        if (onAbort && signal) {
             signal.addEventListener('abort', onAbort, { once: true });
             if (signal.aborted) { onAbort(); }
         }
         const completed = (async () => {
             try {
-                return await Promise.race([exited, terminationFailed]);
+                return await (terminationFailed ? Promise.race([exited, terminationFailed.promise]) : exited);
             } catch (error) {
                 outputAbort?.abort();
                 throw error;
             } finally {
-                signal?.removeEventListener('abort', onAbort);
+                if (onAbort) { signal?.removeEventListener('abort', onAbort); }
                 disposable.dispose();
                 await termination;
             }
         })();
         if (stdoutOutput && stderrOutput) {
+            const streamed = completed.then(() => undefined);
             // The original promise remains observable even if output is consumed first.
-            void completed.catch(() => undefined);
-            return { stdout: stdoutOutput, stderr: stderrOutput, completed };
+            void streamed.catch(() => undefined);
+            return { stdout: stdoutOutput, stderr: stderrOutput, completed: streamed };
         }
 
-        const result = await completed;
-        if (options.parseJson) {
-            const json: unknown = JSON.parse(result.stdout);
-            return { ...result, json };
+        const parsed = options.parseJson ? completed.then(result => ({
+            ...result, json: JSON.parse(result.stdout) as unknown,
+        })) : undefined;
+        if (jsonLines && parsed) {
+            void parsed.catch(() => undefined);
+            return { jsonLines, completed: parsed };
         }
-
-        return result;
+        return parsed ?? completed;
     }
 }
 

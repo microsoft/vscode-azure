@@ -65,7 +65,7 @@ describe('ProcessExecutor (unit)', () => {
             const [stdout, stderr] = await Promise.all([collectAsync(result.stdout), collectAsync(result.stderr)]);
             expect(stdout).to.deep.equal(['host ready']);
             expect(stderr).to.deep.equal(['worker message']);
-            expect(await result.completed).to.deep.equal({ stdout: '', stderr: '' });
+            await result.completed;
         });
 
         it('reports process failure while streaming output', async () => {
@@ -105,7 +105,7 @@ describe('ProcessExecutor (unit)', () => {
                 break;
             }
             expect(await collectAsync(result.stderr)).to.deep.equal(['error one\n', 'error two\n']);
-            expect(await result.completed).to.deep.equal({ stdout: '', stderr: '' });
+            await result.completed;
         });
 
         it('decodes UTF-8 characters split across output chunks', async () => {
@@ -353,6 +353,28 @@ describe('ProcessExecutor (unit)', () => {
             }
 
             expect(lines).to.deep.equal([{ valid: true }]);
+        });
+
+        it('reports a JSONL process failure through completion after yielding its progress', async () => {
+            const executor = new ProcessExecutor(createMockVsCode().vscode, createMockSpawn({
+                stdout: '{}', stderrLines: ['{"step":1}'], exitCode: 2,
+            }));
+            const result = await executor.spawn({
+                execution: 'background', command: ['test-cmd'], parseJson: true, jsonLines: true,
+            });
+            expect(await collectAsync(result.jsonLines)).to.deep.equal([{ step: 1 }]);
+            await expect(result.completed).to.be.rejectedWith(ProcessError).and.eventually.have.property('code', 2);
+        });
+
+        it('reports malformed JSON stdout through JSONL completion', async () => {
+            const executor = new ProcessExecutor(createMockVsCode().vscode, createMockSpawn({
+                stdout: 'not JSON', stderrLines: ['{"step":1}'],
+            }));
+            const result = await executor.spawn({
+                execution: 'background', command: ['test-cmd'], parseJson: true, jsonLines: true,
+            });
+            expect(await collectAsync(result.jsonLines)).to.deep.equal([{ step: 1 }]);
+            await expect(result.completed).to.be.rejectedWith(SyntaxError);
         });
     });
 
@@ -858,7 +880,7 @@ describe('ProcessExecutor (integration)', () => {
             const [stdout, stderr] = await Promise.all([collectAsync(result.stdout), collectAsync(result.stderr)]);
             expect(stdout.join('')).to.equal('o'.repeat(size));
             expect(stderr.join('')).to.equal('e'.repeat(size));
-            expect(await result.completed).to.deep.equal({ stdout: '', stderr: '' });
+            await result.completed;
         });
 
         it('lets a large-output process finish after its output generator is closed early', async () => {
@@ -872,7 +894,7 @@ describe('ProcessExecutor (integration)', () => {
                 break;
             }
             expect((await collectAsync(result.stderr)).join('')).to.equal('e'.repeat(1024 * 1024));
-            expect(await result.completed).to.deep.equal({ stdout: '', stderr: '' });
+            await result.completed;
         });
 
         it('should pass arguments verbatim without shell interpretation or quoting corruption', async () => {

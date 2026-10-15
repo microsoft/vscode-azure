@@ -38,6 +38,7 @@ through the official `azure-functions-core-tools@4` npm package, while its defau
 acquisition policy accepts v5 preview. Tool acquisition remains user-action driven.
 `IProcessExecutor` exposes decoded stdout/stderr chunks through separate async generators
 and a separate process-completion promise, without retaining long-running output.
+The completion promise resolves without a value; failures reject it.
 Owned hosts consume both generators concurrently and opt into process-tree cancellation;
 other callers retain their existing cancellation behavior.
 
