@@ -512,10 +512,12 @@ When source maps are available, coverage from the bundled extension can be remap
 
 ## Test Configuration
 
-Extension test configuration lives in `.vscode-test.mjs`:
+Extension test configuration lives in [`.vscode-test.mjs`](../extensions/vscode-azure/.vscode-test.mjs).
 
-```javascript
-export { azExtTestConfig as default } from '@microsoft/vscode-azext-eng/vscode-test'; // Other configurations exist
-```
-
-Package test configuration lives in each package's `package.json` under the `mocha` key. Specs are `test/**/*.test.ts`, and Mocha runs them directly as TypeScript via Node's `--experimental-transform-types` plus the shared `@microsoft/vscode-azext-eng/mocha` loader.
+Package test configuration lives in [utils' `.mocharc.cjs`](../packages/utils/.mocharc.cjs)
+and [azutils' `.mocharc.cjs`](../packages/azutils/.mocharc.cjs). Both use the shared
+`createNodeMochaConfig` factory, which discovers `**/*.test.{ts,mts,cts}` and ignores
+`node_modules`. Mocha runs tests
+directly as TypeScript via Node's `--experimental-transform-types` plus the shared
+`@microsoft/vscode-azext-eng/mocha` loader. The `test` and `testcov` scripts discover
+these files automatically.

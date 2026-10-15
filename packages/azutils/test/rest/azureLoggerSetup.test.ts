@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureLogger, createClientLogger, getLogLevel, setLogLevel } from '@azure/logger';
-import { MockOutputChannel } from '@microsoft/vscode-azure-utils/testing';
+import { MockLogLevel, MockOutputChannel } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
 import { setUpAzureSdkLogging } from '../../src/rest/azureLoggerSetup';
@@ -17,7 +17,7 @@ describe('setUpAzureSdkLogging (unit)', () => {
 
     it('forwards AzureLogger.log to output.debug with [azure-sdk] prefix', () => {
         const output = new MockOutputChannel('test');
-        output.logLevel = 2; // Debug
+        output.logLevel = MockLogLevel.Debug;
 
         const disposable = setUpAzureSdkLogging(output);
         try {
@@ -32,7 +32,7 @@ describe('setUpAzureSdkLogging (unit)', () => {
 
     it('routes per-severity client logger messages to the matching output method', () => {
         const output = new MockOutputChannel('test');
-        output.logLevel = 1; // Trace -> 'verbose' so all levels fire
+        output.logLevel = MockLogLevel.Trace;
 
         const disposable = setUpAzureSdkLogging(output);
         try {
@@ -62,7 +62,7 @@ describe('setUpAzureSdkLogging (unit)', () => {
 
     it('applies the initial log level based on the output channel logLevel', () => {
         const output = new MockOutputChannel('test');
-        output.logLevel = 3; // Info
+        output.logLevel = MockLogLevel.Info;
 
         const disposable = setUpAzureSdkLogging(output);
         try {
@@ -74,16 +74,16 @@ describe('setUpAzureSdkLogging (unit)', () => {
 
     it('re-applies the log level when onDidChangeLogLevel fires', () => {
         const output = new MockOutputChannel('test');
-        output.logLevel = 3; // Info
+        output.logLevel = MockLogLevel.Info;
 
         const disposable = setUpAzureSdkLogging(output);
         try {
             expect(getLogLevel()).to.equal('info');
 
-            output.logLevel = 1; // Trace -> 'verbose'
+            output.logLevel = MockLogLevel.Trace;
             expect(getLogLevel()).to.equal('verbose');
 
-            output.logLevel = 4; // Warning
+            output.logLevel = MockLogLevel.Warning;
             expect(getLogLevel()).to.equal('warning');
         } finally {
             disposable.dispose();
@@ -92,7 +92,7 @@ describe('setUpAzureSdkLogging (unit)', () => {
 
     it('maps LogLevel.Off to undefined (disables Azure SDK logging)', () => {
         const output = new MockOutputChannel('test');
-        output.logLevel = 0; // Off
+        output.logLevel = MockLogLevel.Off;
 
         const disposable = setUpAzureSdkLogging(output);
         try {
@@ -106,6 +106,7 @@ describe('setUpAzureSdkLogging (unit)', () => {
         const output = new MockOutputChannel('test');
         // Use a value outside the known vscode.LogLevel range (Off..Error = 0..5)
         // to exercise the fallback branch in `toAzureLogLevel`.
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-enum-assignment -- exercises malformed input outside the enum
         output.logLevel = 99 as vscode.LogLevel;
 
         const disposable = setUpAzureSdkLogging(output);
@@ -120,7 +121,7 @@ describe('setUpAzureSdkLogging (unit)', () => {
         const sentinel = mock.method(AzureLogger, 'log', () => { /* previous sink */ });
 
         const output = new MockOutputChannel('test');
-        output.logLevel = 3;
+        output.logLevel = MockLogLevel.Info;
         const disposable = setUpAzureSdkLogging(output);
         try {
             expect(AzureLogger.log).to.not.equal(sentinel);
@@ -139,7 +140,7 @@ describe('setUpAzureSdkLogging (unit)', () => {
         setLogLevel('warning');
 
         const output = new MockOutputChannel('test');
-        output.logLevel = 1; // Trace -> 'verbose'
+        output.logLevel = MockLogLevel.Trace;
         const disposable = setUpAzureSdkLogging(output);
         try {
             expect(getLogLevel()).to.equal('verbose');
@@ -153,12 +154,12 @@ describe('setUpAzureSdkLogging (unit)', () => {
 
     it('is a no-op when a previous setup is still active', () => {
         const output1 = new MockOutputChannel('first');
-        output1.logLevel = 2; // Debug
+        output1.logLevel = MockLogLevel.Debug;
 
         const first = setUpAzureSdkLogging(output1);
         try {
             const output2 = new MockOutputChannel('second');
-            output2.logLevel = 2;
+            output2.logLevel = MockLogLevel.Debug;
 
             const second = setUpAzureSdkLogging(output2);
             try {

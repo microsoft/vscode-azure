@@ -7,6 +7,7 @@ import { mock } from 'node:test';
 import type * as vscode from 'vscode';
 import { EventEmitter } from '../../src/vscode/EventEmitter';
 import type { IOutputChannel } from '../../src/vscode/IOutputChannel';
+import { MockLogLevel } from './MockValueTypes';
 
 /**
  * Silent {@linkcode IOutputChannel} whose methods are `mock.fn()` no-ops.
@@ -24,7 +25,7 @@ export class MockOutputChannel implements IOutputChannel {
         this._logLevel = level;
         this.logLevelEmitter.fire(level);
     }
-    private _logLevel: vscode.LogLevel = 1 satisfies vscode.LogLevel;
+    private _logLevel: vscode.LogLevel = MockLogLevel.Trace;
 
     private readonly logLevelEmitter = new EventEmitter<vscode.LogLevel>();
     public readonly onDidChangeLogLevel = this.logLevelEmitter.event;

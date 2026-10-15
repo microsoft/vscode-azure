@@ -60,32 +60,34 @@ The extension uses **esbuild** to bundle all source (including packages) into a 
 
 ```bash
 pnpm --filter vscode-azure run build
-# Runs two commands in series:
+# Runs two commands in parallel:
 #   build:esbuild — node esbuild.mjs (produces dist/extension.bundle.js)
 #   build:check   — tsc --noEmit (type checking only)
 ```
 
 #### TypeScript toolchain (`tsc` vs. typescript-eslint)
 
-The build compiler is TypeScript 7, pulled in as an npm alias in the root `package.json`:
+The eng package supplies TypeScript 7 under an npm alias:
 
 ```jsonc
-"@typescript/native": "npm:typescript@7.0.2"  // provides the native `tsc` used by the build scripts
+"@typescript/native": "npm:typescript@7.0.2"
 ```
 
-TypeScript 7.0 ships the fast native compiler but **not** a programmatic compiler API (that arrives
-in 7.1). Type-aware linting via `typescript-eslint` still needs the TypeScript 6.x-compatible API, so
-it keeps using its own `typescript` peer dependency (a 5.x/6.x line, resolved locally by pnpm). pnpm
-resolves that peer by package *name*, so if a package literally named `typescript` were provided at
-the workspace root, the linter would resolve its peer from that and load the API-less TypeScript 7.
+TypeScript 7.0 ships the fast native compiler but not the compiler API used by
+`typescript-eslint`. The eng package supplies TypeScript 6 for type-aware linting,
+resolved locally by pnpm. pnpm resolves that dependency by package *name*, so providing
+TypeScript 7 under the name `typescript` at the workspace root would make the linter
+load an incompatible compiler API.
 The alias sidesteps this: the 7.0 compiler is installed under a *different* name (`@typescript/native`)
-so it provides `tsc` without occupying the `typescript` name. For the same reason, `typescript` is
+without occupying the `typescript` name. `publicHoistPattern` exposes this transitive alias at the
+workspace root, making its `tsc` binary available to each workspace's build scripts.
+For the same reason, `typescript` is
 intentionally **not** in `pnpm-workspace.yaml`'s `publicHoistPattern` and is **not** declared as a
-top-level dependency. The result: `tsc` is TypeScript 7, while `typescript-eslint` transparently uses
-its own compatible TypeScript. No action is needed to keep the two in sync.
+top-level dependency. The result: builds use TypeScript 7, while `typescript-eslint` transparently uses
+eng's TypeScript 6 API.
 
 > **Future cleanup:** this alias-and-no-hoist arrangement is only needed because TypeScript 7.0 has no
-> compiler API. Once TypeScript 7.1 ships its new API *and* `typescript-eslint` releases a version that
+> compatible compiler API. Once TypeScript 7.1 ships its new API *and* `typescript-eslint` releases a version that
 > uses it, this workaround can be removed: drop the `@typescript/native` alias and simply declare
 > `"typescript"` at the appropriate version (re-adding it to `publicHoistPattern` if desired), since the
 > build compiler and the linter's compiler would then be the same package again.
@@ -99,9 +101,10 @@ the separate telemetry bundle) and then layers on three extension-specific thing
 - **Source aliases** for `@microsoft/vscode-azure-utils` and `@microsoft/vscode-azure-azutils`,
   pointing at each package's `src/index.ts`. esbuild therefore bundles package *source*
   and no prebuild step is needed.
-- **A copy plugin** that emits `packages/azutils/resources/azureIcons/**/*.svg` into
-  `dist/azureIcons/`, so resource icons ship with the extension (and get cleaned by
-  `pnpm run clean`). See [Tree Views — Resource Icons](tree-views.md#resource-icons).
+- **The shared `copyPlugin`** that emits `packages/azutils/resources/azureIcons/**/*.svg`
+  into `dist/azureIcons/`, preserving paths relative to the icon source directory.
+  Resource icons ship with the extension and are cleaned by `pnpm run clean`.
+  See [Tree Views — Resource Icons](tree-views.md#resource-icons).
 - **Secondary entry points** for the dev/test override bundles (`test/mock.bundle`,
   `test/e2e.bundle`), which keeps the mock data and the E2E `@azure/identity` credential
   out of the shipped extension bundle.
@@ -177,9 +180,18 @@ The extension's test runner downloads a full VS Code build (~1 GB) into `extensi
 pnpm run link-test-cache
 ```
 
-Run it once per worktree, *before* the first test run. It links `.vscode-test` to a machine-wide cache (default `<homedir>/.vscode-test-cache`, override with `VSCODE_TEST_CACHE_DIR`). It is idempotent and refuses to clobber a real `.vscode-test` directory — move that to the shared location first to keep the existing download.
+Run it once per worktree, *before* the first test run. The script invokes eng's
+`azext-link-test-cache` for the extension workspace, with `--replace` to allow
+retargeting an existing link. It links `.vscode-test` to a machine-wide cache
+(default `<homedir>/.vscode-test-cache`, override with `VSCODE_TEST_CACHE_DIR`).
+It is idempotent and refuses to clobber a real `.vscode-test` directory — move
+that to the shared location first to keep the existing download.
 
-Two caveats: `.vscode-test` also holds the `--user-data-dir` and `--extensions-dir`, so linked worktrees share one VS Code profile and shouldn't run tests concurrently. And this is deliberately not in `postinstall`, since it writes outside the repo and is pointless on CI.
+Linked worktrees share the download and extension-installation directories.
+On Windows they also share VS Code's user-data profile; the shared test config
+uses a separate short user-data path per worktree on macOS/Linux. Do not run
+linked tests concurrently. Cache linking is deliberately not in `postinstall`,
+since it writes outside the repo and is pointless on CI.
 
 ## Linting
 

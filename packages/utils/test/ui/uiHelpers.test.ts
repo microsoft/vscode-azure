@@ -8,6 +8,7 @@ import { CancellationError } from '../../src/vscode/CancellationError';
 import type { IVsCode } from '../../src/vscode/IVsCode';
 import { GoBackError } from '../../src/wizard/GoBackError';
 import { MockUri } from '../vscode/MockUri';
+import { MockProgressLocation } from '../vscode/MockValueTypes';
 import { createMockCodeContext, createMockVsCode, respondToPrompts } from '../vscode/MockVsCode';
 
 describe('uiHelpers (unit)', () => {
@@ -843,7 +844,7 @@ describe('uiHelpers (unit)', () => {
     describe('withDelayedProgress', () => {
         it('should return immediately when promise resolves before the delay', async () => {
             const code = {} as IVsCode; // withProgress not called when fast
-            const result = await withDelayedProgress(code, { location: 1 }, Promise.resolve('fast'), 500);
+            const result = await withDelayedProgress(code, { location: MockProgressLocation.SourceControl }, Promise.resolve('fast'), 500);
             expect(result).to.equal('fast');
         });
 
@@ -859,7 +860,7 @@ describe('uiHelpers (unit)', () => {
             } as unknown as IVsCode;
 
             const slow = new Promise<string>(r => { setTimeout(() => { r('slow'); }, 50); });
-            const result = await withDelayedProgress(code, { location: 1 }, slow, 0);
+            const result = await withDelayedProgress(code, { location: MockProgressLocation.SourceControl }, slow, 0);
             expect(result).to.equal('slow');
             expect(progressCalled).to.be.true;
         });
