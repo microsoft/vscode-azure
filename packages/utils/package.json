@@ -14,6 +14,13 @@
     "license": "MIT",
     "author": "Microsoft Corporation",
     "type": "module",
+    "files": [
+        "LICENSE.md",
+        "dist",
+        "!*.test.*",
+        "!*.map",
+        "!*.tsbuildinfo"
+    ],
     "module": "dist/esm/src/index.js",
     "types": "dist/esm/src/index.d.ts",
     "exports": {
@@ -37,11 +44,11 @@
     },
     "dependencies": {
         "@azure/core-process": "^1.0.0",
+        "minimatch": "^10.2.6",
         "vscode-uri": "catalog:"
     },
     "devDependencies": {
         "@vscode/extension-telemetry": "catalog:",
-        "inversify": "catalog:",
-        "minimatch": "^10.2.6"
+        "inversify": "catalog:"
     }
 }

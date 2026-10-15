@@ -14,6 +14,14 @@
     "license": "MIT",
     "author": "Microsoft Corporation",
     "type": "module",
+    "files": [
+        "LICENSE.md",
+        "dist",
+        "resources",
+        "!*.test.*",
+        "!*.map",
+        "!*.tsbuildinfo"
+    ],
     "module": "dist/esm/src/index.js",
     "types": "dist/esm/src/index.d.ts",
     "exports": {
