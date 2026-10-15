@@ -50,7 +50,7 @@ describe('Functions debug provider (unit)', () => {
             expect(config?.request).to.equal('attach');
             expect(config?.__azureFunctionsHostId).to.equal('owned');
             expect(config?.preLaunchTask).to.be.undefined;
-            expect(s.tools.acquire.mock.calls[0].arguments[0].versionRange).to.equal('>=4.15.2 <5.0.0');
+            expect(s.tools.acquire.mock.calls[0].arguments[0].versionRange).to.equal('>=5.0.0-preview.3');
             expect(start.mock.calls[0].arguments[0].project.toString()).to.equal(s.folder.toString());
             if (runtime === 'node' || runtime === 'java') { expect(config?.port).to.equal(9229); }
             if (runtime === 'python') { expect(config?.connect).to.deep.equal({ host: '127.0.0.1', port: 9229 }); }
@@ -74,7 +74,10 @@ describe('Functions debug provider (unit)', () => {
         it(`uses the selected Python interpreter, quoted debugger path, and ${platform} ${pathName} precedence`, async () => {
             mock.property(process, 'platform', platform);
             const s = setup('python');
-            const python = s.code.Uri.joinPath(s.folder, '.venv', 'Scripts', 'python.exe');
+            const virtualEnvironment = s.code.Uri.file('/Selected Python Environment');
+            const executableDirectory = s.code.Uri.joinPath(virtualEnvironment, platform === 'win32' ? 'Scripts' : 'bin');
+            const python = s.code.Uri.joinPath(executableDirectory, platform === 'win32' ? 'python.exe' : 'python');
+            s.m.fs.addFile(s.code.Uri.joinPath(virtualEnvironment, 'pyvenv.cfg'), '');
             addMockExtension(s.m, 'ms-python.python', {
                 ready: Promise.resolve(),
                 environments: {
@@ -91,17 +94,28 @@ describe('Functions debug provider (unit)', () => {
             expect(env.languageWorkers__python__defaultExecutablePath).to.equal(python.fsPath);
             expect(env.languageWorkers__python__arguments).to.equal('"C:\\Python Debugger\\debugpy" "--listen" "127.0.0.1:9001" "--wait-for-client"');
             expect(env.CUSTOM_PYTHON_ENV).to.equal('configured');
+            expect(env.VIRTUAL_ENV).to.equal(virtualEnvironment.fsPath);
             expect(env.PATH).to.contain('environment-path');
             expect(launcher.mock.calls[0].arguments).to.deep.equal(['127.0.0.1', 9001, true]);
             const overridden = await s.preparation.workerEnvironment(s.folder, 'python', 9001, 'pipe', {
                 ['CUSTOM_PYTHON_ENV']: 'launch', [pathName]: 'launch-path',
+                [platform === 'win32' ? 'Virtual_Env' : 'VIRTUAL_ENV']: 'another-environment',
             });
             expect(overridden.CUSTOM_PYTHON_ENV).to.equal('launch');
-            expect(overridden.PATH).to.equal(`${s.code.Uri.joinPath(s.folder, '.venv', 'Scripts').fsPath}${delimiter}${expectedPath}`);
+            expect(overridden.PATH).to.equal(`${executableDirectory.fsPath}${delimiter}${expectedPath}`);
+            expect(overridden.VIRTUAL_ENV).to.equal(virtualEnvironment.fsPath);
             if (platform === 'win32') {
                 expect(Object.keys(overridden).filter(key => key.toLowerCase() === 'path')).to.deep.equal(['PATH']);
+                expect(Object.keys(overridden).filter(key => key.toLowerCase() === 'virtual_env')).to.deep.equal(['VIRTUAL_ENV']);
             }
             expect(overridden.languageWorkers__python__defaultExecutablePath).to.equal(python.fsPath);
+            const resolved = await s.debugProvider.resolveDebugConfigurationWithSubstitutedVariables(undefined, {
+                ...s.config, env: { [platform === 'win32' ? 'Virtual_Env' : 'VIRTUAL_ENV']: 'another-environment' },
+            });
+            expect(resolved?.type).to.equal('debugpy');
+            const spawnedEnvironment = s.spawn.mock.calls[0].arguments[2]?.env ?? {};
+            expect(Object.entries(spawnedEnvironment).filter(([key]) => key.toLowerCase() === 'virtual_env').map(([, value]) => value))
+                .to.deep.equal([virtualEnvironment.fsPath]);
         });
     }
 
@@ -194,7 +208,11 @@ describe('Functions debug provider (unit)', () => {
         mock.property(s.m.workspace, 'isTrusted', false);
         expect(await s.debugProvider.resolveDebugConfigurationWithSubstitutedVariables(undefined, s.config)).to.be.undefined;
         const trusted = setup();
-        expect(await trusted.debugProvider.resolveDebugConfigurationWithSubstitutedVariables(undefined, { ...trusted.config, hostArgs: ['--port=7000'] })).to.be.undefined;
+        for (const flag of ['--port=7000', '-p', '--output=json', '--no-tui', '--no-azurite=false',
+            '--host-version=4.1049.0', '-v', '--profile=other', '--enable-auth', '--no-build=false',
+            '--dotnet-isolated-debug', '--enable-json-output', '--json-output-file=worker.json']) {
+            expect(await trusted.debugProvider.resolveDebugConfigurationWithSubstitutedVariables(undefined, { ...trusted.config, hostArgs: [flag] })).to.be.undefined;
+        }
         expect(await trusted.debugProvider.resolveDebugConfigurationWithSubstitutedVariables(undefined, { ...trusted.config, debugPort: 0 })).to.be.undefined;
         expect(await trusted.debugProvider.resolveDebugConfigurationWithSubstitutedVariables(undefined, { ...trusted.config, env: { ['PSWorkerCustomPipeName']: 'unowned' } })).to.be.undefined;
         expect(s.tools.acquire.mock.callCount()).to.equal(0);

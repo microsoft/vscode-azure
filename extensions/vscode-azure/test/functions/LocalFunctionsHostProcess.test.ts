@@ -13,6 +13,13 @@ import { LocalFunctionsHostTracker } from '../../src/functions/host/LocalFunctio
 import { LocalFunctionsNetwork } from '../../src/functions/host/LocalFunctionsNetwork';
 import { workerProcessId } from '../../src/functions/host/workerProcessId';
 
+function dotnetToolingLog(message: string): string {
+    return JSON.stringify({
+        ['schema_version']: 1, kind: 'log', timestamp: '2026-10-15T00:00:00.0000000+00:00',
+        category: 'Host.Function.ToolingConsoleLog', level: 'information', ['event_id']: 0, message,
+    });
+}
+
 describe('Local Functions host ownership (unit)', () => {
     const owners: LocalFunctionsHostProcess[] = [];
     afterEach(() => { owners.splice(0).forEach(owner => { owner.dispose(); }); mock.restoreAll(); });
@@ -42,8 +49,9 @@ describe('Local Functions host ownership (unit)', () => {
         await waitFor(() => !!s.tracker.get(s.request.project));
         expect(s.tracker.get(s.request.project)?.port).to.equal(host.hostPort);
         const args = s.spawn.mock.calls[0].arguments[1];
-        expect(args).to.include('--address');
-        expect(args).to.include('127.0.0.1');
+        expect(args).to.deep.equal([
+            'run', s.request.cwd.fsPath, '--port', String(host.hostPort), '--no-build', '--no-azurite', '--output', 'plain',
+        ]);
         await s.owner.stop(host.id);
         expect(s.tracker.get(s.request.project)).to.be.undefined;
         await s.owner.stop(host.id);
@@ -158,16 +166,25 @@ describe('Local Functions host ownership (unit)', () => {
         expect(s.tracker.get(s.request.project)).to.be.undefined;
     });
 
-    it('extracts a fragmented structured .NET worker PID before HTTP readiness', async () => {
-        const line = JSON.stringify({ Message: 'azfuncjsonlog:{"name":"dotnet-worker-startup","workerProcessId":1234}' });
-        const s = setup({ stdoutChunks: [line.slice(0, 30), line.slice(30), '\n'] });
-        s.client.getStatus.mock.mockImplementation(() => Promise.resolve({ state: 'Starting' }));
-        const host = await s.owner.start({ ...s.request, runtime: 'dotnet-isolated' });
-        expect(host.workerPid).to.equal(1234);
-        expect(s.tracker.get(s.request.project)).to.be.undefined;
-        expect(s.spawn.mock.calls[0].arguments[1]).to.include('--dotnet-isolated-debug');
-        await s.owner.stop(host.id);
-    });
+    for (const [channel, message] of [
+        ['stdout', 'azfuncjsonlog:{"name":"dotnet-worker-startup","workerProcessId":1234}'],
+        ['stderr', 'Azure Functions .NET Worker (PID: 1234) initialized in debug mode.'],
+    ] as const) {
+        it(`extracts a v5 .NET worker PID from ${channel} before HTTP readiness`, async () => {
+            const line = dotnetToolingLog(message);
+            const chunks = [line.slice(0, 30), line.slice(30), '\n'];
+            const s = setup(channel === 'stdout' ? { stdoutChunks: chunks } : { stderr: `${line}\n` });
+            s.client.getStatus.mock.mockImplementation(() => Promise.resolve({ state: 'Starting' }));
+            const host = await s.owner.start({ ...s.request, runtime: 'dotnet-isolated' });
+            expect(host.workerPid).to.equal(1234);
+            expect(s.tracker.get(s.request.project)).to.be.undefined;
+            expect(s.spawn.mock.calls[0].arguments[1]).to.deep.equal([
+                'run', s.request.cwd.fsPath, '--port', String(host.hostPort), '--no-build', '--no-azurite',
+                '--output', 'json', '--dotnet-isolated-debug', '--enable-json-output',
+            ]);
+            await s.owner.stop(host.id);
+        });
+    }
 
     it('cancels a running owned process when its task ends', async () => {
         const s = setup();
@@ -249,6 +266,22 @@ describe('Functions worker PID (unit)', () => {
         for (const line of ['not json', '{"workerProcessId":1234}', '{"name":"other","workerProcessId":1234}',
             '{"name":"dotnet-worker-startup","workerProcessId":-1}', '{"name":"dotnet-worker-startup","workerProcessId":"1234"}']) {
             expect(workerProcessId(line)).to.be.undefined;
+        }
+    });
+
+    it('reads v5 tooling-category startup messages with positive safe-integer PIDs', () => {
+        expect(workerProcessId(dotnetToolingLog('azfuncjsonlog:{"name":"dotnet-worker-startup","workerProcessId":2345}'))).to.equal(2345);
+        expect(workerProcessId(dotnetToolingLog('Azure Functions .NET Worker (PID: 2345) initialized in debug mode.'))).to.equal(2345);
+        expect(workerProcessId(JSON.stringify({
+            category: 'host.function.toolingconsolelog', message: 'Azure Functions .NET Worker (PID: 2345) initialized in debug mode.',
+        }))).to.equal(2345);
+        for (const pid of ['0', '-1', '1.5', '9007199254740992', 'not-a-pid']) {
+            expect(workerProcessId(dotnetToolingLog(`Azure Functions .NET Worker (PID: ${pid}) initialized in debug mode.`))).to.be.undefined;
+        }
+        for (const category of ['Function.user', undefined]) {
+            expect(workerProcessId(JSON.stringify({
+                category, message: 'Azure Functions .NET Worker (PID: 2345) initialized in debug mode.',
+            }))).to.be.undefined;
         }
     });
 });

@@ -195,12 +195,12 @@ export class LocalFunctionsHostProcess implements Disposable {
     }
 
     private launch(host: OwnedHost, request: FunctionsHostStart, port: number, debugPort: number, env: Readonly<Record<string, string>>): void {
-        const args = ['host', 'start', ...request.hostArgs, '--address', '127.0.0.1', '--port', String(port)];
+        const args = [
+            'run', request.cwd.fsPath, ...request.hostArgs, '--port', String(port), '--no-build', '--no-azurite',
+            '--output', request.runtime === 'dotnet-isolated' ? 'json' : 'plain',
+        ];
         if (request.runtime === 'dotnet-isolated') {
-            args.push('--no-build', '--dotnet-isolated-debug', '--enable-json-output');
-        }
-        if (request.runtime === 'native') {
-            args.push('--no-build');
+            args.push('--dotnet-isolated-debug', '--enable-json-output');
         }
         const buffers = { stdout: '', stderr: '' };
         host.process = this.processes.spawn({
@@ -251,7 +251,7 @@ export class LocalFunctionsHostProcess implements Disposable {
                 }
                 if (!host.abort.signal.aborted && !CancellationError.test(error)) {
                     host.error = new ExternalError(request.runtime === 'native'
-                        ? this.code.l10n.t('The Functions host failed. Native Go requires a full Core Tools v4 installation with native worker assets. See its terminal for details.')
+                        ? this.code.l10n.t('The Functions host failed. Native Go requires the Core Tools v5 Go worker workload. See its terminal for details.')
                         : this.code.l10n.t('The Functions host failed. See its terminal for details.'));
                     host.terminal.write(`${host.error.message}\n`);
                     this.output.warn(this.code.l10n.t('[functions] Owned host process failed.'));

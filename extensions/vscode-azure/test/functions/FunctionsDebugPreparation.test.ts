@@ -151,14 +151,7 @@ describe('Functions debug preparation (unit)', () => {
 
     it('installs Python requirements with the selected interpreter and reports a missing debugger extension', async () => {
         const s = setup('python');
-        const executable = s.code.Uri.joinPath(s.folder, '.venv', 'python.exe');
-        addMockExtension(s.m, 'ms-python.python', {
-            ready: Promise.resolve(), environments: {
-                getActiveEnvironmentPath: () => ({ path: executable.fsPath }),
-                resolveEnvironment: () => Promise.resolve({ executable: { uri: executable } }),
-                getEnvironmentVariables: () => ({}),
-            },
-        });
+        const executable = s.code.Uri.joinPath(s.folder, '.venv', process.platform === 'win32' ? 'Scripts' : 'bin', process.platform === 'win32' ? 'python.exe' : 'python');
         s.m.fs.addFile(s.code.Uri.joinPath(s.folder, 'requirements.txt'), 'azure-functions');
         const building = s.preparation.build(s.folder, 'python', {});
         const build = await getMockTaskExecution(s.m);
@@ -168,5 +161,21 @@ describe('Functions debug preparation (unit)', () => {
         s.m.taskProcessEndEmitter.fire({ execution: build, exitCode: 0 });
         await building;
         await expect(s.preparation.workerEnvironment(s.folder, 'python', 9001, 'pipe')).to.be.rejectedWith('Install the Python Debugger');
+    });
+
+    it('requires a selected Python virtual environment before tool acquisition or host launch', async () => {
+        const s = setup('python');
+        const executable = s.code.Uri.file('/system/python');
+        addMockExtension(s.m, 'ms-python.python', {
+            ready: Promise.resolve(), environments: {
+                getActiveEnvironmentPath: () => ({ path: executable.fsPath }),
+                resolveEnvironment: () => Promise.resolve({ executable: { uri: executable } }),
+                getEnvironmentVariables: () => ({}),
+            },
+        });
+        await expect(s.preparation.validate(s.folder, {})).to.be.rejectedWith('Select a Python virtual environment');
+        expect(s.tools.acquire.mock.callCount()).to.equal(0);
+        expect(s.spawn.mock.callCount()).to.equal(0);
+        expect(s.m.tasks.executeTask.mock.callCount()).to.equal(0);
     });
 });

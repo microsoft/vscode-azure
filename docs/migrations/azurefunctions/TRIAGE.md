@@ -39,7 +39,7 @@ Go scaffolding, Java add-function, the gallery webview, and binding, Durable,
 MCP, and container integrations are also deferred.
 
 CLI v5 is distinct from Functions runtime v4. Runtime scope remains v4;
-the implemented F5 path acquires Core Tools v4 independently of scaffolding.
+the implemented F5 path acquires Core Tools v5.
 
 ### Confirmed Go debugging scope
 
@@ -87,14 +87,14 @@ problem matcher and pattern; per manifest-level contract; per orphan.
 - **Log streaming follows Container Apps.** Streaming opens a pseudoterminal;
   closing it stops the stream. There is no Logs node.
 - **`local.settings.json` stays; no settings file sync.** Projects keep
-  `local.settings.json` (written by `func init`, read by `func host start` and
+  `local.settings.json` (written by `func init`, read by `func run` and
   local execute). Remote app settings are owned by IaC, so there is no upload,
   download, encrypt, decrypt, or tree node for the file.
 - **Scaffolding is deferred; future ownership is CLI v5.** Project and
   function creation, gallery-backed quickstarts, and their dependent UI flows
   are outside this phase. Future integration delegates catalog/generation to
-  `func init` / `func new` / `func quickstart`, with separate CLI v5 workload
-  acquisition from the implemented Core Tools v4 F5 path.
+  `func init` / `func new` / `func quickstart`. Scaffolding workload capabilities
+  require verification independently of the implemented Core Tools v5 F5 path.
 - **F5 without `tasks.json` / `launch.json`.** A contributed `azure-functions`
   debug type builds the project, starts the host in-process, and resolves to the
   language debugger's attach configuration. `launch.json` is optional: F5

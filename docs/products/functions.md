@@ -33,9 +33,8 @@ without changing a completed deployment's status.
 
 ## Local development tools
 
-The shared Core Tools installer supports an explicit v4-only acquisition range
-through the official `azure-functions-core-tools@4` npm package, while its default
-acquisition policy accepts v5 preview. Tool acquisition remains user-action driven.
+F5 requires Core Tools `>=5.0.0-preview.3`, acquired through the shared installer's
+official v5 preview scripts. Tool acquisition remains user-action driven.
 Owned hosts consume both output generators concurrently and opt into
 [shared process-tree cancellation](../architecture.md#process-output-and-lifetime).
 
@@ -57,7 +56,7 @@ one packaged app under `target/azure-functions`.
 | Runtime | Built-in preparation | Debugger prerequisite |
 |---|---|---|
 | Node.js | Install missing dependencies with `npm ci` or `npm install`; run the package's build script when present | Built-in JavaScript debugger (`pwa-node`) |
-| Python | Install `requirements.txt` with the selected interpreter | Python and Python Debugger extensions; selected interpreter |
+| Python | Install `requirements.txt` with the selected virtual environment's interpreter | Python and Python Debugger extensions; selected virtual environment |
 | Java | `mvn package` | Maven and a matching JDK; Java debugger extension |
 | PowerShell | Start the worker with a session-specific pipe | PowerShell extension |
 | .NET isolated | `dotnet build` | Matching .NET SDK; C# extension (`coreclr`) |
@@ -68,8 +67,11 @@ matchers where applicable. Python uses the owning extensions' public
 [environment API](https://github.com/microsoft/vscode-python/blob/main/src/client/api/types.ts)
 and [debugpy launcher API](https://github.com/microsoft/vscode-python-debugger/blob/061023c85cf721731569c2d0d670c129fc1f45c4/src/extension/api.ts),
 including the selected executable rather than a guessed `python` command.
+The selected environment must have `pyvenv.cfg`. Its root is passed as
+`VIRTUAL_ENV` so Core Tools uses that environment even when it is outside the
+project. Core Tools' Python workload also restores `requirements.txt` at startup.
 Project settings and launch environment overrides take precedence over Python
-environment defaults; the owned debugger arguments and interpreter take precedence
+environment defaults; the owned debugger arguments, interpreter, and virtual environment take precedence
 over those overrides. The selected interpreter's directory leads `PATH`, with
 case-insensitive environment variable names on Windows and case-sensitive names
 on other platforms.
@@ -102,20 +104,24 @@ Pre-debug validation requires runtime v4 settings, storage configuration, and
 saved local settings. `UseDevelopmentStorage=true` requires Azurite on its three
 default loopback ports; automatic emulator startup and custom proxy validation
 are outside this flow. Identity-based storage settings are accepted. Core Tools
-acquisition requires `>=4.15.2 <5.0.0`, following the
-[v4 host-start contract](https://github.com/Azure/azure-functions-core-tools/blob/4.15.2/src/Cli/func/Actions/HostActions/StartHostAction.cs).
+starts with `--no-azurite` to leave emulator management to the user. Host startup
+uses the released v5
+[run contract](https://github.com/Azure/azure-functions-core-tools/blob/f8f54ba328758b2165d835930e391af23e60f090/src/Func/Commands/Start/StartCommand.cs).
 Native Go compilation/output and `--no-build` behavior follow
-[GoHelpers](https://github.com/Azure/azure-functions-core-tools/blob/4.15.2/src/Cli/func/Helpers/GoHelpers.cs).
-Go requires the full Core Tools distribution containing
-`workers/native/worker.config.json`; the minified distribution omits language
-workers and cannot start a native Go host.
+[GoFunctionsProject](https://github.com/Azure/azure-functions-core-tools/blob/f8f54ba328758b2165d835930e391af23e60f090/src/Workloads/Stacks/Go/GoFunctionsProject.cs).
+Go requires the Core Tools Go worker workload, installed with
+`func workload install go-worker --prerelease`.
 
-`LocalFunctionsHostProcess` starts an owned custom task on IPv4 loopback with
+`LocalFunctionsHostProcess` starts `func run <project> --no-build` in an owned custom task with
 available host/debugger ports, or explicit validated `hostPort`/`debugPort`
 options. Node, Python, and Java attach through their worker port; PowerShell uses
 its unique pipe; .NET isolated uses the structured worker PID emitted by
-`--dotnet-isolated-debug --enable-json-output`. Workers are restricted to one per
-host. Protected transport, worker-debugger, and process-count options cannot be
+`--dotnet-isolated-debug --enable-json-output --output=json`.
+The PID parser accepts startup events embedded in v5 NDJSON messages and the
+tooling-category worker debug message, following the
+[.NET output contract](https://github.com/Azure/azure-functions-core-tools/blob/f8f54ba328758b2165d835930e391af23e60f090/src/Workloads/Stacks/DotNet/DotNetHostOutputInterceptor.cs).
+Other workers use `--output=plain`. Workers are restricted to one per
+host. Protected transport, output, build, runtime, worker-debugger, and process-count options cannot be
 overridden through `hostArgs` or `env`.
 
 Paused workers expose their debugger before the host can finish initialization.

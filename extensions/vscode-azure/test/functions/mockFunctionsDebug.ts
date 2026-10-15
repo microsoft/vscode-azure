@@ -27,6 +27,17 @@ export function createFunctionsDebugFixture(runtime = 'node', processOptions?: P
             settings: { getExecutionCommand: mock.fn((tool: string) => ({ binPath: s.code.Uri.file(`/Go Tools/${tool}`).fsPath })) },
         });
     }
+    if (runtime === 'python') {
+        const executable = s.code.Uri.joinPath(s.folder, '.venv', process.platform === 'win32' ? 'Scripts' : 'bin', process.platform === 'win32' ? 'python.exe' : 'python');
+        s.m.fs.addFile(s.code.Uri.joinPath(s.folder, '.venv', 'pyvenv.cfg'), '');
+        addMockExtension(s.m, 'ms-python.python', {
+            ready: Promise.resolve(), environments: {
+                getActiveEnvironmentPath: () => ({ path: executable.fsPath }),
+                resolveEnvironment: () => Promise.resolve({ executable: { uri: executable } }),
+                getEnvironmentVariables: () => ({}),
+            },
+        });
+    }
     const output = new MockOutputChannel('functions');
     const actions = new ActionExecutor(s.code, new NullTelemetryReporter(), 'test', output);
     const projects = new FunctionsProjectSelector(s.context.ctx, s.index, s.tree);

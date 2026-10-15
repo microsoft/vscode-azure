@@ -82,6 +82,9 @@ export class FunctionsDebugPreparation {
                 }
             }
         }
+        if (runtime === 'python') {
+            await this.python(project);
+        }
         if (runtime === 'native') {
             if (!await fileExists(this.code, this.code.Uri.joinPath(project, 'go.mod'))) {
                 throw new ExternalError(this.code.l10n.t('Native worker debugging requires a Go Functions project with go.mod. Custom handlers are not supported.'));
@@ -109,7 +112,7 @@ export class FunctionsDebugPreparation {
     public async executable(project: vscode.Uri, token?: vscode.CancellationToken): Promise<string> {
         this.projects.assertLocal(project);
         return (await this.tools.acquire({
-            toolId: 'func', requestingExtensionId: ExtensionId, versionRange: '>=4.15.2 <5.0.0',
+            toolId: 'func', requestingExtensionId: ExtensionId, versionRange: '>=5.0.0-preview.3',
             cancellationToken: token, showProgressNotification: true, revealInstallTask: true,
         })).executablePath;
     }
@@ -190,7 +193,7 @@ export class FunctionsDebugPreparation {
             };
         }
         if (runtime === 'python') {
-            const { executable: python, variables } = await this.python(project);
+            const { executable: python, variables, virtualEnvironment } = await this.python(project);
             const extension = this.code.extensions.getExtension<PythonDebugApi | undefined>('ms-python.debugpy');
             if (!extension) { throw new ExternalError(this.code.l10n.t('Install the Python Debugger extension before debugging this project.')); }
             const api = await extension.activate();
@@ -208,8 +211,10 @@ export class FunctionsDebugPreparation {
             const environment = process.platform === 'win32' ? new CaselessMap(entries) : new Map(entries);
             const path = environment.get('PATH');
             environment.delete('PATH');
+            environment.delete('VIRTUAL_ENV');
             return {
                 ...Object.fromEntries(environment),
+                ['VIRTUAL_ENV']: virtualEnvironment.fsPath,
                 ['PATH']: `${dirname(this.code.Uri.file(python)).fsPath}${delimiter}${path ?? process.env.PATH ?? ''}`,
                 ['languageWorkers__python__defaultExecutablePath']: python,
                 ['languageWorkers__python__arguments']: args.map(quoteWorkerArgument).join(' '),
@@ -241,6 +246,7 @@ export class FunctionsDebugPreparation {
 
     private async python(project: vscode.Uri): Promise<{
         readonly executable: string;
+        readonly virtualEnvironment: vscode.Uri;
         readonly variables: Readonly<Partial<Record<string, string>>>;
     }> {
         const extension = this.code.extensions.getExtension<PythonApi | undefined>('ms-python.python');
@@ -254,8 +260,13 @@ export class FunctionsDebugPreparation {
         const environment = await api.environments.resolveEnvironment(api.environments.getActiveEnvironmentPath(project));
         const python = environment?.executable.uri?.fsPath;
         if (!python) { throw new ExternalError(this.code.l10n.t('Select a valid Python interpreter for this project before debugging.')); }
+        const virtualEnvironment = dirname(dirname(this.code.Uri.file(python)));
+        if (!await fileExists(this.code, this.code.Uri.joinPath(virtualEnvironment, 'pyvenv.cfg'))) {
+            throw new ExternalError(this.code.l10n.t('Select a Python virtual environment for this project before debugging with Core Tools v5.'));
+        }
         return {
             executable: python,
+            virtualEnvironment,
             variables: Object.fromEntries(Object.entries(api.environments.getEnvironmentVariables(project))
                 .filter((entry): entry is [string, string] => typeof entry[1] === 'string')),
         };

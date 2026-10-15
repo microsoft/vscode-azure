@@ -79,7 +79,7 @@ export class FunctionsDebugProvider implements vscode.DebugConfigurationProvider
                 throw new ExternalError(this.code.l10n.t('hostArgs must be an array of strings.'));
             }
             const hostArgs: string[] = Array.isArray(args) ? args : [];
-            if (hostArgs.some(arg => /^(?:-p|-t|--(?:port|address|useHttps|enableAuth|language-worker|runtime|dotnet-isolated-debug|enable-json-output|json-output-file|no-build))(?:=|$)/i.test(arg))) {
+            if (hostArgs.some(arg => /^(?:-p|-t|-v|--(?:port|address|useHttps|enableAuth|enable-auth|language-worker|runtime|host-version|profile|dotnet-isolated-debug|enable-json-output|json-output-file|no-build|no-azurite|output|no-tui))(?:=|$)/i.test(arg))) {
                 throw new ExternalError(this.code.l10n.t('hostArgs cannot override the owned host transport, runtime, or debugger options. Use hostPort, debugPort, or skipBuild instead.'));
             }
             const hostPort = portOption(config.hostPort, this.code);

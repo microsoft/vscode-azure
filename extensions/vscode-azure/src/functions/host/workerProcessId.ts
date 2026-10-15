@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-/** Reads only the .NET worker's structured startup event, including a JSON-wrapped console message. */
+/** Reads the .NET worker startup event or tooling-category PID message from Core Tools output. */
 export function workerProcessId(line: string): number | undefined {
     const prefix = 'azfuncjsonlog:';
     let value: unknown;
@@ -26,6 +26,14 @@ export function workerProcessId(line: string): number | undefined {
             const message: unknown = value[key as keyof typeof value];
             if (typeof message === 'string' && message.includes(prefix)) {
                 return workerProcessId(message);
+            }
+            if (typeof message === 'string' && 'category' in value && typeof value.category === 'string'
+                && value.category.toLowerCase() === 'host.function.toolingconsolelog') {
+                const match = /^Azure Functions \.NET Worker \(PID:\s*(\d+)\) initialized in debug mode\.?$/.exec(message);
+                const pid = match ? Number(match[1]) : 0;
+                if (Number.isSafeInteger(pid) && pid > 0) {
+                    return pid;
+                }
             }
         }
     }

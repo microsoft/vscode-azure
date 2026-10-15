@@ -326,10 +326,11 @@ Sweep:          reused IProcessExecutor (packages/utils), createShellTask (packa
 Activation:     only the implicit events VS Code generates for a contributed `debuggers` entry; justify any explicit
                 onDebug* entry in this record before adding it.
 External facts: verified VS Code provider ordering against 7f1c8a96ce99bcffba134a7db3ef9b1f57d30ca0;
-                Core Tools host arguments/PID output against tag 4.15.2; Python environment public API;
+                Core Tools v5 host arguments/PID output against preview.3 (f8f54ba328758b2165d835930e391af23e60f090);
+                Python environment public API and selected virtual environment via VIRTUAL_ENV;
                 Python Debugger launcher/path public API against 061023c85cf721731569c2d0d670c129fc1f45c4.
-                Native Go uses the Go extension's public tool API, Core Tools 4.15.2 native worker configuration
-                and GoHelpers, and headless Delve's remote DAP protocol.
+                Native Go uses the Go extension's public tool API, Core Tools v5 Go worker workload
+                and GoFunctionsProject, and headless Delve's remote DAP protocol.
                 Source links and per-language prerequisites are in docs/products/functions.md.
 ```
 
@@ -343,8 +344,10 @@ Resolution flow for one session:
 3. Build with in-code tasks (`npm run build`, `dotnet build`, `mvn package`, `go build`,
    dependency install), using VS Code's own `$tsc` / `$msCompile` matchers.
    Skip this build when `skipBuild` or a replacement `preLaunchTask` applies.
-4. Start `func host start` in an in-code pseudoterminal task with the worker
-   debug arguments in its environment and a free debug port.
+4. Start `func run <project> --no-build --no-azurite` in an in-code
+   pseudoterminal task with the worker debug arguments in its environment and
+   a free debug port. Use JSON output for .NET isolated PID discovery and plain
+   output for other workers.
 5. Wait for worker attach coordinates, bounded to 120 seconds. Paused workers
    attach before full HTTP readiness; poll HTTP independently and register the
    owned host only after its status is Running.
@@ -370,8 +373,8 @@ Resolution flow for one session:
 - [x] Native Go debugging: validate Go 1.24+ and Delve using the Go extension's
   resource-scoped public tool API; compile `bin/app` (`app.exe` on Windows)
   with `-gcflags=all=-N -l`, and start the native worker under headless Delve.
-  Reuse worker executable/argument overrides and the owned host's loopback
-  ports/readiness/process-tree cleanup. Return a Go remote DAP attach config;
+  Reuse worker executable/argument overrides, loopback debugger transport,
+  and owned-host readiness/process-tree cleanup. Return a Go remote DAP attach config;
   custom handlers are excluded. Wire Go recommendations, native-runtime
   initialization, debugger language contribution, and the workspace Debug action.
   <- FUNC-140, FUNC-141, FUNC-195
@@ -402,13 +405,7 @@ Resolution flow for one session:
 - [ ] Live language attach-path smoke checks during Slice 7. The automated tests
   cover all six configuration/API paths, not live language debugger sessions.
 
-Native Go protocol validation on Windows used the full Core Tools 4.15.2
-distribution, Go 1.26.2, Delve 1.27.2, and Go worker SDK v0.7.0-preview.
-The exact host/worker invocation passed remote DAP attach, a verified HTTP
-handler breakpoint, variable inspection, continue, and an HTTP response with
-a project path containing repeated spaces. A binary hash check confirmed
-that `--no-build` preserves the prepared debug binary. This protocol smoke
-uses a DAP client, not the VS Code Go extension UI; live VS Code sessions,
+Live Core Tools v5 workload startup, language debugger sessions,
 storage/emulator integration, and Linux/macOS smoke checks remain in Slice 7.
 
 Existing projects' source-generated `tasks.json` / `launch.json` (task type
@@ -430,8 +427,8 @@ Future integration uses thin `ManagedCommand` entry points and shared
 `ToolService` / `IProcessExecutor` services. CLI v5 owns catalogs, requirements,
 validation, generated files, dependencies, and project configuration; the
 extension owns folder selection, editor integration, cancellation/errors, and
-preserving user-owned files. CLI v5 workload acquisition must be independent
-of the implemented Core Tools v4 F5 contract. Shared tool support
+preserving user-owned files. Scaffolding workload capabilities require
+verification independently of the Core Tools v5 F5 contract. Shared tool support
 (FUNC-021, FUNC-031, FUNC-217), local-only gates (FUNC-004), and initialization
 of existing projects (FUNC-030, FUNC-190) remain in scope.
 
@@ -677,7 +674,7 @@ registration in `commands/registerCommands.ts`, and tree composition in
 | FUNC-004 | Local workspace gates | Migrate | Landed | Extension `package.json` enablement/menu gates; `functions/FunctionsProjectSelector.ts`: `assertLocal`; `functions/LocalFunctionTarget.ts` |
 | FUNC-008 | Function schema | Migrate | Landed | Extension `package.json`: `jsonValidation` for `function.json` |
 | FUNC-009 | Host schema | Migrate | Landed | Extension `package.json`: `jsonValidation` for `host.json` |
-| FUNC-021 | Core Tools version checks | Reuse | Wired on demand | `tools/ToolService.ts`, `tools/FuncInstaller.ts`; debug preparation supplies a v4 range |
+| FUNC-021 | Core Tools version checks | Reuse | Wired on demand | `tools/ToolService.ts`, `tools/FuncInstaller.ts`; debug preparation requires v5 preview.3 or later |
 | FUNC-030 | Existing-project initialization | Adapt | Landed without generated tasks | `commands/functions/InitializeFunctionsProject.ts`; optional debug entry and recommendations |
 | FUNC-031 | Install/update Core Tools | Reuse | Wired | `commands/registerCommands.ts`: `vscode-azure/installFunc` -> `AcquireTool`; `extension.ts`: `FuncInstaller` binding |
 | FUNC-033 | .NET process selection | Adapt | Landed inside owned F5 | `functions/host/LocalFunctionsHostProcess.ts`; `functions/debug/FunctionsDebugProvider.ts` |
@@ -730,7 +727,7 @@ registration in `commands/registerCommands.ts`, and tree composition in
 | FUNC-214 | PowerShell F5 | Adapt | Landed; live checks pending | `functions/debug/FunctionsDebugPreparation.ts`, `FunctionsDebugProvider.ts`; worker pipe attach |
 | FUNC-215 | Pre-debug validation | Adapt | Landed as retained subset | `functions/debug/FunctionsDebugPreparation.ts`; trust, runtime, tools, storage configuration, default Azurite endpoint checks |
 | FUNC-216 | Host lifecycle tracking | Adapt | Landed without tasks | `functions/host/LocalFunctionsHostProcess.ts`, `LocalFunctionsHostTracker.ts`; readiness, ports, cancellation, cleanup |
-| FUNC-217 | Core Tools lifecycle | Reuse | Wired on demand | `tools/ToolService.ts`, `tools/FuncInstaller.ts`; explicit v4 acquisition for F5 |
+| FUNC-217 | Core Tools lifecycle | Reuse | Wired on demand | `tools/ToolService.ts`, `tools/FuncInstaller.ts`; shared v5 acquisition for F5 |
 | FUNC-241 | Flex Consumption | Reuse | Wired in provisioning template | Extension `resources/templates/functionApp/main.bicep`: FC1 |
 | FUNC-246 | Storage authentication | Adapt | Landed as managed identity default | Extension `resources/templates/functionApp/main.bicep`; pinned AVM pattern owns identity and roles |
 | FUNC-247 | Runtime detection | Adapt | Landed | `commands/functions/steps/DetectFunctionRuntimeStep.ts`; supported existing-project settings skip runtime selection |
