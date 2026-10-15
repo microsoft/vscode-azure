@@ -12,8 +12,6 @@ export const IToolInstaller: ServiceIdentifier<ToolInstaller> = Symbol.for('IToo
 
 /** Options passed to {@linkcode ToolInstaller.install}. */
 export interface ToolInstallOptions {
-    /** Requested range, when the consumer needs a specific CLI generation. */
-    readonly versionRange?: string;
     /**
      * The tool that is already present, when one was found but rejected (for
      * example because it is too old). Lets an installer prefer a self-update

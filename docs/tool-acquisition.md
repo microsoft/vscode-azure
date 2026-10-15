@@ -85,12 +85,6 @@ carry v4. Its default range is `>=5.0.0-0`, prerelease-inclusive so the preview
 actually satisfies it, and a v4 install found on the machine is handed to the
 script for an upgrade (`-Force` / `--force`) rather than accepted.
 
-The caller's explicit `versionRange` is forwarded to `ToolInstaller.install`
-so an installer can select a compatible install method. Each installer owns its
-acquisition policy; `func` uses the v5 preview scripts. Concurrent requests share
-the initiating caller's install method and each verify the resulting executable
-against their own range.
-
 `swa` ships only as an npm package, so it has no Windows package-manager entry
 at all.
 
