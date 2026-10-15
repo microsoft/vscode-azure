@@ -522,6 +522,7 @@ describe('AzdService (unit)', () => {
             const opts = spawnMock.mock.calls[0].arguments[0] as SpawnOpts;
             expect(argsToStrings(opts.command)).to.deep.equal([AzdCommand, 'deploy', 'api']);
         });
+
         it('should spawn foreground execution for deploy', async () => {
             const spawnFn = mock.fn(() => Promise.resolve());
             const { service, spawnMock, fs } = createService(spawnFn);

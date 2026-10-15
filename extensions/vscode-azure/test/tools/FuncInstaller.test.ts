@@ -84,6 +84,7 @@ describe('FuncInstaller (unit)', () => {
             await installer.install(installOptions({ versionRange: '>=4.15.2 <5.0.0' }));
             expect(installedWith(spawn)).to.include('azure-functions-core-tools@4');
         });
+
         it('should run the prerelease install script on Windows', async () => {
             setPlatform('win32');
             // Present but irrelevant: v5 ships only through the script.
