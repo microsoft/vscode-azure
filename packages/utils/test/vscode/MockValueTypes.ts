@@ -123,19 +123,30 @@ export class MockRelativePattern implements vscode.RelativePattern {
     }
 }
 
+/* eslint-disable @typescript-eslint/no-unsafe-enum-assignment -- numeric stand-ins avoid a runtime dependency on vscode */
 /** Test stand-in for {@linkcode vscode.TreeItemCollapsibleState}. */
-export const MockTreeItemCollapsibleState = {
+export const MockTreeItemCollapsibleState: typeof vscode.TreeItemCollapsibleState = {
     None: 0,
     Collapsed: 1,
     Expanded: 2,
-} satisfies typeof vscode.TreeItemCollapsibleState;
+};
 
 /** Test stand-in for {@linkcode vscode.ConfigurationTarget}. */
-export const MockConfigurationTarget = {
+export const MockConfigurationTarget: typeof vscode.ConfigurationTarget = {
     Global: 1,
     Workspace: 2,
     WorkspaceFolder: 3,
-} satisfies typeof vscode.ConfigurationTarget;
+};
+
+/** Test stand-in for {@linkcode vscode.LogLevel}. */
+export const MockLogLevel: typeof vscode.LogLevel = {
+    Off: 0,
+    Trace: 1,
+    Debug: 2,
+    Info: 3,
+    Warning: 4,
+    Error: 5,
+};
 
 /** Test stand-in for {@linkcode vscode.ExtensionMode}. */
 export const MockExtensionMode = {
@@ -145,10 +156,10 @@ export const MockExtensionMode = {
 } satisfies typeof vscode.ExtensionMode;
 
 /** Test stand-in for {@linkcode vscode.TaskScope}. */
-export const MockTaskScope = {
+export const MockTaskScope: typeof vscode.TaskScope = {
     Global: 1,
     Workspace: 2,
-} satisfies typeof vscode.TaskScope;
+};
 
 /** Test stand-in for the task terminal reveal policy. */
 export const MockTaskRevealKind = {
@@ -161,11 +172,12 @@ export const MockDebugConfigurationProviderTriggerKind = {
 } satisfies typeof vscode.DebugConfigurationProviderTriggerKind;
 
 /** Test stand-in for {@linkcode vscode.ProgressLocation}. */
-export const MockProgressLocation = {
+export const MockProgressLocation: typeof vscode.ProgressLocation = {
     SourceControl: 1,
     Window: 10,
     Notification: 15,
-} satisfies typeof vscode.ProgressLocation;
+};
+/* eslint-enable @typescript-eslint/no-unsafe-enum-assignment */
 
 // Compile-time checks: each value type is mutually assignable to its vscode
 // counterpart, so the shapes are faithful in both directions.

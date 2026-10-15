@@ -55,7 +55,8 @@ export class DebugOutputChannel implements IOutputChannel {
         this._logLevel = level;
         this.logLevelEmitter.fire(level);
     }
-    private _logLevel: vscode.LogLevel = 1 satisfies vscode.LogLevel; // Avoiding the actual enum value to prevent a dependency on vscode, plus this is just a debug channel
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-enum-assignment -- Trace without a runtime dependency on vscode
+    private _logLevel: vscode.LogLevel = 1 satisfies vscode.LogLevel;
 
     private readonly logLevelEmitter = new EventEmitter<vscode.LogLevel>();
 

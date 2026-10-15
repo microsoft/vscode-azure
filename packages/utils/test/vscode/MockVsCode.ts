@@ -600,7 +600,7 @@ function languageFromPath(path: string): string | undefined {
 export function addMockExtension<T>(m: MockVsCodeResult, id: string, api: T): vscode.Extension<T> {
     const extension: vscode.Extension<T> = {
         id, extensionUri: m.vscode.Uri.file(`/extensions/${id}`), extensionPath: `/extensions/${id}`,
-        isActive: true, packageJSON: {}, extensionKind: 2, exports: api,
+        isActive: true, packageJSON: {}, extensionKind: 2, exports: api, // eslint-disable-line @typescript-eslint/no-unsafe-enum-assignment -- numeric stand-in avoids a runtime dependency on vscode
         activate: mock.fn(() => Promise.resolve(api)),
     };
     m.installedExtensions.set(id, extension);
