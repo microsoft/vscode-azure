@@ -10,8 +10,14 @@ import { FunctionsHostFileTag } from '../../tree/workspace/functions/FunctionsWo
 import { IWorkspaceIndexService } from '../../utils/workspaceIndex/WorkspaceIndexService';
 import { FunctionsProjectSelector } from '../FunctionsProjectSelector';
 import { LocalFunctionSettings } from '../LocalFunctionSettings';
-import { LocalFunctionsHostProcess } from '../host/LocalFunctionsHostProcess';
-import { FunctionsDebugPreparation } from './FunctionsDebugPreparation';
+import { LocalFunctionsHostProcess, type FunctionsHostAttachment } from '../host/LocalFunctionsHostProcess';
+import { FunctionsDebugPreparation, type FunctionsDebugRuntime } from './FunctionsDebugPreparation';
+
+const ProtectedHostOptions = new Set([
+    '-p', '-t', '-v', '--port', '--address', '--usehttps', '--enableauth', '--enable-auth',
+    '--language-worker', '--runtime', '--host-version', '--profile', '--dotnet-isolated-debug',
+    '--enable-json-output', '--json-output-file', '--no-build', '--no-azurite', '--output', '--no-tui',
+]);
 
 /** Resolves the product debugger to a language attach configuration after VS Code runs preLaunchTask and substitutes variables. */
 @injectable()
@@ -71,65 +77,96 @@ export class FunctionsDebugProvider implements vscode.DebugConfigurationProvider
             }
             const project = await this.projects.select(folder, path);
             const env = stringRecord(config.env, this.code);
-            if (Object.keys(env).some(key => /^(?:languageWorkers(?:__|:).*(?:__|:)(?:arguments(?:(?:__|:).*)?|defaultExecutablePath)|PSWorkerCustomPipeName|FUNCTIONS_WORKER_PROCESS_COUNT)$/i.test(key))) {
+            if (Object.keys(env).some(isOwnedWorkerSetting)) {
                 throw new ExternalError(this.code.l10n.t('env cannot override the owned worker debugger or process settings. Use debugPort instead.'));
             }
-            const args: unknown = config.hostArgs;
-            if (args !== undefined && (!Array.isArray(args) || !args.every(arg => typeof arg === 'string'))) {
-                throw new ExternalError(this.code.l10n.t('hostArgs must be an array of strings.'));
-            }
-            const hostArgs: string[] = Array.isArray(args) ? args : [];
-            if (hostArgs.some(arg => /^(?:-p|-t|-v|--(?:port|address|useHttps|enableAuth|enable-auth|language-worker|runtime|host-version|profile|dotnet-isolated-debug|enable-json-output|json-output-file|no-build|no-azurite|output|no-tui))(?:=|$)/i.test(arg))) {
-                throw new ExternalError(this.code.l10n.t('hostArgs cannot override the owned host transport, runtime, or debugger options. Use hostPort, debugPort, or skipBuild instead.'));
-            }
+            const hostArgs = hostArguments(config.hostArgs, this.code);
             const hostPort = portOption(config.hostPort, this.code);
             const debugPort = portOption(config.debugPort, this.code);
             const runtime = await this.preparation.validate(project, env, token);
             const executable = await this.preparation.executable(project, token);
-            const cwd = config.skipBuild === true || config.preLaunchTask
-                ? await this.preparation.hostDirectory(project, runtime)
-                : await this.preparation.build(project, runtime, env, token);
-            const host = await this.hosts.start({
-                project, cwd, runtime, executable, hostPort, debugPort, hostArgs,
-                prepare: async (port, pipe) => {
-                    const projectEnv = new CaselessMap((await this.settings.read(project)).values);
-                    for (const [key, value] of Object.entries(env)) {
-                        projectEnv.delete(key);
-                        projectEnv.set(key, value);
-                    }
-                    const workerEnv = await this.preparation.workerEnvironment(project, runtime, port, pipe, Object.fromEntries(projectEnv));
-                    for (const [key, value] of Object.entries(workerEnv)) {
-                        projectEnv.delete(key);
-                        projectEnv.set(key, value);
-                    }
-                    for (const [key, value] of [['FUNCTIONS_WORKER_RUNTIME', runtime], ['FUNCTIONS_WORKER_PROCESS_COUNT', '1']]) {
-                        projectEnv.delete(key);
-                        projectEnv.set(key, value);
-                    }
-                    return Object.fromEntries(projectEnv);
-                },
-            }, token);
-            const postDebugTask: unknown = config.postDebugTask;
-            const presentation: unknown = config.presentation;
-            const internalConsoleOptions: unknown = config.internalConsoleOptions;
-            const common = {
-                name: config.name, request: 'attach', ['__azureFunctionsHostId']: host.id,
-                postDebugTask, presentation, internalConsoleOptions,
-            };
-            if (runtime === 'node') { return { ...common, type: 'pwa-node', address: '127.0.0.1', port: host.debugPort, localRoot: project.fsPath }; }
-            if (runtime === 'python') { return { ...common, type: 'debugpy', connect: { host: '127.0.0.1', port: host.debugPort }, justMyCode: true }; }
-            if (runtime === 'java') { return { ...common, type: 'java', hostName: '127.0.0.1', port: host.debugPort }; }
-            if (runtime === 'powershell') { return { ...common, type: 'PowerShell', customPipeName: host.pipe, runspaceId: 1 }; }
-            if (runtime === 'native') {
-                return { ...common, type: 'go', mode: 'remote', debugAdapter: 'dlv-dap', host: '127.0.0.1', port: host.debugPort, cwd: project.fsPath };
+            const skipBuild = config.skipBuild === true || !!config.preLaunchTask;
+            if (runtime === 'native' && !skipBuild) {
+                await this.preparation.buildGo(project, env, token);
             }
-            return { ...common, type: 'coreclr', processId: String(host.workerPid), justMyCode: true };
+            const host = await this.hosts.start({
+                project, runtime, executable, hostPort, debugPort, hostArgs,
+                skipBuild: skipBuild || runtime === 'native',
+                prepare: (port, pipe) => this.hostEnvironment(project, runtime, port, pipe, env),
+            }, token);
+            return attachConfiguration(config, runtime, project, host);
         });
+    }
+
+    private async hostEnvironment(
+        project: vscode.Uri,
+        runtime: FunctionsDebugRuntime,
+        port: number,
+        pipe: string,
+        overrides: Readonly<Record<string, string>>,
+    ): Promise<Readonly<Record<string, string>>> {
+        const environment = new CaselessMap((await this.settings.read(project)).values);
+        applyEnvironmentOverrides(environment, overrides);
+        const worker = await this.preparation.workerEnvironment(project, runtime, port, pipe, Object.fromEntries(environment));
+        applyEnvironmentOverrides(environment, {
+            ...worker,
+            ['FUNCTIONS_WORKER_RUNTIME']: runtime,
+            ['FUNCTIONS_WORKER_PROCESS_COUNT']: '1',
+        });
+        return Object.fromEntries(environment);
     }
 
     public dispose(): void {
         this.subscriptions.splice(0).forEach(disposable => { disposable.dispose(); });
     }
+}
+
+function attachConfiguration(config: vscode.DebugConfiguration, runtime: FunctionsDebugRuntime, project: vscode.Uri, host: FunctionsHostAttachment): vscode.DebugConfiguration {
+    const postDebugTask: unknown = config.postDebugTask;
+    const presentation: unknown = config.presentation;
+    const internalConsoleOptions: unknown = config.internalConsoleOptions;
+    const common = {
+        name: config.name, request: 'attach', ['__azureFunctionsHostId']: host.id,
+        postDebugTask, presentation, internalConsoleOptions,
+    };
+    switch (runtime) {
+        case 'node':
+            return { ...common, type: 'pwa-node', address: '127.0.0.1', port: host.debugPort, localRoot: project.fsPath };
+        case 'python':
+            return { ...common, type: 'debugpy', connect: { host: '127.0.0.1', port: host.debugPort }, justMyCode: true };
+        case 'java':
+            return { ...common, type: 'java', hostName: '127.0.0.1', port: host.debugPort };
+        case 'powershell':
+            return { ...common, type: 'PowerShell', customPipeName: host.pipe, runspaceId: 1 };
+        case 'native':
+            return { ...common, type: 'go', mode: 'remote', debugAdapter: 'dlv-dap', host: '127.0.0.1', port: host.debugPort, cwd: project.fsPath };
+        case 'dotnet-isolated':
+            return { ...common, type: 'coreclr', processId: String(host.workerPid), justMyCode: true };
+    }
+}
+
+function applyEnvironmentOverrides(environment: CaselessMap<string>, overrides: Readonly<Record<string, string>>): void {
+    for (const [key, value] of Object.entries(overrides)) {
+        environment.delete(key);
+        environment.set(key, value);
+    }
+}
+
+function isOwnedWorkerSetting(key: string): boolean {
+    const normalized = key.replaceAll('__', ':').toLowerCase();
+    return normalized === 'psworkercustompipename' || normalized === 'functions_worker_process_count'
+        || /^languageworkers:.*:(?:arguments(?::.*)?|defaultexecutablepath)$/.test(normalized);
+}
+
+function hostArguments(value: unknown, code: IVsCode): string[] {
+    if (value === undefined) { return []; }
+    if (!Array.isArray(value) || !value.every((arg: unknown) => typeof arg === 'string')) {
+        throw new ExternalError(code.l10n.t('hostArgs must be an array of strings.'));
+    }
+    if (value.some(arg => ProtectedHostOptions.has(arg.split('=', 1)[0].toLowerCase()))) {
+        throw new ExternalError(code.l10n.t('hostArgs cannot override the owned host transport, runtime, or debugger options. Use hostPort, debugPort, or skipBuild instead.'));
+    }
+    return value;
 }
 
 function stringRecord(value: unknown, code: IVsCode): Readonly<Record<string, string>> {

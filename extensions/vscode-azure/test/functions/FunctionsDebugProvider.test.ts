@@ -69,7 +69,6 @@ describe('Functions debug provider (unit)', () => {
     for (const [runtime, type] of [['node', 'pwa-node'], ['python', 'debugpy'], ['java', 'java'], ['powershell', 'PowerShell'], ['dotnet-isolated', 'coreclr'], ['native', 'go']]) {
         it(`returns ${runtime} attach coordinates owned by the selected project`, async () => {
             const s = setup(runtime);
-            mock.method(s.preparation, 'hostDirectory', () => Promise.resolve(s.folder));
             mock.method(s.preparation, 'workerEnvironment', () => Promise.resolve({}));
             const start = mock.method(s.owners, 'start', async (request: FunctionsHostStart) => {
                 const env = await request.prepare(9229, 'owned-pipe');
@@ -77,11 +76,17 @@ describe('Functions debug provider (unit)', () => {
                 expect(env.FUNCTIONS_WORKER_PROCESS_COUNT).to.equal('1');
                 return { id: 'owned', hostPort: 7072, debugPort: 9229, pipe: 'owned-pipe', workerPid: 1234 };
             });
-            const config = await s.debugProvider.resolveDebugConfigurationWithSubstitutedVariables(undefined, s.config);
+            const presentation = { group: 'functions', order: 1 };
+            const config = await s.debugProvider.resolveDebugConfigurationWithSubstitutedVariables(undefined, {
+                ...s.config, postDebugTask: 'cleanup', presentation, internalConsoleOptions: 'neverOpen',
+            });
             expect(config?.type).to.equal(type);
             expect(config?.request).to.equal('attach');
             expect(config?.__azureFunctionsHostId).to.equal('owned');
             expect(config?.preLaunchTask).to.be.undefined;
+            expect(config?.postDebugTask).to.equal('cleanup');
+            expect(config?.presentation).to.deep.equal(presentation);
+            expect(config?.internalConsoleOptions).to.equal('neverOpen');
             expect(s.tools.acquire.mock.calls[0].arguments[0].versionRange).to.equal('>=5.0.0-preview.3');
             expect(start.mock.calls[0].arguments[0].project.toString()).to.equal(s.folder.toString());
             if (runtime === 'node' || runtime === 'java') { expect(config?.port).to.equal(9229); }
@@ -192,15 +197,38 @@ describe('Functions debug provider (unit)', () => {
         expect(start.mock.callCount()).to.equal(0);
     });
 
-    it('runs the built-in build only when neither skipBuild nor preLaunchTask replaces it', async () => {
-        const s = setup();
-        const build = mock.method(s.preparation, 'build', () => Promise.resolve(s.folder));
-        mock.method(s.owners, 'start', () => Promise.resolve({ id: 'owned', hostPort: 7072, debugPort: 9229, pipe: 'pipe' }));
-        await s.debugProvider.resolveDebugConfigurationWithSubstitutedVariables(undefined, { ...s.config, skipBuild: false });
-        expect(build.mock.callCount()).to.equal(1);
-        await s.debugProvider.resolveDebugConfigurationWithSubstitutedVariables(undefined, { ...s.config, skipBuild: false, preLaunchTask: 'my-build' });
-        await s.debugProvider.resolveDebugConfigurationWithSubstitutedVariables(undefined, s.config);
-        expect(build.mock.callCount()).to.equal(1);
+    for (const runtime of ['node', 'python', 'java', 'powershell', 'dotnet-isolated', 'native']) {
+        it(`assigns ${runtime} builds to the CLI or the Go debug build and honors build overrides`, async () => {
+            const s = setup(runtime);
+            const buildGo = mock.method(s.preparation, 'buildGo', () => Promise.resolve());
+            const start = mock.method(s.owners, 'start', () => Promise.resolve({
+                id: 'owned', hostPort: 7072, debugPort: 9229, pipe: 'pipe', workerPid: 1234,
+            }));
+            for (const overrides of [{ skipBuild: false }, { skipBuild: true }, { skipBuild: false, preLaunchTask: 'my-build' }]) {
+                const config = await s.debugProvider.resolveDebugConfigurationWithSubstitutedVariables(undefined, { ...s.config, ...overrides });
+                expect(config?.request).to.equal('attach');
+                const request = start.mock.calls.at(-1)?.arguments[0];
+                expect(request?.project.toString()).to.equal(s.folder.toString());
+                expect(request?.skipBuild).to.equal(runtime === 'native' || overrides.skipBuild || !!overrides.preLaunchTask);
+            }
+            expect(start.mock.callCount()).to.equal(3);
+            expect(buildGo.mock.callCount()).to.equal(runtime === 'native' ? 1 : 0);
+            if (runtime === 'native') {
+                expect(buildGo.mock.calls[0].arguments).to.deep.equal([s.folder, {}, undefined]);
+            }
+        });
+    }
+
+    it('reports a failed Go debug build before launching its host', async () => {
+        const s = setup('native');
+        mock.method(s.preparation, 'buildGo', () => Promise.reject(new Error('Go compilation failed')));
+        const start = mock.method(s.owners, 'start');
+        const config = await s.debugProvider.resolveDebugConfigurationWithSubstitutedVariables(undefined, {
+            ...s.config, skipBuild: false,
+        });
+        expect(config).to.be.undefined;
+        expect(start.mock.callCount()).to.equal(0);
+        expect(s.m.window.showErrorMessage.mock.calls.at(-1)?.arguments[0]).to.include('Go compilation failed');
     });
 
     it('offers project selection with the remembered project active in a multi-project workspace', async () => {
@@ -256,11 +284,17 @@ describe('Functions debug provider (unit)', () => {
         const trusted = setup();
         for (const flag of ['--port=7000', '-p', '--output=json', '--no-tui', '--no-azurite=false',
             '--host-version=4.1049.0', '-v', '--profile=other', '--enable-auth', '--no-build=false',
-            '--dotnet-isolated-debug', '--enable-json-output', '--json-output-file=worker.json']) {
+            '--dotnet-isolated-debug', '--enable-json-output', '--json-output-file=worker.json',
+            '--PORT=7000', '--useHttps', '--enableAuth', '--language-worker=other']) {
             expect(await trusted.debugProvider.resolveDebugConfigurationWithSubstitutedVariables(undefined, { ...trusted.config, hostArgs: [flag] })).to.be.undefined;
         }
         expect(await trusted.debugProvider.resolveDebugConfigurationWithSubstitutedVariables(undefined, { ...trusted.config, debugPort: 0 })).to.be.undefined;
-        expect(await trusted.debugProvider.resolveDebugConfigurationWithSubstitutedVariables(undefined, { ...trusted.config, env: { ['PSWorkerCustomPipeName']: 'unowned' } })).to.be.undefined;
+        for (const key of ['PSWorkerCustomPipeName', 'FUNCTIONS_WORKER_PROCESS_COUNT', 'languageWorkers__python__arguments__0',
+            'LANGUAGEWORKERS:java:defaultExecutablePath', 'languageWorkers__node:arguments', 'languageWorkers:node:arguments:0']) {
+            expect(await trusted.debugProvider.resolveDebugConfigurationWithSubstitutedVariables(undefined, {
+                ...trusted.config, env: { [key]: 'unowned' },
+            })).to.be.undefined;
+        }
         expect(s.tools.acquire.mock.callCount()).to.equal(0);
         expect(trusted.tools.acquire.mock.callCount()).to.equal(0);
     });

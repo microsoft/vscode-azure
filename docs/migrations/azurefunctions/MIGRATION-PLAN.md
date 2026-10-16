@@ -301,8 +301,9 @@ Verified external contracts:
 ## Slice 4 -- Local development (F5)
 
 A contributed debug type resolves to the language debugger's attach
-configuration after the extension has built the project and started the host
-itself. Resolving to a different debug type is proven in the Container Tools
+configuration after the extension has validated the project and started an owned
+Core Tools host. Core Tools owns ordinary builds and dependency restoration;
+the extension owns Go's debug build. Resolving to a different debug type is proven in the Container Tools
 extension. Debugging works with no `tasks.json` or `launch.json`; a
 `launch.json` entry is optional and exposes the configurable options. No
 `tasks.json` is generated, and no task type, problem matcher, or process-pick
@@ -310,7 +311,7 @@ command is contributed.
 
 ```
 Pattern:        contributed `azure-functions` debugger (launch request, no adapter) whose DebugConfigurationProvider
-                (Initial + Dynamic) builds, starts the host, and returns a config of the language's debug type
+                (Initial + Dynamic) validates, starts the host, and returns a config of the language's debug type
 Target files:   extensions/vscode-azure/src/functions/debug/* (debug configuration provider, per-language attach configs)
                 extensions/vscode-azure/src/functions/host/* (host process, host tracking, pre-debug validation)
 Precedent:      Container Tools debug providers (resolve to another debug type); tools/FuncInstaller + ToolService (Core
@@ -341,14 +342,15 @@ Resolution flow for one session:
    the Functions project from the workspace index (remembered per workspace
    when a folder has several).
 2. Pre-debug validation; failures are `ExternalError`s.
-3. Build with in-code tasks (`npm run build`, `dotnet build`, `mvn package`, `go build`,
-   dependency install), using VS Code's own `$tsc` / `$msCompile` matchers.
-   Skip this build when `skipBuild` or a replacement `preLaunchTask` applies.
-4. Start `func run <project> --no-build --no-azurite` in an in-code
+3. Build Go with optimizations and inlining disabled in a visible task, unless
+   `skipBuild` or a replacement `preLaunchTask` applies.
+4. Start `func run <project> --no-azurite` in an in-code
    pseudoterminal task with the worker debug arguments in its environment and
    a free debug port. Use JSON output for .NET isolated PID discovery and plain
-   output for other workers.
-5. Wait for worker attach coordinates, bounded to 120 seconds. Paused workers
+   output for other workers. Core Tools owns ordinary builds and dependency
+   restoration; pass `--no-build` for Go or when a build override applies.
+5. Wait for worker attach coordinates, bounded to five minutes when Core Tools
+   owns the build and two minutes when compilation is skipped. Paused workers
    attach before full HTTP readiness; poll HTTP independently and register the
    owned host only after its status is Running.
 6. Return the attach configuration of the language's debug type; stop the host

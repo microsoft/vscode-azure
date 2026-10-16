@@ -54,9 +54,19 @@ export class FunctionsProjectReader {
             const folder = dirname(project.resourceUri);
             const { values } = await this.settings.read(folder);
             const runtime = values.get('FUNCTIONS_WORKER_RUNTIME')?.trim().toLowerCase();
-            const build = runtime
-                ? runtime === 'java' ? 'java' : runtime === 'dotnet-isolated' ? 'dotnet' : undefined
-                : compiled;
+            let build = compiled;
+            if (runtime) {
+                switch (runtime) {
+                    case 'java':
+                        build = 'java';
+                        break;
+                    case 'dotnet-isolated':
+                        build = 'dotnet';
+                        break;
+                    default:
+                        build = undefined;
+                }
+            }
             const host = this.hosts.get(folder);
             let metadata: FunctionMetadata[];
             let hint: LocalFunctionsNode | undefined;
@@ -76,7 +86,7 @@ export class FunctionsProjectReader {
                 metadata = [];
                 hint = this.hint(project, 'host', this.code.l10n.t('Start debugging to update this list...'));
             }
-            const allowed = 'functions' in config ? config.functions : undefined;
+            const allowed = config.functions;
             if (allowed !== undefined && (!Array.isArray(allowed) || !allowed.every(name => typeof name === 'string'))) {
                 throw new ExternalError(this.code.l10n.t('host.json functions must be an array of function names.'));
             }
@@ -178,28 +188,32 @@ export class FunctionsProjectReader {
     }
 
     private async buildMetadata(folder: vscode.Uri, runtime: 'java' | 'dotnet'): Promise<FunctionMetadata[]> {
-        const isJava = runtime === 'java';
-        const root = this.code.Uri.joinPath(folder, ...(isJava ? ['target', 'azure-functions'] : ['bin']));
+        const root = runtime === 'java'
+            ? this.code.Uri.joinPath(folder, 'target', 'azure-functions')
+            : this.code.Uri.joinPath(folder, 'bin');
         const files = await this.outputFiles(root);
-        if (!isJava) {
-            const metadata = files.filter(uri => basename(uri) === 'functions.metadata');
-            const timestamps = await Promise.all(metadata.map(async uri => ({ uri, mtime: (await this.code.workspace.fs.stat(uri)).mtime })));
-            timestamps.sort((left, right) => right.mtime - left.mtime || left.uri.path.localeCompare(right.uri.path));
-            const selected = timestamps.at(0)?.uri;
-            if (!selected) {
-                return [];
-            }
-            const data = await this.json(selected);
-            if (!Array.isArray(data)) {
-                throw new ExternalError(this.code.l10n.t('functions.metadata must contain an array.'));
-            }
-            return data.map((item: unknown) => {
-                if (!item || typeof item !== 'object' || !('name' in item) || typeof item.name !== 'string') {
-                    return { name: '', config: item, uri: selected };
-                }
-                return { name: item.name, config: item, uri: selected };
-            });
+        return runtime === 'java' ? this.javaMetadata(files) : this.dotnetMetadata(files);
+    }
+
+    private async dotnetMetadata(files: readonly vscode.Uri[]): Promise<FunctionMetadata[]> {
+        const metadata = files.filter(uri => basename(uri) === 'functions.metadata');
+        const timestamps = await Promise.all(metadata.map(async uri => ({ uri, mtime: (await this.code.workspace.fs.stat(uri)).mtime })));
+        timestamps.sort((left, right) => right.mtime - left.mtime || left.uri.path.localeCompare(right.uri.path));
+        const selected = timestamps.at(0)?.uri;
+        if (!selected) {
+            return [];
         }
+        const data = await this.json(selected);
+        if (!Array.isArray(data)) {
+            throw new ExternalError(this.code.l10n.t('functions.metadata must contain an array.'));
+        }
+        return data.map((item: unknown) => {
+            const name = item && typeof item === 'object' && 'name' in item && typeof item.name === 'string' ? item.name : '';
+            return { name, config: item, uri: selected };
+        });
+    }
+
+    private async javaMetadata(files: readonly vscode.Uri[]): Promise<FunctionMetadata[]> {
         const apps = files.filter(uri => basename(uri) === 'host.json');
         if (apps.length > 1) {
             throw new ExternalError(this.code.l10n.t('Multiple Java build outputs are present. Start debugging to list the active app.'));

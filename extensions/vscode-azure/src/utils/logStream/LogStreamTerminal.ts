@@ -9,12 +9,16 @@ import type * as vscode from 'vscode';
 /** Buffers output until VS Code opens the terminal; closure cancels its associated stream. */
 export class LogStreamTerminal implements vscode.Pseudoterminal {
     private readonly writeEmitter = new EventEmitter<string>();
+    private readonly exitEmitter = new EventEmitter<number>();
     private readonly pending: string[] = [];
     private opened = false;
-    private closed = false;
+    /** Subclasses must not start work after closure or a reported exit. */
+    protected closed = false;
+    private exitCode?: number;
     private lastWasCarriageReturn = false;
 
     public readonly onDidWrite = this.writeEmitter.event;
+    public readonly onDidClose = this.exitEmitter.event;
 
     public constructor(private readonly onClose: () => void) { }
 
@@ -28,6 +32,21 @@ export class LogStreamTerminal implements vscode.Pseudoterminal {
             this.writeEmitter.fire(text);
         }
         this.pending.length = 0;
+        if (this.exitCode !== undefined) {
+            this.finish(this.exitCode);
+        }
+    }
+
+    /** Ends the terminal after buffered output is delivered, retaining its nonzero-exit diagnostics. */
+    public finish(code: number): void {
+        if (this.closed) {
+            return;
+        }
+        this.exitCode ??= code;
+        if (this.opened) {
+            this.exitEmitter.fire(this.exitCode);
+            this.close();
+        }
     }
 
     /** @inheritdoc */
@@ -39,6 +58,7 @@ export class LogStreamTerminal implements vscode.Pseudoterminal {
         this.pending.length = 0;
         this.onClose();
         this.writeEmitter.dispose();
+        this.exitEmitter.dispose();
     }
 
     /** Writes stream text using CRLF line endings, including when a CRLF spans two chunks. */

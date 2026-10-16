@@ -54,16 +54,7 @@ export class DeployFunctionApp implements ManagedCommand {
         }
         const app = await this.selector.selectResource({ key: target, logicalTypes: [FunctionAppLogicalType] });
         const service = Object.entries(app.tags ?? {}).find(([key]) => key.toLowerCase() === 'azd-service-name')?.[1];
-        const matches: { label: string; folder: vscode.Uri }[] = [];
-        if (service) {
-            for (const uri of (await this.index.getIndex()).withTag(AzdProjectFileTag)) {
-                const folder = dirname(uri);
-                const show = await this.azd.show(folder);
-                if (show?.services?.[service]?.target?.resourceIds?.some(id => id.toLowerCase() === app.id.toLowerCase())) {
-                    matches.push({ label: folder.fsPath, folder });
-                }
-            }
-        }
+        const matches = service ? await this.matchingProjects(service, app.id) : [];
         if (!service || !matches.length) {
             const action = this.ctx.code.l10n.t('Deploy Workspace Project');
             const selected = await showMessage(this.ctx.code, this.ctx.code.l10n.t(
@@ -84,5 +75,18 @@ export class DeployFunctionApp implements ManagedCommand {
         };
         await this.deploy.execute(context, service);
         await this.endpoints.execute(context);
+    }
+
+    private async matchingProjects(service: string, appId: string): Promise<{ label: string; folder: vscode.Uri }[]> {
+        const matches: { label: string; folder: vscode.Uri }[] = [];
+        for (const uri of (await this.index.getIndex()).withTag(AzdProjectFileTag)) {
+            const folder = dirname(uri);
+            const show = await this.azd.show(folder);
+            const targets = show?.services?.[service]?.target?.resourceIds ?? [];
+            if (targets.some(id => id.toLowerCase() === appId.toLowerCase())) {
+                matches.push({ label: folder.fsPath, folder });
+            }
+        }
+        return matches;
     }
 }

@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { CancellationError, CaselessMap, dirname, ExternalError, fileExists, IProcessExecutor, IVsCode, readText } from '@microsoft/vscode-azure-utils';
+import { CancellationError, CaselessMap, dirname, ExternalError, fileExists, IProcessExecutor, IVsCode, type ICaselessMapReader } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { delimiter } from 'node:path';
 import type * as vscode from 'vscode';
@@ -42,7 +42,7 @@ interface PythonDebugApi {
     };
 }
 
-/** Performs local validation and builds, then prepares language worker arguments using the owning debugger APIs. */
+/** Validates local projects and prepares workers; Core Tools owns ordinary builds and dependency restoration. */
 @injectable()
 export class FunctionsDebugPreparation {
     public constructor(
@@ -69,6 +69,16 @@ export class FunctionsDebugPreparation {
         if (version && !/^~?4(?:\.|$)/.test(version)) {
             throw new ExternalError(this.code.l10n.t('Local debugging supports Functions runtime v4 only.'));
         }
+        await this.validateStorage(values);
+        if (runtime === 'python') {
+            await this.selectedPython(project);
+        } else if (runtime === 'native') {
+            await this.validateGo(project, Object.fromEntries(values), token);
+        }
+        return runtime;
+    }
+
+    private async validateStorage(values: ICaselessMapReader<string>): Promise<void> {
         const storage = values.get('AzureWebJobsStorage');
         if (!storage && !values.get('AzureWebJobsStorage__accountName') && !values.get('AzureWebJobsStorage__blobServiceUri')) {
             throw new ExternalError(this.code.l10n.t('Configure AzureWebJobsStorage or its identity-based settings in local.settings.json before debugging.'));
@@ -83,31 +93,27 @@ export class FunctionsDebugPreparation {
                 }
             }
         }
-        if (runtime === 'python') {
-            await this.python(project);
+    }
+
+    private async validateGo(project: vscode.Uri, env: Readonly<Record<string, string>>, token?: vscode.CancellationToken): Promise<void> {
+        if (!await fileExists(this.code, this.code.Uri.joinPath(project, 'go.mod'))) {
+            throw new ExternalError(this.code.l10n.t('Native worker debugging requires a Go Functions project with go.mod. Custom handlers are not supported.'));
         }
-        if (runtime === 'native') {
-            if (!await fileExists(this.code, this.code.Uri.joinPath(project, 'go.mod'))) {
-                throw new ExternalError(this.code.l10n.t('Native worker debugging requires a Go Functions project with go.mod. Custom handlers are not supported.'));
+        const tools = await this.goTools(project);
+        try {
+            const { stdout } = await this.processes.spawn({ execution: 'background', command: [tools.go, 'version'], cwd: project, env }, token);
+            const version = /go version go(\d+)\.(\d+)(?:[.\s]|$)/.exec(stdout);
+            if (!version || Number(version[1]) < 1 || (Number(version[1]) === 1 && Number(version[2]) < 24)) {
+                throw new ExternalError(this.code.l10n.t('Go 1.24 or later is required to debug native Go Functions. Install or select a supported Go toolchain.'));
             }
-            const tools = await this.goTools(project);
-            const variables = Object.fromEntries(values);
-            try {
-                const { stdout } = await this.processes.spawn({ execution: 'background', command: [tools.go, 'version'], cwd: project, env: variables }, token);
-                const version = /go version go(\d+)\.(\d+)(?:[.\s]|$)/.exec(stdout);
-                if (!version || Number(version[1]) < 1 || (Number(version[1]) === 1 && Number(version[2]) < 24)) {
-                    throw new ExternalError(this.code.l10n.t('Go 1.24 or later is required to debug native Go Functions. Install or select a supported Go toolchain.'));
-                }
-                const delve = await this.processes.spawn({ execution: 'background', command: [tools.delve, 'version'], cwd: project, env: variables }, token);
-                if (!delve.stdout.includes('Delve Debugger') || !/Version:\s*\d+\.\d+/.test(delve.stdout)) {
-                    throw new ExternalError(this.code.l10n.t('Delve did not report a valid version. Install or update dlv with Go: Install/Update Tools.'));
-                }
-            } catch (error: unknown) {
-                if (CancellationError.test(error) || error instanceof ExternalError) { throw error; }
-                throw new ExternalError(this.code.l10n.t('Could not run the Go debugging tools. Install Go 1.24 or later and install dlv with Go: Install/Update Tools.'));
+            const delve = await this.processes.spawn({ execution: 'background', command: [tools.delve, 'version'], cwd: project, env }, token);
+            if (!delve.stdout.includes('Delve Debugger') || !/Version:\s*\d+\.\d+/.test(delve.stdout)) {
+                throw new ExternalError(this.code.l10n.t('Delve did not report a valid version. Install or update dlv with Go: Install/Update Tools.'));
             }
+        } catch (error: unknown) {
+            if (CancellationError.test(error) || error instanceof ExternalError) { throw error; }
+            throw new ExternalError(this.code.l10n.t('Could not run the Go debugging tools. Install Go 1.24 or later and install dlv with Go: Install/Update Tools.'));
         }
-        return runtime;
     }
 
     public async executable(project: vscode.Uri, token?: vscode.CancellationToken): Promise<string> {
@@ -118,110 +124,101 @@ export class FunctionsDebugPreparation {
         })).executablePath;
     }
 
-    public async build(project: vscode.Uri, runtime: FunctionsDebugRuntime, env: Readonly<Record<string, string>>, token?: vscode.CancellationToken): Promise<vscode.Uri> {
-        let command: string[] | undefined;
-        let matcher: string | undefined;
-        if (runtime === 'dotnet-isolated') { command = ['dotnet', 'build']; matcher = '$msCompile'; }
-        if (runtime === 'java') { command = ['mvn', 'package']; }
-        if (runtime === 'native') {
-            const tools = await this.goTools(project);
-            await this.code.workspace.fs.createDirectory(this.code.Uri.joinPath(project, 'bin'));
-            command = [tools.go, 'build', '-gcflags=all=-N -l', '-o', this.goBinary(project).fsPath, '.'];
-        }
-        if (runtime === 'node') {
-            const text = await readText(this.code, this.code.Uri.joinPath(project, 'package.json'));
-            if (!text) { throw new ExternalError(this.code.l10n.t('The Node.js Functions project must contain package.json before debugging.')); }
-            let manifest: unknown;
-            try { manifest = JSON.parse(text); } catch {
-                throw new ExternalError(this.code.l10n.t('package.json must contain valid JSON before debugging.'));
-            }
-            const installed = await fileExists(this.code, this.code.Uri.joinPath(project, 'node_modules'));
-            if (!installed) {
-                await this.run(project, ['npm', await readText(this.code, this.code.Uri.joinPath(project, 'package-lock.json')) ? 'ci' : 'install'], env, token);
-            }
-            if (manifest && typeof manifest === 'object' && 'scripts' in manifest && manifest.scripts
-                && typeof manifest.scripts === 'object' && 'build' in manifest.scripts && typeof manifest.scripts.build === 'string') {
-                command = ['npm', 'run', 'build']; matcher = '$tsc';
-            }
-        }
-        if (runtime === 'python' && await readText(this.code, this.code.Uri.joinPath(project, 'requirements.txt'))) {
-            const { executable: python } = await this.python(project);
-            command = [python, '-m', 'pip', 'install', '-r', 'requirements.txt'];
-        }
-        if (command) { await this.run(project, command, env, token, matcher); }
-        return this.hostDirectory(project, runtime);
-    }
-
-    public async hostDirectory(project: vscode.Uri, runtime: FunctionsDebugRuntime): Promise<vscode.Uri> {
-        if (runtime !== 'java') { return project; }
-        const root = this.code.Uri.joinPath(project, 'target', 'azure-functions');
-        const apps = (await this.code.workspace.fs.readDirectory(root)).filter(([, type]) => type === this.code.FileType.Directory);
-        if (apps.length !== 1) {
-            throw new ExternalError(this.code.l10n.t('Package the Java project so target/azure-functions contains exactly one Function App.'));
-        }
-        return this.code.Uri.joinPath(root, apps[0][0]);
+    /** Builds Go with optimizations and inlining disabled so Delve can attach reliably. */
+    public async buildGo(project: vscode.Uri, env: Readonly<Record<string, string>>, token?: vscode.CancellationToken): Promise<void> {
+        const tools = await this.goTools(project);
+        await this.code.workspace.fs.createDirectory(this.code.Uri.joinPath(project, 'bin'));
+        await this.processes.spawn({
+            execution: 'foreground',
+            command: [tools.go, 'build', '-gcflags=all=-N -l', '-o', this.goBinary(project).fsPath, '.'],
+            cwd: project, env,
+            name: this.code.l10n.t('Build Azure Functions'), source: 'Azure Functions', alwaysRunNew: true,
+            workspaceFolder: this.code.workspace.getWorkspaceFolder(project),
+        }, token);
     }
 
     /** Applies project/launch overrides above Python environment defaults, then sets the owned debugger coordinates. */
     public async workerEnvironment(project: vscode.Uri, runtime: FunctionsDebugRuntime, port: number, pipe: string, env: Readonly<Partial<Record<string, string>>> = {}): Promise<Readonly<Record<string, string>>> {
-        const extensionId = runtime === 'java' ? 'vscjava.vscode-java-debug'
-            : runtime === 'powershell' ? 'ms-vscode.PowerShell'
-                : runtime === 'dotnet-isolated' ? 'ms-dotnettools.csharp' : undefined;
+        const debuggerExtensions: Partial<Record<FunctionsDebugRuntime, string>> = {
+            java: 'vscjava.vscode-java-debug',
+            powershell: 'ms-vscode.PowerShell',
+            ['dotnet-isolated']: 'ms-dotnettools.csharp',
+        };
+        const extensionId = debuggerExtensions[runtime];
         if (extensionId) {
             const extension = this.code.extensions.getExtension(extensionId);
-            if (!extension) { throw new ExternalError(this.code.l10n.t('Install the {0} extension before debugging this project.', extensionId)); }
+            if (!extension) {
+                throw new ExternalError(this.code.l10n.t('Install the {0} extension before debugging this project.', extensionId));
+            }
             await extension.activate();
         }
-        if (runtime === 'node') { return { ['languageWorkers__node__arguments']: `--inspect-brk=127.0.0.1:${port}` }; }
-        if (runtime === 'java') { return { ['languageWorkers__java__arguments']: `-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=127.0.0.1:${port}` }; }
-        if (runtime === 'powershell') { return { ['PSWorkerCustomPipeName']: pipe }; }
-        if (runtime === 'native') {
-            const tools = await this.goTools(project);
-            const binary = this.goBinary(project);
-            if (!await fileExists(this.code, binary)) {
-                throw new ExternalError(this.code.l10n.t('Build the Go Functions project to bin/app (app.exe on Windows) with -gcflags=all=-N -l before debugging.'));
-            }
-            if (Object.keys(env).some(key => /^languageWorkers(?:__|:)native(?:__|:)(?:arguments(?:(?:__|:).*)?|defaultExecutablePath)$/i.test(key))) {
-                throw new ExternalError(this.code.l10n.t('Native worker executable and argument overrides are not supported by the owned Go debugger. Use debugPort to configure its transport.'));
-            }
-            return {
-                ['languageWorkers__native__defaultExecutablePath']: tools.delve,
-                ['languageWorkers__native__arguments']: [
-                    'exec', process.platform === 'win32' ? 'bin\\app.exe' : 'bin/app', '--headless', '--continue', `--listen=127.0.0.1:${port}`,
-                    '--api-version=2', '--accept-multiclient', '--',
-                ].map(quoteWorkerArgument).join(' '),
-                ['PATH']: `${dirname(this.code.Uri.file(tools.go)).fsPath}${delimiter}${env.PATH ?? env.Path ?? process.env.PATH ?? ''}`,
-            };
+        switch (runtime) {
+            case 'node':
+                return { ['languageWorkers__node__arguments']: `--inspect-brk=127.0.0.1:${port}` };
+            case 'java':
+                return { ['languageWorkers__java__arguments']: `-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=127.0.0.1:${port}` };
+            case 'powershell':
+                return { ['PSWorkerCustomPipeName']: pipe };
+            case 'native':
+                return this.goWorkerEnvironment(project, port, env);
+            case 'python':
+                return this.pythonWorkerEnvironment(project, port, env);
+            case 'dotnet-isolated':
+                return {};
         }
-        if (runtime === 'python') {
-            const { executable: python, variables, virtualEnvironment } = await this.python(project);
-            const extension = this.code.extensions.getExtension<PythonDebugApi | undefined>('ms-python.debugpy');
-            if (!extension) { throw new ExternalError(this.code.l10n.t('Install the Python Debugger extension before debugging this project.')); }
-            const api = await extension.activate();
-            if (typeof api?.debug?.getRemoteLauncherCommand !== 'function' || typeof api.debug.getDebuggerPackagePath !== 'function') {
-                throw new ExternalError(this.code.l10n.t('Update the Python Debugger extension to use its public debugpy launcher API.'));
-            }
-            const args = await api.debug.getRemoteLauncherCommand('127.0.0.1', port, true);
-            const debuggerPath = await api.debug.getDebuggerPackagePath();
-            if (!debuggerPath || !args.length) {
-                throw new ExternalError(this.code.l10n.t('The Python Debugger extension did not provide a debugpy launcher.'));
-            }
-            // The launch command's first argument can be pre-quoted by the Python extension.
-            args[0] = debuggerPath;
-            const entries = [...Object.entries(variables), ...Object.entries(env)].filter((entry): entry is [string, string] => typeof entry[1] === 'string');
-            const environment = process.platform === 'win32' ? new CaselessMap(entries) : new Map(entries);
-            const path = environment.get('PATH');
-            environment.delete('PATH');
-            environment.delete('VIRTUAL_ENV');
-            return {
-                ...Object.fromEntries(environment),
-                ['VIRTUAL_ENV']: virtualEnvironment.fsPath,
-                ['PATH']: `${dirname(this.code.Uri.file(python)).fsPath}${delimiter}${path ?? process.env.PATH ?? ''}`,
-                ['languageWorkers__python__defaultExecutablePath']: python,
-                ['languageWorkers__python__arguments']: args.map(quoteWorkerArgument).join(' '),
-            };
+    }
+
+    private async goWorkerEnvironment(project: vscode.Uri, port: number, env: Readonly<Partial<Record<string, string>>>): Promise<Readonly<Record<string, string>>> {
+        const tools = await this.goTools(project);
+        const binary = this.goBinary(project);
+        if (!await fileExists(this.code, binary)) {
+            throw new ExternalError(this.code.l10n.t('Build the Go Functions project to bin/app (app.exe on Windows) with -gcflags=all=-N -l before debugging.'));
         }
-        return {};
+        if (Object.keys(env).some(key => /^languageWorkers(?:__|:)native(?:__|:)(?:arguments(?:(?:__|:).*)?|defaultExecutablePath)$/i.test(key))) {
+            throw new ExternalError(this.code.l10n.t('Native worker executable and argument overrides are not supported by the owned Go debugger. Use debugPort to configure its transport.'));
+        }
+        const args = [
+            'exec', process.platform === 'win32' ? 'bin\\app.exe' : 'bin/app',
+            '--headless', '--continue', `--listen=127.0.0.1:${port}`,
+            '--api-version=2', '--accept-multiclient', '--',
+        ];
+        return {
+            ['languageWorkers__native__defaultExecutablePath']: tools.delve,
+            ['languageWorkers__native__arguments']: args.map(quoteWorkerArgument).join(' '),
+            ['PATH']: `${dirname(this.code.Uri.file(tools.go)).fsPath}${delimiter}${env.PATH ?? env.Path ?? process.env.PATH ?? ''}`,
+        };
+    }
+
+    private async pythonWorkerEnvironment(project: vscode.Uri, port: number, env: Readonly<Partial<Record<string, string>>>): Promise<Readonly<Record<string, string>>> {
+        const { executable: python, variables, virtualEnvironment } = await this.selectedPython(project);
+        const extension = this.code.extensions.getExtension<PythonDebugApi | undefined>('ms-python.debugpy');
+        if (!extension) {
+            throw new ExternalError(this.code.l10n.t('Install the Python Debugger extension before debugging this project.'));
+        }
+        const api = await extension.activate();
+        if (typeof api?.debug?.getRemoteLauncherCommand !== 'function' || typeof api.debug.getDebuggerPackagePath !== 'function') {
+            throw new ExternalError(this.code.l10n.t('Update the Python Debugger extension to use its public debugpy launcher API.'));
+        }
+        const args = await api.debug.getRemoteLauncherCommand('127.0.0.1', port, true);
+        const debuggerPath = await api.debug.getDebuggerPackagePath();
+        if (!debuggerPath || !args.length) {
+            throw new ExternalError(this.code.l10n.t('The Python Debugger extension did not provide a debugpy launcher.'));
+        }
+        // The launch command's first argument can be pre-quoted by the Python extension.
+        args[0] = debuggerPath;
+        const entries = [...Object.entries(variables), ...Object.entries(env)]
+            .filter((entry): entry is [string, string] => typeof entry[1] === 'string');
+        const environment = process.platform === 'win32' ? new CaselessMap(entries) : new Map(entries);
+        const path = environment.get('PATH');
+        environment.delete('PATH');
+        environment.delete('VIRTUAL_ENV');
+        return {
+            ...Object.fromEntries(environment),
+            ['VIRTUAL_ENV']: virtualEnvironment.fsPath,
+            ['PATH']: `${dirname(this.code.Uri.file(python)).fsPath}${delimiter}${path ?? process.env.PATH ?? ''}`,
+            ['languageWorkers__python__defaultExecutablePath']: python,
+            ['languageWorkers__python__arguments']: args.map(quoteWorkerArgument).join(' '),
+        };
     }
 
     private goBinary(project: vscode.Uri): vscode.Uri {
@@ -245,13 +242,15 @@ export class FunctionsDebugPreparation {
         return { go, delve };
     }
 
-    private async python(project: vscode.Uri): Promise<{
+    private async selectedPython(project: vscode.Uri): Promise<{
         readonly executable: string;
         readonly virtualEnvironment: vscode.Uri;
         readonly variables: Readonly<Partial<Record<string, string>>>;
     }> {
         const extension = this.code.extensions.getExtension<PythonApi | undefined>('ms-python.python');
-        if (!extension) { throw new ExternalError(this.code.l10n.t('Install the Python extension and select an interpreter for this project before debugging.')); }
+        if (!extension) {
+            throw new ExternalError(this.code.l10n.t('Install the Python extension and select an interpreter for this project before debugging.'));
+        }
         const api = await extension.activate();
         await api?.ready;
         if (typeof api?.environments?.getActiveEnvironmentPath !== 'function' || typeof api.environments.resolveEnvironment !== 'function'
@@ -260,7 +259,9 @@ export class FunctionsDebugPreparation {
         }
         const environment = await api.environments.resolveEnvironment(api.environments.getActiveEnvironmentPath(project));
         const python = environment?.executable.uri?.fsPath;
-        if (!python) { throw new ExternalError(this.code.l10n.t('Select a valid Python interpreter for this project before debugging.')); }
+        if (!python) {
+            throw new ExternalError(this.code.l10n.t('Select a valid Python interpreter for this project before debugging.'));
+        }
         const virtualEnvironment = dirname(dirname(this.code.Uri.file(python)));
         if (!await fileExists(this.code, this.code.Uri.joinPath(virtualEnvironment, 'pyvenv.cfg'))) {
             throw new ExternalError(this.code.l10n.t('Select a Python virtual environment for this project before debugging with Core Tools v5.'));
@@ -271,14 +272,6 @@ export class FunctionsDebugPreparation {
             variables: Object.fromEntries(Object.entries(api.environments.getEnvironmentVariables(project))
                 .filter((entry): entry is [string, string] => typeof entry[1] === 'string')),
         };
-    }
-
-    private async run(project: vscode.Uri, command: readonly string[], env: Readonly<Record<string, string>>, token?: vscode.CancellationToken, problemMatchers?: string): Promise<void> {
-        await this.processes.spawn({
-            execution: 'foreground', command: [...command], cwd: project, env, problemMatchers,
-            name: this.code.l10n.t('Build Azure Functions'), source: 'Azure Functions', alwaysRunNew: true,
-            workspaceFolder: this.code.workspace.getWorkspaceFolder(project),
-        }, token);
     }
 }
 

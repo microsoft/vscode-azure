@@ -34,62 +34,9 @@ describe('Functions debug preparation (unit)', () => {
             .to.be.rejectedWith('runtime v4 only');
     });
 
-    it('installs missing Node dependencies from the lockfile and applies the TypeScript build matcher', async () => {
-        const s = setup();
-        s.m.fs.addFile(s.code.Uri.joinPath(s.folder, 'package.json'), '{"scripts":{"build":"tsc"}}');
-        s.m.fs.addFile(s.code.Uri.joinPath(s.folder, 'package-lock.json'), '{}');
-        const building = s.preparation.build(s.folder, 'node', {});
-        const install = await getMockTaskExecution(s.m);
-        expect(install.task.execution).to.be.instanceOf(MockShellExecution);
-        if (!(install.task.execution instanceof MockShellExecution)) { throw new Error('Expected a shell task.'); }
-        expect(install.task.execution.args).to.deep.equal(['ci']);
-        s.m.taskProcessEndEmitter.fire({ execution: install, exitCode: 0 });
-        const build = await getMockTaskExecution(s.m, 1);
-        expect(build.task.problemMatchers).to.include('$tsc');
-        s.m.taskProcessEndEmitter.fire({ execution: build, exitCode: 0 });
-        expect((await building).toString()).to.equal(s.folder.toString());
-    });
-
-    it('uses existing Node dependencies and runs the configured build script', async () => {
-        const s = setup();
-        s.m.fs.addFile(s.code.Uri.joinPath(s.folder, 'package.json'), '{"scripts":{"build":"tsc"}}');
-        s.m.fs.addDirectory(s.code.Uri.joinPath(s.folder, 'node_modules'));
-        const building = s.preparation.build(s.folder, 'node', {});
-        const build = await getMockTaskExecution(s.m);
-        if (!(build.task.execution instanceof MockShellExecution)) { throw new Error('Expected a shell task.'); }
-        expect(build.task.execution.args).to.deep.equal(['run', 'build']);
-        s.m.taskProcessEndEmitter.fire({ execution: build, exitCode: 0 });
-        await building;
-        expect(s.m.tasks.executeTask.mock.callCount()).to.equal(1);
-    });
-
-    it('builds isolated .NET with compiler diagnostics and propagates a build failure', async () => {
-        const s = setup('dotnet-isolated');
-        const building = s.preparation.build(s.folder, 'dotnet-isolated', {});
-        const failed = expect(building).to.be.rejectedWith('failed with exit code 1');
-        const build = await getMockTaskExecution(s.m);
-        expect(build.task.problemMatchers).to.include('$msCompile');
-        s.m.taskProcessEndEmitter.fire({ execution: build, exitCode: 1 });
-        await failed;
-    });
-
-    it('packages Java and uses its sole generated app as the host working directory', async () => {
-        const s = setup('java');
-        const generated = s.code.Uri.joinPath(s.folder, 'target', 'azure-functions', 'app');
-        s.m.fs.addDirectory(generated);
-        const building = s.preparation.build(s.folder, 'java', {});
-        const build = await getMockTaskExecution(s.m);
-        if (!(build.task.execution instanceof MockShellExecution)) { throw new Error('Expected a shell task.'); }
-        expect(build.task.execution.args).to.deep.equal(['package']);
-        s.m.taskProcessEndEmitter.fire({ execution: build, exitCode: 0 });
-        expect((await building).toString()).to.equal(generated.toString());
-        s.m.fs.addDirectory(s.code.Uri.joinPath(s.folder, 'target', 'azure-functions', 'other'));
-        await expect(s.preparation.hostDirectory(s.folder, 'java')).to.be.rejectedWith('exactly one Function App');
-    });
-
     it('builds native Go with optimizations and inlining disabled using the resource-scoped Go executable', async () => {
         const s = setup('native');
-        const building = s.preparation.build(s.folder, 'native', { ['CUSTOM_GO_ENV']: 'configured' });
+        const building = s.preparation.buildGo(s.folder, { ['CUSTOM_GO_ENV']: 'configured' });
         const build = await getMockTaskExecution(s.m);
         if (!(build.task.execution instanceof MockShellExecution)) { throw new Error('Expected a shell task.'); }
         const command = build.task.execution.command;
@@ -100,12 +47,12 @@ describe('Functions debug preparation (unit)', () => {
         ]);
         expect(build.task.execution.options?.env?.CUSTOM_GO_ENV).to.equal('configured');
         s.m.taskProcessEndEmitter.fire({ execution: build, exitCode: 0 });
-        expect((await building).toString()).to.equal(s.folder.toString());
+        await building;
     });
 
     it('propagates Go build failures before starting a worker', async () => {
         const s = setup('native');
-        const building = s.preparation.build(s.folder, 'native', {});
+        const building = s.preparation.buildGo(s.folder, {});
         const rejected = expect(building).to.be.rejectedWith('failed with exit code 1');
         const build = await getMockTaskExecution(s.m);
         s.m.taskProcessEndEmitter.fire({ execution: build, exitCode: 1 });
@@ -166,17 +113,8 @@ describe('Functions debug preparation (unit)', () => {
         }
     });
 
-    it('installs Python requirements with the selected interpreter and reports a missing debugger extension', async () => {
+    it('reports a missing Python Debugger extension for worker preparation', async () => {
         const s = setup('python');
-        const executable = s.code.Uri.joinPath(s.folder, '.venv', process.platform === 'win32' ? 'Scripts' : 'bin', process.platform === 'win32' ? 'python.exe' : 'python');
-        s.m.fs.addFile(s.code.Uri.joinPath(s.folder, 'requirements.txt'), 'azure-functions');
-        const building = s.preparation.build(s.folder, 'python', {});
-        const build = await getMockTaskExecution(s.m);
-        if (!(build.task.execution instanceof MockShellExecution)) { throw new Error('Expected a shell task.'); }
-        expect(build.task.execution.command).to.equal(executable.fsPath);
-        expect(build.task.execution.args).to.deep.equal(['-m', 'pip', 'install', '-r', 'requirements.txt']);
-        s.m.taskProcessEndEmitter.fire({ execution: build, exitCode: 0 });
-        await building;
         await expect(s.preparation.workerEnvironment(s.folder, 'python', 9001, 'pipe')).to.be.rejectedWith('Install the Python Debugger');
     });
 

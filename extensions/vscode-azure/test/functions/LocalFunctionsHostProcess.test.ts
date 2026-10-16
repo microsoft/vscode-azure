@@ -45,7 +45,7 @@ describe('Local Functions host ownership (unit)', () => {
         });
         const owner = new LocalFunctionsHostProcess(m.vscode, processes, () => client, tracker, network, output);
         owners.push(owner);
-        const request = { project, cwd: project, executable: 'func', runtime: 'node', hostArgs: [], prepare: () => Promise.resolve({}) };
+        const request = { project, executable: 'func', runtime: 'node', skipBuild: true, hostArgs: [], prepare: () => Promise.resolve({}) };
         return { m, owner, request, spawn, client, tracker, network, reserve, terminateTree, output, written, finished };
     }
 
@@ -59,7 +59,7 @@ describe('Local Functions host ownership (unit)', () => {
         expect(s.tracker.get(s.request.project)?.port).to.equal(host.hostPort);
         const args = s.spawn.mock.calls[0].arguments[1];
         expect(args).to.deep.equal([
-            'run', s.request.cwd.fsPath, '--port', String(host.hostPort), '--no-build', '--no-azurite', '--output', 'plain',
+            'run', s.request.project.fsPath, '--port', String(host.hostPort), '--no-build', '--no-azurite', '--output', 'plain',
         ]);
         await s.owner.stop(host.id);
         expect(s.tracker.get(s.request.project)).to.be.undefined;
@@ -75,13 +75,15 @@ describe('Local Functions host ownership (unit)', () => {
         await s.owner.stop(host.id);
     });
 
-    it('reports early process failure instead of cancellation', async () => {
-        const s = setup({ keepAlive: false, exitCode: 1 });
-        mock.method(s.network, 'listening', () => Promise.resolve(false));
-        await expect(s.owner.start(s.request)).to.be.rejectedWith('Functions host failed');
-        expect(s.tracker.get(s.request.project)).to.be.undefined;
-        expect(s.finished.mock.calls.map(call => call.arguments[0])).to.deep.equal([1]);
-    });
+    for (const skipBuild of [false, true]) {
+        it(`reports early CLI failure with skipBuild=${String(skipBuild)} instead of cancellation`, async () => {
+            const s = setup({ keepAlive: false, exitCode: 1 });
+            mock.method(s.network, 'listening', () => Promise.resolve(false));
+            await expect(s.owner.start({ ...s.request, skipBuild })).to.be.rejectedWith('Functions host failed');
+            expect(s.tracker.get(s.request.project)).to.be.undefined;
+            expect(s.finished.mock.calls.map(call => call.arguments[0])).to.deep.equal([1]);
+        });
+    }
 
     it('stops the owned process and reports a failed output stream', async () => {
         const s = setup({ keepStreamsOpen: true });
@@ -147,26 +149,38 @@ describe('Local Functions host ownership (unit)', () => {
         expect(s.tracker.get(s.request.project)).to.be.undefined;
     });
 
-    it('stops the owned process when debugger readiness reaches its 120-second deadline', async () => {
+    for (const [skipBuild, timeout] of [[true, 120_000], [false, 300_000]] as const) {
+        it(`stops the owned process when debugger readiness reaches its ${timeout / 1000}-second deadline`, async () => {
+            const s = setup();
+            const now = Date.now();
+            const clock = mock.method(Date, 'now', () => now + timeout);
+            clock.mock.mockImplementationOnce(() => now, 0);
+            clock.mock.mockImplementationOnce(() => now + timeout - 100, 1);
+            const listening = mock.method(s.network, 'listening', () => Promise.resolve(false));
+            const ended = mock.fn();
+            const subscription = s.m.taskEndEmitter.event(ended);
+            s.client.getStatus.mock.mockImplementation(() => Promise.resolve({ state: 'Starting' }));
+            await expect(s.owner.start({ ...s.request, skipBuild })).to.be.rejectedWith('worker did not expose its debugger');
+            expect(listening.mock.callCount()).to.equal(1);
+            expect(s.terminateTree.mock.callCount()).to.equal(1);
+            expect(s.tracker.get(s.request.project)).to.be.undefined;
+            const execution = await s.m.tasks.executeTask.mock.calls[0].result;
+            if (!execution) { throw new Error('Expected the owned host task.'); }
+            expect(ended.mock.calls[0].arguments[0]).to.deep.equal({ execution });
+            expect(s.finished.mock.calls.map(call => call.arguments[0])).to.deep.equal([1]);
+            expect(s.written.mock.calls.map(call => call.arguments[0]).join('')).to.include('worker did not expose its debugger');
+            subscription.dispose();
+        });
+    }
+
+    it('runs from the project root and delegates compilation to Core Tools when requested', async () => {
         const s = setup();
-        const now = Date.now();
-        const clock = mock.method(Date, 'now', () => now + 120_000);
-        clock.mock.mockImplementationOnce(() => now, 0);
-        clock.mock.mockImplementationOnce(() => now + 119_900, 1);
-        const listening = mock.method(s.network, 'listening', () => Promise.resolve(false));
-        const ended = mock.fn();
-        const subscription = s.m.taskEndEmitter.event(ended);
-        s.client.getStatus.mock.mockImplementation(() => Promise.resolve({ state: 'Starting' }));
-        await expect(s.owner.start(s.request)).to.be.rejectedWith('worker did not expose its debugger');
-        expect(listening.mock.callCount()).to.equal(1);
-        expect(s.terminateTree.mock.callCount()).to.equal(1);
-        expect(s.tracker.get(s.request.project)).to.be.undefined;
-        const execution = await s.m.tasks.executeTask.mock.calls[0].result;
-        if (!execution) { throw new Error('Expected the owned host task.'); }
-        expect(ended.mock.calls[0].arguments[0]).to.deep.equal({ execution });
-        expect(s.finished.mock.calls.map(call => call.arguments[0])).to.deep.equal([1]);
-        expect(s.written.mock.calls.map(call => call.arguments[0]).join('')).to.include('worker did not expose its debugger');
-        subscription.dispose();
+        const host = await s.owner.start({ ...s.request, skipBuild: false });
+        expect(s.spawn.mock.calls[0].arguments[1]).to.deep.equal([
+            'run', s.request.project.fsPath, '--port', String(host.hostPort), '--no-azurite', '--output', 'plain',
+        ]);
+        expect(s.spawn.mock.calls[0].arguments[2]?.cwd).to.equal(s.request.project.fsPath);
+        await s.owner.stop(host.id);
     });
 
     for (const failure of ['preparation', 'task launch'] as const) {
@@ -246,7 +260,7 @@ describe('Local Functions host ownership (unit)', () => {
             expect(host.workerPid).to.equal(1234);
             expect(s.tracker.get(s.request.project)).to.be.undefined;
             expect(s.spawn.mock.calls[0].arguments[1]).to.deep.equal([
-                'run', s.request.cwd.fsPath, '--port', String(host.hostPort), '--no-build', '--no-azurite',
+                'run', s.request.project.fsPath, '--port', String(host.hostPort), '--no-build', '--no-azurite',
                 '--output', 'json', '--dotnet-isolated-debug', '--enable-json-output',
             ]);
             await s.owner.stop(host.id);

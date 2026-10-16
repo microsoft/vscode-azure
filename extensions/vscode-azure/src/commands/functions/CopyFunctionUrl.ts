@@ -10,6 +10,12 @@ import { IResourceSelector } from '../../tree/resources/ResourceSelector';
 import { isFunctionAppFunction, isFunctionTriggerBinding, type FunctionTriggerBinding } from '../../tree/resources/webApp/FunctionApp';
 import type { ManagedCommand } from '../ManagedCommand';
 import { LocalFunctionTarget } from '../../functions/LocalFunctionTarget';
+import type { LocalFunctionNode } from '../../tree/workspace/WorkspaceNode';
+
+interface FunctionUrl {
+    readonly functionName: string;
+    readonly url: URL;
+}
 
 /** Copies a live HTTP invocation URL with the least-privileged key its access level requires. */
 @injectable()
@@ -27,23 +33,28 @@ export class CopyFunctionUrl implements ManagedCommand {
     /** Keeps keys out of notifications and output; admin URLs require explicit confirmation. */
     public async execute(key?: string): Promise<void> {
         const local = this.local.resolve(key);
-        if (local) {
-            const { client, port } = this.local.host(local);
-            const fn = (await client.listFunctions()).find(fn => fn.name === local.functionName);
-            this.httpTrigger(fn?.config);
-            const rawUrl = fn?.invoke_url_template;
-            if (!rawUrl || !URL.canParse(rawUrl)) {
-                throw new ExternalError(this.code.l10n.t('The running host does not report an HTTP invocation URL for this function.'));
-            }
-            const url = new URL(rawUrl);
-            if (url.protocol !== 'http:' || !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)
-                || Number(url.port || '80') !== port || url.username || url.password) {
-                throw new ExternalError(this.code.l10n.t('The local function URL must belong to the registered loopback host.'));
-            }
-            await this.code.env.clipboard.writeText(url.toString());
-            void showMessage(this.code, this.code.l10n.t('Copied the URL for \'{0}\'.', local.functionName));
-            return;
+        const { url, functionName } = local ? await this.localUrl(local) : await this.remoteUrl(key);
+        await this.code.env.clipboard.writeText(url.toString());
+        void showMessage(this.code, this.code.l10n.t('Copied the URL for \'{0}\'.', functionName));
+    }
+
+    private async localUrl(local: LocalFunctionNode): Promise<FunctionUrl> {
+        const { client, port } = this.local.host(local);
+        const fn = (await client.listFunctions()).find(fn => fn.name === local.functionName);
+        this.httpTrigger(fn?.config);
+        const rawUrl = fn?.invoke_url_template;
+        if (!rawUrl || !URL.canParse(rawUrl)) {
+            throw new ExternalError(this.code.l10n.t('The running host does not report an HTTP invocation URL for this function.'));
         }
+        const url = new URL(rawUrl);
+        if (url.protocol !== 'http:' || !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)
+            || Number(url.port || '80') !== port || url.username || url.password) {
+            throw new ExternalError(this.code.l10n.t('The local function URL must belong to the registered loopback host.'));
+        }
+        return { url, functionName: local.functionName };
+    }
+
+    private async remoteUrl(key?: string): Promise<FunctionUrl> {
         const fn = await this.selector.selectVirtual({ key, canHandle: isFunctionAppFunction });
         if (fn.triggerKind.toLowerCase() !== 'httptrigger') {
             throw new ExternalError(this.code.l10n.t('Only HTTP-triggered functions have an invocation URL.'));
@@ -88,8 +99,7 @@ export class CopyFunctionUrl implements ManagedCommand {
             }
             url.searchParams.set('code', functionKey);
         }
-        await this.code.env.clipboard.writeText(url.toString());
-        void showMessage(this.code, this.code.l10n.t('Copied the URL for \'{0}\'.', fn.functionName));
+        return { url, functionName: fn.functionName };
     }
 
     private httpTrigger(config: unknown): FunctionTriggerBinding {

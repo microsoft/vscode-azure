@@ -59,21 +59,31 @@ selection, remembering the last choice per workspace.
 
 The initial resolution hook normalizes the configuration. VS Code substitutes
 variables and runs a configured `preLaunchTask` before the substituted-variable
-hook selects, validates, builds, and starts the project. `preLaunchTask` replaces
-the built-in build; `skipBuild: true` also bypasses it. Java still requires exactly
-one packaged app under `target/azure-functions`.
+hook selects, validates, and starts the project. Core Tools builds ordinary
+projects and restores their dependencies. `preLaunchTask` replaces compilation;
+`skipBuild: true` also suppresses compilation, but Core Tools can still restore
+dependencies. Go uses an extension-owned debug build.
 
-| Runtime | Built-in preparation | Debugger prerequisite |
+| Runtime | Preparation | Debugger prerequisite |
 |---|---|---|
-| Node.js | Install missing dependencies with `npm ci` or `npm install`; run the package's build script when present | Built-in JavaScript debugger (`pwa-node`) |
-| Python | Install `requirements.txt` with the selected virtual environment's interpreter | Python and Python Debugger extensions; selected virtual environment |
-| Java | `mvn package` | Maven and a matching JDK; Java debugger extension |
+| Node.js | Core Tools installs missing dependencies with `npm install` and runs the package's build script when present | Built-in JavaScript debugger (`pwa-node`) |
+| Python | Core Tools installs `requirements.txt` into the selected virtual environment | Python and Python Debugger extensions; selected virtual environment |
+| Java | Core Tools runs `mvn clean package`, preferring the project's Maven wrapper, and locates the staged app | Maven or its project wrapper and a matching JDK; Java debugger extension |
 | PowerShell | Start the worker with a session-specific pipe | PowerShell extension |
-| .NET isolated | `dotnet build` | Matching .NET SDK; C# extension (`coreclr`) |
+| .NET isolated | Core Tools builds the project and resolves its output through MSBuild | Matching .NET SDK; C# extension (`coreclr`) |
 | Native Go (preview) | `go build -gcflags="all=-N -l" -o bin/app .` (`app.exe` on Windows) | Go 1.24+; Go extension (`golang.Go`); Delve (`dlv`) |
 
-Builds run as visible in-code tasks, using the existing `$tsc` and `$msCompile`
-matchers where applicable. Python uses the owning extensions' public
+Core Tools compilation and restoration output appears in the owned host task.
+Go's debug build runs as a separate visible task. Java's CLI startup selects the
+most recently written staged app when multiple outputs exist; offline tree
+listing reports ambiguity instead of selecting an app.
+The stack preparation contracts are implemented by Core Tools'
+[Node](https://github.com/Azure/azure-functions-core-tools/blob/f8f54ba328758b2165d835930e391af23e60f090/src/Workloads/Stacks/Node/NodeFunctionsProject.cs),
+[Python](https://github.com/Azure/azure-functions-core-tools/blob/f8f54ba328758b2165d835930e391af23e60f090/src/Workloads/Stacks/Python/PythonFunctionsProject.cs),
+[Java](https://github.com/Azure/azure-functions-core-tools/blob/f8f54ba328758b2165d835930e391af23e60f090/src/Workloads/Stacks/Java/JavaFunctionsProject.cs),
+and [.NET](https://github.com/Azure/azure-functions-core-tools/blob/f8f54ba328758b2165d835930e391af23e60f090/src/Workloads/Stacks/DotNet/DotNetSourceProject.cs)
+workloads.
+Python uses the owning extensions' public
 [environment API](https://github.com/microsoft/vscode-python/blob/main/src/client/api/types.ts)
 and [debugpy launcher API](https://github.com/microsoft/vscode-python-debugger/blob/061023c85cf721731569c2d0d670c129fc1f45c4/src/extension/api.ts),
 including the selected executable rather than a guessed `python` command.
@@ -122,9 +132,10 @@ Native Go compilation/output and `--no-build` behavior follow
 Go requires the Core Tools Go worker workload, installed with
 `func workload install go-worker --prerelease`.
 
-`LocalFunctionsHostProcess` starts `func run <project> --no-build` in an owned custom task with
+`LocalFunctionsHostProcess` starts `func run <project>` in an owned custom task with
 available host/debugger ports, or explicit validated `hostPort`/`debugPort`
-options. Node, Python, and Java attach through their worker port; PowerShell uses
+options. It passes `--no-build` for Go and for launches with `skipBuild` or
+`preLaunchTask`. Node, Python, and Java attach through their worker port; PowerShell uses
 its unique pipe; .NET isolated uses the structured worker PID emitted by
 `--dotnet-isolated-debug --enable-json-output --output=json`.
 The PID parser accepts startup events embedded in v5 NDJSON messages and the
@@ -135,8 +146,9 @@ host. Protected transport, output, build, runtime, worker-debugger, and process-
 overridden through `hostArgs` or `env`.
 
 Paused workers expose their debugger before the host can finish initialization.
-Attach readiness has a 120-second bound; HTTP readiness is polled independently
-and can remain pending while startup code is paused at a breakpoint. Only an
+Attach readiness has a five-minute bound when Core Tools owns the build and a
+two-minute bound when compilation is skipped. HTTP readiness is polled
+independently and can remain pending while startup code is paused at a breakpoint. Only an
 owned host reporting HTTP state `Running` enters `LocalFunctionsHostTracker`.
 Task/terminal closure, cancellation, attach failure, session termination, and
 service disposal stop the owned process tree and remove its registration.

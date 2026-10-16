@@ -13,12 +13,13 @@ import { LocalFunctionsHostTracker } from './LocalFunctionsHostTracker';
 import { LocalFunctionsNetwork, type FunctionsPortReservation } from './LocalFunctionsNetwork';
 import { workerProcessId } from './workerProcessId';
 
-/** Inputs supplied after project validation and the build task have completed. */
+/** Inputs supplied after project validation and any custom or Go debug build. */
 export interface FunctionsHostStart {
     readonly project: vscode.Uri;
-    readonly cwd: vscode.Uri;
     readonly executable: string;
     readonly runtime: string;
+    /** Suppresses CLI compilation; dependency restoration still follows the stack's CLI contract. */
+    readonly skipBuild: boolean;
     readonly hostPort?: number;
     readonly debugPort?: number;
     readonly hostArgs: readonly string[];
@@ -138,20 +139,9 @@ export class LocalFunctionsHostProcess implements Disposable {
                     abort.abort();
                 }
             });
-            const deadline = Date.now() + 120_000;
-            while (Date.now() < deadline) {
-                this.checkRunning(host);
-                const ready = host.process && (request.runtime === 'dotnet-isolated' ? !!host.workerPid
-                    : request.runtime === 'powershell' ? !!host.registration
-                        : request.runtime === 'native' ? host.debuggerReady && await this.network.listening(debugPort.port)
-                            : await this.network.listening(debugPort.port));
-                this.checkRunning(host);
-                if (ready) {
-                    return { id, hostPort: hostPort.port, debugPort: debugPort.port, pipe, workerPid: host.workerPid };
-                }
-                await delay(100, abort.signal);
-            }
-            throw new ExternalError(this.code.l10n.t('The Functions worker did not expose its debugger. See the host terminal for details.'));
+            const timeout = request.skipBuild ? 120_000 : 300_000;
+            await this.waitForDebugger(host, request.runtime, debugPort.port, timeout);
+            return { id, hostPort: hostPort.port, debugPort: debugPort.port, pipe, workerPid: host.workerPid };
         } catch (error) {
             if (host.execution && !host.error && !CancellationError.test(error)) {
                 host.error = error instanceof ExternalError ? error
@@ -164,6 +154,36 @@ export class LocalFunctionsHostProcess implements Disposable {
             if (!released) {
                 await Promise.all([hostPort.release(), debugPort.release()]);
             }
+        }
+    }
+
+    private async waitForDebugger(host: OwnedHost, runtime: string, port: number, timeout: number): Promise<void> {
+        const deadline = Date.now() + timeout;
+        while (Date.now() < deadline) {
+            this.checkRunning(host);
+            const ready = await this.isDebuggerReady(host, runtime, port);
+            this.checkRunning(host);
+            if (ready) {
+                return;
+            }
+            await delay(100, host.abort.signal);
+        }
+        throw new ExternalError(this.code.l10n.t('The Functions worker did not expose its debugger. See the host terminal for details.'));
+    }
+
+    private async isDebuggerReady(host: OwnedHost, runtime: string, port: number): Promise<boolean> {
+        if (!host.process) {
+            return false;
+        }
+        switch (runtime) {
+            case 'dotnet-isolated':
+                return host.workerPid !== undefined;
+            case 'powershell':
+                return host.registration !== undefined;
+            case 'native':
+                return !!host.debuggerReady && await this.network.listening(port);
+            default:
+                return this.network.listening(port);
         }
     }
 
@@ -205,36 +225,24 @@ export class LocalFunctionsHostProcess implements Disposable {
 
     private launch(host: OwnedHost, request: FunctionsHostStart, port: number, debugPort: number, env: Readonly<Record<string, string>>): void {
         const args = [
-            'run', request.cwd.fsPath, ...request.hostArgs, '--port', String(port), '--no-build', '--no-azurite',
-            '--output', request.runtime === 'dotnet-isolated' ? 'json' : 'plain',
+            'run', request.project.fsPath, ...request.hostArgs, '--port', String(port),
         ];
+        if (request.skipBuild) {
+            args.push('--no-build');
+        }
+        args.push('--no-azurite', '--output', request.runtime === 'dotnet-isolated' ? 'json' : 'plain');
         if (request.runtime === 'dotnet-isolated') {
             args.push('--dotnet-isolated-debug', '--enable-json-output');
         }
-        const buffers = { stdout: '', stderr: '' };
         host.process = this.processes.spawn({
-            execution: 'background', command: [request.executable, ...args], cwd: request.cwd, env,
+            execution: 'background', command: [request.executable, ...args], cwd: request.project, env,
             killTreeOnCancel: true, streamOutput: true,
         }, host.abort.signal).then(async process => {
-            const consume = async (stream: 'stdout' | 'stderr') => {
-                for await (const text of process[stream]) {
-                    host.terminal.write(text);
-                    if (request.runtime === 'dotnet-isolated' || request.runtime === 'native') {
-                        const lines = (buffers[stream] + text).split(/\r?\n/);
-                        buffers[stream] = (lines.pop() ?? '').slice(-16_384);
-                        for (const line of lines) {
-                            if (request.runtime === 'dotnet-isolated') {
-                                host.workerPid ??= workerProcessId(line);
-                            } else {
-                                const listener = /(?:^|\s)API server listening at: 127\.0\.0\.1:(\d+)\s*$/.exec(line);
-                                if (listener && Number(listener[1]) === debugPort) { host.debuggerReady = true; }
-                            }
-                        }
-                    }
-                }
-            };
             try {
-                await Promise.all([consume('stdout'), consume('stderr')]);
+                await Promise.all([
+                    this.consumeOutput(host, process.stdout, request.runtime, debugPort),
+                    this.consumeOutput(host, process.stderr, request.runtime, debugPort),
+                ]);
             } catch (error: unknown) {
                 host.abort.abort();
                 host.error ??= new ExternalError(this.code.l10n.t('The Functions host output stream failed. See its terminal for details.'));
@@ -270,6 +278,28 @@ export class LocalFunctionsHostProcess implements Disposable {
                 host.terminal.finish(host.error || host.stopError ? 1 : 0);
             },
         );
+    }
+
+    private async consumeOutput(host: OwnedHost, stream: AsyncIterable<string>, runtime: string, debugPort: number): Promise<void> {
+        let pending = '';
+        for await (const text of stream) {
+            host.terminal.write(text);
+            if (runtime !== 'dotnet-isolated' && runtime !== 'native') {
+                continue;
+            }
+            const lines = (pending + text).split(/\r?\n/);
+            pending = (lines.pop() ?? '').slice(-16_384);
+            for (const line of lines) {
+                if (runtime === 'dotnet-isolated') {
+                    host.workerPid ??= workerProcessId(line);
+                } else {
+                    const listener = /(?:^|\s)API server listening at: 127\.0\.0\.1:(\d+)\s*$/.exec(line);
+                    if (listener && Number(listener[1]) === debugPort) {
+                        host.debuggerReady = true;
+                    }
+                }
+            }
+        }
     }
 
     private async waitForHttp(host: OwnedHost, port: number): Promise<void> {
