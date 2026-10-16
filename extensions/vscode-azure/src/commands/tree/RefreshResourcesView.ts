@@ -20,6 +20,9 @@ import type { ManagedCommand } from '../ManagedCommand';
  */
 @injectable()
 export class RefreshResourcesView implements ManagedCommand {
+    /** Marks tree items that support the shared refresh action. */
+    public static readonly ContextValue = 'refreshResource';
+
     public constructor(
         @inject(IAzureViewDataTree) private readonly cache: IAzureViewDataTree,
         @inject(IAzureListingCache) private readonly listings: AzureListingCache,

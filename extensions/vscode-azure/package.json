@@ -131,6 +131,22 @@
                 "title": "%commands.vscode-azure/functions/deploy%"
             },
             {
+                "command": "vscode-azure/webApp/start",
+                "title": "%commands.vscode-azure/webApp/start%"
+            },
+            {
+                "command": "vscode-azure/webApp/stop",
+                "title": "%commands.vscode-azure/webApp/stop%"
+            },
+            {
+                "command": "vscode-azure/webApp/restart",
+                "title": "%commands.vscode-azure/webApp/restart%"
+            },
+            {
+                "command": "vscode-azure/resources/reveal",
+                "title": "%commands.vscode-azure/resources/reveal%"
+            },
+            {
                 "command": "vscode-azure/containerApps/openConsoleInPortal",
                 "icon": "$(terminal)",
                 "title": "%commands.vscode-azure/containerApps/openConsoleInPortal%"
@@ -235,6 +251,10 @@
         ],
         "menus": {
             "commandPalette": [
+                {
+                    "command": "vscode-azure/resources/reveal",
+                    "when": "false"
+                },
                 {
                     "command": "vscode-azure/containerApps/verifyStart",
                     "when": "false"
@@ -347,6 +367,21 @@
             ],
             "view/item/context": [
                 {
+                    "command": "vscode-azure/webApp/start",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\bstartWebApp\\b/i",
+                    "group": "3_actions@1"
+                },
+                {
+                    "command": "vscode-azure/webApp/stop",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\bstopWebApp\\b/i",
+                    "group": "3_actions@1"
+                },
+                {
+                    "command": "vscode-azure/webApp/restart",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\brestartWebApp\\b/i",
+                    "group": "3_actions@2"
+                },
+                {
                     "command": "vscode-azure/acr/disableAdminUser",
                     "when": "view == vscode-azure/resources && viewItem =~ /\\bdisableAcrAdminUser\\b/i",
                     "group": "3_actions@1"
@@ -428,13 +463,18 @@
                 },
                 {
                     "command": "vscode-azure/resources/refresh",
-                    "when": "view == vscode-azure/resources && viewItem =~ /\\b(?:azureStaticEnvironment|azureStaticFunctions)\\b/i",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\b(?:azureStaticEnvironment|azureStaticFunctions|refreshResource)\\b/i",
                     "group": "3_actions@3"
                 },
                 {
                     "command": "vscode-azure/workspace/revealInExplorer",
                     "when": "view == vscode-azure/workspace && viewItem =~ /\\brevealInExplorer\\b/i",
                     "group": "navigation"
+                },
+                {
+                    "command": "vscode-azure/workspace/refresh",
+                    "when": "view == vscode-azure/workspace && viewItem =~ /\\brefreshWorkspace\\b/i",
+                    "group": "3_actions@3"
                 }
             ],
             "explorer/context": [

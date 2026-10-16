@@ -3,14 +3,14 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureNodeId, ContainerAppResourceType } from '@microsoft/vscode-azure-azutils';
+import { ContainerAppResourceType } from '@microsoft/vscode-azure-azutils';
 import { IVsCode, stringifyError, withDelayedProgress } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import { IAzureResourceTreeView } from '../../services';
 import type { ContainerApp } from '../../tree/resources/containerApps/ContainerApp';
 import { isContainerApp } from '../../tree/resources/containerApps/ContainerApp';
 import { IResourceSelector } from '../../tree/resources/ResourceSelector';
 import type { ManagedCommand } from '../ManagedCommand';
+import { RevealResource } from '../tree/RevealResource';
 
 /**
  * Reveals the managed environment that hosts a container app.
@@ -31,12 +31,12 @@ export class RevealContainerAppEnvironment implements ManagedCommand {
     public constructor(
         @inject(IVsCode) private readonly code: IVsCode,
         @inject(IResourceSelector) private readonly selector: IResourceSelector,
-        @inject(IAzureResourceTreeView) private readonly treeView: IAzureResourceTreeView,
+        @inject(RevealResource) private readonly revealResource: RevealResource,
     ) { }
 
     /** @inheritdoc */
     public async execute(key?: string): Promise<void> {
-        const resource = await this.selector.selectResource({ logicalType: ContainerAppResourceType, key });
+        const resource = await this.selector.selectResource({ logicalTypes: [ContainerAppResourceType], key });
         if (!isContainerApp(resource)) {
             return;
         }
@@ -54,12 +54,8 @@ export class RevealContainerAppEnvironment implements ManagedCommand {
             throw new Error(this.code.l10n.t('Could not determine the environment hosting \'{0}\'.', app.name));
         }
 
-        // The environment is a separate ARM resource that the tree may not have
-        // loaded, so its node id is derived from the app's rather than looked up.
-        const environmentKey = AzureNodeId.from(app).forRelatedResource(app.environmentId).toString();
-
         try {
-            await this.treeView.reveal(environmentKey, { select: true, focus: true });
+            await this.revealResource.execute(app, app.environmentId);
         } catch (error) {
             throw new Error(this.code.l10n.t(
                 'Could not reveal the environment hosting \'{0}\'. It may be in a subscription that is not shown in the Resources view. {1}',

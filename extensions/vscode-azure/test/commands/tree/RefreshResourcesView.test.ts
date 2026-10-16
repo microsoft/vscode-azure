@@ -3,12 +3,13 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureListingCache } from '@microsoft/vscode-azure-azutils';
-import { createMockAzureListingFetcher, makeAccount, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
+import { AzureListingCache, AzureNodeId } from '@microsoft/vscode-azure-azutils';
+import { createMockAzureListingFetcher, makeAccount, makeGenericResource, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
 import { collectAsync, Everything } from '@microsoft/vscode-azure-utils';
 import { createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import { RefreshResourcesView } from '../../../src/commands/tree/RefreshResourcesView';
+import type { ManagedCommand } from '../../../src/commands/ManagedCommand';
 import type { IAzureViewDataTree } from '../../../src/services';
 
 describe('RefreshResourcesView (unit)', () => {
@@ -46,4 +47,18 @@ describe('RefreshResourcesView (unit)', () => {
         expect(fetcher.fetchTenants.mock.callCount()).to.equal(2);
         expect(fetcher.fetchSubscriptions.mock.callCount()).to.equal(2);
     });
+
+    it('should discard resource and listing caches when a title action supplies a focused item', async () => {
+        const invalidate = mock.fn();
+        const tree: IAzureViewDataTree = { invalidate } as never;
+        const { executor } = createTestActionExecutor();
+        const listings = new AzureListingCache(createMockAzureListingFetcher(), executor);
+        const clear = mock.method(listings, 'clear');
+        const command: ManagedCommand<void> = new RefreshResourcesView(tree, listings);
+        await command.execute(AzureNodeId.from(makeGenericResource()).toString());
+        expect(invalidate.mock.calls[0].arguments[0]).to.equal(Everything);
+        expect(clear.mock.callCount()).to.equal(1);
+    });
+
+    afterEach(() => { mock.restoreAll(); });
 });

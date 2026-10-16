@@ -111,7 +111,7 @@ Each step defines a context interface (e.g. `ChooseSubscriptionContext`) that th
 
 Convenience wrappers (`subscriptionExperience`, `resourceGroupExperience`) run a single-step wizard and return the picked object directly, for use outside of larger wizard flows.
 
-For picking an arbitrary node out of the resource tree, `nodeExperience` runs a `RecursivePickStep` directly against a caller-supplied classifier and type guard, then resolves the picked key back to its data-layer node. `resourceExperience` builds on it with a classifier that treats accounts, tenants, subscriptions, resource groups, and virtual groups as navigable and ARM resources as selectable, optionally filtered to a single `logicalType`.
+For picking an arbitrary node out of the resource tree, `nodeExperience` runs a `RecursivePickStep` directly against a caller-supplied classifier and type guard, then resolves the picked key back to its data-layer node. `resourceExperience` builds on it with a classifier that treats accounts, tenants, subscriptions, resource groups, and virtual groups as navigable and ARM resources as selectable, optionally filtered by a `logicalTypes` array compared case-insensitively. Omitting the array accepts all resource types; an empty array accepts none. A single requested type skips its matching resource-type group, while multiple requested types keep those groups navigable.
 
 ## Resource Creation Wizards
 

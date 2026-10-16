@@ -35,10 +35,16 @@ export class WebAppDataProvider implements DataProvider<ConcreteAzureNode> {
         }
 
         this.executor.setTelProp('nodeType', getNodeType(resource));
-        const client = this.createClient(resource.subscription);
-        const site = await client.webApps.get(getResourceGroupName(resource.id), resource.name);
-        setWebsiteUrl(resource, site.defaultHostName);
-        return false;
+        try {
+            const client = this.createClient(resource.subscription);
+            const site = await client.webApps.get(getResourceGroupName(resource.id), resource.name);
+            resource.site = site;
+            setWebsiteUrl(resource, site.defaultHostName);
+            return false;
+        } catch (error: unknown) {
+            resource.site = undefined;
+            throw error;
+        }
     }
 
     /** @inheritdoc */

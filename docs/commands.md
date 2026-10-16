@@ -75,6 +75,27 @@ A product only needs its own delete command for targets the generic command
 cannot express -- for example a virtual child node that maps to a
 service-specific API rather than an ARM resource ID.
 
+### Revealing related resources
+
+`RevealResource.execute(reference, resourceId)` reveals an ARM resource in the
+Resources tree using the reference resource's cloud, account, and tenant.
+The target may be in another resource group or subscription. Tree failures
+propagate to the caller, which can supply a product-specific explanation.
+The `vscode-azure/resources/reveal` command accepts these same arguments and is
+hidden from the Command Palette because it requires a reference and target.
+
+### Shared site lifecycle
+
+`WebAppLifecycle` supplies start, stop, and restart actions for App Service,
+Function App, and Logic App sites. `WebAppDataProvider` enriches each site's
+resource object with management-plane `site` metadata; `WebAppViewProvider`
+uses its state to expose stop/restart for running sites and start for stopped
+sites. Unknown or transitional states expose neither. A successful action
+refreshes the site's metadata before invalidating only its subtree, so its
+lifecycle capabilities reflect the reported state. The commands are also available
+from the Command Palette: `ResourceSelector.selectResource` prompts for any of
+the three site logical types when no tree-item key is supplied.
+
 ### Viewing resource properties
 
 `ViewProperties` opens a node's live properties as a JSON document. It resolves
@@ -249,6 +270,11 @@ if (!node) {
 
 Each `messages` entry is a localized string. Omitted entries fall back to a generic localized message.
 
+`selectResource` accepts a `logicalTypes` array, compared case-insensitively on
+both direct-key and picker paths. Omit it to allow any ARM resource; an empty
+array accepts none. Callers narrow the returned `GenericResource` with their
+product type guard.
+
 Commands keep their own `execute` signature, so `prefixArgs` and non-`key` first arguments stay expressible -- `BrowseWebsite` resolves out of `...args: unknown[]`.
 
 Use `selectVirtual` for commands targeting a virtual resource. It resolves a supplied key directly, or prompts the user to navigate through collapsible resource-tree nodes when invoked from the command palette:
@@ -263,7 +289,7 @@ When a command should prompt rather than fail, `selectResource` resolves from th
 
 ```typescript
 public async execute(key?: string): Promise<void> {
-    const resource = await this.selector.selectResource({ logicalType: AcrResourceType, key });
+    const resource = await this.selector.selectResource({ logicalTypes: [AcrResourceType], key });
     if (!isAcrRegistry(resource)) {
         return;
     }

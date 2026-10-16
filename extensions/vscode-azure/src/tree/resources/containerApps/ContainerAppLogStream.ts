@@ -7,10 +7,11 @@ import {
     getResourceGroupName, IContainerAppsClientProvider, type GenericResource, type IContainerAppsClient,
 } from '@microsoft/vscode-azure-azutils';
 import {
-    CancellationError, CaselessMap, Disposable, EventEmitter, ExternalError, IActionExecutor, IVsCode, stringifyError,
+    CancellationError, CaselessMap, Disposable, ExternalError, IActionExecutor, IVsCode, stringifyError,
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
 import type * as vscode from 'vscode';
+import { LogStreamTerminal } from '../../../utils/logStream/LogStreamTerminal';
 
 /** Service identifier for {@linkcode ContainerAppLogStreamService}. */
 export const IContainerAppLogStreamService: ServiceIdentifier<IContainerAppLogStreamService> = Symbol.for('IContainerAppLogStreamService');
@@ -44,7 +45,7 @@ const MaxRedirects = 5;
 
 interface RunningStream {
     readonly terminal: vscode.Terminal;
-    readonly pty: LogStreamPseudoterminal;
+    readonly pty: LogStreamTerminal;
 }
 
 interface Stream {
@@ -172,7 +173,7 @@ export class ContainerAppLogStreamService implements Disposable {
         const label = target.kind === 'system'
             ? this.code.l10n.t('{0} (system, JSON)', target.app.name)
             : this.code.l10n.t('{0} ({1})', target.replicaName, target.containerName);
-        const pty = new LogStreamPseudoterminal(() => {
+        const pty = new LogStreamTerminal(() => {
             if (this.streams.get(id) === stream) {
                 this.stop(id, false);
             }
@@ -278,55 +279,6 @@ export class ContainerAppLogStreamService implements Disposable {
             // removed it and a later stream may have reused the id.
             if (this.streams.get(id) === stream) {
                 this.streams.delete(id);
-            }
-        }
-    }
-}
-
-/** Buffers output until VS Code opens the terminal; closure cancels its associated stream. */
-class LogStreamPseudoterminal implements vscode.Pseudoterminal {
-    private readonly writeEmitter = new EventEmitter<string>();
-    private readonly pending: string[] = [];
-    private opened = false;
-    private closed = false;
-    private lastWasCarriageReturn = false;
-
-    public readonly onDidWrite = this.writeEmitter.event;
-
-    public constructor(private readonly onClose: () => void) { }
-
-    public open(): void {
-        if (this.closed || this.opened) {
-            return;
-        }
-        this.opened = true;
-        for (const text of this.pending) {
-            this.writeEmitter.fire(text);
-        }
-        this.pending.length = 0;
-    }
-
-    public close(): void {
-        if (this.closed) {
-            return;
-        }
-
-        this.closed = true;
-        this.pending.length = 0;
-        this.onClose();
-        this.writeEmitter.dispose();
-    }
-
-    /** Writes stream text using the CRLF line endings expected by terminals. */
-    public write(value: string): void {
-        if (!this.closed && value) {
-            const text = value.replace(/\r?\n/g, (match: string, offset: number) =>
-                offset === 0 && match === '\n' && this.lastWasCarriageReturn ? '\n' : '\r\n');
-            this.lastWasCarriageReturn = value.endsWith('\r');
-            if (this.opened) {
-                this.writeEmitter.fire(text);
-            } else {
-                this.pending.push(text);
             }
         }
     }

@@ -112,6 +112,15 @@ Applies to: `deploy` when the default env has both `AZURE_SUBSCRIPTION_ID` and `
 
 This ensures that existing projects keep their established service names while fresh projects derive a sensible default from the user's chosen name.
 
+`IAzdService.deploy(cwd, service?)` and `AzdDeployStep.execute(context, service?)`
+accept an explicit service name for targeted node actions. The name is passed
+as one CLI argument to `azd deploy <service>`. Omitting it deploys every
+configured service; the creation wizard does not implicitly scope deployment
+to `azdServiceName`. `AzdShowResult.services` entries expose optional
+`target.resourceIds` for matching a deployed ARM resource to its service.
+Workspace consumers can locate indexed `azure.yaml` / `azure.yml` files through
+the exported `AzdProjectFileTag`.
+
 ### Temp directory lifecycle
 
 `createNew` uses `TempDirManager`, which allocates directories under `extensionContext.storageUri/tmp/d-{uuid}`. These are cleaned up when the manager is disposed (extension deactivation). The workspace is never modified.
