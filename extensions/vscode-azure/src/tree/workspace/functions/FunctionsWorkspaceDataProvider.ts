@@ -8,6 +8,7 @@ import {
     type DataProvider, type DataProviderChangeEvent,
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, unmanaged } from 'inversify';
+import type * as vscode from 'vscode';
 import { IWorkspaceIndexService } from '../../../utils/workspaceIndex/WorkspaceIndexService';
 import type { WorkspaceDetector } from '../../../utils/workspaceIndex/WorkspaceDetector';
 import { createTag, StandardTagNames } from '../../../utils/workspaceIndex/tags';
@@ -39,13 +40,16 @@ export const functionsDetector: WorkspaceDetector = {
     id: 'functions',
     namespace: functions,
     inspect(node) {
-        if (!node.isDirectory && node.name === FunctionsHostFileName) {
+        if (node.isDirectory) {
+            return;
+        }
+        if (node.name === FunctionsHostFileName) {
             node.tag(FunctionsHostFileTag);
-        } else if (!node.isDirectory && node.name === 'function.json') {
+        } else if (node.name === 'function.json') {
             node.tag(FunctionsMetadataFileTag);
-        } else if (!node.isDirectory && node.name === 'local.settings.json') {
+        } else if (node.name === 'local.settings.json') {
             node.tag(FunctionsSettingsFileTag);
-        } else if (!node.isDirectory && (node.name.endsWith('.csproj') || node.name === 'pom.xml')) {
+        } else if (node.name.endsWith('.csproj') || node.name === 'pom.xml') {
             node.tag(FunctionsBuildFileTag);
         }
     },
@@ -70,37 +74,43 @@ export class FunctionsWorkspaceDataProvider implements DataProvider<WorkspaceNod
         @unmanaged() private readonly outputScheduler: IDebounceScheduler = new DebounceScheduler(250),
     ) {
         this.disposables.push(outputScheduler);
-        this.disposables.push(hosts.onDidChange(folder => {
-            if (!this.projects.length) {
-                this.changeEmitter.fire({ target: Roots });
-                return;
-            }
-            for (const project of this.projects) {
-                if (dirname(project.resourceUri).toString() === folder.toString()) {
-                    this.changeEmitter.fire({ target: project });
-                }
-            }
-        }));
+        this.disposables.push(hosts.onDidChange(folder => { this.refreshHostProject(folder); }));
         // String-glob watching reuses VS Code's watcher; include output directories themselves for deletion events.
         const watcher = code.workspace.createFileSystemWatcher('**/{bin,target,bin/**,target/**}');
-        const changed = (uri: Parameters<typeof relativePath>[1]) => {
-            for (const project of this.projects) {
-                const relative = relativePath(dirname(project.resourceUri), uri);
-                if (relative && /^(?:bin|target)(?:\/|$)/.test(relative)) {
-                    this.pendingProjects.add(project.id);
-                }
-            }
-            if (this.pendingProjects.size) {
-                this.outputScheduler.debounce(() => {
-                    const changedProjects = this.projects.filter(project => this.pendingProjects.has(project.id));
-                    this.pendingProjects.clear();
-                    for (const project of changedProjects) {
-                        this.changeEmitter.fire({ target: project });
-                    }
-                });
-            }
-        };
+        const changed = (uri: vscode.Uri) => { this.queueOutputRefresh(uri); };
         this.disposables.push(watcher, watcher.onDidCreate(changed), watcher.onDidChange(changed), watcher.onDidDelete(changed));
+    }
+
+    private refreshHostProject(folder: vscode.Uri): void {
+        if (!this.projects.length) {
+            this.changeEmitter.fire({ target: Roots });
+            return;
+        }
+        for (const project of this.projects) {
+            if (dirname(project.resourceUri).toString() === folder.toString()) {
+                this.changeEmitter.fire({ target: project });
+            }
+        }
+    }
+
+    private queueOutputRefresh(uri: vscode.Uri): void {
+        for (const project of this.projects) {
+            const relative = relativePath(dirname(project.resourceUri), uri);
+            if (relative && /^(?:bin|target)(?:\/|$)/.test(relative)) {
+                this.pendingProjects.add(project.id);
+            }
+        }
+        if (this.pendingProjects.size) {
+            this.outputScheduler.debounce(() => { this.flushOutputRefreshes(); });
+        }
+    }
+
+    private flushOutputRefreshes(): void {
+        const changedProjects = this.projects.filter(project => this.pendingProjects.has(project.id));
+        this.pendingProjects.clear();
+        for (const project of changedProjects) {
+            this.changeEmitter.fire({ target: project });
+        }
     }
 
     /** @inheritdoc */
@@ -122,10 +132,12 @@ export class FunctionsWorkspaceDataProvider implements DataProvider<WorkspaceNod
             dirname(dirname(uri)).toString() === folder.toString()
             && !index.has(this.code.Uri.joinPath(dirname(uri), FunctionsHostFileName), FunctionsHostFileTag));
         const buildFiles = index.withTag(FunctionsBuildFileTag).filter(uri => dirname(uri).toString() === folder.toString());
-        const compiled = buildFiles.some(uri => basename(uri) === 'pom.xml')
-            ? 'java'
-            : buildFiles.some(uri => basename(uri).endsWith('.csproj'))
-                ? 'dotnet' : undefined;
+        let compiled: 'java' | 'dotnet' | undefined;
+        if (buildFiles.some(uri => basename(uri) === 'pom.xml')) {
+            compiled = 'java';
+        } else if (buildFiles.some(uri => basename(uri).endsWith('.csproj'))) {
+            compiled = 'dotnet';
+        }
         return this.reader.functions(resource, files, compiled);
     }
 

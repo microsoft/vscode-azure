@@ -7,7 +7,7 @@ import { IFunctionsHostClientProvider } from '@microsoft/vscode-azure-azutils';
 import { basename, dirname, ExternalError, IActionExecutor, IVsCode, isFileNotFoundError, readText, stringifyError, type ICaselessMapReader } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
-import { isFunctionTriggerBinding } from '../tree/resources/webApp/FunctionApp';
+import { hasFunctionBindings, isFunctionTriggerBinding } from '../tree/resources/webApp/FunctionApp';
 import { FunctionsProjectKeyPrefix, type FunctionsProjectNode, type LocalFunctionsNode, type LocalFunctionNode } from '../tree/workspace/WorkspaceNode';
 import { LocalFunctionSettings } from './LocalFunctionSettings';
 import { LocalFunctionsHostTracker } from './host/LocalFunctionsHostTracker';
@@ -118,11 +118,10 @@ export class FunctionsProjectReader {
     }
 
     private functionNode(project: FunctionsProjectNode, fn: FunctionMetadata, values: ICaselessMapReader<string>): LocalFunctionNode {
-        if (!fn.config || typeof fn.config !== 'object' || !('bindings' in fn.config) || !Array.isArray(fn.config.bindings)) {
+        if (!hasFunctionBindings(fn.config)) {
             throw new ExternalError(this.code.l10n.t('Function metadata must include a bindings array.'));
         }
-        const bindings: unknown[] = fn.config.bindings;
-        const triggers = bindings.filter(isFunctionTriggerBinding);
+        const triggers = fn.config.bindings.filter(isFunctionTriggerBinding);
         const trigger = triggers.at(0);
         if (triggers.length !== 1 || !trigger) {
             throw new ExternalError(this.code.l10n.t('Function metadata must include exactly one trigger binding.'));

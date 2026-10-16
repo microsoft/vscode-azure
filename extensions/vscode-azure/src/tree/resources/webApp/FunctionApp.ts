@@ -62,6 +62,12 @@ export interface FunctionTriggerBinding {
     readonly authLevel?: unknown;
 }
 
+/** Recognizes the bindings container without trusting its individual entries or optional properties. */
+export function hasFunctionBindings(config: unknown): config is { readonly bindings: readonly unknown[] } {
+    return !!config && typeof config === 'object'
+        && 'bindings' in config && Array.isArray(config.bindings);
+}
+
 /** Recognizes trigger bindings in untrusted management-plane function configuration. */
 export function isFunctionTriggerBinding(binding: unknown): binding is FunctionTriggerBinding {
     return !!binding && typeof binding === 'object'

@@ -164,6 +164,9 @@ comments, existing entries, and unrelated properties are preserved; malformed,
 duplicate-property, and dirty files are rejected. Initialization refreshes the
 selected project without evicting unrelated projects. Custom handlers receive
 recommendations and an explanation of the supported debugging runtimes.
+Runtime selection, recommendation editing, and the optional launch offer are
+separate stages. Recommendation IDs are matched case-insensitively while
+preserving the existing file's spelling.
 
 The debugger schema and snippets expose `projectPath`, `hostArgs`, `env`,
 `hostPort`, `debugPort`, and `skipBuild`; standard `preLaunchTask` and

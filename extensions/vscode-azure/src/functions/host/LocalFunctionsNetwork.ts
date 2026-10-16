@@ -19,7 +19,10 @@ export class LocalFunctionsNetwork {
         const server = createServer();
         await new Promise<void>((resolve, reject) => {
             server.once('error', reject);
-            server.listen(port, '127.0.0.1', () => { server.removeListener('error', reject); resolve(); });
+            server.listen(port, '127.0.0.1', () => {
+                server.removeListener('error', reject);
+                resolve();
+            });
         });
         const address = server.address();
         if (!address || typeof address === 'string') {
@@ -30,7 +33,13 @@ export class LocalFunctionsNetwork {
         return {
             port: address.port,
             release: () => released ??= new Promise<void>((resolve, reject) => {
-                server.close(error => { if (error) { reject(error); } else { resolve(); } });
+                server.close(error => {
+                    if (error) {
+                        reject(error);
+                    } else {
+                        resolve();
+                    }
+                });
             }),
         };
     }
@@ -39,7 +48,10 @@ export class LocalFunctionsNetwork {
     public listening(port: number): Promise<boolean> {
         return new Promise<boolean>((resolve, reject) => {
             const socket = createConnection({ port, host: '127.0.0.1' });
-            const finish = (ready: boolean) => { socket.destroy(); resolve(ready); };
+            const finish = (ready: boolean) => {
+                socket.destroy();
+                resolve(ready);
+            };
             socket.once('connect', () => { finish(true); });
             socket.setTimeout(300, () => { finish(false); });
             socket.once('error', (error: NodeJS.ErrnoException) => {

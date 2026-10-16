@@ -32,7 +32,7 @@
     "debug.functions.env": "Additional local environment variables. Worker debugger and ownership settings are managed by the extension.",
     "debug.functions.hostPort": "Owned HTTP host loopback port. Omit to reserve an available port.",
     "debug.functions.debugPort": "Worker debugger loopback port. Omit to reserve an available port.",
-    "debug.functions.skipBuild": "Skip the built-in build. A preLaunchTask also replaces the built-in build.",
+    "debug.functions.skipBuild": "Skip compilation. Core Tools may still restore dependencies. A preLaunchTask also replaces compilation.",
     "commands.vscode-azure/webApp/start": "Start",
     "commands.vscode-azure/webApp/stop": "Stop",
     "commands.vscode-azure/webApp/restart": "Restart",

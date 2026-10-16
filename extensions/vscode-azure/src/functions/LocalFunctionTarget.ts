@@ -39,8 +39,9 @@ export class LocalFunctionTarget {
 
     /** Resolves the actual registered port, never a guessed default or a cached host URL. */
     public host(fn: LocalFunctionNode): { readonly client: IFunctionsHostClient; readonly port: number } {
-        this.projects.assertLocal(dirname(fn.project.resourceUri));
-        const host = this.hosts.get(dirname(fn.project.resourceUri));
+        const project = dirname(fn.project.resourceUri);
+        this.projects.assertLocal(project);
+        const host = this.hosts.get(project);
         if (!host) {
             throw new ExternalError(this.code.l10n.t('Start debugging this Functions project before executing a function or copying its URL.'));
         }
@@ -49,8 +50,9 @@ export class LocalFunctionTarget {
 
     /** Edits only the local disable flag and refreshes the owning project after a successful write. */
     public async setDisabled(fn: LocalFunctionNode, disabled: boolean): Promise<void> {
-        this.projects.assertLocal(dirname(fn.project.resourceUri));
-        await this.settings.setDisabled(dirname(fn.project.resourceUri), fn.functionName, disabled);
+        const project = dirname(fn.project.resourceUri);
+        this.projects.assertLocal(project);
+        await this.settings.setDisabled(project, fn.functionName, disabled);
         this.tree.invalidate(fn.project);
         void this.code.window.showInformationMessage(this.code.l10n.t('Function settings updated. Restart the local host to apply the change.'));
     }

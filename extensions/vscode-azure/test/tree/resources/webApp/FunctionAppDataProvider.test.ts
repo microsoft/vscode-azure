@@ -104,7 +104,11 @@ describe('FunctionAppDataProvider (unit)', () => {
         mock.method(client.webApps, 'listFunctions', () => pagesOf(
             [makeFunctionEnvelope({ name: '' }), makeFunctionEnvelope({ name: 'MyFuncApp/Valid' })],
             [makeFunctionEnvelope({ name: 'MyFuncApp/MissingBindings', config: {} }), makeFunctionEnvelope({ name: '' })],
-            [makeFunctionEnvelope({ name: 'MyFuncApp/NoTrigger', config: { bindings: [{ type: 'http', direction: 'out' }] } })],
+            [
+                makeFunctionEnvelope({ name: 'MyFuncApp/NoTrigger', config: { bindings: [{ type: 'http', direction: 'out' }] } }),
+                makeFunctionEnvelope({ name: 'MyFuncApp/MalformedBindings', config: { bindings: 'not-an-array' } }),
+                makeFunctionEnvelope({ name: 'MyFuncApp/MissingConfig', config: undefined }),
+            ],
         ));
         const app = makeSettingsResource();
         const pages = await collectPages(await provider.getChildren(makeFunctionAppFunctions(app)));
@@ -112,11 +116,11 @@ describe('FunctionAppDataProvider (unit)', () => {
         const nodes = pages.flatMap(page => page.items);
         expect(nodes.filter(isFunctionAppFunction).map(fn => fn.functionName)).to.deep.equal(['Valid']);
         const invalid = nodes.filter((node): node is FunctionAppInvalidNode => 'virtualType' in node && node.virtualType === FunctionAppVirtualTypes.Invalid);
-        expect(invalid).to.have.lengthOf(4);
-        expect(new Set(invalid.map(node => AzureNodeId.from(node).toString())).size).to.equal(4);
+        expect(invalid).to.have.lengthOf(6);
+        expect(new Set(invalid.map(node => AzureNodeId.from(node).toString())).size).to.equal(6);
         expect(invalid.every(node => !!node.error)).to.be.true;
         expect(invalid[1]?.sourceLabel).to.equal('MissingBindings');
-        expect(log.mock.callCount()).to.equal(4);
+        expect(log.mock.callCount()).to.equal(6);
     });
 
     it('represents a listing failure as an error child rather than a successful empty list', async () => {

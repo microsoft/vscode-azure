@@ -31,10 +31,17 @@ export class RevealFunctionAppIdentity implements ManagedCommand {
         if (!ids.length) {
             throw new ExternalError(this.ctx.code.l10n.t('The Function App does not have a user-assigned identity.'));
         }
-        const id = ids.length === 1 ? ids[0] : (await showSmartQuickPick(this.ctx, ids.map(data => {
-            const parsed = parseAzureResourceId(data);
-            return { label: parsed.resourceName ?? data, description: parsed.resourceGroup, data };
-        }), { title: this.ctx.code.l10n.t('Select an identity') })).data;
+        let id = ids[0];
+        if (ids.length > 1) {
+            const items = ids.map(data => {
+                const parsed = parseAzureResourceId(data);
+                return { label: parsed.resourceName ?? data, description: parsed.resourceGroup, data };
+            });
+            const selected = await showSmartQuickPick(this.ctx, items, {
+                title: this.ctx.code.l10n.t('Select an identity'),
+            });
+            id = selected.data;
+        }
         try {
             await this.reveal.execute(app, id);
         } catch (error: unknown) {

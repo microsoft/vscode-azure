@@ -3,12 +3,12 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IWebAppClientProvider, parseAzureResourceId, SiteType } from '@microsoft/vscode-azure-azutils';
+import { IWebAppClientProvider, parseAzureResourceId, SiteType, type AzureSubscription, type FunctionEnvelope } from '@microsoft/vscode-azure-azutils';
 import { CancellationError, ExecuteStep, ExternalError, ICodeContext, IOutputChannel, showMessage, showSmartQuickPick, stringifyError } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzdService } from '../../../azd/AzdService';
 import { ISubscriptionResolver } from '../../../services';
-import { isFunctionTriggerBinding } from '../../../tree/resources/webApp/FunctionApp';
+import { hasFunctionBindings, isFunctionTriggerBinding } from '../../../tree/resources/webApp/FunctionApp';
 import { OpenUrl } from '../../OpenUrl';
 import type { CreateFunctionAppContext } from '../CreateFunctionAppContext';
 
@@ -45,42 +45,23 @@ export class ShowFunctionEndpointsStep extends ExecuteStep<CreateFunctionAppCont
         try {
             const show = await this.azd.show(context.iacFolder);
             const services = context.azdServiceName ? [show?.services?.[context.azdServiceName]] : Object.values(show?.services ?? {});
-            for (const service of services) {
-                for (const id of service?.target?.resourceIds ?? []) {
-                    operation = this.ctx.code.l10n.t('deployment discovery');
-                    const parsed = parseAzureResourceId(id);
-                    const type = `${parsed.provider}/${parsed.resourceType}`;
-                    if (type.toLowerCase() !== SiteType.toLowerCase() || !parsed.resourceGroup || !parsed.resourceName) {
-                        continue;
-                    }
-                    operation = this.ctx.code.l10n.t('subscription resolution');
-                    const subscription = context.subscription?.subscriptionId.toLowerCase() === parsed.subscriptionId.toLowerCase()
-                        ? context.subscription : await this.subscription(parsed.subscriptionId);
-                    if (!subscription) {
-                        throw new FunctionEndpointError(this.ctx.code.l10n.t('Sign in to the deployed Function App subscription to list its HTTP URLs.'));
-                    }
-                    operation = this.ctx.code.l10n.t('function listing');
-                    const client = this.createClient(subscription);
-                    for await (const page of client.webApps.listFunctions(parsed.resourceGroup, parsed.resourceName)) {
-                        for (const fn of page.items) {
-                            const config: unknown = fn.config;
-                            const bindings: unknown[] = config && typeof config === 'object' && 'bindings' in config && Array.isArray(config.bindings)
-                                ? config.bindings : [];
-                            if (!bindings.some(binding => isFunctionTriggerBinding(binding) && binding.type.toLowerCase() === 'httptrigger')) {
-                                continue;
-                            }
-                            if (!fn.invokeUrlTemplate || !URL.canParse(fn.invokeUrlTemplate)) {
-                                throw new FunctionEndpointError(this.ctx.code.l10n.t('Azure did not report a valid HTTP invocation template.'));
-                            }
-                            const url = new URL(fn.invokeUrlTemplate);
-                            if (url.protocol !== 'https:' || url.username || url.password) {
-                                throw new FunctionEndpointError(this.ctx.code.l10n.t('A remote function invocation template must use HTTPS without embedded credentials.'));
-                            }
-                            url.search = '';
-                            url.hash = '';
-                            endpoints.push({ label: fn.name?.split('/').at(-1) ?? parsed.resourceName, description: url.toString() });
-                        }
-                    }
+            const resourceIds = services.flatMap(service => service?.target?.resourceIds ?? []);
+            for (const id of resourceIds) {
+                operation = this.ctx.code.l10n.t('deployment discovery');
+                const parsed = parseAzureResourceId(id);
+                const type = `${parsed.provider}/${parsed.resourceType}`;
+                if (type.toLowerCase() !== SiteType.toLowerCase() || !parsed.resourceGroup || !parsed.resourceName) {
+                    continue;
+                }
+                operation = this.ctx.code.l10n.t('subscription resolution');
+                const subscription = context.subscription?.subscriptionId.toLowerCase() === parsed.subscriptionId.toLowerCase()
+                    ? context.subscription : await this.subscription(parsed.subscriptionId);
+                if (!subscription) {
+                    throw new FunctionEndpointError(this.ctx.code.l10n.t('Sign in to the deployed Function App subscription to list its HTTP URLs.'));
+                }
+                operation = this.ctx.code.l10n.t('function listing');
+                for await (const endpoint of this.listEndpoints(subscription, parsed.resourceGroup, parsed.resourceName)) {
+                    endpoints.push(endpoint);
                 }
             }
         } catch (error) {
@@ -101,6 +82,36 @@ export class ShowFunctionEndpointsStep extends ExecuteStep<CreateFunctionAppCont
                 void showMessage(this.ctx.code, this.ctx.code.l10n.t('Could not open the deployed function endpoint.'), { severity: 'warning' });
             }
         });
+    }
+
+    private async *listEndpoints(subscription: AzureSubscription, resourceGroup: string, appName: string): AsyncIterable<FunctionEndpoint> {
+        const client = this.createClient(subscription);
+        for await (const page of client.webApps.listFunctions(resourceGroup, appName)) {
+            for (const fn of page.items) {
+                const endpoint = this.httpEndpoint(fn, appName);
+                if (endpoint) {
+                    yield endpoint;
+                }
+            }
+        }
+    }
+
+    private httpEndpoint(fn: FunctionEnvelope, appName: string): FunctionEndpoint | undefined {
+        const config: unknown = fn.config;
+        const bindings = hasFunctionBindings(config) ? config.bindings : [];
+        if (!bindings.some(binding => isFunctionTriggerBinding(binding) && binding.type.toLowerCase() === 'httptrigger')) {
+            return undefined;
+        }
+        if (!fn.invokeUrlTemplate || !URL.canParse(fn.invokeUrlTemplate)) {
+            throw new FunctionEndpointError(this.ctx.code.l10n.t('Azure did not report a valid HTTP invocation template.'));
+        }
+        const url = new URL(fn.invokeUrlTemplate);
+        if (url.protocol !== 'https:' || url.username || url.password) {
+            throw new FunctionEndpointError(this.ctx.code.l10n.t('A remote function invocation template must use HTTPS without embedded credentials.'));
+        }
+        url.search = '';
+        url.hash = '';
+        return { label: fn.name?.split('/').at(-1) ?? appName, description: url.toString() };
     }
 
     private async offer(endpoints: readonly FunctionEndpoint[]): Promise<void> {

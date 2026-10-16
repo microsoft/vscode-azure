@@ -7,7 +7,7 @@ import { getResourceGroupName, IWebAppClientProvider } from '@microsoft/vscode-a
 import { ExternalError, IVsCode, showMessage } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IResourceSelector } from '../../tree/resources/ResourceSelector';
-import { isFunctionAppFunction, isFunctionTriggerBinding, type FunctionTriggerBinding } from '../../tree/resources/webApp/FunctionApp';
+import { hasFunctionBindings, isFunctionAppFunction, isFunctionTriggerBinding, type FunctionTriggerBinding } from '../../tree/resources/webApp/FunctionApp';
 import type { ManagedCommand } from '../ManagedCommand';
 import { LocalFunctionTarget } from '../../functions/LocalFunctionTarget';
 import type { LocalFunctionNode } from '../../tree/workspace/WorkspaceNode';
@@ -103,8 +103,7 @@ export class CopyFunctionUrl implements ManagedCommand {
     }
 
     private httpTrigger(config: unknown): FunctionTriggerBinding {
-        const bindings: unknown[] = config && typeof config === 'object' && 'bindings' in config && Array.isArray(config.bindings)
-            ? config.bindings : [];
+        const bindings = hasFunctionBindings(config) ? config.bindings : [];
         const triggers = bindings.filter(isFunctionTriggerBinding);
         if (triggers.length !== 1 || triggers[0].type.toLowerCase() !== 'httptrigger') {
             throw new ExternalError(this.code.l10n.t('The latest function metadata does not report an HTTP trigger.'));

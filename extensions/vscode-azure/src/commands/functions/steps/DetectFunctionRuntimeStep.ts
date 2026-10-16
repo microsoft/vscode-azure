@@ -26,9 +26,10 @@ export class DetectFunctionRuntimeStep extends PromptStep<CreateFunctionAppConte
 
     public async prompt(context: Readonly<CreateFunctionAppContext>): Promise<Partial<CreateFunctionAppContext>> {
         const path = context.hydratedServiceProjectPath;
-        const uri = path && context.iacFolder
-            ? isAbsolute(path) ? this.ctx.code.Uri.file(path) : this.ctx.code.Uri.joinPath(context.iacFolder, path)
-            : context.iacFolder;
+        let uri = context.iacFolder;
+        if (path && uri) {
+            uri = isAbsolute(path) ? this.ctx.code.Uri.file(path) : this.ctx.code.Uri.joinPath(uri, path);
+        }
         if (!uri) {
             return {};
         }

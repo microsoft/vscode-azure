@@ -72,12 +72,16 @@ export class CreateFunctionApp implements ManagedCommand {
             executeSteps.push(get(ShowFunctionEndpointsStep));
         }
 
+        let iacFolder: vscode.Uri | undefined;
+        if (target) {
+            const stat = await this.code.workspace.fs.stat(target);
+            iacFolder = stat.type === this.code.FileType.Directory ? target : dirname(target);
+        }
         const wizard = new Wizard<CreateFunctionAppContext>(
             this.output,
             {
                 job,
-                iacFolder: target ? (await this.code.workspace.fs.stat(target)).type === this.code.FileType.Directory
-                    ? target : dirname(target) : undefined,
+                iacFolder,
                 resourceDisplayName: this.code.l10n.t('Function App'),
                 provision: true, // Provisioning is assumed unless an environment exists, in which case the user will be prompted to confirm
                 deploy: job === 'deploy', // Only deploy if the deploy job is selected

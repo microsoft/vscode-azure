@@ -28,30 +28,7 @@ export class FunctionsProjectSelector {
     }
 
     public async select(folder?: vscode.WorkspaceFolder, target?: string | vscode.Uri): Promise<vscode.Uri> {
-        let project: vscode.Uri;
-        if (typeof target === 'string' && target.startsWith(FunctionsProjectKeyPrefix)) {
-            const node = this.tree.get(target);
-            if (!isFunctionsProjectNode(node)) {
-                throw new ExternalError(this.ctx.code.l10n.t('The Functions project is not available. Refresh the workspace view.'));
-            }
-            project = dirname(node.resourceUri);
-        } else if (target) {
-            project = typeof target === 'string'
-                ? isAbsolute(target) ? this.ctx.code.Uri.file(target)
-                    : folder ? this.ctx.code.Uri.joinPath(folder.uri, ...target.split(/[\\/]/)) : this.ctx.code.Uri.file(target)
-                : target;
-        } else {
-            const projects = (await this.index.getIndex()).withTag(FunctionsHostFileTag)
-                .map(dirname).filter(uri => !folder || this.ctx.code.workspace.getWorkspaceFolder(uri)?.uri.toString() === folder.uri.toString());
-            if (!projects.length) {
-                throw new ExternalError(this.ctx.code.l10n.t('No Functions project was found. Open a workspace containing host.json.'));
-            }
-            const remembered = this.ctx.extensionContext.workspaceState.get<string>('functions.lastDebugProject');
-            project = projects.length === 1 ? projects[0] : (await showSmartQuickPick(this.ctx,
-                projects.map(data => ({ label: data.fsPath, data })),
-                { title: this.ctx.code.l10n.t('Select a Functions project'), isActiveItem: item => item.data.toString() === remembered },
-            )).data;
-        }
+        let project = this.resolveTarget(folder, target) ?? await this.pickProject(folder);
         this.assertLocal(project);
         const host = this.ctx.code.Uri.joinPath(project, 'host.json');
         try {
@@ -68,5 +45,42 @@ export class FunctionsProjectSelector {
         }
         await this.ctx.extensionContext.workspaceState.update('functions.lastDebugProject', project.toString());
         return project;
+    }
+
+    private resolveTarget(folder?: vscode.WorkspaceFolder, target?: string | vscode.Uri): vscode.Uri | undefined {
+        if (!target) {
+            return undefined;
+        }
+        if (typeof target !== 'string') {
+            return target;
+        }
+        if (target.startsWith(FunctionsProjectKeyPrefix)) {
+            const node = this.tree.get(target);
+            if (!isFunctionsProjectNode(node)) {
+                throw new ExternalError(this.ctx.code.l10n.t('The Functions project is not available. Refresh the workspace view.'));
+            }
+            return dirname(node.resourceUri);
+        }
+        if (!isAbsolute(target) && folder) {
+            return this.ctx.code.Uri.joinPath(folder.uri, ...target.split(/[\\/]/));
+        }
+        return this.ctx.code.Uri.file(target);
+    }
+
+    private async pickProject(folder?: vscode.WorkspaceFolder): Promise<vscode.Uri> {
+        const projects = (await this.index.getIndex()).withTag(FunctionsHostFileTag)
+            .map(dirname).filter(uri => !folder || this.ctx.code.workspace.getWorkspaceFolder(uri)?.uri.toString() === folder.uri.toString());
+        if (!projects.length) {
+            throw new ExternalError(this.ctx.code.l10n.t('No Functions project was found. Open a workspace containing host.json.'));
+        }
+        if (projects.length === 1) {
+            return projects[0];
+        }
+        const remembered = this.ctx.extensionContext.workspaceState.get<string>('functions.lastDebugProject');
+        const selected = await showSmartQuickPick(this.ctx, projects.map(data => ({ label: data.fsPath, data })), {
+            title: this.ctx.code.l10n.t('Select a Functions project'),
+            isActiveItem: item => item.data.toString() === remembered,
+        });
+        return selected.data;
     }
 }

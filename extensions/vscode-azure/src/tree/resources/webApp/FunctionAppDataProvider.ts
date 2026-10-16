@@ -11,6 +11,7 @@ import { getSettingsNodes } from '../settings/SettingsNode';
 import { setWebsiteUrl } from '../websiteUrl';
 import {
     FunctionAppVirtualTypes,
+    hasFunctionBindings,
     isFunctionApp,
     isFunctionAppVirtualNode,
     isFunctionTriggerBinding,
@@ -110,11 +111,10 @@ export class FunctionAppDataProvider implements DataProvider<ConcreteAzureNode> 
                 throw new Error(this.code.l10n.t('The function metadata does not include a name.'));
             }
             const config: unknown = data.config;
-            if (!config || typeof config !== 'object' || !('bindings' in config) || !Array.isArray(config.bindings)) {
+            if (!hasFunctionBindings(config)) {
                 throw new Error(this.code.l10n.t('The function metadata does not include a bindings array.'));
             }
-            const bindings: unknown[] = config.bindings;
-            const triggers = bindings.filter(isFunctionTriggerBinding);
+            const triggers = config.bindings.filter(isFunctionTriggerBinding);
             if (triggers.length !== 1 || !triggers[0]) {
                 throw new Error(this.code.l10n.t('The function metadata must include exactly one trigger binding.'));
             }

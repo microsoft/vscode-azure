@@ -88,13 +88,15 @@ describe('Initialize Functions project (integration)', () => {
         expect(await readText(s.code, extensions)).to.equal('{}');
     });
 
-    it('initializes custom-handler recommendations and explains which runtimes support local debugging', async () => {
-        const s = setup('custom');
-        await s.command.execute(s.folder);
-        expect(s.m.window.showInformationMessage.mock.calls[0].arguments[0]).to.include('Local debugging supports');
-        const extensions = parse(await readText(s.code, s.code.Uri.joinPath(s.folder, '.vscode', 'extensions.json')) ?? '');
-        expect(extensions.recommendations).to.include(ExtensionId);
-    });
+    for (const runtime of ['custom', 'constructor']) {
+        it(`initializes ${runtime} with base recommendations and explains supported debugging runtimes`, async () => {
+            const s = setup(runtime);
+            await s.command.execute(s.folder);
+            expect(s.m.window.showInformationMessage.mock.calls[0].arguments[0]).to.include('Local debugging supports');
+            const extensions = parse(await readText(s.code, s.code.Uri.joinPath(s.folder, '.vscode', 'extensions.json')) ?? '');
+            expect(extensions.recommendations).to.deep.equal([ExtensionId]);
+        });
+    }
 
     it('preserves existing extension IDs without adding case-insensitive duplicates', async () => {
         const s = setup('powershell');

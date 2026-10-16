@@ -19,7 +19,7 @@ import { LocalFunctionsHostTracker } from '../../../functions/host/LocalFunction
 import { IWorkspaceViewDataTree } from '../../../services';
 import { combineContextValues } from '../../contextValueHelpers';
 import { getResourceTypeIconUri } from '../../iconPath';
-import { FunctionsProjectKeyPrefix, isFunctionsProjectNode, isLocalFunctionsNode, isLocalFunctionNode } from '../WorkspaceNode';
+import { FunctionsProjectKeyPrefix, isFunctionsProjectNode, isLocalFunctionsNode, isLocalFunctionNode, type FunctionsProjectNode, type LocalFunctionNode } from '../WorkspaceNode';
 import { isFunctionsDebugRuntime } from '../../../functions/debug/FunctionsDebugPreparation';
 
 /** Renders local Functions projects, their direct function leaves, and listing hints or errors. */
@@ -64,34 +64,55 @@ export class FunctionsWorkspaceViewProvider implements ViewProvider<string> {
         item.id = node.id;
         item.contextValue = RefreshWorkspaceView.ContextValue;
         if (isFunctionsProjectNode(node)) {
-            item.description = node.error ? this.ctx.code.l10n.t('Invalid')
-                : node.initialized === false ? this.ctx.code.l10n.t('Worker runtime not configured') : this.ctx.code.l10n.t('Azure Functions');
-            item.iconPath = node.error ? new this.ctx.code.ThemeIcon('warning') : getResourceTypeIconUri(this.ctx, FunctionAppLogicalType);
-            item.tooltip = node.error ?? node.resourceUri.fsPath;
-            if (!node.error) {
-                item.contextValue = combineContextValues(RevealInExplorer.ContextValue, RefreshWorkspaceView.ContextValue, DeployFunctionApp.ContextValue,
-                    InitializeFunctionsProject.ContextValue, isFunctionsDebugRuntime(node.runtime) ? DebugFunctionsProject.ContextValue : '');
-            }
+            this.configureProjectItem(item, node);
         } else if (isLocalFunctionNode(node)) {
-            const running = !!this.hosts.get(dirname(node.project.resourceUri));
-            item.description = node.isDisabled
-                ? this.ctx.code.l10n.t('{0}, Disabled', node.triggerKind)
-                : node.authLevel ? this.ctx.code.l10n.t('{0} ({1})', node.triggerKind, node.authLevel) : node.triggerKind;
-            item.iconPath = new this.ctx.code.ThemeIcon('symbol-method',
-                node.isDisabled ? new this.ctx.code.ThemeColor('disabledForeground') : undefined);
-            item.contextValue = combineContextValues(
-                RefreshWorkspaceView.ContextValue,
-                node.isDisabled ? SetFunctionState.EnableContextValue : SetFunctionState.DisableContextValue,
-                running ? ExecuteFunction.ContextValue : '',
-                running && node.triggerKind.toLowerCase() === 'httptrigger' ? CopyFunctionUrl.ContextValue : '',
-                node.resourceUri ? RevealInExplorer.ContextValue : '',
-            );
+            this.configureFunctionItem(item, node);
         } else {
             item.description = node.error ? this.ctx.code.l10n.t('Invalid') : undefined;
             item.tooltip = node.error;
             item.iconPath = new this.ctx.code.ThemeIcon(node.error ? 'warning' : 'info');
         }
         return item;
+    }
+
+    private configureProjectItem(item: ITreeItem, node: FunctionsProjectNode): void {
+        item.tooltip = node.error ?? node.resourceUri.fsPath;
+        if (node.error) {
+            item.description = this.ctx.code.l10n.t('Invalid');
+            item.iconPath = new this.ctx.code.ThemeIcon('warning');
+            return;
+        }
+        item.description = node.initialized === false
+            ? this.ctx.code.l10n.t('Worker runtime not configured')
+            : this.ctx.code.l10n.t('Azure Functions');
+        item.iconPath = getResourceTypeIconUri(this.ctx, FunctionAppLogicalType);
+        item.contextValue = combineContextValues(
+            RevealInExplorer.ContextValue,
+            RefreshWorkspaceView.ContextValue,
+            DeployFunctionApp.ContextValue,
+            InitializeFunctionsProject.ContextValue,
+            isFunctionsDebugRuntime(node.runtime) ? DebugFunctionsProject.ContextValue : '',
+        );
+    }
+
+    private configureFunctionItem(item: ITreeItem, node: LocalFunctionNode): void {
+        const running = !!this.hosts.get(dirname(node.project.resourceUri));
+        if (node.isDisabled) {
+            item.description = this.ctx.code.l10n.t('{0}, Disabled', node.triggerKind);
+        } else {
+            item.description = node.authLevel
+                ? this.ctx.code.l10n.t('{0} ({1})', node.triggerKind, node.authLevel)
+                : node.triggerKind;
+        }
+        item.iconPath = new this.ctx.code.ThemeIcon('symbol-method',
+            node.isDisabled ? new this.ctx.code.ThemeColor('disabledForeground') : undefined);
+        item.contextValue = combineContextValues(
+            RefreshWorkspaceView.ContextValue,
+            node.isDisabled ? SetFunctionState.EnableContextValue : SetFunctionState.DisableContextValue,
+            running ? ExecuteFunction.ContextValue : '',
+            running && node.triggerKind.toLowerCase() === 'httptrigger' ? CopyFunctionUrl.ContextValue : '',
+            node.resourceUri ? RevealInExplorer.ContextValue : '',
+        );
     }
 
     /** Functions are direct project children even before view expansion has loaded them. */

@@ -166,11 +166,17 @@ export class FunctionAppViewProvider implements ViewProvider<string> {
                 break;
             }
             case FunctionAppVirtualTypes.Invalid:
-                item.label = node.kind === 'function'
-                    ? node.sourceLabel ?? this.ctx.code.l10n.t('Invalid function')
-                    : node.kind === 'app'
-                        ? this.ctx.code.l10n.t('Unable to read Function App')
-                        : this.ctx.code.l10n.t('Unable to list functions');
+                switch (node.kind) {
+                    case 'function':
+                        item.label = node.sourceLabel ?? this.ctx.code.l10n.t('Invalid function');
+                        break;
+                    case 'app':
+                        item.label = this.ctx.code.l10n.t('Unable to read Function App');
+                        break;
+                    default:
+                        item.label = this.ctx.code.l10n.t('Unable to list functions');
+                        break;
+                }
                 item.description = this.ctx.code.l10n.t('Invalid');
                 item.tooltip = node.error;
                 item.iconPath = new this.ctx.code.ThemeIcon('warning');

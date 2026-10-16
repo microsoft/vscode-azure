@@ -31,6 +31,7 @@ export class ExecuteFunction implements ManagedCommand {
         if (local) {
             this.local.host(local);
             const input = await this.prompt(local.functionName);
+            // Trust and host readiness can change while the input prompt is open.
             const { client } = this.local.host(local);
             await this.invoke(local.functionName, client.invoke(local.functionName, input));
             return;
