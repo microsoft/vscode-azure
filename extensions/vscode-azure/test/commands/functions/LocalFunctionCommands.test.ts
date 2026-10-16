@@ -129,15 +129,21 @@ describe('Local function commands (integration)', () => {
     for (const url of [
         'http://example.com:8090/api/Http', 'http://localhost:7071/api/Http',
         'https://localhost:8090/api/Http', 'http://user:password@localhost:8090/api/Http',
-        'not-a-url',
     ]) {
         it(`rejects a host invocation URL outside the registered loopback origin (${url.split('@').at(-1)})`, async () => {
             const s = await setup();
             s.host.listFunctions.mock.mockImplementation(() => Promise.resolve([{ ...s.metadata, ['invoke_url_template']: url }]));
-            await expect(new CopyFunctionUrl(s.code, s.selector, s.remote, s.target).execute(s.fn.id)).to.be.rejected;
+            await expect(new CopyFunctionUrl(s.code, s.selector, s.remote, s.target).execute(s.fn.id)).to.be.rejectedWith(/registered loopback host/);
             expect(s.writeClipboard.mock.callCount()).to.equal(0);
         });
     }
+
+    it('rejects an invalid host invocation URL without writing to the clipboard', async () => {
+        const s = await setup();
+        s.host.listFunctions.mock.mockImplementation(() => Promise.resolve([{ ...s.metadata, ['invoke_url_template']: 'not-a-url' }]));
+        await expect(new CopyFunctionUrl(s.code, s.selector, s.remote, s.target).execute(s.fn.id)).to.be.rejectedWith(/HTTP invocation URL/);
+        expect(s.writeClipboard.mock.callCount()).to.equal(0);
+    });
 
     it('rejects a stale HTTP leaf when current host metadata has another trigger', async () => {
         const s = await setup();
@@ -201,17 +207,20 @@ describe('Local function commands (integration)', () => {
         expect(write.mock.callCount()).to.equal(0);
     });
 
-    for (const text of [
-        '{"IsEncrypted":true,"Values":{"private":"ciphertext"}}',
-        '{"Values":{"private":5}}', '{"Values":{"same":"one","same":"two"}}', '{"Values":{"same":"one","SAME":"two"}}',
-        '{"Values":{},"Values":{"private":"ambiguous"}}', '{"Values":',
-    ]) {
+    for (const [text, message] of [
+        ['{"IsEncrypted":true,"Values":{"private":"ciphertext"}}', /Decrypt local\.settings\.json/],
+        ['{"Values":{"private":5}}', /must be a quoted string/],
+        ['{"Values":{"same":"one","same":"two"}}', /listed more than once/],
+        ['{"Values":{"same":"one","SAME":"two"}}', /differ only by capitalization/],
+        ['{"Values":{},"Values":{"private":"ambiguous"}}', /duplicate properties/],
+        ['{"Values":', /valid JSON object/],
+    ] as const) {
         it(`rejects encrypted or malformed local settings without replacing the file (${text.length})`, async () => {
             const s = await setup(false);
             const uri = s.code.Uri.joinPath(s.folder, 'local.settings.json');
             s.m.fs.addFile(uri, text);
             const write = mock.method(s.code.workspace.fs, 'writeFile');
-            await expect(s.target.setDisabled(s.fn, true)).to.be.rejected;
+            await expect(s.target.setDisabled(s.fn, true)).to.be.rejectedWith(message);
             expect(write.mock.callCount()).to.equal(0);
             expect(await readText(s.code, uri)).to.equal(text);
         });

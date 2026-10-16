@@ -205,6 +205,7 @@ describe('Local Functions tree (integration)', () => {
         expect((await s.tree.getChildren(project)).find(isLocalFunctionNode)?.triggerKind).to.equal('timerTrigger');
         const invalidate = mock.method(s.tree, 'invalidate');
         fireFileSystemEvent(s.m, '/repo/bin', 'delete');
+        await s.outputScheduler.flush();
         expect(invalidate.mock.callCount()).to.be.greaterThan(0);
     });
 
@@ -269,6 +270,7 @@ describe('Local Functions tree (integration)', () => {
         const projects = await s.tree.getChildren();
         const invalidate = mock.method(s.tree, 'invalidate');
         fireFileSystemEvent(s.m, '/repo/other/bin/Debug/functions.metadata');
+        await s.outputScheduler.flush();
         expect(invalidate.mock.calls.map(call => call.arguments[0])).to.deep.equal([projects[1]]);
     });
 
@@ -323,9 +325,11 @@ describe('Local Functions tree (integration)', () => {
             { name: 'Generated', bindings: [{ type: 'httpTrigger' }] },
         ]));
         fireFileSystemEvent(s.m, '/repo/bin/Debug/net8.0/functions.metadata', 'create');
+        await s.outputScheduler.flush();
         expect((await s.tree.getChildren(project)).find(isLocalFunctionNode)?.functionName).to.equal('Generated');
         await s.code.workspace.fs.delete(s.code.Uri.file('/repo/bin'), { recursive: true });
         fireFileSystemEvent(s.m, '/repo/bin', 'delete');
+        await s.outputScheduler.flush();
         expect((await s.tree.getChildren(project)).map(node => node.type)).to.deep.equal(['functionsHint']);
     });
 });

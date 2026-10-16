@@ -64,12 +64,46 @@ describe('FunctionsWorkspaceDataProvider (unit)', () => {
                 for (const path of ['bin', 'bin/Debug/functions.metadata', 'target', 'target/azure-functions/app/Http/function.json']) {
                     fireFileSystemEvent(s.m, `/repo/api/${path}`, kind);
                 }
-                expect(changed.mock.calls.map(call => call.arguments[0])).to.deep.equal(
-                    Array.from({ length: 4 }, () => ({ target: project })),
-                );
+                expect(changed.mock.callCount()).to.equal(0);
+                await s.outputScheduler.flush();
+                expect(changed.mock.calls.map(call => call.arguments[0])).to.deep.equal([{ target: project }]);
                 subscription.dispose();
             });
         }
+
+        it('coalesces mixed output events into one refresh per affected project', async () => {
+            const s = createProvider();
+            s.addProject();
+            for (const name of ['api', 'other']) {
+                s.m.fs.addFile(s.code.Uri.joinPath(s.folder, name, 'host.json'), '{}');
+            }
+            const projects = await s.provider.getChildren();
+            const changed = mock.fn<(event: DataProviderChangeEvent<WorkspaceNode>) => void>();
+            const subscription = s.provider.onDidChange(changed);
+            fireFileSystemEvent(s.m, '/repo/bin/Debug/functions.metadata', 'create');
+            fireFileSystemEvent(s.m, '/repo/api/target/classes/Http.class', 'change');
+            fireFileSystemEvent(s.m, '/repo/api/target', 'delete');
+            expect(changed.mock.callCount()).to.equal(0);
+            await s.outputScheduler.flush();
+            expect(changed.mock.calls.map(call => call.arguments[0])).to.deep.equal(
+                projects.filter(project => project.label !== 'repo/other').map(project => ({ target: project })),
+            );
+            changed.mock.resetCalls();
+            fireFileSystemEvent(s.m, '/repo/bin', 'delete');
+            await s.outputScheduler.flush();
+            expect(changed.mock.calls.map(call => call.arguments[0])).to.deep.equal([{ target: projects[0] }]);
+            subscription.dispose();
+        });
+
+        it('cancels pending generated-output refreshes when disposed', async () => {
+            const s = createProvider();
+            s.addProject();
+            await s.provider.getChildren();
+            fireFileSystemEvent(s.m, '/repo/bin', 'delete');
+            expect(s.outputScheduler.hasPending).to.be.true;
+            s.provider.dispose();
+            expect(s.outputScheduler.hasPending).to.be.false;
+        });
 
         it('refreshes roots for a host change before discovery and only the owning project afterward', async () => {
             const s = createProvider();

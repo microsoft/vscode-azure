@@ -26,7 +26,7 @@ import { createTestResourceSelector } from '../testResourceSelector';
 import { makeFunctionAppFunction, makeFunctionAppFunctions } from './mockFunctionApp';
 
 describe('FunctionAppViewProvider (unit)', () => {
-    function setup(app: FunctionApp = makeSettingsResource()) {
+    function setup(app: FunctionApp = makeSettingsResource(), invalidKind: FunctionAppInvalidNode['kind'] = 'function') {
         const codeContext = createMockCodeContext();
         const { executor } = createTestActionExecutor();
         const adapter = new WebAppSettingsAdapter(codeContext.ctx.code, () => createMockWebAppClient());
@@ -37,7 +37,7 @@ describe('FunctionAppViewProvider (unit)', () => {
             azureResource: app,
             virtualType: FunctionAppVirtualTypes.Invalid,
             virtualPath: 'functions/invalid/0',
-            kind: 'function',
+            kind: invalidKind,
             error: 'The trigger binding is not available.',
             sourceLabel: 'Broken',
         };
@@ -161,4 +161,11 @@ describe('FunctionAppViewProvider (unit)', () => {
         expect(provider.getParent(key(group))).to.equal(key(app));
         expect(provider.getParent(key(app))).to.equal(AzureNodeId.from(app).parentNodeId()?.toString());
     });
+
+    for (const kind of ['app', 'functions'] as const) {
+        it(`resolves invalid ${kind} parentage before the view has loaded its children`, () => {
+            const { app, group, invalid, provider, key } = setup(makeSettingsResource(), kind);
+            expect(provider.getParent(key(invalid))).to.equal(key(kind === 'app' ? app : group));
+        });
+    }
 });

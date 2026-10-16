@@ -213,22 +213,51 @@ describe('FunctionAppLogStream (unit)', () => {
         expect(s.terminals).to.have.lengthOf(1);
     });
 
-    it('keeps a polling failure visible in the terminal and starts a fresh session on retry', async () => {
+    it('finishes a failed polling terminal with its error visible and starts a fresh session on retry', async () => {
         const s = setup();
         const error = mock.method(s.executor.output, 'error');
         await s.service.start(s.app);
+        const closed = mock.fn();
+        s.terminals[0].pty.onDidClose?.(closed);
         s.queries.queryResource.mock.mockImplementation(() => Promise.reject(new Error('poll rejected')));
         await timers.whenScheduled();
         timers.tick(10_000);
-        await waitFor(() => s.terminals[0].writes.some(text => text.includes('poll rejected')));
+        await waitFor(() => closed.mock.callCount() === 1);
+        expect(closed.mock.calls[0].arguments).to.deep.equal([1]);
+        expect(s.terminals[0].writes.join('')).to.include('Log stream failed: poll rejected');
+        expect(s.terminals[0].dispose.mock.callCount()).to.equal(0);
+        expect(timers.hasPending).to.be.false;
         expect(error.mock.callCount()).to.equal(1);
         expect(JSON.stringify(error.mock.calls)).not.to.include('poll rejected');
+        timers.tick(30_000);
+        await setImmediate();
+        expect(s.queries.queryResource.mock.callCount()).to.equal(2);
         s.queries.queryResource.mock.mockImplementation(() => Promise.resolve(logResult()));
         await s.service.start(s.app);
         expect(s.terminals).to.have.lengthOf(2);
         s.terminals[0].pty.close();
         await s.service.start(s.app);
         expect(s.terminals[1].show.mock.callCount()).to.equal(2);
+    });
+
+    it('flushes a polling failure before finishing a terminal that VS Code opens later', async () => {
+        const s = setup({ openOnShow: false });
+        const error = mock.method(s.executor.output, 'error');
+        await s.service.start(s.app);
+        const closed = mock.fn(() => s.terminals[0].writes.join(''));
+        s.terminals[0].pty.onDidClose?.(closed);
+        s.queries.queryResource.mock.mockImplementation(() => Promise.reject(new Error('poll rejected')));
+        await timers.whenScheduled();
+        timers.tick(10_000);
+        await waitFor(() => error.mock.callCount() === 1);
+        expect(s.terminals[0].writes).to.be.empty;
+        expect(closed.mock.callCount()).to.equal(0);
+        s.terminals[0].pty.open(undefined);
+        expect(closed.mock.callCount()).to.equal(1);
+        expect(closed.mock.calls[0].arguments).to.deep.equal([1]);
+        expect(closed.mock.calls[0].result).to.include('Log stream failed: poll rejected');
+        s.terminals[0].pty.open(undefined);
+        expect(closed.mock.callCount()).to.equal(1);
     });
 
     it('cancels an in-flight query and discards its late result on terminal close', async () => {

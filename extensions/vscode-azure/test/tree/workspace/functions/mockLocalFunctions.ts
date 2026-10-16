@@ -34,7 +34,8 @@ export function createLocalFunctions() {
     const createHost = mock.fn((_target: FunctionsHostTarget) => host);
     const settings = new LocalFunctionSettings(code);
     const reader = new FunctionsProjectReader(code, executor, settings, hosts, createHost);
-    const provider = new FunctionsWorkspaceDataProvider(code, index, executor, reader, hosts);
+    const outputScheduler = new ManualDebounceScheduler();
+    const provider = new FunctionsWorkspaceDataProvider(code, index, executor, reader, hosts, outputScheduler);
     const tree = new DataItemTree<WorkspaceNode>(code, 'local-functions-test', executor, node => node.id, Infinity);
     tree.registerProvider(provider);
     const view = new FunctionsWorkspaceViewProvider(context.ctx, executor, tree, hosts);
@@ -55,7 +56,7 @@ export function createLocalFunctions() {
         return uri;
     };
     return {
-        m, code, context, folder, executor, scheduler, index, hosts, host, createHost,
+        m, code, context, folder, executor, scheduler, outputScheduler, index, hosts, host, createHost,
         settings, reader, provider, tree, view, projects, target, addProject, addFunction, selector: remoteSelection.selector,
         resourceCache: remoteSelection.cache,
         dispose: () => {

@@ -4,10 +4,12 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createMockWebAppClient, makeFunctionEnvelope, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
+import { ExternalError } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, MockOutputChannel, MockUri, pagesOf, rejectingAsyncIterable, respondToPrompts, waitFor } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import { ShowFunctionEndpointsStep } from '../../../src/commands/functions/steps/ShowFunctionEndpointsStep';
 import { OpenUrl } from '../../../src/commands/OpenUrl';
+import type { ISubscriptionResolver } from '../../../src/services';
 import { createMockAzdService } from '../../azd/MockAzdService';
 
 describe('ShowFunctionEndpointsStep (unit)', () => {
@@ -29,7 +31,7 @@ describe('ShowFunctionEndpointsStep (unit)', () => {
                 makeFunctionEnvelope({ name: 'sample/Timer', config: { bindings: [{ type: 'timerTrigger' }] } }),
         ]));
         const output = new MockOutputChannel('test');
-        const resolveSubscription = mock.fn((_id: string) => Promise.resolve(subscription));
+        const resolveSubscription = mock.fn<ISubscriptionResolver>((_id: string) => Promise.resolve(subscription));
         const step = new ShowFunctionEndpointsStep(ctx, azd, () => client, resolveSubscription, output, new OpenUrl(ctx.code));
         const context = { job: 'deploy' as const, deploy: true, iacFolder: MockUri.file('/workspace'), azdServiceName: 'api', resourceDisplayName: 'Function App' };
         return { step, context, client, ctx, m, subscription, resolveSubscription, azd, output };
@@ -46,10 +48,40 @@ describe('ShowFunctionEndpointsStep (unit)', () => {
         expect(client.webApps.listHostKeys.mock.callCount()).to.equal(0);
     });
 
-    it('reports an unavailable endpoint without inventing a route', async () => {
-        const { step, context, m } = setup('http://sample.azurewebsites.net/api/Orders');
+    for (const { url, reason } of [
+        { url: 'invalid-url', reason: 'Azure did not report a valid HTTP invocation template.' },
+        {
+            url: 'http://sample.azurewebsites.net/api/Orders',
+            reason: 'A remote function invocation template must use HTTPS without embedded credentials.',
+        },
+        {
+            url: 'https://username:private-key@sample.azurewebsites.net/api/Orders',
+            reason: 'A remote function invocation template must use HTTPS without embedded credentials.',
+        },
+    ]) {
+        it(`reports the safe validation reason for an unavailable endpoint: ${url.split(':')[0]}`, async () => {
+            const { step, context, m, output } = setup(url);
+            const warning = mock.method(output, 'warn');
+            await step.execute(context);
+            const message = `Deployment completed, but HTTP invocation URLs could not be retrieved. ${reason}`;
+            expect(m.window.showWarningMessage.mock.calls[0].arguments[0]).to.equal(message);
+            expect(warning.mock.calls[0].arguments[0]).to.equal(
+                `[functions] HTTP invocation URL retrieval failed during function listing: ${message}`,
+            );
+            expect(m.env.openExternal.mock.callCount()).to.equal(0);
+        });
+    }
+
+    it('explains how to recover when the deployed subscription is not signed in', async () => {
+        const { step, context, m, output, resolveSubscription } = setup();
+        const warning = mock.method(output, 'warn');
+        resolveSubscription.mock.mockImplementation(() => Promise.resolve(undefined));
         await step.execute(context);
-        expect(m.window.showWarningMessage.mock.callCount()).to.equal(1);
+        const message = 'Deployment completed, but HTTP invocation URLs could not be retrieved. Sign in to the deployed Function App subscription to list its HTTP URLs.';
+        expect(m.window.showWarningMessage.mock.calls[0].arguments[0]).to.equal(message);
+        expect(warning.mock.calls[0].arguments[0]).to.equal(
+            `[functions] HTTP invocation URL retrieval failed during subscription resolution: ${message}`,
+        );
     });
 
     it('preserves the selected app subscription instead of resolving another account identity', async () => {
@@ -89,26 +121,29 @@ describe('ShowFunctionEndpointsStep (unit)', () => {
         expect(s.m.env.openExternal.mock.callCount()).to.equal(0);
     });
 
-    for (const failure of ['discovery', 'function listing'] as const) {
-        it(`warns without undoing a completed deployment when ${failure} fails`, async () => {
-            const s = setup();
-            const warning = mock.method(s.output, 'warn');
-            const error = new Error('Azure access denied: private response.');
-            if (failure === 'discovery') {
-                s.azd.show.mock.mockImplementation(() => Promise.reject(error));
-            } else {
-                s.client.webApps.listFunctions.mock.mockImplementation(() => rejectingAsyncIterable(error));
-            }
-            await s.step.execute(s.context);
-            expect(s.m.window.showWarningMessage.mock.calls[0].arguments[0]).to.equal(
-                'Deployment completed, but HTTP invocation URLs could not be retrieved. Refresh the Function App and use Copy Function URL.',
-            );
-            expect(warning.mock.calls[0].arguments[0]).to.equal(
-                '[functions] Deployment completed, but HTTP invocation URLs could not be retrieved.',
-            );
-            expect(s.m.quickPicks).to.be.empty;
-            expect(s.m.env.openExternal.mock.callCount()).to.equal(0);
-            expect(s.client.webApps.listFunctions.mock.callCount()).to.equal(failure === 'discovery' ? 0 : 1);
-        });
+    for (const failure of ['deployment discovery', 'subscription resolution', 'function listing'] as const) {
+        for (const ErrorType of [Error, ExternalError]) {
+            it(`reports a safe diagnostic when ${failure} fails with an upstream ${ErrorType.name}`, async () => {
+                const s = setup();
+                const warning = mock.method(s.output, 'warn');
+                const error = new ErrorType('Azure access denied: private response.');
+                if (failure === 'deployment discovery') {
+                    s.azd.show.mock.mockImplementation(() => Promise.reject(error));
+                } else if (failure === 'subscription resolution') {
+                    s.resolveSubscription.mock.mockImplementation(() => Promise.reject(error));
+                } else {
+                    s.client.webApps.listFunctions.mock.mockImplementation(() => rejectingAsyncIterable(error));
+                }
+                await s.step.execute(s.context);
+                const message = 'Deployment completed, but HTTP invocation URLs could not be retrieved. Refresh the Function App and use Copy Function URL.';
+                expect(s.m.window.showWarningMessage.mock.calls[0].arguments[0]).to.equal(message);
+                expect(warning.mock.calls[0].arguments[0]).to.equal(
+                    `[functions] HTTP invocation URL retrieval failed during ${failure}: ${message}`,
+                );
+                expect(s.m.quickPicks).to.be.empty;
+                expect(s.m.env.openExternal.mock.callCount()).to.equal(0);
+                expect(s.client.webApps.listFunctions.mock.callCount()).to.equal(failure === 'function listing' ? 1 : 0);
+            });
+        }
     }
 });

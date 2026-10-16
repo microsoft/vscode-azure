@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ExternalError, fileExists, ICodeContext, readText, Roots, showMessage, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
+import { CaselessSet, ExternalError, fileExists, ICodeContext, readText, Roots, showMessage, showSmartQuickPick, type ICaselessSetReader } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { applyEdits, findNodeAtLocation, getNodeValue, modify, parseTree } from 'jsonc-parser';
 import type * as vscode from 'vscode';
@@ -53,7 +53,8 @@ export class InitializeFunctionsProject implements ManagedCommand {
             if (!Array.isArray(value) || !value.every(entry => typeof entry === 'string')) {
                 throw new ExternalError(this.ctx.code.l10n.t('extensions.json recommendations must be an array of extension IDs.'));
             }
-            return [ExtensionId, ...(recommendations[runtime] ?? [])].filter(id => !value.includes(id));
+            const existing: ICaselessSetReader = new CaselessSet(value);
+            return [ExtensionId, ...(recommendations[runtime] ?? [])].filter(id => !existing.has(id));
         });
         this.tree.remove(`${FunctionsProjectKeyPrefix}${this.ctx.code.Uri.joinPath(project, 'host.json').toString()}`);
         this.tree.invalidate(Roots);

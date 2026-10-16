@@ -153,6 +153,11 @@ export class LocalFunctionsHostProcess implements Disposable {
             }
             throw new ExternalError(this.code.l10n.t('The Functions worker did not expose its debugger. See the host terminal for details.'));
         } catch (error) {
+            if (host.execution && !host.error && !CancellationError.test(error)) {
+                host.error = error instanceof ExternalError ? error
+                    : new ExternalError(this.code.l10n.t('The Functions host did not become ready. See its terminal for details.'));
+                terminal.write(`${host.error.message}\n`);
+            }
             await this.stop(id);
             throw host.error ?? error;
         } finally {
@@ -178,10 +183,14 @@ export class LocalFunctionsHostProcess implements Disposable {
         if (!host) { return; }
         host.abort.abort();
         host.registration?.dispose();
-        host.execution?.terminate();
-        host.terminal.close();
         await host.process;
         this.cleanup(host);
+        if (host.error || host.stopError) {
+            host.terminal.finish(1);
+        } else {
+            host.execution?.terminate();
+            host.terminal.close();
+        }
         if (host.stopError) { throw host.stopError; }
     }
 
@@ -242,11 +251,12 @@ export class LocalFunctionsHostProcess implements Disposable {
                     host.terminal.write(`${host.error.message}\n`);
                 }
                 this.cleanup(host);
-                host.terminal.finish(0);
+                host.terminal.finish(host.error ? 1 : 0);
             },
             (error: unknown) => {
                 if (host.abort.signal.aborted && !CancellationError.test(error)) {
                     host.stopError = new ExternalError(this.code.l10n.t('Could not terminate the owned Functions process tree. Check its terminal and stop the remaining processes before debugging again.'));
+                    host.terminal.write(`${host.stopError.message}\n`);
                     this.output.warn(this.code.l10n.t('[functions] Owned process-tree termination failed.'));
                 }
                 if (!host.abort.signal.aborted && !CancellationError.test(error)) {

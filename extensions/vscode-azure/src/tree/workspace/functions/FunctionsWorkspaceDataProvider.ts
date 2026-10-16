@@ -4,10 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    basename, dirname, Disposable, EventEmitter, IActionExecutor, IVsCode, relativePath, Roots,
+    basename, DebounceScheduler, dirname, Disposable, EventEmitter, IActionExecutor, IDebounceScheduler, IVsCode, relativePath, Roots,
     type DataProvider, type DataProviderChangeEvent,
 } from '@microsoft/vscode-azure-utils';
-import { inject, injectable } from 'inversify';
+import { inject, injectable, unmanaged } from 'inversify';
 import { IWorkspaceIndexService } from '../../../utils/workspaceIndex/WorkspaceIndexService';
 import type { WorkspaceDetector } from '../../../utils/workspaceIndex/WorkspaceDetector';
 import { createTag, StandardTagNames } from '../../../utils/workspaceIndex/tags';
@@ -58,6 +58,7 @@ export class FunctionsWorkspaceDataProvider implements DataProvider<WorkspaceNod
     private readonly changeEmitter = new EventEmitter<DataProviderChangeEvent<WorkspaceNode>>();
     public readonly onDidChange = this.changeEmitter.event;
     private readonly disposables: Disposable[] = [this.changeEmitter];
+    private readonly pendingProjects = new Set<string>();
     private projects: FunctionsProjectNode[] = [];
 
     public constructor(
@@ -66,7 +67,9 @@ export class FunctionsWorkspaceDataProvider implements DataProvider<WorkspaceNod
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(FunctionsProjectReader) private readonly reader: FunctionsProjectReader,
         @inject(LocalFunctionsHostTracker) hosts: LocalFunctionsHostTracker,
+        @unmanaged() private readonly outputScheduler: IDebounceScheduler = new DebounceScheduler(250),
     ) {
+        this.disposables.push(outputScheduler);
         this.disposables.push(hosts.onDidChange(folder => {
             if (!this.projects.length) {
                 this.changeEmitter.fire({ target: Roots });
@@ -84,8 +87,17 @@ export class FunctionsWorkspaceDataProvider implements DataProvider<WorkspaceNod
             for (const project of this.projects) {
                 const relative = relativePath(dirname(project.resourceUri), uri);
                 if (relative && /^(?:bin|target)(?:\/|$)/.test(relative)) {
-                    this.changeEmitter.fire({ target: project });
+                    this.pendingProjects.add(project.id);
                 }
+            }
+            if (this.pendingProjects.size) {
+                this.outputScheduler.debounce(() => {
+                    const changedProjects = this.projects.filter(project => this.pendingProjects.has(project.id));
+                    this.pendingProjects.clear();
+                    for (const project of changedProjects) {
+                        this.changeEmitter.fire({ target: project });
+                    }
+                });
             }
         };
         this.disposables.push(watcher, watcher.onDidCreate(changed), watcher.onDidChange(changed), watcher.onDidDelete(changed));
@@ -139,5 +151,6 @@ export class FunctionsWorkspaceDataProvider implements DataProvider<WorkspaceNod
     /** Disposes output and host subscriptions when the workspace tree is released. */
     public dispose(): void {
         Disposable.disposeAll(this.disposables);
+        this.pendingProjects.clear();
     }
 }

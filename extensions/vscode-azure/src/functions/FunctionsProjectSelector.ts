@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { dirname, ExternalError, ICodeContext, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
+import { dirname, ExternalError, ICodeContext, isFileNotFoundError, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { isAbsolute } from 'node:path';
 import type * as vscode from 'vscode';
@@ -54,7 +54,14 @@ export class FunctionsProjectSelector {
         }
         this.assertLocal(project);
         const host = this.ctx.code.Uri.joinPath(project, 'host.json');
-        await this.ctx.code.workspace.fs.stat(host);
+        try {
+            await this.ctx.code.workspace.fs.stat(host);
+        } catch (error) {
+            if (isFileNotFoundError(error)) {
+                throw new ExternalError(this.ctx.code.l10n.t('The selected Functions project does not contain host.json. Select a folder containing host.json.'));
+            }
+            throw error;
+        }
         if (process.platform === 'win32') {
             project = (await this.index.getIndex()).withTag(FunctionsHostFileTag).map(dirname)
                 .find(uri => uri.toString().toLowerCase() === project.toString().toLowerCase()) ?? project;

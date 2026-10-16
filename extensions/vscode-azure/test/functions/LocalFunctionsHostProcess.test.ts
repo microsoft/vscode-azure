@@ -5,7 +5,7 @@
 
 import { createMockFunctionsHostClient } from '@microsoft/vscode-azure-azutils/testing';
 import { CancellationError } from '@microsoft/vscode-azure-utils';
-import { addWorkspaceFolder, createMockProcessExecutor, createMockSpawn, createMockVsCode, MockCancellationToken, MockOutputChannel, waitFor } from '@microsoft/vscode-azure-utils/testing';
+import { addWorkspaceFolder, createMockProcessExecutor, createMockSpawn, createMockVsCode, getMockTaskExecution, MockCancellationToken, MockOutputChannel, waitFor } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import { FunctionsHostTerminal } from '../../src/functions/host/FunctionsHostTerminal';
 import { LocalFunctionsHostProcess } from '../../src/functions/host/LocalFunctionsHostProcess';
@@ -34,10 +34,19 @@ describe('Local Functions host ownership (unit)', () => {
         const tracker = new LocalFunctionsHostTracker();
         const { network, reserve } = createMockFunctionsNetwork();
         const output = new MockOutputChannel('functions');
+        const written = mock.fn<(text: string) => void>();
+        const finished = mock.fn<(code: number) => void>();
+        // eslint-disable-next-line @typescript-eslint/unbound-method -- The wrapper supplies the terminal receiver with call().
+        const openTerminal = FunctionsHostTerminal.prototype.open;
+        mock.method(FunctionsHostTerminal.prototype, 'open', function (this: FunctionsHostTerminal) {
+            this.onDidWrite(written);
+            this.onDidClose(finished);
+            openTerminal.call(this);
+        });
         const owner = new LocalFunctionsHostProcess(m.vscode, processes, () => client, tracker, network, output);
         owners.push(owner);
         const request = { project, cwd: project, executable: 'func', runtime: 'node', hostArgs: [], prepare: () => Promise.resolve({}) };
-        return { m, owner, request, spawn, client, tracker, network, reserve, terminateTree, output };
+        return { m, owner, request, spawn, client, tracker, network, reserve, terminateTree, output, written, finished };
     }
 
     it('registers the exact owned port only after HTTP Running and removes it on stop', async () => {
@@ -71,6 +80,7 @@ describe('Local Functions host ownership (unit)', () => {
         mock.method(s.network, 'listening', () => Promise.resolve(false));
         await expect(s.owner.start(s.request)).to.be.rejectedWith('Functions host failed');
         expect(s.tracker.get(s.request.project)).to.be.undefined;
+        expect(s.finished.mock.calls.map(call => call.arguments[0])).to.deep.equal([1]);
     });
 
     it('stops the owned process and reports a failed output stream', async () => {
@@ -85,11 +95,54 @@ describe('Local Functions host ownership (unit)', () => {
         expect(s.tracker.get(s.request.project)).to.be.undefined;
     });
 
-    it('reports a rejected readiness request and terminates the owned process tree', async () => {
-        const s = setup();
+    for (const attached of [false, true]) {
+        it(`retains failed readiness output and awaits process-tree shutdown ${attached ? 'after' : 'before'} debugger attachment`, async () => {
+            const s = setup({ stdout: 'Core Tools startup diagnostics\n' });
+            const status = Promise.withResolvers<Awaited<ReturnType<typeof s.client.getStatus>>>();
+            s.client.getStatus.mock.mockImplementation(() => status.promise);
+            mock.method(s.network, 'listening', () => Promise.resolve(attached));
+            const starting = s.owner.start(s.request);
+            const rejected = attached ? undefined : expect(starting).to.be.rejectedWith('host rejected its readiness request');
+            const execution = await getMockTaskExecution(s.m);
+            const terminateTask = mock.method(execution, 'terminate');
+            if (attached) { await starting; }
+            await waitFor(() => s.client.getStatus.mock.callCount() > 0);
+            status.reject(Object.assign(new Error('Host authentication required.'), { statusCode: 401 }));
+            if (rejected) { await rejected; }
+            await waitFor(() => s.finished.mock.callCount() === 1);
+            expect(s.terminateTree.mock.callCount()).to.equal(1);
+            expect(terminateTask.mock.callCount()).to.equal(0);
+            expect(s.tracker.get(s.request.project)).to.be.undefined;
+            expect(s.finished.mock.calls.map(call => call.arguments[0])).to.deep.equal([1]);
+            expect(s.written.mock.calls.map(call => call.arguments[0]).join(''))
+                .to.include('Core Tools startup diagnostics\r\n')
+                .and.include('host rejected its readiness request');
+        });
+    }
+
+    it('waits for process-tree termination before finishing a failed host task', async () => {
+        const s = setup({ keepStreamsOpen: true });
+        const status = Promise.withResolvers<Awaited<ReturnType<typeof s.client.getStatus>>>();
+        const shutdown = Promise.withResolvers<undefined>();
+        s.client.getStatus.mock.mockImplementation(() => status.promise);
+        s.terminateTree.mock.mockImplementationOnce(() => shutdown.promise, 0);
         mock.method(s.network, 'listening', () => Promise.resolve(false));
-        s.client.getStatus.mock.mockImplementation(() => Promise.reject(Object.assign(new Error('Host authentication required.'), { statusCode: 401 })));
-        await expect(s.owner.start(s.request)).to.be.rejectedWith('host rejected its readiness request');
+        const starting = s.owner.start(s.request);
+        const rejected = expect(starting).to.be.rejectedWith('host rejected its readiness request');
+        const execution = await getMockTaskExecution(s.m);
+        const terminateTask = mock.method(execution, 'terminate');
+        await waitFor(() => s.client.getStatus.mock.callCount() > 0);
+        status.reject(Object.assign(new Error('Host authentication required.'), { statusCode: 401 }));
+        await waitFor(() => s.terminateTree.mock.callCount() === 1);
+        expect(s.finished.mock.callCount()).to.equal(0);
+        expect(terminateTask.mock.callCount()).to.equal(0);
+        const child = s.spawn.mock.calls[0].result;
+        child?.stdout?.push(null);
+        child?.stderr?.push(null);
+        child?.emit('close', 0, null);
+        shutdown.resolve(undefined);
+        await rejected;
+        expect(s.finished.mock.calls.map(call => call.arguments[0])).to.deep.equal([1]);
         expect(s.terminateTree.mock.callCount()).to.equal(1);
         expect(s.tracker.get(s.request.project)).to.be.undefined;
     });
@@ -111,6 +164,8 @@ describe('Local Functions host ownership (unit)', () => {
         const execution = await s.m.tasks.executeTask.mock.calls[0].result;
         if (!execution) { throw new Error('Expected the owned host task.'); }
         expect(ended.mock.calls[0].arguments[0]).to.deep.equal({ execution });
+        expect(s.finished.mock.calls.map(call => call.arguments[0])).to.deep.equal([1]);
+        expect(s.written.mock.calls.map(call => call.arguments[0]).join('')).to.include('worker did not expose its debugger');
         subscription.dispose();
     });
 
@@ -161,6 +216,8 @@ describe('Local Functions host ownership (unit)', () => {
         expect(s.terminateTree.mock.callCount()).to.equal(1);
         expect(s.tracker.get(s.request.project)).to.be.undefined;
         expect(warning.mock.calls[0].arguments[0]).to.equal('[functions] Owned process-tree termination failed.');
+        expect(s.finished.mock.calls.map(call => call.arguments[0])).to.deep.equal([1]);
+        expect(s.written.mock.calls.map(call => call.arguments[0]).join('')).to.include('Could not terminate the owned Functions process tree');
         s.spawn.mock.calls[0].result?.emit('close', 0, null);
     });
 
@@ -251,6 +308,26 @@ describe('Local Functions host ownership (unit)', () => {
 });
 
 describe('Functions host terminal (unit)', () => {
+    it('delivers buffered failure details before ending an unopened task without starting its process', () => {
+        const start = mock.fn();
+        const cancel = mock.fn();
+        const terminal = new FunctionsHostTerminal(start, cancel);
+        const written = mock.fn<(text: string) => void>();
+        const finished = mock.fn<(code: number) => void>();
+        terminal.onDidWrite(written);
+        terminal.onDidClose(finished);
+        terminal.write('Startup failed.\n');
+        terminal.finish(1);
+        expect(finished.mock.callCount()).to.equal(0);
+        terminal.open();
+        terminal.open();
+        terminal.finish(1);
+        expect(written.mock.calls.map(call => call.arguments[0])).to.deep.equal(['Startup failed.\r\n']);
+        expect(finished.mock.calls.map(call => call.arguments[0])).to.deep.equal([1]);
+        expect(start.mock.callCount()).to.equal(0);
+        expect(cancel.mock.callCount()).to.equal(1);
+    });
+
     it('starts at most once and never starts after close', () => {
         const start = mock.fn();
         const closed = new FunctionsHostTerminal(start, mock.fn());

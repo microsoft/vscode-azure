@@ -7,7 +7,7 @@ import {
     ApplicationInsightsResourceType, AzureNodeId, IAzureListingCache, ILogsQueryClientProvider, IResourceClientProvider,
     type AzureListingCache, type AzureSubscription, type GenericResource, type ILogsQueryClient, type LogsQueryResult,
 } from '@microsoft/vscode-azure-azutils';
-import { CancellationError, CaselessMap, delay, ExternalError, IActionExecutor, IVsCode, stringifyError, type Disposable } from '@microsoft/vscode-azure-utils';
+import { CancellationError, CaselessMap, delay, EventEmitter, ExternalError, IActionExecutor, IVsCode, stringifyError, type Disposable } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 import { WebAppSettingsAdapter } from '../../../settings/adapters/WebAppSettingsAdapter';
@@ -28,6 +28,35 @@ interface LogRecord {
 }
 
 const LookbackMs = 5 * 60_000;
+
+/** Retains buffered failure output until VS Code opens the terminal before reporting its exit. */
+class FunctionAppLogTerminal extends LogStreamTerminal {
+    private readonly exit = new EventEmitter<number>();
+    private didOpen = false;
+    private exitCode?: number;
+    public readonly onDidClose = this.exit.event;
+
+    public override open(): void {
+        super.open();
+        this.didOpen = true;
+        if (this.exitCode !== undefined) {
+            this.finish(this.exitCode);
+        }
+    }
+
+    public finish(code: number): void {
+        this.exitCode = code;
+        if (this.didOpen) {
+            this.exit.fire(code);
+            this.close();
+        }
+    }
+
+    public override close(): void {
+        super.close();
+        this.exit.dispose();
+    }
+}
 
 /** Owns one cancellable Application Insights log terminal per Function App. */
 @injectable()
@@ -74,7 +103,7 @@ export class FunctionAppLogStream implements Disposable {
             const cursor = Date.now() - LookbackMs;
             const first = this.records(await client.queryResource(resource.id, this.query(app.name, cursor), { abortSignal: signal, timespan: 'P2D' }));
             signal.throwIfAborted();
-            const pty = new LogStreamTerminal(() => {
+            const pty = new FunctionAppLogTerminal(() => {
                 this.stop(AzureNodeId.from(app).toString(), stream, false);
             });
             stream.terminal = this.code.window.createTerminal({ name: this.code.l10n.t('Logs: {0}', app.name), pty });
@@ -187,7 +216,7 @@ export class FunctionAppLogStream implements Disposable {
         resourceId: string,
         client: ILogsQueryClient,
         stream: Stream,
-        pty: LogStreamTerminal,
+        pty: FunctionAppLogTerminal,
         cursor: number,
         records: LogRecord[],
     ): Promise<void> {
@@ -218,6 +247,7 @@ export class FunctionAppLogStream implements Disposable {
             if (!signal.aborted) {
                 pty.write(this.code.l10n.t('Log stream failed: {0}\n', stringifyError(error)));
                 this.executor.output.error(this.code.l10n.t('[data] Function log stream failed for \'{0}\'.', app.name));
+                pty.finish(1);
             }
         } finally {
             const key = AzureNodeId.from(app).toString();

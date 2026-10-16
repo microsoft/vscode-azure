@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { IWebAppClientProvider, parseAzureResourceId, SiteType } from '@microsoft/vscode-azure-azutils';
-import { CancellationError, ExecuteStep, ExternalError, ICodeContext, IOutputChannel, showMessage, showSmartQuickPick } from '@microsoft/vscode-azure-utils';
+import { CancellationError, ExecuteStep, ExternalError, ICodeContext, IOutputChannel, showMessage, showSmartQuickPick, stringifyError } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzdService } from '../../../azd/AzdService';
 import { ISubscriptionResolver } from '../../../services';
@@ -16,6 +16,9 @@ interface FunctionEndpoint {
     readonly label: string;
     readonly description: string;
 }
+
+/** Contains only diagnostics authored by this step, never upstream error messages. */
+class FunctionEndpointError extends ExternalError { }
 
 /** Lists Azure-reported HTTP invocation templates after deployment, without retrieving or exposing keys. */
 @injectable()
@@ -38,21 +41,25 @@ export class ShowFunctionEndpointsStep extends ExecuteStep<CreateFunctionAppCont
             return;
         }
         const endpoints: FunctionEndpoint[] = [];
+        let operation = this.ctx.code.l10n.t('deployment discovery');
         try {
             const show = await this.azd.show(context.iacFolder);
             const services = context.azdServiceName ? [show?.services?.[context.azdServiceName]] : Object.values(show?.services ?? {});
             for (const service of services) {
                 for (const id of service?.target?.resourceIds ?? []) {
+                    operation = this.ctx.code.l10n.t('deployment discovery');
                     const parsed = parseAzureResourceId(id);
                     const type = `${parsed.provider}/${parsed.resourceType}`;
                     if (type.toLowerCase() !== SiteType.toLowerCase() || !parsed.resourceGroup || !parsed.resourceName) {
                         continue;
                     }
+                    operation = this.ctx.code.l10n.t('subscription resolution');
                     const subscription = context.subscription?.subscriptionId.toLowerCase() === parsed.subscriptionId.toLowerCase()
                         ? context.subscription : await this.subscription(parsed.subscriptionId);
                     if (!subscription) {
-                        throw new ExternalError(this.ctx.code.l10n.t('Sign in to the deployed Function App subscription to list its HTTP URLs.'));
+                        throw new FunctionEndpointError(this.ctx.code.l10n.t('Sign in to the deployed Function App subscription to list its HTTP URLs.'));
                     }
+                    operation = this.ctx.code.l10n.t('function listing');
                     const client = this.createClient(subscription);
                     for await (const page of client.webApps.listFunctions(parsed.resourceGroup, parsed.resourceName)) {
                         for (const fn of page.items) {
@@ -63,11 +70,11 @@ export class ShowFunctionEndpointsStep extends ExecuteStep<CreateFunctionAppCont
                                 continue;
                             }
                             if (!fn.invokeUrlTemplate || !URL.canParse(fn.invokeUrlTemplate)) {
-                                throw new ExternalError(this.ctx.code.l10n.t('Azure did not report a valid HTTP invocation template.'));
+                                throw new FunctionEndpointError(this.ctx.code.l10n.t('Azure did not report a valid HTTP invocation template.'));
                             }
                             const url = new URL(fn.invokeUrlTemplate);
                             if (url.protocol !== 'https:' || url.username || url.password) {
-                                throw new ExternalError(this.ctx.code.l10n.t('A remote function invocation template must use HTTPS without embedded credentials.'));
+                                throw new FunctionEndpointError(this.ctx.code.l10n.t('A remote function invocation template must use HTTPS without embedded credentials.'));
                             }
                             url.search = '';
                             url.hash = '';
@@ -76,11 +83,12 @@ export class ShowFunctionEndpointsStep extends ExecuteStep<CreateFunctionAppCont
                     }
                 }
             }
-        } catch {
-            this.output.warn(this.ctx.code.l10n.t('[functions] Deployment completed, but HTTP invocation URLs could not be retrieved.'));
-            await showMessage(this.ctx.code, this.ctx.code.l10n.t(
-                'Deployment completed, but HTTP invocation URLs could not be retrieved. Refresh the Function App and use Copy Function URL.',
-            ), { severity: 'warning' });
+        } catch (error) {
+            const message = error instanceof FunctionEndpointError
+                ? this.ctx.code.l10n.t('Deployment completed, but HTTP invocation URLs could not be retrieved. {0}', stringifyError(error))
+                : this.ctx.code.l10n.t('Deployment completed, but HTTP invocation URLs could not be retrieved. Refresh the Function App and use Copy Function URL.');
+            this.output.warn(this.ctx.code.l10n.t('[functions] HTTP invocation URL retrieval failed during {0}: {1}', operation, message));
+            await showMessage(this.ctx.code, message, { severity: 'warning' });
             return;
         }
         if (!endpoints.length) {

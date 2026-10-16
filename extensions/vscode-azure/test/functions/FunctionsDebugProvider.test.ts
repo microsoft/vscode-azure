@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { ExternalError } from '@microsoft/vscode-azure-utils';
 import { addMockExtension, addWorkspaceFolder, MockCancellationToken, waitFor } from '@microsoft/vscode-azure-utils/testing';
 import { delimiter } from 'node:path';
 import { mock } from 'node:test';
@@ -231,6 +232,21 @@ describe('Functions debug provider (unit)', () => {
         s.m.fs.addFile(s.code.Uri.joinPath(nested, 'host.json'), '{}');
         const workspace = s.code.workspace.getWorkspaceFolder(s.folder);
         expect((await s.projects.select(workspace, 'nested\\app')).toString()).to.equal(nested.toString());
+    });
+
+    it('explains when an explicit project path has no host.json without remembering the invalid selection', async () => {
+        const s = setup();
+        const missing = s.code.Uri.joinPath(s.folder, 'missing');
+        await expect(s.projects.select(undefined, missing)).to.be.rejectedWith(ExternalError, 'does not contain host.json');
+        expect(s.context.ctx.extensionContext.workspaceState.get('functions.lastDebugProject')).to.be.undefined;
+    });
+
+    it('propagates filesystem permissions failures when validating an explicit project path', async () => {
+        const s = setup();
+        const error = s.code.FileSystemError.NoPermissions();
+        mock.method(s.code.workspace.fs, 'stat', () => Promise.reject(error));
+        await expect(s.projects.select(undefined, s.folder)).to.be.rejectedWith(error);
+        expect(s.context.ctx.extensionContext.workspaceState.get('functions.lastDebugProject')).to.be.undefined;
     });
 
     it('rejects an untrusted workspace, protected flags, and invalid ports before tool acquisition', async () => {

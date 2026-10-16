@@ -96,6 +96,47 @@ describe('Initialize Functions project (integration)', () => {
         expect(extensions.recommendations).to.include(ExtensionId);
     });
 
+    it('preserves existing extension IDs without adding case-insensitive duplicates', async () => {
+        const s = setup('powershell');
+        const extensions = s.code.Uri.joinPath(s.folder, '.vscode', 'extensions.json');
+        const text = JSON.stringify({ recommendations: [ExtensionId.toUpperCase(), 'ms-vscode.powershell', 'existing.extension'] });
+        s.m.fs.addFile(extensions, text);
+        const write = mock.method(s.code.workspace.fs, 'writeFile');
+        const prompts = respondToPrompts(s.m, ['cancel']);
+        await s.command.execute(s.folder);
+        prompts.assertAllConsumed();
+        expect(write.mock.callCount()).to.equal(0);
+        expect(await readText(s.code, extensions)).to.equal(text);
+    });
+
+    it('requires go.mod for native worker initialization before editing workspace files', async () => {
+        const s = setup('native');
+        const write = mock.method(s.code.workspace.fs, 'writeFile');
+        await expect(s.command.execute(s.folder)).to.be.rejectedWith('Native worker initialization requires a Go Functions project with go.mod.');
+        expect(write.mock.callCount()).to.equal(0);
+    });
+
+    for (const [file, key, value, message] of [
+        ['extensions.json', 'recommendations', {}, 'recommendations must be an array of extension IDs'],
+        ['extensions.json', 'recommendations', ['existing.extension', 5], 'recommendations must be an array of extension IDs'],
+        ['launch.json', 'configurations', {}, 'configurations must be an array of configuration objects'],
+        ['launch.json', 'configurations', ['invalid'], 'configurations must be an array of configuration objects'],
+    ] as const) {
+        it(`preserves ${file} when ${key} has invalid ${Array.isArray(value) ? 'entries' : 'type'}`, async () => {
+            const s = setup();
+            const uri = s.code.Uri.joinPath(s.folder, '.vscode', file);
+            const text = JSON.stringify({ [key]: value, custom: 'preserve' });
+            s.m.fs.addFile(uri, text);
+            if (key === 'configurations') {
+                respondToPrompts(s.m, [{ button: 'Add launch.json Configuration' }]);
+            }
+            const write = mock.method(s.code.workspace.fs, 'writeFile');
+            await expect(s.command.execute(s.folder)).to.be.rejectedWith(message);
+            expect(write.mock.calls.some(call => call.arguments[0].toString() === uri.toString())).to.be.false;
+            expect(await readText(s.code, uri)).to.equal(text);
+        });
+    }
+
     it('initializes native Go recommendations and exposes F5 in the workspace tree', async () => {
         const s = setup('native');
         s.m.fs.addFile(s.code.Uri.joinPath(s.folder, 'go.mod'), 'module app\n\ngo 1.24\n');

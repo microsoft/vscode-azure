@@ -136,6 +136,8 @@ Task/terminal closure, cancellation, attach failure, session termination, and
 service disposal stop the owned process tree and remove its registration.
 Readiness and shutdown failures are surfaced without copying settings or host
 response bodies into the output channel.
+Failed host tasks retain their diagnostic output and end with a nonzero exit
+code after the process-tree shutdown attempt completes.
 
 Initialize Project for VS Code selects a missing worker runtime and appends
 workspace extension recommendations. Supported runtimes offer an optional
@@ -175,10 +177,11 @@ and [package step](https://github.com/microsoft/azure-maven-plugins/blob/975dd14
 Precompiled listings include a build hint because output can be stale.
 Multiple Java app outputs produce an actionable error rather than choosing one.
 
-Generated output stays excluded from the shared source index. Explicit output
-reads are bounded to 2,000 directory entries and four descendant-directory
-levels, skipping symbolic links and the `.azurefunctions`, `lib`, and `runtimes`
-dependency directories. Exceeding these limits is a visible listing error.
+Generated output stays excluded from the shared source index. Output watcher
+events are debounced for 250 milliseconds and refresh each affected project once
+per burst. Explicit output reads are bounded to 2,000 directory entries and four
+descendant-directory levels, skipping symbolic links and the `.azurefunctions`,
+`lib`, and `runtimes` dependency directories. Exceeding these limits is a visible listing error.
 Custom build-output locations require the running-host path.
 
 Malformed functions remain visible beside readable siblings. Project validation
@@ -310,8 +313,9 @@ an actionable error.
 by Container Apps. Concurrent starts share initialization, existing sessions are
 focused instead of duplicated, and terminal closure or service disposal cancels
 polling and pending log queries. Discovery and initial-query failures occur
-before terminal creation. Later failures remain visible in the terminal; opening
-the stream again starts a fresh session.
+before terminal creation. Later polling failures finish the terminal with a
+nonzero exit code while retaining its error output; opening the stream again
+starts a fresh active session.
 
 The service reads the instrumentation GUID from
 `APPLICATIONINSIGHTS_CONNECTION_STRING`, lists Application Insights components,
