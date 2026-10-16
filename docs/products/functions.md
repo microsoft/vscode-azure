@@ -34,6 +34,12 @@ authenticated URLs. Missing endpoints and failed endpoint discovery are reported
 without changing a completed deployment's status.
 
 `function.json` and `host.json` receive the published SchemaStore schemas.
+The `function.json` association applies to runtime v4 projects with file-based
+bindings, including [PowerShell](https://learn.microsoft.com/azure/azure-functions/functions-reference-powershell),
+[Node.js v3](https://learn.microsoft.com/azure/azure-functions/functions-reference-node#programming-model),
+and [Python v1](https://learn.microsoft.com/azure/azure-functions/functions-reference-python#programming-model).
+Node.js v4 and Python v2 define bindings in code instead. Programming-model
+versions are distinct from the Functions runtime and Core Tools CLI versions.
 
 ## Local development tools
 
