@@ -230,9 +230,9 @@ initialization configures existing projects, not new source/template generation.
 ## Remote resources tree
 
 Function Apps are identified by `FunctionAppLogicalType`, not by the shared
-`Microsoft.Web/sites` ARM type. `WebAppDataProvider` owns site enrichment and
-remote function data. `FunctionAppViewProvider` renders Function Apps before
-the shared Web App fallback provider.
+`Microsoft.Web/sites` ARM type. `FunctionAppDataProvider` owns site enrichment,
+settings children, and remote function data. The Functions data and view
+providers are registered before their shared Web App fallbacks.
 
 A readable Function App has Application Settings followed by a Functions
 group. The settings node uses `getSettingsNodes` and `WebAppSettingsAdapter`;

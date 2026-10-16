@@ -29,6 +29,7 @@ import { FunctionsProjectReader } from '../functions/FunctionsProjectReader';
 import { LocalFunctionsHostTracker } from '../functions/host/LocalFunctionsHostTracker';
 import { WebAppSettingsAdapter } from '../settings/adapters/WebAppSettingsAdapter';
 import { WebAppDataProvider } from '../tree/resources/webApp/WebAppDataProvider';
+import { FunctionAppDataProvider } from '../tree/resources/webApp/FunctionAppDataProvider';
 import { FunctionAppViewProvider } from '../tree/resources/webApp/FunctionAppViewProvider';
 import { FunctionAppLogStream } from '../tree/resources/webApp/FunctionAppLogStream';
 import { WebAppViewProvider } from '../tree/resources/webApp/WebAppViewProvider';
@@ -60,6 +61,7 @@ export function registerFunctions(registrar: ProductRegistrar): void {
         container.bind(FunctionAppLogStream).toSelf().inSingletonScope().onActivation(pushDisposable);
     });
 
+    registrar.registerResourceDataProvider(FunctionAppDataProvider);
     registrar.registerResourceDataProvider(WebAppDataProvider);
     registrar.registerResourceViewProvider(FunctionAppViewProvider);
     registrar.registerResourceViewProvider(WebAppViewProvider);

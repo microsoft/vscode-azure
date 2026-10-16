@@ -179,6 +179,7 @@ The Azure resources tree composes three data providers. They split responsibilit
 | `AzureAccountDataProvider` (extension) | Yes | Accounts, tenants, subscriptions | `Infinity` | `onDidChange` on VS Code auth-session change (for the `microsoft` / `microsoft-sovereign-cloud` providers) and on `microsoft-sovereign-cloud`, `vscode-azure.signedInTenants`, or `vscode-azure.selectedSubscriptions` configuration change. Since nothing goes stale on its own, `Azure: Refresh` is the only thing that re-lists |
 | `AcrDataProvider` | No | Service-specific resources and their virtual children | default | default TTL |
 | `SettingsDataProvider` | No | Settings virtual-node leaves created by product providers | default | default TTL |
+| `FunctionAppDataProvider` | No | Function Apps and their virtual function children; composes settings and Functions nodes before the Web App fallback | default | default TTL |
 | `WebAppDataProvider` | No | Function App, App Service, and Logic App resources; composes their settings nodes | default | default TTL |
 | `AzureResourceDataProvider` | No | Resource groups (under a subscription), and generic resources as the leaf fallback | default | default TTL |
 

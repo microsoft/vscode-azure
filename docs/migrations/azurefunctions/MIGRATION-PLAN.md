@@ -123,7 +123,7 @@ Client:         re-export every SDK type used in the wrapper APIs from azutils
 
 ```
 Pattern:        DataProvider + ViewProvider; virtual children under the ARM resource
-Target files:   extensions/vscode-azure/src/tree/resources/webApp/WebAppDataProvider.ts (extend for Function Apps)
+Target files:   extensions/vscode-azure/src/tree/resources/webApp/FunctionAppDataProvider.ts (before WebAppDataProvider)
                 extensions/vscode-azure/src/tree/resources/webApp/FunctionAppViewProvider.ts (new, before WebAppViewProvider)
                 extensions/vscode-azure/src/products/registerFunctions.ts (register)
 Precedent:      StaticWebAppDataProvider / StaticWebAppViewProvider (virtual children, explicit invalid nodes)
@@ -701,13 +701,13 @@ registration in `commands/registerCommands.ts`, and tree composition in
 | FUNC-100 | Report Issue | Reuse | Wired through framework errors | `packages/utils/src/base/IActionExecutor.ts`: `ActionExecutor.showErrorToast`; `ExternalError` suppresses the issue action |
 | FUNC-140 | Delve validation | Adapt | Landed without a setting | `functions/debug/FunctionsDebugPreparation.ts`: native worker validation |
 | FUNC-141 | Go validation | Adapt | Landed without a setting | `functions/debug/FunctionsDebugPreparation.ts`: Go version validation |
-| FUNC-166 | Function App node/state/Flex | Migrate | Landed | `tree/resources/webApp/FunctionAppViewProvider.ts`; `WebAppDataProvider` enrichment |
-| FUNC-168 | Remote Functions group | Migrate | Landed beside settings | `tree/resources/webApp/WebAppDataProvider.ts`, `FunctionAppViewProvider.ts` |
+| FUNC-166 | Function App node/state/Flex | Migrate | Landed | `tree/resources/webApp/FunctionAppViewProvider.ts`; `FunctionAppDataProvider` enrichment |
+| FUNC-168 | Remote Functions group | Migrate | Landed beside settings | `tree/resources/webApp/FunctionAppDataProvider.ts`, `FunctionAppViewProvider.ts` |
 | FUNC-169 | Remote function leaf | Migrate | Landed | `tree/resources/webApp/FunctionApp.ts`, `FunctionAppViewProvider.ts`; trigger/access/state capabilities |
-| FUNC-170 | Invalid remote function | Migrate | Landed | `tree/resources/webApp/WebAppDataProvider.ts`, `FunctionAppViewProvider.ts`; refresh-only errors |
+| FUNC-170 | Invalid remote function | Migrate | Landed | `tree/resources/webApp/FunctionAppDataProvider.ts`, `FunctionAppViewProvider.ts`; refresh-only errors |
 | FUNC-171 | Reveal attached identity | Adapt | Landed as navigation | `commands/functions/RevealFunctionAppIdentity.ts` -> shared `RevealResource` |
-| FUNC-173 | App settings nodes | Reuse | Wired | `tree/resources/webApp/WebAppDataProvider.ts`: `getSettingsNodes`; `products/registerSettings.ts` |
-| FUNC-180 | Invalid Function App | Migrate | Landed | `tree/resources/webApp/WebAppDataProvider.ts`: site errors; `FunctionAppViewProvider.ts`: invalid presentation |
+| FUNC-173 | App settings nodes | Reuse | Wired | `tree/resources/webApp/FunctionAppDataProvider.ts`: `getSettingsNodes`; `products/registerSettings.ts` |
+| FUNC-180 | Invalid Function App | Migrate | Landed | `tree/resources/webApp/FunctionAppDataProvider.ts`: site errors; `FunctionAppViewProvider.ts`: invalid presentation |
 | FUNC-182 | Local project node | Migrate | Landed | `tree/workspace/functions/FunctionsWorkspaceDataProvider.ts`, `FunctionsWorkspaceViewProvider.ts` |
 | FUNC-184 | Local Functions grouping | Adapt | Landed as direct project children | `functions/FunctionsProjectReader.ts`; `FunctionsWorkspaceViewProvider.getChildren` |
 | FUNC-185 | Local function leaf | Migrate | Landed | `functions/FunctionsProjectReader.ts`; `FunctionsWorkspaceViewProvider.ts` |
@@ -719,7 +719,7 @@ registration in `commands/registerCommands.ts`, and tree composition in
 | FUNC-195 | Native Go F5 | Adapt | Landed; live VS Code checks pending | `functions/debug/FunctionsDebugPreparation.ts`, `FunctionsDebugProvider.ts`; owned Delve and cleanup |
 | FUNC-198 | Local tree refresh | Migrate | Landed | `FunctionsWorkspaceDataProvider.ts` under `tree/workspace/functions/`; shared index, generated-output watcher, host events |
 | FUNC-199 | Resource pickers | Reuse | Wired | `tree/resources/ResourceSelector.ts`: `IResourceSelector`; remote commands inject the shared selector |
-| FUNC-200 | Resource listing/site cache | Reuse | Wired | `tree/resources/AzureResourceDataProvider.ts`; `WebAppDataProvider` enrichment and shared data-tree cache |
+| FUNC-200 | Resource listing/site cache | Reuse | Wired | `tree/resources/AzureResourceDataProvider.ts`; `FunctionAppDataProvider` enrichment and shared data-tree cache |
 | FUNC-202 | Explorer folder deployment | Adapt | Landed through azd | Extension `package.json`: `explorer/context`; `DeployFunctionApp.execute` accepts a folder URI |
 | FUNC-210 | Node F5 | Adapt | Landed; live checks pending | `functions/debug/FunctionsDebugPreparation.ts`, `FunctionsDebugProvider.ts`; JS/TS attach |
 | FUNC-211 | Python F5 | Adapt | Landed; live checks pending | `functions/debug/FunctionsDebugPreparation.ts`, `FunctionsDebugProvider.ts`; owning Python/debugpy APIs |
