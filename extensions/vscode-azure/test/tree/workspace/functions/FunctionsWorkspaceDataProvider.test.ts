@@ -87,7 +87,9 @@ describe('FunctionsWorkspaceDataProvider (unit)', () => {
         });
 
         it('returns empty when there are no workspace folders', async () => {
-            const { provider } = createProvider();
+            const { provider, m } = createProvider();
+            m.workspaceFolders.splice(0);
+            m.fs.addFile(m.vscode.Uri.file('/repo/host.json'), '{}');
             expect(await provider.getChildren()).to.deep.equal([]);
         });
 

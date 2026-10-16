@@ -54,7 +54,7 @@ describe('Remote function commands (unit)', () => {
 
     it('copies an anonymous URL without reading keys or retaining a stale code parameter', async () => {
         const s = setup('anonymous');
-        const write = mock.method(s.code.env.clipboard, 'writeText', (_text: string) => Promise.resolve());
+        const write = s.codeContext.mock.env.clipboard.writeText;
         await new CopyFunctionUrl(s.code, s.selector, () => s.client, s.local).execute(s.key);
         expect(write.mock.calls[0].arguments[0]).to.equal('https://my-functions.azurewebsites.net/api/HttpTrigger?custom=value');
         expect(s.client.webApps.listFunctionKeys.mock.callCount()).to.equal(0);
@@ -64,7 +64,7 @@ describe('Remote function commands (unit)', () => {
     it('allows remote invocation, URL copying, and state updates in an untrusted workspace', async () => {
         const s = setup('anonymous', false);
         const host = createMockFunctionsHostClient();
-        const write = mock.method(s.code.env.clipboard, 'writeText', (_text: string) => Promise.resolve());
+        const write = s.codeContext.mock.env.clipboard.writeText;
         const prompts = respondToPrompts(s.codeContext.mock, [{ input: 'remote input' }]);
         await new ExecuteFunction(s.ctx, s.selector, () => s.client, () => host, s.local).execute(s.key);
         await new CopyFunctionUrl(s.code, s.selector, () => s.client, s.local).execute(s.key);
@@ -80,7 +80,7 @@ describe('Remote function commands (unit)', () => {
 
     it('uses the default function key and URL-encodes it without exposing it in notifications', async () => {
         const s = setup();
-        const write = mock.method(s.code.env.clipboard, 'writeText', (_text: string) => Promise.resolve());
+        const write = s.codeContext.mock.env.clipboard.writeText;
         s.client.webApps.listFunctionKeys.mock.mockImplementation(() => Promise.resolve({ properties: { default: 'key+/?=', other: 'other' } }));
         await new CopyFunctionUrl(s.code, s.selector, () => s.client, s.local).execute(s.key);
         expect(new URL(write.mock.calls[0].arguments[0]).searchParams.get('code')).to.equal('key+/?=');
@@ -90,7 +90,7 @@ describe('Remote function commands (unit)', () => {
 
     it('uses a host function key when there are no function-scoped keys', async () => {
         const s = setup();
-        const write = mock.method(s.code.env.clipboard, 'writeText', (_text: string) => Promise.resolve());
+        const write = s.codeContext.mock.env.clipboard.writeText;
         s.client.webApps.listHostKeys.mock.mockImplementation(() => Promise.resolve({
             masterKey: 'master', functionKeys: { default: 'host-function-key' },
         }));
@@ -100,14 +100,14 @@ describe('Remote function commands (unit)', () => {
 
     it('reports missing function keys without substituting the master key or changing the clipboard', async () => {
         const s = setup();
-        const write = mock.method(s.code.env.clipboard, 'writeText', (_text: string) => Promise.resolve());
+        const write = s.codeContext.mock.env.clipboard.writeText;
         await expect(new CopyFunctionUrl(s.code, s.selector, () => s.client, s.local).execute(s.key)).to.be.rejectedWith(/No key/);
         expect(write.mock.callCount()).to.equal(0);
     });
 
     it('requires confirmation before reading or copying an admin key', async () => {
         const s = setup('admin');
-        const write = mock.method(s.code.env.clipboard, 'writeText', (_text: string) => Promise.resolve());
+        const write = s.codeContext.mock.env.clipboard.writeText;
         const command = new CopyFunctionUrl(s.code, s.selector, () => s.client, s.local);
         await expect(command.execute(s.key)).to.be.rejectedWith(CancellationError);
         expect(s.client.webApps.listHostKeys.mock.callCount()).to.equal(0);
@@ -130,7 +130,7 @@ describe('Remote function commands (unit)', () => {
     for (const url of ['http://my-functions.azurewebsites.net/api/fn', 'https://user:secret@my-functions.azurewebsites.net/api/fn', 'invalid']) {
         it(`rejects an unsafe or invalid invocation URL: ${url.split(':')[0]}`, async () => {
             const s = setup('anonymous');
-            const write = mock.method(s.code.env.clipboard, 'writeText', (_text: string) => Promise.resolve());
+            const write = s.codeContext.mock.env.clipboard.writeText;
             s.client.webApps.getFunction.mock.mockImplementation(() => Promise.resolve(makeFunctionEnvelope({ invokeUrlTemplate: url })));
             await expect(new CopyFunctionUrl(s.code, s.selector, () => s.client, s.local).execute(s.key)).to.be.rejected;
             expect(write.mock.callCount()).to.equal(0);
@@ -140,7 +140,7 @@ describe('Remote function commands (unit)', () => {
 
     it('uses the management-plane trigger URL when no URL template is reported', async () => {
         const s = setup('anonymous');
-        const write = mock.method(s.code.env.clipboard, 'writeText', (_text: string) => Promise.resolve());
+        const write = s.codeContext.mock.env.clipboard.writeText;
         s.client.webApps.getFunction.mock.mockImplementation(() => Promise.resolve(makeFunctionEnvelope({
             config: { bindings: [{ type: 'httpTrigger', authLevel: 'anonymous' }] },
         })));

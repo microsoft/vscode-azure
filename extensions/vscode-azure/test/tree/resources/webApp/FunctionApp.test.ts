@@ -4,8 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AppServiceLogicalType, FunctionAppLogicalType, LogicAppLogicalType, SiteType } from '@microsoft/vscode-azure-azutils';
-import { makeGenericResource, makeVirtualResource } from '@microsoft/vscode-azure-azutils/testing';
-import { isFunctionApp, isFunctionAppFunction, type FunctionAppFunction } from '../../../../src/tree/resources/webApp/FunctionApp';
+import { makeGenericResource } from '@microsoft/vscode-azure-azutils/testing';
+import { isFunctionApp, isFunctionAppFunction } from '../../../../src/tree/resources/webApp/FunctionApp';
+import { makeFunctionAppFunction } from './mockFunctionApp';
 
 describe('FunctionApp model (unit)', () => {
     it('should distinguish Function Apps from other Web Apps case-insensitively', () => {
@@ -19,18 +20,7 @@ describe('FunctionApp model (unit)', () => {
     });
 
     it('should identify remote function leaves and reject leaves owned by another product', () => {
-        const fn: FunctionAppFunction = {
-            ...makeVirtualResource({
-                azureResource: makeGenericResource({ type: SiteType, logicalType: FunctionAppLogicalType }),
-                virtualPath: 'functions/hello',
-            }),
-            virtualType: 'functionApp.function',
-            functionName: 'hello',
-            triggerKind: 'httpTrigger',
-            isDisabled: false,
-            authLevel: 'function',
-            data: { name: 'app/hello' },
-        };
+        const fn = makeFunctionAppFunction();
         expect(isFunctionAppFunction(fn)).to.be.true;
         expect(isFunctionAppFunction({ ...fn, azureResource: makeGenericResource() })).to.be.false;
         expect(isFunctionAppFunction({ ...fn, virtualType: 'functionApp.functions' })).to.be.false;

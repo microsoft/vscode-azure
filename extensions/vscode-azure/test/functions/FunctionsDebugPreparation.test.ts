@@ -6,7 +6,7 @@
 import { CancellationError } from '@microsoft/vscode-azure-utils';
 import { addMockExtension, getMockTaskExecution, MockCancellationToken, MockShellExecution, waitFor } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
-import { createFunctionsDebugFixture } from './mockFunctionsDebug';
+import { createFunctionsDebugFixture, selectPythonEnvironment } from './mockFunctionsDebug';
 
 describe('Functions debug preparation (unit)', () => {
     const fixtures: ReturnType<typeof createFunctionsDebugFixture>[] = [];
@@ -183,13 +183,7 @@ describe('Functions debug preparation (unit)', () => {
     it('requires a selected Python virtual environment before tool acquisition or host launch', async () => {
         const s = setup('python');
         const executable = s.code.Uri.file('/system/python');
-        addMockExtension(s.m, 'ms-python.python', {
-            ready: Promise.resolve(), environments: {
-                getActiveEnvironmentPath: () => ({ path: executable.fsPath }),
-                resolveEnvironment: () => Promise.resolve({ executable: { uri: executable } }),
-                getEnvironmentVariables: () => ({}),
-            },
-        });
+        selectPythonEnvironment(s, executable);
         await expect(s.preparation.validate(s.folder, {})).to.be.rejectedWith('Select a Python virtual environment');
         expect(s.tools.acquire.mock.callCount()).to.equal(0);
         expect(s.spawn.mock.callCount()).to.equal(0);

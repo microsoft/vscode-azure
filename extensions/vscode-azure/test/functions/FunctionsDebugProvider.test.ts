@@ -3,12 +3,12 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { addMockExtension, addWorkspaceFolder, MockCancellationToken, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
+import { addMockExtension, addWorkspaceFolder, MockCancellationToken, waitFor } from '@microsoft/vscode-azure-utils/testing';
 import { delimiter } from 'node:path';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
 import type { FunctionsHostStart } from '../../src/functions/host/LocalFunctionsHostProcess';
-import { createFunctionsDebugFixture } from './mockFunctionsDebug';
+import { createFunctionsDebugFixture, selectPythonEnvironment } from './mockFunctionsDebug';
 
 describe('Functions debug provider (unit)', () => {
     const fixtures: ReturnType<typeof createFunctionsDebugFixture>[] = [];
@@ -109,13 +109,8 @@ describe('Functions debug provider (unit)', () => {
             const executableDirectory = s.code.Uri.joinPath(virtualEnvironment, platform === 'win32' ? 'Scripts' : 'bin');
             const python = s.code.Uri.joinPath(executableDirectory, platform === 'win32' ? 'python.exe' : 'python');
             s.m.fs.addFile(s.code.Uri.joinPath(virtualEnvironment, 'pyvenv.cfg'), '');
-            addMockExtension(s.m, 'ms-python.python', {
-                ready: Promise.resolve(),
-                environments: {
-                    getActiveEnvironmentPath: () => ({ path: python.fsPath }),
-                    resolveEnvironment: () => Promise.resolve({ executable: { uri: python } }),
-                    getEnvironmentVariables: () => ({ ['CUSTOM_PYTHON_ENV']: 'configured', ['PATH']: 'environment-path' }),
-                },
+            selectPythonEnvironment(s, python, {
+                ['CUSTOM_PYTHON_ENV']: 'configured', ['PATH']: 'environment-path',
             });
             const launcher = mock.fn(() => Promise.resolve(['"C:\\Python Debugger\\debugpy"', '--listen', '127.0.0.1:9001', '--wait-for-client']));
             addMockExtension(s.m, 'ms-python.debugpy', {
@@ -212,9 +207,13 @@ describe('Functions debug provider (unit)', () => {
         const nested = s.code.Uri.joinPath(s.folder, 'nested');
         s.m.fs.addFile(s.code.Uri.joinPath(nested, 'host.json'), '{}');
         await s.context.ctx.extensionContext.workspaceState.update('functions.lastDebugProject', nested.toString());
-        const prompts = respondToPrompts(s.m, [{ pick: nested.fsPath }]);
-        expect((await s.projects.select()).toString()).to.equal(nested.toString());
-        prompts.assertAllConsumed();
+        const selecting = s.projects.select();
+        await waitFor(() => s.m.quickPicks.some(pick => pick.show.mock.callCount() > 0), 'the project picker');
+        const picker = s.m.quickPicks[0];
+        expect(picker.items.map(item => item.label)).to.have.members([s.folder.fsPath, nested.fsPath]);
+        expect(picker.activeItems.map(item => item.label)).to.deep.equal([nested.fsPath]);
+        picker.accept();
+        expect((await selecting).toString()).to.equal(nested.toString());
     });
 
     it('filters dynamic configurations to their owning workspace folder', async () => {

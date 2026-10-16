@@ -19,7 +19,7 @@ import { FunctionAppLogStream } from '../../../../src/tree/resources/webApp/Func
 import { makeSettingsResource } from '../../../settings/mockSettings';
 
 /** Instrumentation identifier used only in deterministic Application Insights fixtures. */
-export const TestInstrumentationKey = '11111111-2222-3333-4444-555555555555';
+export const TestInstrumentationKey = 'a1b2c3d4-abcd-1234-abcd-123456abcdef';
 const ConnectionStringSetting = 'APPLICATIONINSIGHTS_CONNECTION_STRING';
 
 /** Builds the normalized query table consumed by the function terminal. */

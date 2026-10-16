@@ -12,6 +12,7 @@ import { LocalFunctionsHostProcess } from '../../src/functions/host/LocalFunctio
 import { LocalFunctionsHostTracker } from '../../src/functions/host/LocalFunctionsHostTracker';
 import { LocalFunctionsNetwork } from '../../src/functions/host/LocalFunctionsNetwork';
 import { workerProcessId } from '../../src/functions/host/workerProcessId';
+import { createMockFunctionsNetwork } from './mockFunctionsDebug';
 
 function dotnetToolingLog(message: string): string {
     return JSON.stringify({
@@ -31,13 +32,12 @@ describe('Local Functions host ownership (unit)', () => {
         const client = createMockFunctionsHostClient();
         client.getStatus.mock.mockImplementation(() => Promise.resolve({ state: 'Running' }));
         const tracker = new LocalFunctionsHostTracker();
-        const network = new LocalFunctionsNetwork();
-        mock.method(network, 'listening', () => Promise.resolve(true));
+        const { network, reserve } = createMockFunctionsNetwork();
         const output = new MockOutputChannel('functions');
         const owner = new LocalFunctionsHostProcess(m.vscode, processes, () => client, tracker, network, output);
         owners.push(owner);
         const request = { project, cwd: project, executable: 'func', runtime: 'node', hostArgs: [], prepare: () => Promise.resolve({}) };
-        return { m, owner, request, spawn, client, tracker, network, terminateTree, output };
+        return { m, owner, request, spawn, client, tracker, network, reserve, terminateTree, output };
     }
 
     it('registers the exact owned port only after HTTP Running and removes it on stop', async () => {
@@ -117,7 +117,6 @@ describe('Local Functions host ownership (unit)', () => {
     for (const failure of ['preparation', 'task launch'] as const) {
         it(`releases both ports and permits another start after ${failure} fails`, async () => {
             const s = setup();
-            const reserve = mock.method(s.network, 'reserve', s.network.reserve.bind(s.network));
             const prepare = mock.fn(s.request.prepare);
             if (failure === 'preparation') {
                 prepare.mock.mockImplementationOnce(() => Promise.reject(new Error('Preparation failed.')), 0);
@@ -129,17 +128,28 @@ describe('Local Functions host ownership (unit)', () => {
             );
             expect(s.spawn.mock.callCount()).to.equal(0);
             expect(s.tracker.get(s.request.project)).to.be.undefined;
-            for (const call of reserve.mock.calls) {
+            expect(s.reserve.mock.callCount()).to.equal(2);
+            for (const call of s.reserve.mock.calls) {
                 const reservation = await call.result;
                 if (!reservation) { throw new Error('Expected a reserved host or debugger port.'); }
-                const port = await s.network.reserve(reservation.port);
-                await port.release();
+                expect(reservation.release.mock.callCount()).to.equal(1);
             }
             const host = await s.owner.start(s.request);
             expect(s.spawn.mock.callCount()).to.equal(1);
             await s.owner.stop(host.id);
         });
     }
+
+    it('releases the host reservation when the debugger port is unavailable and permits retry', async () => {
+        const s = setup();
+        s.reserve.mock.mockImplementationOnce(() => Promise.reject(Object.assign(new Error('Port in use'), { code: 'EADDRINUSE' })), 1);
+        await expect(s.owner.start(s.request)).to.be.rejectedWith('port is already in use');
+        const hostPort = await s.reserve.mock.calls[0].result;
+        expect(hostPort?.release.mock.callCount()).to.equal(1);
+        expect(s.spawn.mock.callCount()).to.equal(0);
+        const host = await s.owner.start(s.request);
+        await s.owner.stop(host.id);
+    });
 
     it('surfaces process-tree termination failure through stop and removes the ready registration', async () => {
         const s = setup();
@@ -198,9 +208,7 @@ describe('Local Functions host ownership (unit)', () => {
     });
 
     it('preserves the prepared Go binary and stops the owned host/Delve/worker tree on cancellation', async () => {
-        const port = await new LocalFunctionsNetwork().reserve();
-        const debugPort = port.port;
-        await port.release();
+        const debugPort = 19001;
         const marker = `[host] API server listening at: 127.0.0.1:${debugPort}\n`;
         const s = setup({ stdoutChunks: [marker.slice(0, 12), marker.slice(12)] });
         const token = new MockCancellationToken();
@@ -286,7 +294,7 @@ describe('Functions worker PID (unit)', () => {
     });
 });
 
-describe('Functions loopback ports (unit)', () => {
+describe('Functions loopback ports (integration)', () => {
     it('holds a unique loopback port and releases it idempotently', async () => {
         const network = new LocalFunctionsNetwork();
         const port = await network.reserve();

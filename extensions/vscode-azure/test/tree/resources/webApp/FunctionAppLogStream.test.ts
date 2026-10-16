@@ -8,11 +8,13 @@ import { makeResponse, makeSubscription } from '@microsoft/vscode-azure-azutils/
 import { CancellationError } from '@microsoft/vscode-azure-utils';
 import { ManualTimers, waitFor } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
+import { setImmediate } from 'node:timers/promises';
 import type { FunctionAppLogStream } from '../../../../src/tree/resources/webApp/FunctionAppLogStream';
 import { createFunctionLogs, logResult, TestInstrumentationKey, type MockFunctionLogsOptions } from './mockFunctionLogs';
 
 describe('FunctionAppLogStream (unit)', () => {
     const timers = new ManualTimers();
+    const now = Date.parse('2026-10-15T12:00:00.000Z');
     let services: FunctionAppLogStream[] = [];
 
     function setup(options?: MockFunctionLogsOptions) {
@@ -36,8 +38,8 @@ describe('FunctionAppLogStream (unit)', () => {
 
     it('discovers live component properties and buffers records until VS Code opens the terminal', async () => {
         const s = setup({ openOnShow: false });
-        const now = new Date().toISOString();
-        s.queries.queryResource.mock.mockImplementation(() => Promise.resolve(logResult([[now, now, 'first', 'first\nsecond']])));
+        const timestamp = new Date(now).toISOString();
+        s.queries.queryResource.mock.mockImplementation(() => Promise.resolve(logResult([[timestamp, timestamp, 'first', 'first\nsecond']])));
         await s.service.start(s.app);
         expect(s.terminals).to.have.lengthOf(1);
         expect(s.terminals[0].writes).to.be.empty;
@@ -77,7 +79,6 @@ describe('FunctionAppLogStream (unit)', () => {
 
     it('replays a bounded ingestion overlap without duplicates and accepts delayed or equal-time records', async () => {
         const s = setup();
-        const now = Date.now();
         const timestamp = new Date(now - 60 * 60_000).toISOString();
         const first = new Date(now).toISOString();
         const later = new Date(now + 1000).toISOString();
@@ -91,7 +92,9 @@ describe('FunctionAppLogStream (unit)', () => {
             [timestamp, first, 'delayed', 'delayed'],
             [timestamp, `${later.slice(0, -1)}1000Z`, 'same-time', 'same-time'],
         ])));
+        const clock = mock.method(Date, 'now', () => now);
         await s.service.start(s.app);
+        clock.mock.restore();
         await timers.whenScheduled();
         timers.tick(10_000);
         await waitFor(() => s.terminals[0].writes.some(text => text.includes('same-time')));
@@ -115,8 +118,8 @@ describe('FunctionAppLogStream (unit)', () => {
         timers.tick(10_000);
         await waitFor(() => s.queries.queryResource.mock.callCount() === 2);
         await timers.whenScheduled();
-        const now = new Date().toISOString();
-        s.queries.queryResource.mock.mockImplementation(() => Promise.resolve(logResult([[now, now, 'late', 'late']])));
+        const timestamp = new Date(now).toISOString();
+        s.queries.queryResource.mock.mockImplementation(() => Promise.resolve(logResult([[timestamp, timestamp, 'late', 'late']])));
         timers.tick(10_000);
         await waitFor(() => s.terminals[0].writes.some(text => text.includes('] late')));
         expect(s.queries.queryResource.mock.calls[1].arguments[1]).to.equal(firstQuery);
@@ -185,7 +188,7 @@ describe('FunctionAppLogStream (unit)', () => {
     for (const invalid of [
         { tables: [] }, { tables: [{ name: 'result', columns: [], rows: [] }] },
         logResult([['not-a-date', 'not-a-date', 'id', 'message']]),
-        logResult([[new Date().toISOString(), null, '', 'message']]),
+        logResult([[new Date(now).toISOString(), null, '', 'message']]),
     ]) {
         it('rejects an incomplete query schema or malformed record before opening a terminal', async () => {
             const s = setup();
@@ -228,7 +231,7 @@ describe('FunctionAppLogStream (unit)', () => {
         expect(s.terminals[1].show.mock.callCount()).to.equal(2);
     });
 
-    it('cancels an in-flight query and the pending delay on terminal close', async () => {
+    it('cancels an in-flight query and discards its late result on terminal close', async () => {
         const s = setup();
         await s.service.start(s.app);
         const next = Promise.withResolvers<LogsQueryResult>();
@@ -239,11 +242,27 @@ describe('FunctionAppLogStream (unit)', () => {
         const signal = s.queries.queryResource.mock.calls[1].arguments[2]?.abortSignal;
         s.terminals[0].pty.close();
         expect(signal?.aborted).to.be.true;
-        next.resolve(logResult());
-        await waitFor(() => s.queries.queryResource.mock.callCount() === 2);
+        const timestamp = new Date(now).toISOString();
+        next.resolve(logResult([[timestamp, timestamp, 'after-close', 'must not be written']]));
+        await setImmediate();
+        expect(timers.hasPending).to.be.false;
         timers.tick(30_000);
+        await setImmediate();
         expect(s.queries.queryResource.mock.callCount()).to.equal(2);
+        expect(s.terminals[0].writes.join('')).not.to.include('must not be written');
         expect(s.terminals[0].writes.join('')).not.to.include('Log stream failed');
+    });
+
+    it('cancels a scheduled poll when the terminal closes', async () => {
+        const s = setup();
+        await s.service.start(s.app);
+        await timers.whenScheduled();
+        s.terminals[0].pty.close();
+        await setImmediate();
+        expect(timers.hasPending).to.be.false;
+        timers.tick(30_000);
+        await setImmediate();
+        expect(s.queries.queryResource.mock.callCount()).to.equal(1);
     });
 
     it('cancels initialization on disposal without creating a terminal after the query finishes', async () => {

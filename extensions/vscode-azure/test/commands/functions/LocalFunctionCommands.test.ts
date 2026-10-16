@@ -34,7 +34,7 @@ describe('Local function commands (integration)', () => {
         }
         const remote = mock.fn(() => { throw new Error('A local command must not contact Azure'); });
         const remoteSettings = new WebAppSettingsAdapter(s.code, remote);
-        const writeClipboard = mock.method(s.code.env.clipboard, 'writeText', (_text: string) => Promise.resolve());
+        const writeClipboard = s.m.env.clipboard.writeText;
         return { ...s, project, fn, metadata, registration, remote, remoteSettings, writeClipboard };
     }
     afterEach(() => {

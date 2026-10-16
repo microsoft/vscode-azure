@@ -4,9 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createMockWebAppClient, makeFunctionEnvelope, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
-import { createMockCodeContext, MockOutputChannel, MockUri, pagesOf, rejectingAsyncIterable, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, MockOutputChannel, MockUri, pagesOf, rejectingAsyncIterable, respondToPrompts, waitFor } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
-import type * as vscode from 'vscode';
 import { ShowFunctionEndpointsStep } from '../../../src/commands/functions/steps/ShowFunctionEndpointsStep';
 import { OpenUrl } from '../../../src/commands/OpenUrl';
 import { createMockAzdService } from '../../azd/MockAzdService';
@@ -37,17 +36,11 @@ describe('ShowFunctionEndpointsStep (unit)', () => {
     }
 
     it('uses actual HTTP templates and excludes authentication keys', async () => {
-        const { step, context, client, ctx, m } = setup();
+        const { step, context, client, m } = setup();
         const responses = respondToPrompts(m, [{ button: 'View HTTP URLs' }, { pick: 'Orders' }]);
-        const opened = new Promise<void>(resolve => {
-            mock.method(ctx.code.env, 'openExternal', (uri: vscode.Uri) => {
-                expect(uri.toString()).to.equal('https://sample.azurewebsites.net/orders/%7Bid%7D');
-                resolve();
-                return Promise.resolve(true);
-            });
-        });
         await step.execute(context);
-        await opened;
+        await waitFor(() => m.env.openExternal.mock.callCount() === 1, 'the selected HTTP endpoint to open');
+        expect(m.env.openExternal.mock.calls[0].arguments[0].toString()).to.equal('https://sample.azurewebsites.net/orders/%7Bid%7D');
         responses.assertAllConsumed();
         expect(client.webApps.listFunctionKeys.mock.callCount()).to.equal(0);
         expect(client.webApps.listHostKeys.mock.callCount()).to.equal(0);

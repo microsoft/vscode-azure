@@ -6,13 +6,41 @@
 import { ActionExecutor } from '@microsoft/vscode-azure-utils';
 import { addMockExtension, createMockProcessExecutor, MockOutputChannel, NullTelemetryReporter } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
-import { FunctionsProjectSelector } from '../../src/functions/FunctionsProjectSelector';
+import type * as vscode from 'vscode';
 import { FunctionsDebugPreparation } from '../../src/functions/debug/FunctionsDebugPreparation';
 import { FunctionsDebugProvider } from '../../src/functions/debug/FunctionsDebugProvider';
 import { LocalFunctionsHostProcess } from '../../src/functions/host/LocalFunctionsHostProcess';
 import { LocalFunctionsNetwork } from '../../src/functions/host/LocalFunctionsNetwork';
 import type { IToolService } from '../../src/tools/ToolService';
 import { createLocalFunctions } from '../tree/workspace/functions/mockLocalFunctions';
+
+/** Stubs port ownership without binding sockets; real socket behavior has separate coverage. */
+export function createMockFunctionsNetwork() {
+    const network = new LocalFunctionsNetwork();
+    let nextPort = 17000;
+    const reserve = mock.fn((port?: number) => Promise.resolve({
+        port: port ?? nextPort++,
+        release: mock.fn(() => Promise.resolve()),
+    }));
+    mock.method(network, 'reserve', reserve);
+    mock.method(network, 'listening', () => Promise.resolve(true));
+    return { network, reserve };
+}
+
+/** Supplies the Python extension's selected interpreter and resource-scoped environment. */
+export function selectPythonEnvironment(
+    s: ReturnType<typeof createLocalFunctions>,
+    executable: vscode.Uri,
+    variables: Readonly<Record<string, string>> = {},
+): void {
+    addMockExtension(s.m, 'ms-python.python', {
+        ready: Promise.resolve(), environments: {
+            getActiveEnvironmentPath: () => ({ path: executable.fsPath }),
+            resolveEnvironment: () => Promise.resolve({ executable: { uri: executable } }),
+            getEnvironmentVariables: () => variables,
+        },
+    });
+}
 
 /** Shares real index, settings, validation, and host services with deterministic executable acquisition and network probes. */
 export function createFunctionsDebugFixture(runtime = 'node', processOptions?: Parameters<typeof createMockProcessExecutor>[1]) {
@@ -30,19 +58,12 @@ export function createFunctionsDebugFixture(runtime = 'node', processOptions?: P
     if (runtime === 'python') {
         const executable = s.code.Uri.joinPath(s.folder, '.venv', process.platform === 'win32' ? 'Scripts' : 'bin', process.platform === 'win32' ? 'python.exe' : 'python');
         s.m.fs.addFile(s.code.Uri.joinPath(s.folder, '.venv', 'pyvenv.cfg'), '');
-        addMockExtension(s.m, 'ms-python.python', {
-            ready: Promise.resolve(), environments: {
-                getActiveEnvironmentPath: () => ({ path: executable.fsPath }),
-                resolveEnvironment: () => Promise.resolve({ executable: { uri: executable } }),
-                getEnvironmentVariables: () => ({}),
-            },
-        });
+        selectPythonEnvironment(s, executable);
     }
     const output = new MockOutputChannel('functions');
     const actions = new ActionExecutor(s.code, new NullTelemetryReporter(), 'test', output);
-    const projects = new FunctionsProjectSelector(s.context.ctx, s.index, s.tree);
-    const network = new LocalFunctionsNetwork();
-    mock.method(network, 'listening', () => Promise.resolve(true));
+    const projects = s.projects;
+    const { network } = createMockFunctionsNetwork();
     const { executor: processes, spawn } = createMockProcessExecutor(s.code, {
         keepAlive: runtime !== 'native',
         stdout: runtime === 'native' ? 'go version go1.24.1 windows/amd64\nDelve Debugger\nVersion: 1.24.0\n' : '',

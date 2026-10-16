@@ -9,14 +9,15 @@ import { parse } from 'jsonc-parser';
 import { mock } from 'node:test';
 import { ExtensionId } from '../../../src/constants';
 import { InitializeFunctionsProject } from '../../../src/commands/functions/InitializeFunctionsProject';
-import { createFunctionsDebugFixture } from '../../functions/mockFunctionsDebug';
+import { createLocalFunctions } from '../../tree/workspace/functions/mockLocalFunctions';
 import { isFunctionsProjectNode } from '../../../src/tree/workspace/WorkspaceNode';
 import { DebugFunctionsProject } from '../../../src/commands/functions/DebugFunctionsProject';
 
 describe('Initialize Functions project (integration)', () => {
-    const fixtures: ReturnType<typeof createFunctionsDebugFixture>[] = [];
+    const fixtures: ReturnType<typeof createLocalFunctions>[] = [];
     function setup(runtime = 'node') {
-        const s = createFunctionsDebugFixture(runtime);
+        const s = createLocalFunctions();
+        s.addProject(runtime);
         fixtures.push(s);
         const command = new InitializeFunctionsProject(s.context.ctx, s.projects, s.settings, s.tree);
         return { ...s, command };
@@ -97,6 +98,7 @@ describe('Initialize Functions project (integration)', () => {
 
     it('initializes native Go recommendations and exposes F5 in the workspace tree', async () => {
         const s = setup('native');
+        s.m.fs.addFile(s.code.Uri.joinPath(s.folder, 'go.mod'), 'module app\n\ngo 1.24\n');
         const prompts = respondToPrompts(s.m, [{ button: 'Add launch.json Configuration' }]);
         await s.command.execute(s.folder);
         prompts.assertAllConsumed();
