@@ -20,6 +20,37 @@ describe('Functions debug provider (unit)', () => {
     }
     afterEach(() => { fixtures.splice(0).forEach(s => { s.dispose(); }); mock.restoreAll(); });
 
+    it('applies launch and owned worker settings without duplicating mixed-case local keys', async () => {
+        const s = setup();
+        s.m.fs.addFile(s.code.Uri.joinPath(s.folder, 'local.settings.json'), JSON.stringify({
+            Values: {
+                ['functions_worker_runtime']: 'unsupported',
+                ['functions_worker_process_count']: '4',
+                ['azurewebjobsstorage__accountname']: 'storage-account',
+                ['languageworkers__node__arguments']: 'unowned',
+                ['custom_setting']: 'local',
+            },
+        }));
+        const start = mock.method(s.owners, 'start', async (request: FunctionsHostStart) => {
+            const env = await request.prepare(9229, 'owned-pipe');
+            expect(env).to.deep.equal({
+                ['azurewebjobsstorage__accountname']: 'storage-account',
+                ['CUSTOM_SETTING']: 'launch',
+                ['languageWorkers__node__arguments']: '--inspect-brk=127.0.0.1:9229',
+                ['FUNCTIONS_WORKER_RUNTIME']: 'node',
+                ['FUNCTIONS_WORKER_PROCESS_COUNT']: '1',
+            });
+            return { id: 'owned', hostPort: 7072, debugPort: 9229, pipe: 'owned-pipe' };
+        });
+
+        const config = await s.debugProvider.resolveDebugConfigurationWithSubstitutedVariables(undefined, {
+            ...s.config, env: { ['FUNCTIONS_WORKER_RUNTIME']: 'node', ['CUSTOM_SETTING']: 'launch' },
+        });
+
+        expect(config?.type).to.equal('pwa-node');
+        expect(start.mock.callCount()).to.equal(1);
+    });
+
     it('discovers nested projects and resolves initial configurations without tool acquisition or a process', async () => {
         const s = setup();
         s.m.fs.addFile(s.code.Uri.joinPath(s.folder, 'nested', 'host.json'), '{}');

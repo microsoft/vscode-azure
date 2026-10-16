@@ -21,7 +21,6 @@ function getRuntimeItems(ctx: ICodeContext): RuntimeItem[] {
         { label: ctx.code.l10n.t('.NET (isolated)'), description: ctx.code.l10n.t('.NET isolated worker'), data: 'dotnet-isolated' },
         { label: ctx.code.l10n.t('Java'), description: ctx.code.l10n.t('Java'), data: 'java' },
         { label: ctx.code.l10n.t('PowerShell'), description: ctx.code.l10n.t('PowerShell'), data: 'powershell' },
-        { label: ctx.code.l10n.t('Custom'), description: ctx.code.l10n.t('Custom handler'), data: 'custom' },
     ];
 }
 

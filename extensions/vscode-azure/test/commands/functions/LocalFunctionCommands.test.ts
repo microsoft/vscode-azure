@@ -164,7 +164,7 @@ describe('Local function commands (integration)', () => {
             '{',
             '    // keep this comment',
             '    "IsEncrypted": false,',
-            '    "Values": {"FUNCTIONS_WORKER_RUNTIME":"node", "private":"keep-secret",},',
+            '    "Values": {"functions_worker_runtime":"node", "aZureWebJobs.hTtP.dIsabled":"false", "private":"keep-secret",},',
             '    "Host": {"LocalHttpPort":8090},',
             '    "ConnectionStrings": {"database":"keep-connection"},',
             '}',
@@ -177,7 +177,7 @@ describe('Local function commands (integration)', () => {
         const data: unknown = parse(text ?? '');
         expect(data).to.deep.equal({
             IsEncrypted: false,
-            Values: { ['FUNCTIONS_WORKER_RUNTIME']: 'node', private: 'keep-secret', ['AzureWebJobs.Http.Disabled']: 'true' },
+            Values: { ['functions_worker_runtime']: 'node', ['aZureWebJobs.hTtP.dIsabled']: 'true', private: 'keep-secret' },
             Host: { LocalHttpPort: 8090 }, ConnectionStrings: { database: 'keep-connection' },
         });
         expect(invalidate.mock.calls[0].arguments[0]).to.equal(s.project);
@@ -188,7 +188,7 @@ describe('Local function commands (integration)', () => {
             throw new Error('Expected refreshed local function');
         }
         await new SetFunctionState(s.code, s.selector, s.remoteSettings, s.resourceCache, s.target).execute(false, refreshed.id);
-        expect((await s.settings.read(s.folder)).values['AzureWebJobs.Http.Disabled']).to.equal('false');
+        expect((await s.settings.read(s.folder)).values.get('AzureWebJobs.Http.Disabled')).to.equal('false');
     });
 
     it('rejects writes to a dirty local settings document', async () => {
@@ -203,7 +203,7 @@ describe('Local function commands (integration)', () => {
 
     for (const text of [
         '{"IsEncrypted":true,"Values":{"private":"ciphertext"}}',
-        '{"Values":{"private":5}}', '{"Values":{"same":"one","same":"two"}}',
+        '{"Values":{"private":5}}', '{"Values":{"same":"one","same":"two"}}', '{"Values":{"same":"one","SAME":"two"}}',
         '{"Values":{},"Values":{"private":"ambiguous"}}', '{"Values":',
     ]) {
         it(`rejects encrypted or malformed local settings without replacing the file (${text.length})`, async () => {
@@ -230,6 +230,6 @@ describe('Local function commands (integration)', () => {
         const uri = s.code.Uri.joinPath(s.folder, 'local.settings.json');
         await s.code.workspace.fs.delete(uri);
         await s.target.setDisabled(s.fn, true);
-        expect((await s.settings.read(s.folder)).values).to.deep.equal({ ['AzureWebJobs.Http.Disabled']: 'true' });
+        expect(Object.fromEntries((await s.settings.read(s.folder)).values)).to.deep.equal({ ['AzureWebJobs.Http.Disabled']: 'true' });
     });
 });

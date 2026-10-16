@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IVsCode, withDelayedProgress } from '@microsoft/vscode-azure-utils';
+import { CaselessMap, IVsCode, withDelayedProgress } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzureViewDataTree } from '../../services';
 import { WebAppSettingsAdapter } from '../../settings/adapters/WebAppSettingsAdapter';
@@ -37,8 +37,9 @@ export class SetFunctionState implements ManagedCommand {
         const fn = await this.selector.selectVirtual({ key, canHandle: isFunctionAppFunction });
         const settingName = `AzureWebJobs.${fn.functionName}.Disabled`;
         const snapshot = await this.settings.read(fn.azureResource);
-        const entries = snapshot.entries.filter(entry => entry.key !== settingName);
-        entries.push({ key: settingName, value: String(disabled) });
+        const values = new CaselessMap(snapshot.entries.map(entry => [entry.key, entry.value]));
+        values.set(settingName, String(disabled));
+        const entries = [...values].map(([key, value]) => ({ key, value }));
         await withDelayedProgress(this.code, {
             location: this.code.ProgressLocation.Notification,
             title: disabled

@@ -60,16 +60,17 @@ export class FunctionsDebugPreparation {
         if (this.code.workspace.textDocuments.some(document => document.uri.toString() === localSettings.toString() && document.isDirty)) {
             throw new ExternalError(this.code.l10n.t('Save local.settings.json before starting the Functions host.'));
         }
-        const values = { ...(await this.settings.read(project)).values, ...env };
-        const runtime = values.FUNCTIONS_WORKER_RUNTIME?.trim().toLowerCase();
+        const values = new CaselessMap([...(await this.settings.read(project)).values, ...Object.entries(env)]);
+        const runtime = values.get('FUNCTIONS_WORKER_RUNTIME')?.trim().toLowerCase();
         if (!isFunctionsDebugRuntime(runtime)) {
             throw new ExternalError(this.code.l10n.t('Set FUNCTIONS_WORKER_RUNTIME to node, python, java, powershell, dotnet-isolated, or native (Go) in local.settings.json before debugging.'));
         }
-        if (values.FUNCTIONS_EXTENSION_VERSION && !/^~?4(?:\.|$)/.test(values.FUNCTIONS_EXTENSION_VERSION)) {
+        const version = values.get('FUNCTIONS_EXTENSION_VERSION');
+        if (version && !/^~?4(?:\.|$)/.test(version)) {
             throw new ExternalError(this.code.l10n.t('Local debugging supports Functions runtime v4 only.'));
         }
-        const storage = values.AzureWebJobsStorage;
-        if (!storage && !values.AzureWebJobsStorage__accountName && !values.AzureWebJobsStorage__blobServiceUri) {
+        const storage = values.get('AzureWebJobsStorage');
+        if (!storage && !values.get('AzureWebJobsStorage__accountName') && !values.get('AzureWebJobsStorage__blobServiceUri')) {
             throw new ExternalError(this.code.l10n.t('Configure AzureWebJobsStorage or its identity-based settings in local.settings.json before debugging.'));
         }
         if (storage && /(?:^|;)\s*UseDevelopmentStorage\s*=\s*true\s*(?:;|$)/i.test(storage)) {
@@ -90,7 +91,7 @@ export class FunctionsDebugPreparation {
                 throw new ExternalError(this.code.l10n.t('Native worker debugging requires a Go Functions project with go.mod. Custom handlers are not supported.'));
             }
             const tools = await this.goTools(project);
-            const variables = Object.fromEntries(Object.entries(values).filter((entry): entry is [string, string] => typeof entry[1] === 'string'));
+            const variables = Object.fromEntries(values);
             try {
                 const { stdout } = await this.processes.spawn({ execution: 'background', command: [tools.go, 'version'], cwd: project, env: variables }, token);
                 const version = /go version go(\d+)\.(\d+)(?:[.\s]|$)/.exec(stdout);

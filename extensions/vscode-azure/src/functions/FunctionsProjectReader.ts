@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { IFunctionsHostClientProvider } from '@microsoft/vscode-azure-azutils';
-import { basename, dirname, ExternalError, IActionExecutor, IVsCode, isFileNotFoundError, readText, stringifyError } from '@microsoft/vscode-azure-utils';
+import { basename, dirname, ExternalError, IActionExecutor, IVsCode, isFileNotFoundError, readText, stringifyError, type ICaselessMapReader } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 import { isFunctionTriggerBinding } from '../tree/resources/webApp/FunctionApp';
@@ -39,7 +39,7 @@ export class FunctionsProjectReader {
         try {
             await this.hostConfig(uri);
             const values = (await this.settings.read(dirname(uri))).values;
-            const runtime = values.FUNCTIONS_WORKER_RUNTIME?.trim().toLowerCase();
+            const runtime = values.get('FUNCTIONS_WORKER_RUNTIME')?.trim().toLowerCase();
             return { ...project, runtime, initialized: !!runtime };
         } catch (error: unknown) {
             this.executor.output.error(this.code.l10n.t('[data] Could not read local Functions project metadata.'));
@@ -53,7 +53,7 @@ export class FunctionsProjectReader {
             const config = await this.hostConfig(project.resourceUri);
             const folder = dirname(project.resourceUri);
             const { values } = await this.settings.read(folder);
-            const runtime = values.FUNCTIONS_WORKER_RUNTIME?.trim().toLowerCase();
+            const runtime = values.get('FUNCTIONS_WORKER_RUNTIME')?.trim().toLowerCase();
             const build = runtime
                 ? runtime === 'java' ? 'java' : runtime === 'dotnet-isolated' ? 'dotnet' : undefined
                 : compiled;
@@ -107,7 +107,7 @@ export class FunctionsProjectReader {
         }
     }
 
-    private functionNode(project: FunctionsProjectNode, fn: FunctionMetadata, values: Readonly<Partial<Record<string, string>>>): LocalFunctionNode {
+    private functionNode(project: FunctionsProjectNode, fn: FunctionMetadata, values: ICaselessMapReader<string>): LocalFunctionNode {
         if (!fn.config || typeof fn.config !== 'object' || !('bindings' in fn.config) || !Array.isArray(fn.config.bindings)) {
             throw new ExternalError(this.code.l10n.t('Function metadata must include a bindings array.'));
         }
@@ -117,7 +117,7 @@ export class FunctionsProjectReader {
         if (triggers.length !== 1 || !trigger) {
             throw new ExternalError(this.code.l10n.t('Function metadata must include exactly one trigger binding.'));
         }
-        const setting = values[`AzureWebJobs.${fn.name}.Disabled`];
+        const setting = values.get(`AzureWebJobs.${fn.name}.Disabled`);
         const disabled = setting === undefined
             ? fn.isDisabled ?? ('disabled' in fn.config && fn.config.disabled === true)
             : setting.toLowerCase() === 'true' || setting === '1';

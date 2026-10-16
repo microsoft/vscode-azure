@@ -15,4 +15,4 @@ export interface CreateFunctionAppContext extends AzdWizardContext, PickContext<
 }
 
 /** Runtime stacks offered by {@linkcode PickRuntimeStep}. */
-export type FunctionWorkerRuntime = 'dotnet-isolated' | 'node' | 'python' | 'java' | 'powershell' | 'custom';
+export type FunctionWorkerRuntime = 'dotnet-isolated' | 'node' | 'python' | 'java' | 'powershell';

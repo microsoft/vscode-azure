@@ -3,15 +3,15 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ExternalError, IVsCode, readText } from '@microsoft/vscode-azure-utils';
+import { CaselessMap, ExternalError, IVsCode, readText, type ICaselessMapReader } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { applyEdits, findNodeAtLocation, getNodeValue, modify, parseTree } from 'jsonc-parser';
 import type * as vscode from 'vscode';
 import { JsoncSettingsFormat } from '../settings/SettingsFileSystemProvider';
 
-/** Plaintext local application settings; absent files have an empty value map. */
+/** Case-insensitive plaintext local application settings; absent files have an empty value map. */
 export interface LocalSettingsSnapshot {
-    readonly values: Readonly<Partial<Record<string, string>>>;
+    readonly values: ICaselessMapReader<string>;
 }
 
 /** Reads and surgically edits local Values without uploading settings or exposing them in a tree. */
@@ -42,8 +42,9 @@ export class LocalFunctionSettings {
             throw new ExternalError(this.code.l10n.t('Save local.settings.json before editing function settings.'));
         }
         const text = await readText(this.code, uri) ?? '{}';
-        this.parse(text);
-        const edits = modify(text, ['Values', key], value, {
+        const snapshot = this.parse(text);
+        const existingKey = [...snapshot.values].find(([name]) => name.toLowerCase() === key.toLowerCase())?.[0] ?? key;
+        const edits = modify(text, ['Values', existingKey], value, {
             formattingOptions: { insertSpaces: true, tabSize: 4, eol: text.includes('\r\n') ? '\r\n' : '\n' },
         });
         await this.code.workspace.fs.writeFile(uri, new TextEncoder().encode(applyEdits(text, edits)));
@@ -73,6 +74,6 @@ export class LocalFunctionSettings {
         const entries = values
             ? new JsoncSettingsFormat(this.code).parse(text.slice(values.offset, values.offset + values.length))
             : [];
-        return { values: Object.fromEntries(entries.map(entry => [entry.key, entry.value])) };
+        return { values: new CaselessMap(entries.map(entry => [entry.key, entry.value])) };
     }
 }

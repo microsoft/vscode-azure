@@ -159,6 +159,19 @@ describe('Remote function commands (unit)', () => {
             });
             expect(invalidate.mock.calls[0].arguments[0]).to.equal(s.app);
         });
+
+        it(`updates a differently cased disable setting to ${String(disabled)} without duplicating it`, async () => {
+            const s = setup();
+            const existingName = `azurewebjobs.${s.fn.functionName.toUpperCase()}.DISABLED`;
+            Reflect.deleteProperty(s.client.settings, `AzureWebJobs.${s.fn.functionName}.Disabled`);
+            s.client.settings[existingName] = String(!disabled);
+
+            await new SetFunctionState(s.code, s.selector, s.settings, s.cache, s.local).execute(disabled, s.key);
+
+            expect(s.client.webApps.updateApplicationSettings.mock.calls[0].arguments[2].properties).to.deep.equal({
+                Existing: 'preserved', [existingName]: String(disabled),
+            });
+        });
     }
 
     it('retains the tree and settings when a disable write fails', async () => {

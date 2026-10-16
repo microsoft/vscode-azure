@@ -78,8 +78,8 @@ export class FunctionsWorkspaceDataProvider implements DataProvider<WorkspaceNod
                 }
             }
         }));
-        // Generated output is excluded from the shared index; string-glob watching reuses VS Code's watcher.
-        const watcher = code.workspace.createFileSystemWatcher('**');
+        // String-glob watching reuses VS Code's watcher; include output directories themselves for deletion events.
+        const watcher = code.workspace.createFileSystemWatcher('**/{bin,target,bin/**,target/**}');
         const changed = (uri: Parameters<typeof relativePath>[1]) => {
             for (const project of this.projects) {
                 const relative = relativePath(dirname(project.resourceUri), uri);

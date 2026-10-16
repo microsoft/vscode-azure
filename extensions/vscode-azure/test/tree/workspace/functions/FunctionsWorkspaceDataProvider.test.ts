@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Roots, type DataProviderChangeEvent } from '@microsoft/vscode-azure-utils';
+import { fireFileSystemEvent } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import { isFunctionsProjectNode, type WorkspaceNode } from '../../../../src/tree/workspace/WorkspaceNode';
 import { makeAzdProjectNode, makeFunctionsProjectNode } from '../mockWorkspaceNode';
@@ -19,6 +20,7 @@ describe('FunctionsWorkspaceDataProvider (unit)', () => {
     afterEach(() => {
         fixtures.forEach(fixture => { fixture.dispose(); });
         fixtures = [];
+        mock.restoreAll();
     });
     describe('canHandle', () => {
         it('returns true only for functionsProject nodes', () => {
@@ -30,6 +32,45 @@ describe('FunctionsWorkspaceDataProvider (unit)', () => {
     });
 
     describe('getChildren', () => {
+        it('delivers only generated-output paths to the Functions watcher', () => {
+            const s = createProvider();
+            const watcher = s.m.fileSystemWatchers.at(-1)!;
+            const delivered = mock.method(watcher, 'fireChange');
+            for (const path of ['/repo/src/index.ts', '/repo/local.settings.json', '/repo/binocular/file', '/repo/targeting/file']) {
+                fireFileSystemEvent(s.m, path);
+            }
+            expect(delivered.mock.callCount()).to.equal(0);
+
+            const outputPaths = [
+                '/repo/bin', '/repo/bin/Debug/net8.0/functions.metadata',
+                '/repo/api/target', '/repo/api/target/azure-functions/app/Http/function.json',
+            ];
+            for (const path of outputPaths) {
+                fireFileSystemEvent(s.m, path);
+            }
+            expect(delivered.mock.calls.map(call => call.arguments[0].path)).to.deep.equal(outputPaths);
+        });
+
+        for (const kind of ['create', 'change', 'delete'] as const) {
+            it(`invalidates the owning project for ${kind} events in generated output`, async () => {
+                const s = createProvider();
+                s.addProject();
+                s.m.fs.addFile(s.code.Uri.joinPath(s.folder, 'api', 'host.json'), '{}');
+                const projects = await s.provider.getChildren();
+                const project = projects.find(node => node.label === 'repo/api');
+                expect(project).not.to.be.undefined;
+                const changed = mock.fn<(event: DataProviderChangeEvent<WorkspaceNode>) => void>();
+                const subscription = s.provider.onDidChange(changed);
+                for (const path of ['bin', 'bin/Debug/functions.metadata', 'target', 'target/azure-functions/app/Http/function.json']) {
+                    fireFileSystemEvent(s.m, `/repo/api/${path}`, kind);
+                }
+                expect(changed.mock.calls.map(call => call.arguments[0])).to.deep.equal(
+                    Array.from({ length: 4 }, () => ({ target: project })),
+                );
+                subscription.dispose();
+            });
+        }
+
         it('refreshes roots for a host change before discovery and only the owning project afterward', async () => {
             const s = createProvider();
             s.addProject();

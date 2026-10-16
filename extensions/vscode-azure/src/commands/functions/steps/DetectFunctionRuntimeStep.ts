@@ -34,7 +34,7 @@ export class DetectFunctionRuntimeStep extends PromptStep<CreateFunctionAppConte
         const folder = context.hydratedServiceProjectPath && (await this.ctx.code.workspace.fs.stat(uri)).type === this.ctx.code.FileType.File
             ? dirname(uri) : uri;
         const { values } = await this.settings.read(folder);
-        const runtime = values.FUNCTIONS_WORKER_RUNTIME?.trim().toLowerCase();
+        const runtime = values.get('FUNCTIONS_WORKER_RUNTIME')?.trim().toLowerCase();
         return isWorkerRuntime(runtime) ? { functionWorkerRuntime: runtime } : {};
     }
 

@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { CancellationError, dirname, Disposable, ExternalError, IActionExecutor, IVsCode } from '@microsoft/vscode-azure-utils';
+import { CancellationError, CaselessMap, dirname, Disposable, ExternalError, IActionExecutor, IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 import { FunctionsHostFileTag } from '../../tree/workspace/functions/FunctionsWorkspaceDataProvider';
@@ -92,12 +92,21 @@ export class FunctionsDebugProvider implements vscode.DebugConfigurationProvider
             const host = await this.hosts.start({
                 project, cwd, runtime, executable, hostPort, debugPort, hostArgs,
                 prepare: async (port, pipe) => {
-                    const projectEnv = Object.fromEntries(Object.entries({ ...(await this.settings.read(project)).values, ...env })
-                        .filter((entry): entry is [string, string] => typeof entry[1] === 'string'));
-                    return {
-                        ...projectEnv, ...await this.preparation.workerEnvironment(project, runtime, port, pipe, projectEnv),
-                        ['FUNCTIONS_WORKER_RUNTIME']: runtime, ['FUNCTIONS_WORKER_PROCESS_COUNT']: '1',
-                    };
+                    const projectEnv = new CaselessMap((await this.settings.read(project)).values);
+                    for (const [key, value] of Object.entries(env)) {
+                        projectEnv.delete(key);
+                        projectEnv.set(key, value);
+                    }
+                    const workerEnv = await this.preparation.workerEnvironment(project, runtime, port, pipe, Object.fromEntries(projectEnv));
+                    for (const [key, value] of Object.entries(workerEnv)) {
+                        projectEnv.delete(key);
+                        projectEnv.set(key, value);
+                    }
+                    for (const [key, value] of [['FUNCTIONS_WORKER_RUNTIME', runtime], ['FUNCTIONS_WORKER_PROCESS_COUNT', '1']]) {
+                        projectEnv.delete(key);
+                        projectEnv.set(key, value);
+                    }
+                    return Object.fromEntries(projectEnv);
                 },
             }, token);
             const postDebugTask: unknown = config.postDebugTask;

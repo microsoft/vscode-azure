@@ -59,7 +59,7 @@ describe('Initialize Functions project (integration)', () => {
         const first = respondToPrompts(s.m, [{ pick: 'node' }, { button: 'Add launch.json Configuration' }]);
         await s.command.execute(s.folder);
         first.assertAllConsumed();
-        expect((await s.settings.read(s.folder)).values.FUNCTIONS_WORKER_RUNTIME).to.equal('node');
+        expect((await s.settings.read(s.folder)).values.get('FUNCTIONS_WORKER_RUNTIME')).to.equal('node');
         const refreshed = await s.tree.getChildren();
         const [after] = refreshed;
         expect(refreshed).to.include(unrelated);
@@ -114,7 +114,7 @@ describe('Initialize Functions project (integration)', () => {
         const prompts = respondToPrompts(s.m, [{ pick: 'Go (native worker)' }, 'cancel']);
         await s.command.execute(s.folder);
         prompts.assertAllConsumed();
-        expect((await s.settings.read(s.folder)).values.FUNCTIONS_WORKER_RUNTIME).to.equal('native');
+        expect((await s.settings.read(s.folder)).values.get('FUNCTIONS_WORKER_RUNTIME')).to.equal('native');
     });
 
     it('preserves duplicate-property files and refreshes project state when the optional launch offer is dismissed', async () => {

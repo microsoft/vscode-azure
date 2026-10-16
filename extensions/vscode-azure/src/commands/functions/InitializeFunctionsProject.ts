@@ -31,7 +31,7 @@ export class InitializeFunctionsProject implements ManagedCommand {
     public async execute(target?: string | vscode.Uri): Promise<void> {
         const project = await this.projects.select(undefined, target);
         const goProject = await fileExists(this.ctx.code, this.ctx.code.Uri.joinPath(project, 'go.mod'));
-        let runtime = (await this.settings.read(project)).values.FUNCTIONS_WORKER_RUNTIME?.trim().toLowerCase();
+        let runtime = (await this.settings.read(project)).values.get('FUNCTIONS_WORKER_RUNTIME')?.trim().toLowerCase();
         if (!runtime) {
             runtime = (await showSmartQuickPick(this.ctx, ['node', 'python', 'dotnet-isolated', 'java', 'powershell', 'custom', ...(goProject ? ['native'] : [])]
                 .map(data => ({ label: data === 'native' ? this.ctx.code.l10n.t('Go (native worker)') : data, data })),

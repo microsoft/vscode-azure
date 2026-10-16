@@ -142,6 +142,18 @@ describe('FunctionAppLogStream (unit)', () => {
         expect(s.terminals[0].writes.join('')).not.to.include('private.invalid');
     });
 
+    it('discovers Application Insights from a differently cased connection string setting', async () => {
+        const s = setup();
+        const connection = s.web.settings.APPLICATIONINSIGHTS_CONNECTION_STRING;
+        delete s.web.settings.APPLICATIONINSIGHTS_CONNECTION_STRING;
+        s.web.settings.applicationinsights_connection_string = connection;
+
+        await s.service.start(s.app);
+
+        expect(s.queries.queryResource.mock.calls[0].arguments[0]).to.equal(s.resource.id);
+        expect(s.terminals).to.have.lengthOf(1);
+    });
+
     for (const connectionString of ['', 'InstrumentationKey=not-a-guid', 'IngestionEndpoint=https://example.invalid']) {
         it(`reports an unusable connection string before querying or creating a terminal: ${connectionString.length}`, async () => {
             const s = setup({ connectionString });

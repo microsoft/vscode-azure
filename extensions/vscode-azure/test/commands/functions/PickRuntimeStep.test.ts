@@ -97,16 +97,5 @@ describe('PickRuntimeStep (unit)', () => {
             expect(result.functionWorkerRuntime).to.equal('powershell');
             expect(result.runtimeVersion).to.be.undefined;
         });
-
-        it('should return custom runtime without a version', async () => {
-            const { ctx, mock: mockResult } = createMockCodeContext();
-            respondToPrompts(mockResult, [{ pick: 'Custom' }]);
-
-            const step = new PickRuntimeStep(ctx);
-            const result = await step.prompt();
-
-            expect(result.functionWorkerRuntime).to.equal('custom');
-            expect(result.runtimeVersion).to.be.undefined;
-        });
     });
 });

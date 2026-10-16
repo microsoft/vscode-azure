@@ -95,7 +95,8 @@ export class FunctionAppLogStream implements Disposable {
         signal.throwIfAborted();
         const snapshot = await this.settings.read(app);
         signal.throwIfAborted();
-        const connection = snapshot.entries.find(entry => entry.key === 'APPLICATIONINSIGHTS_CONNECTION_STRING')?.value;
+        const values = new CaselessMap(snapshot.entries.map(entry => [entry.key, entry.value]));
+        const connection = values.get('APPLICATIONINSIGHTS_CONNECTION_STRING');
         const instrumentationKey = connection?.split(';').map(part => part.trim())
             .find(part => part.slice(0, part.indexOf('=')).trim().toLowerCase() === 'instrumentationkey')
             ?.split('=').slice(1).join('=').trim();

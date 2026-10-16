@@ -25,7 +25,7 @@ describe('PickRuntimeVersionStep (unit)', () => {
         it('should return true when a single-version runtime is selected (resolved without prompting)', () => {
             const { ctx } = createMockCodeContext();
             const step = new PickRuntimeVersionStep(ctx);
-            const context: Partial<CreateFunctionAppContext> = { functionWorkerRuntime: 'custom' };
+            const context: Partial<CreateFunctionAppContext> = { functionWorkerRuntime: 'python' };
             expect(step.shouldPrompt({ resourceDisplayName: 'Function App', ...context })).to.be.true;
         });
 
@@ -59,9 +59,9 @@ describe('PickRuntimeVersionStep (unit)', () => {
             const { ctx } = createMockCodeContext();
 
             const step = new PickRuntimeVersionStep(ctx);
-            const result = await step.prompt({ resourceDisplayName: 'Function App', functionWorkerRuntime: 'custom' });
+            const result = await step.prompt({ resourceDisplayName: 'Function App', functionWorkerRuntime: 'python' });
 
-            expect(result.runtimeVersion).to.equal('');
+            expect(result.runtimeVersion).to.equal('3.12');
         });
     });
 });

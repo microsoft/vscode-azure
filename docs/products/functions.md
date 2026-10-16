@@ -9,6 +9,10 @@ wizard. Workspace deployment detects `FUNCTIONS_WORKER_RUNTIME` from the selecte
 service's local settings, then selects its runtime version. Relative azd service
 paths resolve against the selected IaC folder.
 
+Provisioning offers Node.js, Python, .NET isolated, Java, and PowerShell stacks.
+Custom handlers are not supported by the pinned provisioning module; their local
+settings leave stack selection to the provisioning picker.
+
 Deploy is available from a local Functions project, an Explorer folder, or the
 command palette in a trusted, non-virtual workspace. A nested project targets its
 own folder. The azd wizard hydrates existing infrastructure and environments
@@ -181,8 +185,10 @@ Malformed functions remain visible beside readable siblings. Project validation
 shows invalid metadata or a missing worker runtime without putting local settings
 values in nodes. Invalid and hint nodes offer workspace refresh only.
 Source metadata, local settings, and project-file changes use the shared index
-watcher; generated-output and host-registration events invalidate the affected
-project subtree. Workspace refresh invalidates the complete workspace tree.
+watcher. A separate string-glob subscription matches `bin` and `target`
+directories and their descendants, including directory deletion events;
+generated-output and host-registration events invalidate the affected project
+subtree. Workspace refresh invalidates the complete workspace tree.
 
 ## Local actions and host ownership
 
@@ -208,6 +214,8 @@ Enable and Disable edit only `Values["AzureWebJobs.<FunctionName>.Disabled"]` in
 `local.settings.json`. `LocalFunctionSettings` uses the shared `JsoncSettingsFormat`
 validation and surgical JSONC edits, preserving comments, unrelated settings,
 `Host`, and `ConnectionStrings`. Missing files receive a `Values` object.
+`LocalFunctionSettings` reads `Values` setting names case-insensitively and
+preserves existing key casing during JSONC edits.
 Encrypted, malformed, duplicate-property, and dirty files are rejected before
 writing. Successful writes refresh the owning project and explain that the host
 must restart to apply the setting. Settings values are neither uploaded nor

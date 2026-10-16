@@ -17,6 +17,23 @@ describe('Functions debug preparation (unit)', () => {
     }
     afterEach(() => { fixtures.splice(0).forEach(s => { s.dispose(); }); mock.restoreAll(); });
 
+    it('validates mixed-case local setting names and gives launch overrides case-insensitive precedence', async () => {
+        const s = setup();
+        s.m.fs.addFile(s.code.Uri.joinPath(s.folder, 'local.settings.json'), JSON.stringify({
+            Values: {
+                ['functions_worker_runtime']: 'unsupported',
+                ['functions_extension_version']: '~3',
+                ['azurewebjobsstorage__accountname']: 'storage-account',
+            },
+        }));
+
+        expect(await s.preparation.validate(s.folder, {
+            ['FUNCTIONS_WORKER_RUNTIME']: 'node', ['FUNCTIONS_EXTENSION_VERSION']: '~4',
+        })).to.equal('node');
+        await expect(s.preparation.validate(s.folder, { ['FUNCTIONS_WORKER_RUNTIME']: 'node' }))
+            .to.be.rejectedWith('runtime v4 only');
+    });
+
     it('installs missing Node dependencies from the lockfile and applies the TypeScript build matcher', async () => {
         const s = setup();
         s.m.fs.addFile(s.code.Uri.joinPath(s.folder, 'package.json'), '{"scripts":{"build":"tsc"}}');

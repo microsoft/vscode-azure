@@ -25,6 +25,24 @@ describe('Local Functions tree (integration)', () => {
         mock.restoreAll();
     });
 
+    it('reads runtime and disabled state from mixed-case local setting names', async () => {
+        const s = setup();
+        s.addProject();
+        s.addFunction('Http');
+        s.m.fs.addFile(s.code.Uri.joinPath(s.folder, 'local.settings.json'), JSON.stringify({
+            Values: { ['functions_worker_runtime']: 'node', ['azurewebjobs.HTTP.disabled']: 'true' },
+        }));
+
+        const project = (await s.tree.getChildren())[0];
+        const fn = (await s.tree.getChildren(project)).find(isLocalFunctionNode);
+
+        expect(isFunctionsProjectNode(project) && project.runtime).to.equal('node');
+        expect(isFunctionsProjectNode(project) && project.initialized).to.be.true;
+        if (!fn) { throw new Error('Expected a local function'); }
+        expect(fn.isDisabled).to.be.true;
+        expect(s.view.getTreeItem(fn.id).contextValue?.split(';')).to.include(SetFunctionState.EnableContextValue);
+    });
+
     it('lists script functions directly beneath their own project with stable parentage', async () => {
         const s = setup();
         s.addProject();
