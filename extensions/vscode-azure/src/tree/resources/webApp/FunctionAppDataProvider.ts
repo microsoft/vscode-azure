@@ -6,15 +6,14 @@
 import { getNodeType, getResourceGroupName, IWebAppClientProvider, type ConcreteAzureNode, type FunctionEnvelope } from '@microsoft/vscode-azure-azutils';
 import { IActionExecutor, IVsCode, stringifyError, type ChildResult, type DataProvider, type Page } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
+import { parseFunctionMetadata } from '../../../functions/functionMetadata';
 import { WebAppSettingsAdapter } from '../../../settings/adapters/WebAppSettingsAdapter';
 import { getSettingsNodes } from '../settings/SettingsNode';
 import { setWebsiteUrl } from '../websiteUrl';
 import {
     FunctionAppVirtualTypes,
-    hasFunctionBindings,
     isFunctionApp,
     isFunctionAppVirtualNode,
-    isFunctionTriggerBinding,
     type FunctionApp,
     type FunctionAppFunction,
     type FunctionAppFunctions,
@@ -110,25 +109,15 @@ export class FunctionAppDataProvider implements DataProvider<ConcreteAzureNode> 
             if (!functionName?.trim()) {
                 throw new Error(this.code.l10n.t('The function metadata does not include a name.'));
             }
-            const config: unknown = data.config;
-            if (!hasFunctionBindings(config)) {
-                throw new Error(this.code.l10n.t('The function metadata does not include a bindings array.'));
-            }
-            const triggers = config.bindings.filter(isFunctionTriggerBinding);
-            if (triggers.length !== 1 || !triggers[0]) {
-                throw new Error(this.code.l10n.t('The function metadata must include exactly one trigger binding.'));
-            }
-            const trigger = triggers[0];
-            const isHttp = trigger.type.toLowerCase() === 'httptrigger';
+            const metadata = parseFunctionMetadata(this.code, data.config);
             return {
                 virtualType: FunctionAppVirtualTypes.Function,
                 virtualPath: `functions/${encodeURIComponent(functionName)}`,
                 azureResource: app,
                 data,
                 functionName,
-                triggerKind: trigger.type,
-                isDisabled: data.isDisabled ?? ('disabled' in config && config.disabled === true),
-                authLevel: isHttp && typeof trigger.authLevel === 'string' ? trigger.authLevel.toLowerCase() : undefined,
+                ...metadata,
+                isDisabled: data.isDisabled ?? metadata.isDisabled,
             };
         } catch (error: unknown) {
             this.executor.output.error(this.code.l10n.t('[data] Could not read function metadata for Function App "{0}".', app.name));

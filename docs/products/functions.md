@@ -183,6 +183,11 @@ deferred; Slice 5 records their future CLI v5 ownership.
 index's `host.json` tags. Nested projects have workspace-relative labels.
 Functions appear directly beneath their owning project, without a grouping node.
 
+Local and remote function metadata share binding validation and trigger normalization.
+Each function requires exactly one trigger; authentication levels apply only to HTTP
+triggers. Local disable settings and Azure's reported disable state take precedence
+over the metadata disable flag.
+
 `FunctionsProjectReader` uses a registered, ready local host as the authoritative
 source of function metadata. Offline script-model projects use immediate-child
 `function.json` files. Code-first projects without file metadata show a

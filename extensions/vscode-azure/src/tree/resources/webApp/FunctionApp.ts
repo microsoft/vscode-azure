@@ -56,25 +56,6 @@ export interface FunctionAppInvalidNode extends VirtualResource {
 /** Virtual nodes owned by the remote Function App providers. */
 export type FunctionAppVirtualNode = FunctionAppFunctions | FunctionAppFunction | FunctionAppInvalidNode;
 
-/** Trigger binding with an access level that still requires runtime validation. */
-export interface FunctionTriggerBinding {
-    readonly type: string;
-    readonly authLevel?: unknown;
-}
-
-/** Recognizes the bindings container without trusting its individual entries or optional properties. */
-export function hasFunctionBindings(config: unknown): config is { readonly bindings: readonly unknown[] } {
-    return !!config && typeof config === 'object'
-        && 'bindings' in config && Array.isArray(config.bindings);
-}
-
-/** Recognizes trigger bindings in untrusted management-plane function configuration. */
-export function isFunctionTriggerBinding(binding: unknown): binding is FunctionTriggerBinding {
-    return !!binding && typeof binding === 'object'
-        && 'type' in binding && typeof binding.type === 'string'
-        && binding.type.toLowerCase().endsWith('trigger');
-}
-
 /** Identifies Function Apps without treating other `Microsoft.Web/sites` kinds as functions. */
 export function isFunctionApp(node: unknown): node is FunctionApp {
     return isGenericResource(node)

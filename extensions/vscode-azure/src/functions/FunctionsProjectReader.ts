@@ -7,10 +7,10 @@ import { IFunctionsHostClientProvider } from '@microsoft/vscode-azure-azutils';
 import { basename, dirname, ExternalError, IActionExecutor, IVsCode, isFileNotFoundError, readText, stringifyError, type ICaselessMapReader } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
-import { hasFunctionBindings, isFunctionTriggerBinding } from '../tree/resources/webApp/FunctionApp';
 import { FunctionsProjectKeyPrefix, type FunctionsProjectNode, type LocalFunctionsNode, type LocalFunctionNode } from '../tree/workspace/WorkspaceNode';
 import { LocalFunctionSettings } from './LocalFunctionSettings';
 import { LocalFunctionsHostTracker } from './host/LocalFunctionsHostTracker';
+import { parseFunctionMetadata } from './functionMetadata';
 
 interface FunctionMetadata {
     readonly name: string;
@@ -118,24 +118,15 @@ export class FunctionsProjectReader {
     }
 
     private functionNode(project: FunctionsProjectNode, fn: FunctionMetadata, values: ICaselessMapReader<string>): LocalFunctionNode {
-        if (!hasFunctionBindings(fn.config)) {
-            throw new ExternalError(this.code.l10n.t('Function metadata must include a bindings array.'));
-        }
-        const triggers = fn.config.bindings.filter(isFunctionTriggerBinding);
-        const trigger = triggers.at(0);
-        if (triggers.length !== 1 || !trigger) {
-            throw new ExternalError(this.code.l10n.t('Function metadata must include exactly one trigger binding.'));
-        }
+        const metadata = parseFunctionMetadata(this.code, fn.config);
         const setting = values.get(`AzureWebJobs.${fn.name}.Disabled`);
         const disabled = setting === undefined
-            ? fn.isDisabled ?? ('disabled' in fn.config && fn.config.disabled === true)
+            ? fn.isDisabled ?? metadata.isDisabled
             : setting.toLowerCase() === 'true' || setting === '1';
         return {
             id: `${project.id}/function/${encodeURIComponent(fn.name)}`, type: 'localFunction',
             label: fn.name, functionName: fn.name, project, resourceUri: fn.uri,
-            triggerKind: trigger.type,
-            authLevel: trigger.type.toLowerCase() === 'httptrigger' && typeof trigger.authLevel === 'string'
-                ? trigger.authLevel.toLowerCase() : undefined,
+            ...metadata,
             isDisabled: disabled,
         };
     }

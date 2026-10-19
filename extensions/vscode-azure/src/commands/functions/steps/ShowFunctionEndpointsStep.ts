@@ -8,7 +8,7 @@ import { CancellationError, ExecuteStep, ExternalError, ICodeContext, IOutputCha
 import { inject, injectable } from 'inversify';
 import { IAzdService } from '../../../azd/AzdService';
 import { ISubscriptionResolver } from '../../../services';
-import { hasFunctionBindings, isFunctionTriggerBinding } from '../../../tree/resources/webApp/FunctionApp';
+import { hasFunctionBindings, isFunctionTriggerBinding } from '../../../functions/functionMetadata';
 import { OpenUrl } from '../../OpenUrl';
 import type { CreateFunctionAppContext } from '../CreateFunctionAppContext';
 

@@ -158,7 +158,7 @@ describe('Local function commands (integration)', () => {
         const s = await setup();
         const command = new CopyFunctionUrl(s.code, s.selector, s.remote, s.target);
         s.host.listFunctions.mock.mockImplementation(() => Promise.resolve([]));
-        await expect(command.execute(s.fn.id)).to.be.rejectedWith(/HTTP trigger/);
+        await expect(command.execute(s.fn.id)).to.be.rejectedWith(/does not report this function/);
         s.host.listFunctions.mock.mockImplementation(() => Promise.resolve([{ ...s.metadata, ['invoke_url_template']: undefined }]));
         await expect(command.execute(s.fn.id)).to.be.rejectedWith(/invocation URL/);
     });
