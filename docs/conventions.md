@@ -50,6 +50,11 @@ Use `vscode.workspace.fs` and `vscode.Uri` instead of Node's `fs`/`fs/promises` 
   rooted at a user-selected folder may use `vscode.workspace.fs` directly. Use
   `walkDirectory()` only for a root outside the open workspace index.
 
+Use `readJson()` for optional, work-in-progress JSON files: missing or malformed
+files return `undefined`. Use `readRequiredJson()` when missing or malformed files
+must produce a user-actionable error. Its result is `unknown`; callers validate
+the document's shape. Both helpers propagate other filesystem failures.
+
 ## Localization
 
 User-facing strings **must** use `IVsCode.l10n.t()`:

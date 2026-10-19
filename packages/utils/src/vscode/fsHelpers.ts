@@ -5,6 +5,7 @@
 
 import type * as vscode from 'vscode';
 import { Utils } from 'vscode-uri';
+import { ExternalError } from '../base/ExternalError';
 import type { IVsCode } from './IVsCode';
 
 /**
@@ -99,6 +100,28 @@ export async function readJson<T = unknown>(code: IVsCode, uri: vscode.Uri): Pro
             return undefined;
         }
         throw error;
+    }
+}
+
+/**
+ * Reads a required JSON file without asserting its shape; callers must validate
+ * the parsed value.
+ *
+ * @throws {@linkcode ExternalError} when the file is missing or malformed, with
+ * only its basename in the message. Other filesystem failures propagate unchanged.
+ */
+export async function readRequiredJson(code: IVsCode, uri: vscode.Uri): Promise<unknown> {
+    const text = await readText(code, uri);
+    if (text === undefined) {
+        throw new ExternalError(code.l10n.t('The file \'{0}\' is missing.', basename(uri)));
+    }
+    try {
+        return JSON.parse(text) as unknown;
+    } catch (error: unknown) {
+        if (!(error instanceof SyntaxError)) {
+            throw error;
+        }
+        throw new ExternalError(code.l10n.t('The file \'{0}\' is not valid JSON.', basename(uri)));
     }
 }
 

@@ -3,7 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { basename, dirname, fileExists, isFileNotFoundError, readJson, readText, relativePath } from '../../src/vscode/fsHelpers';
+import { ExternalError } from '../../src/base/ExternalError';
+import { basename, dirname, fileExists, isFileNotFoundError, readJson, readRequiredJson, readText, relativePath } from '../../src/vscode/fsHelpers';
 import { MockFileSystem } from './MockFileSystem';
 import { MockUri } from './MockUri';
 import { createMockVsCode } from './MockVsCode';
@@ -92,6 +93,40 @@ describe('fsHelpers (unit)', () => {
             const uri = m.vscode.Uri.file('/project/package.json');
             m.fs.addFile(uri, '{ "name": ');
             expect(await readJson(m.vscode, uri)).to.be.undefined;
+        });
+    });
+
+    describe('readRequiredJson', () => {
+        it('returns parsed JSON values for caller validation', async () => {
+            const m = createMockVsCode();
+            const uri = m.vscode.Uri.file('/project/metadata.json');
+            for (const value of [{ name: 'test' }, ['first', 'second'], null, false, 0, 'text']) {
+                m.fs.addFile(uri, JSON.stringify(value));
+                expect(await readRequiredJson(m.vscode, uri)).to.deep.equal(value);
+            }
+        });
+
+        it('reports a missing file by basename', async () => {
+            const m = createMockVsCode();
+            await expect(readRequiredJson(m.vscode, m.vscode.Uri.file('/project/missing.json')))
+                .to.be.rejectedWith(ExternalError, 'The file \'missing.json\' is missing.');
+        });
+
+        it('reports malformed JSON without including file contents', async () => {
+            const m = createMockVsCode();
+            const uri = m.vscode.Uri.file('/project/metadata.json');
+            m.fs.addFile(uri, '{ "secret": "sensitive-value",');
+            await expect(readRequiredJson(m.vscode, uri))
+                .to.be.rejectedWith(ExternalError, /^The file 'metadata.json' is not valid JSON\.$/);
+        });
+
+        it('propagates other filesystem errors', async () => {
+            const m = createMockVsCode();
+            const uri = m.vscode.Uri.file('/project/denied.json');
+            m.fs.readFile.mock.mockImplementation(
+                () => Promise.reject(MockFileSystem.createError('NoPermissions', uri)),
+            );
+            await expect(readRequiredJson(m.vscode, uri)).to.be.rejectedWith(/No permissions/);
         });
     });
 

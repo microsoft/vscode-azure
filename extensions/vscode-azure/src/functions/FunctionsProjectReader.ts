@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { IFunctionsHostClientProvider } from '@microsoft/vscode-azure-azutils';
-import { basename, dirname, ExternalError, IActionExecutor, IVsCode, isFileNotFoundError, readText, stringifyError, type ICaselessMapReader } from '@microsoft/vscode-azure-utils';
+import { basename, dirname, ExternalError, IActionExecutor, IVsCode, isFileNotFoundError, readRequiredJson, stringifyError, type ICaselessMapReader } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 import { FunctionsProjectKeyPrefix, type FunctionsProjectNode, type LocalFunctionsNode, type LocalFunctionNode } from '../tree/workspace/WorkspaceNode';
@@ -143,7 +143,7 @@ export class FunctionsProjectReader {
     }
 
     private async hostConfig(uri: vscode.Uri): Promise<Record<string, unknown>> {
-        const config = await this.json(uri);
+        const config = await readRequiredJson(this.code, uri);
         if (!config || typeof config !== 'object' || Array.isArray(config)) {
             throw new ExternalError(this.code.l10n.t('host.json must contain a JSON object.'));
         }
@@ -153,25 +153,10 @@ export class FunctionsProjectReader {
         return config as Record<string, unknown>;
     }
 
-    private async json(uri: vscode.Uri): Promise<unknown> {
-        const text = await readText(this.code, uri);
-        if (text === undefined) {
-            throw new ExternalError(this.code.l10n.t('The metadata file \'{0}\' is missing.', basename(uri)));
-        }
-        try {
-            return JSON.parse(text) as unknown;
-        } catch (error: unknown) {
-            if (!(error instanceof SyntaxError)) {
-                throw error;
-            }
-            throw new ExternalError(this.code.l10n.t('The metadata file \'{0}\' is not valid JSON.', basename(uri)));
-        }
-    }
-
     private async fileMetadata(uri: vscode.Uri): Promise<FunctionMetadata> {
         const name = basename(dirname(uri));
         try {
-            return { name, config: await this.json(uri), uri };
+            return { name, config: await readRequiredJson(this.code, uri), uri };
         } catch (error: unknown) {
             return { name, config: undefined, uri, error: stringifyError(error) };
         }
@@ -193,7 +178,7 @@ export class FunctionsProjectReader {
         if (!selected) {
             return [];
         }
-        const data = await this.json(selected);
+        const data = await readRequiredJson(this.code, selected);
         if (!Array.isArray(data)) {
             throw new ExternalError(this.code.l10n.t('functions.metadata must contain an array.'));
         }
