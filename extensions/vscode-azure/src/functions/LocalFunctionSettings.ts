@@ -5,9 +5,10 @@
 
 import { CaselessMap, ExternalError, IVsCode, readText, type ICaselessMapReader } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import { applyEdits, findNodeAtLocation, getNodeValue, modify, parseTree } from 'jsonc-parser';
+import { findNodeAtLocation, getNodeValue } from 'jsonc-parser';
 import type * as vscode from 'vscode';
 import { JsoncSettingsFormat } from '../settings/SettingsFileSystemProvider';
+import { editJsonc, parseJsoncObject } from '../utils/jsonc';
 
 /** Case-insensitive plaintext local application settings; absent files have an empty value map. */
 export interface LocalSettingsSnapshot {
@@ -44,28 +45,12 @@ export class LocalFunctionSettings {
         const text = await readText(this.code, uri) ?? '{}';
         const snapshot = this.parse(text);
         const existingKey = [...snapshot.values].find(([name]) => name.toLowerCase() === key.toLowerCase())?.[0] ?? key;
-        const edits = modify(text, ['Values', existingKey], value, {
-            formattingOptions: { insertSpaces: true, tabSize: 4, eol: text.includes('\r\n') ? '\r\n' : '\n' },
-        });
-        await this.code.workspace.fs.writeFile(uri, new TextEncoder().encode(applyEdits(text, edits)));
+        const edited = editJsonc(text, ['Values', existingKey], value);
+        await this.code.workspace.fs.writeFile(uri, new TextEncoder().encode(edited));
     }
 
     private parse(text: string): LocalSettingsSnapshot {
-        const errors: { error: number; offset: number; length: number }[] = [];
-        const root = parseTree(text, errors, { allowTrailingComma: true });
-        if (errors.length || root?.type !== 'object') {
-            throw new ExternalError(this.code.l10n.t('local.settings.json must contain a valid JSON object.'));
-        }
-        const names = new Set<string>();
-        for (const property of root.children ?? []) {
-            const name = property.children?.[0].value as unknown;
-            if (typeof name === 'string') {
-                if (names.has(name)) {
-                    throw new ExternalError(this.code.l10n.t('local.settings.json must not contain duplicate properties.'));
-                }
-                names.add(name);
-            }
-        }
+        const root = parseJsoncObject(this.code, text, 'local.settings.json');
         const encrypted = findNodeAtLocation(root, ['IsEncrypted']);
         if (encrypted && (encrypted.type !== 'boolean' || getNodeValue(encrypted) !== false)) {
             throw new ExternalError(this.code.l10n.t('Decrypt local.settings.json with Core Tools before reading or editing function settings.'));

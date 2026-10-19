@@ -5,7 +5,7 @@
 
 import { CaselessSet, ExternalError, fileExists, ICodeContext, readText, Roots, showMessage, showSmartQuickPick, type ICaselessSetReader } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
-import { applyEdits, findNodeAtLocation, getNodeValue, modify, parseTree } from 'jsonc-parser';
+import { findNodeAtLocation, getNodeValue } from 'jsonc-parser';
 import type * as vscode from 'vscode';
 import { ExtensionId } from '../../constants';
 import { FunctionsProjectSelector } from '../../functions/FunctionsProjectSelector';
@@ -13,6 +13,7 @@ import { LocalFunctionSettings } from '../../functions/LocalFunctionSettings';
 import { FunctionsDebugType, isFunctionsDebugRuntime } from '../../functions/debug/functionsDebug';
 import { IWorkspaceViewDataTree } from '../../services';
 import { FunctionsProjectKeyPrefix } from '../../tree/workspace/WorkspaceNode';
+import { editJsonc, parseJsoncObject } from '../../utils/jsonc';
 import type { ManagedCommand } from '../ManagedCommand';
 
 const RuntimeRecommendations: ReadonlyMap<string, readonly string[]> = new Map([
@@ -118,28 +119,19 @@ export class InitializeFunctionsProject implements ManagedCommand {
         }
         const defaultText = key === 'configurations' ? '{ "version": "0.2.0", "configurations": [] }' : '{}';
         const text = await readText(this.ctx.code, uri) ?? defaultText;
-        const errors: { error: number; offset: number; length: number }[] = [];
-        const root = parseTree(text, errors, { allowTrailingComma: true });
-        if (errors.length || root?.type !== 'object') {
-            throw new ExternalError(this.ctx.code.l10n.t('{0} must contain a valid JSON object.', uri.fsPath));
-        }
-        const properties = (root.children ?? []).map(property => property.children?.[0].value as unknown);
-        if (new Set(properties).size !== properties.length) {
-            throw new ExternalError(this.ctx.code.l10n.t('{0} must not contain duplicate properties.', uri.fsPath));
-        }
+        const root = parseJsoncObject(this.ctx.code, text, uri.fsPath);
         const node = findNodeAtLocation(root, [key]);
         const value: unknown = node ? getNodeValue(node) : [];
         const entries = additions(value);
         if (node && !entries.length) {
             return;
         }
-        const options = { formattingOptions: { tabSize: 4, insertSpaces: true, eol: text.includes('\r\n') ? '\r\n' : '\n' } };
         let edited = text;
         if (!node) {
-            edited = applyEdits(edited, modify(edited, [key], entries, options));
+            edited = editJsonc(edited, [key], entries);
         } else {
             for (const entry of entries) {
-                edited = applyEdits(edited, modify(edited, [key, -1], entry, options));
+                edited = editJsonc(edited, [key, -1], entry);
             }
         }
         await this.ctx.code.workspace.fs.writeFile(uri, new TextEncoder().encode(edited));

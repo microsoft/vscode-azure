@@ -174,6 +174,8 @@ recommendations and an explanation of the supported debugging runtimes.
 Runtime selection, recommendation editing, and the optional launch offer are
 separate stages. Recommendation IDs are matched case-insensitively while
 preserving the existing file's spelling.
+Initialization and local settings share JSONC-object validation and path editing
+in `utils/jsonc.ts`; file-specific validation remains with their respective callers.
 
 The debugger schema and snippets expose `projectPath`, `hostArgs`, `env`,
 `hostPort`, `debugPort`, and `skipBuild`; standard `preLaunchTask` and
