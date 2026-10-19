@@ -104,19 +104,21 @@ export async function readJson<T = unknown>(code: IVsCode, uri: vscode.Uri): Pro
 }
 
 /**
- * Reads a required JSON file without asserting its shape; callers must validate
- * the parsed value.
+ * Reads a required JSON file; callers must validate the parsed value.
+ *
+ * @typeParam T - Shape the caller expects. This is an unvalidated assertion,
+ *   not runtime validation. Defaults to `unknown`, which forces the caller to narrow.
  *
  * @throws {@linkcode ExternalError} when the file is missing or malformed, with
  * only its basename in the message. Other filesystem failures propagate unchanged.
  */
-export async function readRequiredJson(code: IVsCode, uri: vscode.Uri): Promise<unknown> {
+export async function readRequiredJson<T = unknown>(code: IVsCode, uri: vscode.Uri): Promise<T> {
     const text = await readText(code, uri);
     if (text === undefined) {
         throw new ExternalError(code.l10n.t('The file \'{0}\' is missing.', basename(uri)));
     }
     try {
-        return JSON.parse(text) as unknown;
+        return JSON.parse(text) as T;
     } catch (error: unknown) {
         if (!(error instanceof SyntaxError)) {
             throw error;
