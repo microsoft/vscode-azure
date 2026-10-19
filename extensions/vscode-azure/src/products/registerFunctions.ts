@@ -33,7 +33,7 @@ import { FunctionAppDataProvider } from '../tree/resources/webApp/FunctionAppDat
 import { FunctionAppViewProvider } from '../tree/resources/webApp/FunctionAppViewProvider';
 import { FunctionAppLogStream } from '../tree/resources/webApp/FunctionAppLogStream';
 import { WebAppViewProvider } from '../tree/resources/webApp/WebAppViewProvider';
-import { functionsDetector } from '../tree/workspace/functions/FunctionsWorkspaceDataProvider';
+import { functionsDetector } from '../functions/functionsDetector';
 import { IWorkspaceDetector } from '../utils/workspaceIndex/WorkspaceDetector';
 
 /** Contribute all Azure Functions services and UI integrations. */

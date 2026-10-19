@@ -672,7 +672,7 @@ registration in `commands/registerCommands.ts`, and tree composition in
 
 | ID | Feature | Signed disposition | Outcome | Evidence |
 |---|---|---|---|---|
-| FUNC-002 | Project detection | Reuse | Wired | `tree/workspace/functions/FunctionsWorkspaceDataProvider.ts`: `functionsDetector`; `utils/workspaceIndex/WorkspaceIndexService.ts` |
+| FUNC-002 | Project detection | Reuse | Wired | `functions/functionsDetector.ts`: `functionsDetector`; `utils/workspaceIndex/WorkspaceIndexService.ts` |
 | FUNC-004 | Local workspace gates | Migrate | Landed | Extension `package.json` enablement/menu gates; `functions/FunctionsProjectSelector.ts`: `assertLocal`; `functions/LocalFunctionTarget.ts` |
 | FUNC-008 | Function schema | Migrate | Landed | Extension `package.json`: `jsonValidation` for `function.json` |
 | FUNC-009 | Host schema | Migrate | Landed | Extension `package.json`: `jsonValidation` for `host.json` |

@@ -6,7 +6,7 @@
 import { respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import { DebugFunctionsProject } from '../../../src/commands/functions/DebugFunctionsProject';
-import { FunctionsDebugProvider } from '../../../src/functions/debug/FunctionsDebugProvider';
+import { FunctionsDebugType } from '../../../src/functions/debug/functionsDebug';
 import { createLocalFunctions } from '../../tree/workspace/functions/mockLocalFunctions';
 
 describe('Debug Functions project (integration)', () => {
@@ -33,7 +33,7 @@ describe('Debug Functions project (integration)', () => {
             expect(s.m.debug.startDebugging.mock.calls[0].arguments).to.deep.equal([
                 s.code.workspace.getWorkspaceFolder(nested),
                 {
-                    type: FunctionsDebugProvider.Type, request: 'launch',
+                    type: FunctionsDebugType, request: 'launch',
                     name: 'Debug Azure Functions', projectPath: nested.fsPath,
                 },
             ]);

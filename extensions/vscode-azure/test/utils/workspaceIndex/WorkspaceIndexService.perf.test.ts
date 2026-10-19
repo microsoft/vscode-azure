@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
-import { functionsDetector, FunctionsHostFileTag } from '../../../src/tree/workspace/functions/FunctionsWorkspaceDataProvider';
+import { functionsDetector, FunctionsHostFileTag } from '../../../src/functions/functionsDetector';
 import type { WorkspaceDetector } from '../../../src/utils/workspaceIndex/WorkspaceDetector';
 import { WorkspaceIndexService } from '../../../src/utils/workspaceIndex/WorkspaceIndexService';
 

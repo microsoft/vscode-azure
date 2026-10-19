@@ -20,7 +20,7 @@ import { IWorkspaceViewDataTree } from '../../../services';
 import { combineContextValues } from '../../contextValueHelpers';
 import { getResourceTypeIconUri } from '../../iconPath';
 import { FunctionsProjectKeyPrefix, isFunctionsProjectNode, isLocalFunctionsNode, isLocalFunctionNode, type FunctionsProjectNode, type LocalFunctionNode } from '../WorkspaceNode';
-import { isFunctionsDebugRuntime } from '../../../functions/debug/FunctionsDebugPreparation';
+import { isFunctionsDebugRuntime } from '../../../functions/debug/functionsDebug';
 
 /** Renders local Functions projects, their direct function leaves, and listing hints or errors. */
 @injectable()

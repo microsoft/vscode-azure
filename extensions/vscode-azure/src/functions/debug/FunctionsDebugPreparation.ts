@@ -12,14 +12,7 @@ import { IToolService } from '../../tools/ToolService';
 import { FunctionsProjectSelector } from '../FunctionsProjectSelector';
 import { LocalFunctionSettings } from '../LocalFunctionSettings';
 import { LocalFunctionsNetwork } from '../host/LocalFunctionsNetwork';
-
-/** Worker stacks supported by the local attach flow. */
-export type FunctionsDebugRuntime = 'node' | 'python' | 'java' | 'powershell' | 'dotnet-isolated' | 'native';
-
-/** Identifies supported worker stacks without offering an attach action for custom handlers. */
-export function isFunctionsDebugRuntime(runtime: unknown): runtime is FunctionsDebugRuntime {
-    return runtime === 'node' || runtime === 'python' || runtime === 'java' || runtime === 'powershell' || runtime === 'dotnet-isolated' || runtime === 'native';
-}
+import { isFunctionsDebugRuntime, type FunctionsDebugRuntime } from './functionsDebug';
 
 interface GoApi {
     readonly settings?: {

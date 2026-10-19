@@ -6,11 +6,12 @@
 import { CancellationError, dirname, Disposable, ExternalError, IActionExecutor, IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
-import { FunctionsHostFileTag } from '../../tree/workspace/functions/FunctionsWorkspaceDataProvider';
+import { FunctionsHostFileTag } from '../functionsDetector';
 import { IWorkspaceIndexService } from '../../utils/workspaceIndex/WorkspaceIndexService';
 import { FunctionsProjectSelector } from '../FunctionsProjectSelector';
 import { LocalFunctionsHostProcess, type FunctionsHostAttachment } from '../host/LocalFunctionsHostProcess';
-import { FunctionsDebugPreparation, type FunctionsDebugRuntime } from './FunctionsDebugPreparation';
+import { FunctionsDebugPreparation } from './FunctionsDebugPreparation';
+import { FunctionsDebugType, type FunctionsDebugRuntime } from './functionsDebug';
 
 const ProtectedHostOptions = new Set([
     '-p', '-t', '-v', '--port', '--address', '--usehttps', '--enableauth', '--enable-auth',
@@ -21,7 +22,6 @@ const ProtectedHostOptions = new Set([
 /** Resolves the product debugger to a language attach configuration after VS Code runs preLaunchTask and substitutes variables. */
 @injectable()
 export class FunctionsDebugProvider implements vscode.DebugConfigurationProvider, Disposable {
-    public static readonly Type = 'azure-functions';
     private readonly subscriptions: Disposable[] = [];
 
     public constructor(
@@ -36,7 +36,7 @@ export class FunctionsDebugProvider implements vscode.DebugConfigurationProvider
     /** Registers only provider/adapter lifecycle hooks; activation never acquires tools or starts a host. */
     public register(): void {
         for (const trigger of [this.code.DebugConfigurationProviderTriggerKind.Initial, this.code.DebugConfigurationProviderTriggerKind.Dynamic]) {
-            this.subscriptions.push(this.code.debug.registerDebugConfigurationProvider(FunctionsDebugProvider.Type, this, trigger));
+            this.subscriptions.push(this.code.debug.registerDebugConfigurationProvider(FunctionsDebugType, this, trigger));
         }
         const stop = (session: vscode.DebugSession) => {
             const id: unknown = session.configuration.__azureFunctionsHostId;
@@ -57,13 +57,13 @@ export class FunctionsDebugProvider implements vscode.DebugConfigurationProvider
         return (await this.index.getIndex()).withTag(FunctionsHostFileTag)
             .filter(uri => !folder || this.code.workspace.getWorkspaceFolder(uri)?.uri.toString() === folder.uri.toString())
             .map(uri => ({
-                type: FunctionsDebugProvider.Type, request: 'launch',
+                type: FunctionsDebugType, request: 'launch',
                 name: this.code.l10n.t('Debug Functions: {0}', dirname(uri).fsPath), projectPath: dirname(uri).fsPath,
             }));
     }
 
     public resolveDebugConfiguration(_folder: vscode.WorkspaceFolder | undefined, config: vscode.DebugConfiguration): vscode.DebugConfiguration {
-        return { ...config, type: FunctionsDebugProvider.Type, request: 'launch', name: config.name || this.code.l10n.t('Debug Azure Functions') };
+        return { ...config, type: FunctionsDebugType, request: 'launch', name: config.name || this.code.l10n.t('Debug Azure Functions') };
     }
 
     public async resolveDebugConfigurationWithSubstitutedVariables(folder: vscode.WorkspaceFolder | undefined, config: vscode.DebugConfiguration, token?: vscode.CancellationToken): Promise<vscode.DebugConfiguration | undefined> {

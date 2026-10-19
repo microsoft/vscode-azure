@@ -10,50 +10,11 @@ import {
 import { inject, injectable, unmanaged } from 'inversify';
 import type * as vscode from 'vscode';
 import { IWorkspaceIndexService } from '../../../utils/workspaceIndex/WorkspaceIndexService';
-import type { WorkspaceDetector } from '../../../utils/workspaceIndex/WorkspaceDetector';
-import { createTag, StandardTagNames } from '../../../utils/workspaceIndex/tags';
 import type { FunctionsProjectNode, WorkspaceNode } from '../WorkspaceNode';
 import { isFunctionsProjectNode } from '../WorkspaceNode';
 import { FunctionsProjectReader } from '../../../functions/FunctionsProjectReader';
 import { LocalFunctionsHostTracker } from '../../../functions/host/LocalFunctionsHostTracker';
-
-/** File name that marks an Azure Functions project. */
-const FunctionsHostFileName = 'host.json';
-
-const functions = 'functions';
-
-/** The `host.json` that marks an Azure Functions project. */
-export const FunctionsHostFileTag = createTag(functions, StandardTagNames.projectFile);
-/** Function metadata files in source folders, excluding generated output. */
-export const FunctionsMetadataFileTag = createTag(functions, 'metadata');
-/** Files that affect local function state or runtime selection. */
-export const FunctionsSettingsFileTag = createTag(functions, 'settings');
-/** Source project files identifying precompiled Functions projects. */
-export const FunctionsBuildFileTag = createTag(functions, 'build');
-
-/**
- * Tags the `host.json` of every Azure Functions project.
- *
- * Source metadata and settings are tagged so edits invalidate the shared tree.
- */
-export const functionsDetector: WorkspaceDetector = {
-    id: 'functions',
-    namespace: functions,
-    inspect(node) {
-        if (node.isDirectory) {
-            return;
-        }
-        if (node.name === FunctionsHostFileName) {
-            node.tag(FunctionsHostFileTag);
-        } else if (node.name === 'function.json') {
-            node.tag(FunctionsMetadataFileTag);
-        } else if (node.name === 'local.settings.json') {
-            node.tag(FunctionsSettingsFileTag);
-        } else if (node.name.endsWith('.csproj') || node.name === 'pom.xml') {
-            node.tag(FunctionsBuildFileTag);
-        }
-    },
-};
+import { FunctionsBuildFileTag, FunctionsHostFileName, FunctionsHostFileTag, FunctionsMetadataFileTag } from '../../../functions/functionsDetector';
 
 /** Data-layer provider for {@linkcode FunctionsProjectNode}s. */
 @injectable()

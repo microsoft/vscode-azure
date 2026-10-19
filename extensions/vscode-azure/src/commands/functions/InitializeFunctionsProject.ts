@@ -10,8 +10,7 @@ import type * as vscode from 'vscode';
 import { ExtensionId } from '../../constants';
 import { FunctionsProjectSelector } from '../../functions/FunctionsProjectSelector';
 import { LocalFunctionSettings } from '../../functions/LocalFunctionSettings';
-import { isFunctionsDebugRuntime } from '../../functions/debug/FunctionsDebugPreparation';
-import { FunctionsDebugProvider } from '../../functions/debug/FunctionsDebugProvider';
+import { FunctionsDebugType, isFunctionsDebugRuntime } from '../../functions/debug/functionsDebug';
 import { IWorkspaceViewDataTree } from '../../services';
 import { FunctionsProjectKeyPrefix } from '../../tree/workspace/WorkspaceNode';
 import type { ManagedCommand } from '../ManagedCommand';
@@ -103,10 +102,10 @@ export class InitializeFunctionsProject implements ManagedCommand {
             if (!Array.isArray(value) || !value.every(isConfiguration)) {
                 throw new ExternalError(this.ctx.code.l10n.t('launch.json configurations must be an array of configuration objects.'));
             }
-            const exists = value.some(entry => entry.type === FunctionsDebugProvider.Type && entry.projectPath === project.fsPath);
+            const exists = value.some(entry => entry.type === FunctionsDebugType && entry.projectPath === project.fsPath);
             return exists ? [] : [{
                 name: this.ctx.code.l10n.t('Debug Azure Functions'),
-                type: FunctionsDebugProvider.Type,
+                type: FunctionsDebugType,
                 request: 'launch',
                 projectPath: project.fsPath,
             }];

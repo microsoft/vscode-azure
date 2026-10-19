@@ -11,7 +11,8 @@ import { FunctionsProjectSelector } from '../../../../src/functions/FunctionsPro
 import { LocalFunctionSettings } from '../../../../src/functions/LocalFunctionSettings';
 import { LocalFunctionTarget } from '../../../../src/functions/LocalFunctionTarget';
 import { LocalFunctionsHostTracker } from '../../../../src/functions/host/LocalFunctionsHostTracker';
-import { functionsDetector, FunctionsWorkspaceDataProvider } from '../../../../src/tree/workspace/functions/FunctionsWorkspaceDataProvider';
+import { FunctionsWorkspaceDataProvider } from '../../../../src/tree/workspace/functions/FunctionsWorkspaceDataProvider';
+import { functionsDetector } from '../../../../src/functions/functionsDetector';
 import { FunctionsWorkspaceViewProvider } from '../../../../src/tree/workspace/functions/FunctionsWorkspaceViewProvider';
 import type { WorkspaceNode } from '../../../../src/tree/workspace/WorkspaceNode';
 import { WorkspaceIndexService } from '../../../../src/utils/workspaceIndex/WorkspaceIndexService';

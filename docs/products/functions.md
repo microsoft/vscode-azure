@@ -56,6 +56,8 @@ dynamic configuration providers discover indexed `host.json` projects, including
 nested projects. F5 and the local project's Debug action share the same provider;
 neither requires `tasks.json` or `launch.json`. Multiple projects prompt for a
 selection, remembering the last choice per workspace.
+Its type identifier and supported-runtime guard live in
+`functions/debug/functionsDebug.ts`, independently of debugger preparation and registration.
 
 The initial resolution hook normalizes the configuration. VS Code substitutes
 variables and runs a configured `preLaunchTask` before the substituted-variable
@@ -184,6 +186,7 @@ deferred; Slice 5 records their future CLI v5 ownership.
 `FunctionsWorkspaceDataProvider` discovers projects through the shared workspace
 index's `host.json` tags. Nested projects have workspace-relative labels.
 Functions appear directly beneath their owning project, without a grouping node.
+Project detection and file tags are defined in `functions/functionsDetector.ts`.
 
 Local and remote function metadata share binding validation and trigger normalization.
 Each function requires exactly one trigger; authentication levels apply only to HTTP

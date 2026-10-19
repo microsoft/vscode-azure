@@ -8,7 +8,7 @@ import { inject, injectable } from 'inversify';
 import { isAbsolute } from 'node:path';
 import type * as vscode from 'vscode';
 import { IWorkspaceViewDataTree } from '../services';
-import { FunctionsHostFileTag } from '../tree/workspace/functions/FunctionsWorkspaceDataProvider';
+import { FunctionsHostFileTag } from './functionsDetector';
 import { FunctionsProjectKeyPrefix, isFunctionsProjectNode } from '../tree/workspace/WorkspaceNode';
 import { IWorkspaceIndexService } from '../utils/workspaceIndex/WorkspaceIndexService';
 
