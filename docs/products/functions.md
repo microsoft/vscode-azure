@@ -159,6 +159,8 @@ Readiness and shutdown failures are surfaced without copying settings or host
 response bodies into the output channel.
 Failed host tasks retain their diagnostic output and end with a nonzero exit
 code after the process-tree shutdown attempt completes.
+Concurrent stop requests await the same owned process completion. Finalization
+releases subscriptions and ownership and closes or finishes the task once.
 
 Initialize Project for VS Code selects a missing worker runtime and appends
 workspace extension recommendations. Supported runtimes offer an optional

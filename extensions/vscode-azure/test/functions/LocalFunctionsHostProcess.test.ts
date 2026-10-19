@@ -75,6 +75,50 @@ describe('Local Functions host ownership (unit)', () => {
         await s.owner.stop(host.id);
     });
 
+    for (const failed of [false, true]) {
+        it(`shares ${failed ? 'failed' : 'successful'} process-tree completion across concurrent stop requests`, async () => {
+            const s = setup({ keepStreamsOpen: true });
+            const host = await s.owner.start(s.request);
+            await waitFor(() => !!s.tracker.get(s.request.project));
+            const execution = await getMockTaskExecution(s.m);
+            const terminateTask = mock.method(execution, 'terminate');
+            const changed = mock.fn();
+            const subscription = s.tracker.onDidChange(changed);
+            const shutdown = Promise.withResolvers<undefined>();
+            s.terminateTree.mock.mockImplementationOnce(() => shutdown.promise, 0);
+            const stopping = Promise.allSettled([s.owner.stop(host.id), s.owner.stop(host.id)]);
+            expect(s.tracker.get(s.request.project)).to.be.undefined;
+            await waitFor(() => s.terminateTree.mock.callCount() === 1);
+            expect(s.finished.mock.callCount()).to.equal(0);
+            expect(terminateTask.mock.callCount()).to.equal(0);
+            await expect(s.owner.start(s.request)).to.be.rejectedWith('already has an owned host');
+            const child = s.spawn.mock.calls[0].result;
+            child?.stdout?.push(null);
+            child?.stderr?.push(null);
+            child?.emit('close', 0, null);
+            if (failed) {
+                shutdown.reject(new Error('Tree termination denied.'));
+            } else {
+                shutdown.resolve(undefined);
+            }
+
+            const results = await stopping;
+            expect(results.map(result => result.status)).to.deep.equal(failed ? ['rejected', 'rejected'] : ['fulfilled', 'fulfilled']);
+            for (const result of results) {
+                if (result.status === 'rejected') {
+                    expect(result.reason).to.have.property('message').that.includes('Could not terminate the owned Functions process tree');
+                }
+            }
+            expect(changed.mock.callCount()).to.equal(1);
+            expect(s.finished.mock.calls.map(call => call.arguments[0])).to.deep.equal(failed ? [1] : []);
+            expect(terminateTask.mock.callCount()).to.equal(failed ? 0 : 1);
+            expect(s.terminateTree.mock.callCount()).to.equal(1);
+            await s.owner.stop(host.id);
+            expect(terminateTask.mock.callCount()).to.equal(failed ? 0 : 1);
+            subscription.dispose();
+        });
+    }
+
     for (const skipBuild of [false, true]) {
         it(`reports early CLI failure with skipBuild=${String(skipBuild)} instead of cancellation`, async () => {
             const s = setup({ keepAlive: false, exitCode: 1 });

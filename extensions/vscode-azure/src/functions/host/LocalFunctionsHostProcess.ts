@@ -99,7 +99,7 @@ export class LocalFunctionsHostProcess implements Disposable {
         const abort = new AbortController();
         const terminal = new FunctionsHostTerminal(() => {
             if (!abort.signal.aborted) {
-                this.launch(host, request, hostPort.port, debugPort.port, env);
+                host.process = this.run(host, request, hostPort.port, debugPort.port, env);
             }
         }, () => { abort.abort(); });
         const host: OwnedHost = { id, project: request.project, abort, terminal, subscriptions: [] };
@@ -203,13 +203,11 @@ export class LocalFunctionsHostProcess implements Disposable {
         if (!host) { return; }
         host.abort.abort();
         host.registration?.dispose();
-        await host.process;
-        this.cleanup(host);
-        if (host.error || host.stopError) {
-            host.terminal.finish(1);
+        host.registration = undefined;
+        if (host.process) {
+            await host.process;
         } else {
-            host.execution?.terminate();
-            host.terminal.close();
+            this.finalize(host);
         }
         if (host.stopError) { throw host.stopError; }
     }
@@ -223,7 +221,7 @@ export class LocalFunctionsHostProcess implements Disposable {
         }
     }
 
-    private launch(host: OwnedHost, request: FunctionsHostStart, port: number, debugPort: number, env: Readonly<Record<string, string>>): void {
+    private async run(host: OwnedHost, request: FunctionsHostStart, port: number, debugPort: number, env: Readonly<Record<string, string>>): Promise<void> {
         const args = [
             'run', request.project.fsPath, ...request.hostArgs, '--port', String(port),
         ];
@@ -234,50 +232,44 @@ export class LocalFunctionsHostProcess implements Disposable {
         if (request.runtime === 'dotnet-isolated') {
             args.push('--dotnet-isolated-debug', '--enable-json-output');
         }
-        host.process = this.processes.spawn({
-            execution: 'background', command: [request.executable, ...args], cwd: request.project, env,
-            killTreeOnCancel: true, streamOutput: true,
-        }, host.abort.signal).then(async process => {
+        try {
+            const process = await this.processes.spawn({
+                execution: 'background', command: [request.executable, ...args], cwd: request.project, env,
+                killTreeOnCancel: true, streamOutput: true,
+            }, host.abort.signal);
             try {
                 await Promise.all([
                     this.consumeOutput(host, process.stdout, request.runtime, debugPort),
                     this.consumeOutput(host, process.stderr, request.runtime, debugPort),
                 ]);
-            } catch (error: unknown) {
+            } catch {
                 host.abort.abort();
                 host.error ??= new ExternalError(this.code.l10n.t('The Functions host output stream failed. See its terminal for details.'));
                 host.terminal.write(`${host.error.message}\n`);
                 this.output.warn(this.code.l10n.t('[functions] Owned host output stream failed.'));
-                throw error;
             } finally {
                 await process.completed;
             }
-        }).then(
-            () => {
-                if (!host.abort.signal.aborted) {
-                    host.error = new ExternalError(this.code.l10n.t('The Functions host exited. See its terminal for details.'));
-                    host.terminal.write(`${host.error.message}\n`);
-                }
-                this.cleanup(host);
-                host.terminal.finish(host.error ? 1 : 0);
-            },
-            (error: unknown) => {
-                if (host.abort.signal.aborted && !CancellationError.test(error)) {
-                    host.stopError = new ExternalError(this.code.l10n.t('Could not terminate the owned Functions process tree. Check its terminal and stop the remaining processes before debugging again.'));
-                    host.terminal.write(`${host.stopError.message}\n`);
-                    this.output.warn(this.code.l10n.t('[functions] Owned process-tree termination failed.'));
-                }
-                if (!host.abort.signal.aborted && !CancellationError.test(error)) {
-                    host.error = new ExternalError(request.runtime === 'native'
-                        ? this.code.l10n.t('The Functions host failed. Native Go requires the Core Tools v5 Go worker workload. See its terminal for details.')
-                        : this.code.l10n.t('The Functions host failed. See its terminal for details.'));
-                    host.terminal.write(`${host.error.message}\n`);
-                    this.output.warn(this.code.l10n.t('[functions] Owned host process failed.'));
-                }
-                this.cleanup(host);
-                host.terminal.finish(host.error || host.stopError ? 1 : 0);
-            },
-        );
+            if (!host.abort.signal.aborted) {
+                host.error = new ExternalError(this.code.l10n.t('The Functions host exited. See its terminal for details.'));
+                host.terminal.write(`${host.error.message}\n`);
+            }
+        } catch (error: unknown) {
+            if (host.abort.signal.aborted && !CancellationError.test(error)) {
+                host.stopError = new ExternalError(this.code.l10n.t('Could not terminate the owned Functions process tree. Check its terminal and stop the remaining processes before debugging again.'));
+                host.terminal.write(`${host.stopError.message}\n`);
+                this.output.warn(this.code.l10n.t('[functions] Owned process-tree termination failed.'));
+            }
+            if (!host.abort.signal.aborted && !CancellationError.test(error)) {
+                host.error = new ExternalError(request.runtime === 'native'
+                    ? this.code.l10n.t('The Functions host failed. Native Go requires the Core Tools v5 Go worker workload. See its terminal for details.')
+                    : this.code.l10n.t('The Functions host failed. See its terminal for details.'));
+                host.terminal.write(`${host.error.message}\n`);
+                this.output.warn(this.code.l10n.t('[functions] Owned host process failed.'));
+            }
+        } finally {
+            this.finalize(host);
+        }
     }
 
     private async consumeOutput(host: OwnedHost, stream: AsyncIterable<string>, runtime: string, debugPort: number): Promise<void> {
@@ -337,10 +329,17 @@ export class LocalFunctionsHostProcess implements Disposable {
         if (host.abort.signal.aborted) { throw new CancellationError(); }
     }
 
-    private cleanup(host: OwnedHost): void {
+    private finalize(host: OwnedHost): void {
+        if (this.hosts.get(host.id) !== host) { return; }
         host.abort.abort();
         host.registration?.dispose();
         host.subscriptions.splice(0).forEach(disposable => { disposable.dispose(); });
-        if (this.hosts.get(host.id) === host) { this.hosts.delete(host.id); }
+        this.hosts.delete(host.id);
+        if (host.error || host.stopError) {
+            host.terminal.finish(1);
+        } else {
+            host.execution?.terminate();
+            host.terminal.close();
+        }
     }
 }
