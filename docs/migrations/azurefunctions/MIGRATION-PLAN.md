@@ -378,11 +378,11 @@ Resolution flow for one session:
   Reuse worker executable/argument overrides, loopback debugger transport,
   and owned-host readiness/process-tree cleanup. Return a Go remote DAP attach config;
   custom handlers are excluded. Wire Go recommendations, native-runtime
-  initialization, debugger language contribution, and the workspace Debug action.
+  initialization, and debugger language contribution.
   <- FUNC-140, FUNC-141, FUNC-195
 - [x] Go behavioral coverage: prerequisites/build errors, paths with spaces,
   skipped builds, loopback attach, readiness failure/cancellation/cleanup, and
-  initialization/tree capabilities. Live Go attach smoke check remains part
+  initialization. Live Go attach smoke check remains part
   of Slice 7. <- FUNC-140, FUNC-141, FUNC-195
 - [x] Host process and tracking: build steps, start, readiness, port, terminal
   errors, stop on session end, and start/stop events for local listing and
@@ -825,8 +825,7 @@ Slice 4; the automated gates do not certify those manual paths.
 
 ### Coverage audit validation -- 2026-10-12
 
-Behavioral tests cover the Debug Project command's project selection and launch
-configuration, host debugger-readiness timeout and failure cleanup, and
+Behavioral tests cover host debugger-readiness timeout and failure cleanup, and
 post-deployment endpoint service scoping, empty results, and discovery failures.
 The coverage additions require no production-code changes.
 

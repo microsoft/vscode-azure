@@ -53,9 +53,8 @@ Owned hosts consume both output generators concurrently and opt into
 The `azure-functions` debugger supports Node.js, Python, Java, PowerShell,
 .NET isolated, and native Go projects in trusted, non-virtual workspace folders. Initial and
 dynamic configuration providers discover indexed `host.json` projects, including
-nested projects. F5 and the local project's Debug action share the same provider;
-neither requires `tasks.json` or `launch.json`. Multiple projects prompt for a
-selection, remembering the last choice per workspace.
+nested projects. F5 requires neither `tasks.json` nor `launch.json`. Multiple
+projects prompt for a selection, remembering the last choice per workspace.
 Its type identifier and supported-runtime guard live in
 `functions/debug/functionsDebug.ts`, independently of debugger preparation and registration.
 

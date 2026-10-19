@@ -11,7 +11,6 @@ import { RevealInExplorer } from '../../../commands/tree/RevealInExplorer';
 import { RefreshWorkspaceView } from '../../../commands/tree/RefreshWorkspaceView';
 import { CopyFunctionUrl } from '../../../commands/functions/CopyFunctionUrl';
 import { DeployFunctionApp } from '../../../commands/functions/DeployFunctionApp';
-import { DebugFunctionsProject } from '../../../commands/functions/DebugFunctionsProject';
 import { InitializeFunctionsProject } from '../../../commands/functions/InitializeFunctionsProject';
 import { ExecuteFunction } from '../../../commands/functions/ExecuteFunction';
 import { SetFunctionState } from '../../../commands/functions/SetFunctionState';
@@ -20,7 +19,6 @@ import { IWorkspaceViewDataTree } from '../../../services';
 import { combineContextValues } from '../../contextValueHelpers';
 import { getResourceTypeIconUri } from '../../iconPath';
 import { FunctionsProjectKeyPrefix, isFunctionsProjectNode, isLocalFunctionsNode, isLocalFunctionNode, type FunctionsProjectNode, type LocalFunctionNode } from '../WorkspaceNode';
-import { isFunctionsDebugRuntime } from '../../../functions/debug/functionsDebug';
 
 /** Renders local Functions projects, their direct function leaves, and listing hints or errors. */
 @injectable()
@@ -91,7 +89,6 @@ export class FunctionsWorkspaceViewProvider implements ViewProvider<string> {
             RefreshWorkspaceView.ContextValue,
             DeployFunctionApp.ContextValue,
             InitializeFunctionsProject.ContextValue,
-            isFunctionsDebugRuntime(node.runtime) ? DebugFunctionsProject.ContextValue : '',
         );
     }
 

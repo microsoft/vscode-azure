@@ -161,12 +161,6 @@
                 "title": "%commands.vscode-azure/functions/deploy%"
             },
             {
-                "command": "vscode-azure/functions/debugProject",
-                "enablement": "isWorkspaceTrusted && !virtualWorkspace",
-                "category": "%commands.category.azure%",
-                "title": "%commands.vscode-azure/functions/debugProject%"
-            },
-            {
                 "command": "vscode-azure/functions/initializeProject",
                 "enablement": "isWorkspaceTrusted && !virtualWorkspace",
                 "category": "%commands.category.azure%",
@@ -464,11 +458,6 @@
                 }
             ],
             "view/item/context": [
-                {
-                    "command": "vscode-azure/functions/debugProject",
-                    "when": "view == vscode-azure/workspace && viewItem =~ /\\bdebugFunctionsProject\\b/i && !virtualWorkspace",
-                    "group": "3_actions@0"
-                },
                 {
                     "command": "vscode-azure/functions/initializeProject",
                     "when": "view == vscode-azure/workspace && viewItem =~ /\\binitializeFunctionsProject\\b/i && !virtualWorkspace",

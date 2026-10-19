@@ -11,7 +11,6 @@ import { ExtensionId } from '../../../src/constants';
 import { InitializeFunctionsProject } from '../../../src/commands/functions/InitializeFunctionsProject';
 import { createLocalFunctions } from '../../tree/workspace/functions/mockLocalFunctions';
 import { isFunctionsProjectNode } from '../../../src/tree/workspace/WorkspaceNode';
-import { DebugFunctionsProject } from '../../../src/commands/functions/DebugFunctionsProject';
 
 describe('Initialize Functions project (integration)', () => {
     const fixtures: ReturnType<typeof createLocalFunctions>[] = [];
@@ -65,7 +64,6 @@ describe('Initialize Functions project (integration)', () => {
         const [after] = refreshed;
         expect(refreshed).to.include(unrelated);
         expect(isFunctionsProjectNode(after) && after.initialized).to.be.true;
-        expect(s.view.getTreeItem(after.id).contextValue).to.include(DebugFunctionsProject.ContextValue);
         const next = respondToPrompts(s.m, [{ button: 'Add launch.json Configuration' }]);
         await s.command.execute(s.folder);
         next.assertAllConsumed();
@@ -139,7 +137,7 @@ describe('Initialize Functions project (integration)', () => {
         });
     }
 
-    it('initializes native Go recommendations and exposes F5 in the workspace tree', async () => {
+    it('initializes native Go recommendations and an optional launch configuration', async () => {
         const s = setup('native');
         s.m.fs.addFile(s.code.Uri.joinPath(s.folder, 'go.mod'), 'module app\n\ngo 1.24\n');
         const prompts = respondToPrompts(s.m, [{ button: 'Add launch.json Configuration' }]);
@@ -149,8 +147,6 @@ describe('Initialize Functions project (integration)', () => {
         expect(extensions.recommendations).to.include('golang.Go');
         const launch = parse(await readText(s.code, s.code.Uri.joinPath(s.folder, '.vscode', 'launch.json')) ?? '');
         expect(launch.configurations[0].type).to.equal('azure-functions');
-        const [project] = await s.tree.getChildren();
-        expect(s.view.getTreeItem(project.id).contextValue).to.include(DebugFunctionsProject.ContextValue);
     });
 
     it('selects the native worker runtime when initializing an existing Go module', async () => {

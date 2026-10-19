@@ -24,7 +24,6 @@
     "commands.vscode-azure/settings/edit": "Edit Settings",
     "commands.vscode-azure/functions/createNew": "Create Empty Function App in Azure...",
     "commands.vscode-azure/functions/deploy": "Deploy Project as Function App...",
-    "commands.vscode-azure/functions/debugProject": "Debug Functions Project",
     "commands.vscode-azure/functions/initializeProject": "Initialize Functions Project for VS Code...",
     "debug.functions.label": "Debug Azure Functions",
     "debug.functions.projectPath": "Functions project folder. Omit to select an indexed project.",
