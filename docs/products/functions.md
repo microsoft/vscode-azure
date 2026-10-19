@@ -59,7 +59,10 @@ selection, remembering the last choice per workspace.
 
 The initial resolution hook normalizes the configuration. VS Code substitutes
 variables and runs a configured `preLaunchTask` before the substituted-variable
-hook selects, validates, and starts the project. Core Tools builds ordinary
+hook selects, validates, and starts the project. Each launch captures local settings,
+launch environment overrides, and the selected Python environment or Go tool paths
+once. Validation, Go compilation, and worker startup consume that launch snapshot;
+subsequent launches resolve their own settings and tools. Core Tools builds ordinary
 projects and restores their dependencies. `preLaunchTask` replaces compilation;
 `skipBuild: true` also suppresses compilation, but Core Tools can still restore
 dependencies. Go uses an extension-owned debug build.

@@ -32,14 +32,16 @@ export function selectPythonEnvironment(
     s: ReturnType<typeof createLocalFunctions>,
     executable: vscode.Uri,
     variables: Readonly<Record<string, string>> = {},
-): void {
+) {
+    const environments = {
+        getActiveEnvironmentPath: mock.fn(() => ({ path: executable.fsPath })),
+        resolveEnvironment: mock.fn(() => Promise.resolve({ executable: { uri: executable } })),
+        getEnvironmentVariables: mock.fn(() => variables),
+    };
     addMockExtension(s.m, 'ms-python.python', {
-        ready: Promise.resolve(), environments: {
-            getActiveEnvironmentPath: () => ({ path: executable.fsPath }),
-            resolveEnvironment: () => Promise.resolve({ executable: { uri: executable } }),
-            getEnvironmentVariables: () => variables,
-        },
+        ready: Promise.resolve(), environments,
     });
+    return environments;
 }
 
 /** Shares real index, settings, validation, and host services with deterministic executable acquisition and network probes. */
@@ -72,7 +74,7 @@ export function createFunctionsDebugFixture(runtime = 'node', processOptions?: P
     const tools = { acquire: mock.fn<IToolService['acquire']>(() => Promise.resolve({ executablePath: 'func' })), getResolvedPath: mock.fn(() => 'func') };
     const preparation = new FunctionsDebugPreparation(s.code, processes, tools, s.settings, projects, network);
     const owners = new LocalFunctionsHostProcess(s.code, processes, s.createHost, s.hosts, network, output);
-    const provider = new FunctionsDebugProvider(s.code, actions, s.index, projects, preparation, owners, s.settings);
+    const provider = new FunctionsDebugProvider(s.code, actions, s.index, projects, preparation, owners);
     return {
         ...s, projects, network, processes, spawn, tools, preparation, owners, debugProvider: provider,
         dispose: () => { provider.dispose(); owners.dispose(); s.dispose(); },

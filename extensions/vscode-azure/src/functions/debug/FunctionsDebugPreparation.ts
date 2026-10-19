@@ -42,6 +42,27 @@ interface PythonDebugApi {
     };
 }
 
+interface GoTools {
+    readonly go: string;
+    readonly delve: string;
+}
+
+interface PythonEnvironment {
+    readonly executable: string;
+    readonly virtualEnvironment: vscode.Uri;
+    readonly variables: Readonly<Record<string, string>>;
+}
+
+/** Settings and runtime prerequisites resolved once for one debug launch, never cached between launches. */
+export type FunctionsDebugLaunch = {
+    readonly project: vscode.Uri;
+    readonly environment: Readonly<Record<string, string>>;
+} & (
+    | { readonly runtime: 'python'; readonly python: PythonEnvironment }
+    | { readonly runtime: 'native'; readonly tools: GoTools }
+    | { readonly runtime: Exclude<FunctionsDebugRuntime, 'python' | 'native'> }
+);
+
 /** Validates local projects and prepares workers; Core Tools owns ordinary builds and dependency restoration. */
 @injectable()
 export class FunctionsDebugPreparation {
@@ -54,13 +75,15 @@ export class FunctionsDebugPreparation {
         @inject(LocalFunctionsNetwork) private readonly network: LocalFunctionsNetwork,
     ) { }
 
-    public async validate(project: vscode.Uri, env: Readonly<Record<string, string>>, token?: vscode.CancellationToken): Promise<FunctionsDebugRuntime> {
+    /** Captures validated settings, launch overrides, and the selected Python environment or Go tools. */
+    public async prepare(project: vscode.Uri, env: Readonly<Record<string, string>>, token?: vscode.CancellationToken): Promise<FunctionsDebugLaunch> {
         this.projects.assertLocal(project);
         const localSettings = this.code.Uri.joinPath(project, 'local.settings.json');
         if (this.code.workspace.textDocuments.some(document => document.uri.toString() === localSettings.toString() && document.isDirty)) {
             throw new ExternalError(this.code.l10n.t('Save local.settings.json before starting the Functions host.'));
         }
-        const values = new CaselessMap([...(await this.settings.read(project)).values, ...Object.entries(env)]);
+        const values = new CaselessMap((await this.settings.read(project)).values);
+        applyEnvironmentOverrides(values, env);
         const runtime = values.get('FUNCTIONS_WORKER_RUNTIME')?.trim().toLowerCase();
         if (!isFunctionsDebugRuntime(runtime)) {
             throw new ExternalError(this.code.l10n.t('Set FUNCTIONS_WORKER_RUNTIME to node, python, java, powershell, dotnet-isolated, or native (Go) in local.settings.json before debugging.'));
@@ -70,12 +93,14 @@ export class FunctionsDebugPreparation {
             throw new ExternalError(this.code.l10n.t('Local debugging supports Functions runtime v4 only.'));
         }
         await this.validateStorage(values);
+        const snapshot = { project, environment: Object.fromEntries(values) };
         if (runtime === 'python') {
-            await this.selectedPython(project);
-        } else if (runtime === 'native') {
-            await this.validateGo(project, Object.fromEntries(values), token);
+            return { ...snapshot, runtime, python: await this.selectedPython(project) };
         }
-        return runtime;
+        if (runtime === 'native') {
+            return { ...snapshot, runtime, tools: await this.validateGo(project, snapshot.environment, token) };
+        }
+        return { ...snapshot, runtime };
     }
 
     private async validateStorage(values: ICaselessMapReader<string>): Promise<void> {
@@ -95,7 +120,7 @@ export class FunctionsDebugPreparation {
         }
     }
 
-    private async validateGo(project: vscode.Uri, env: Readonly<Record<string, string>>, token?: vscode.CancellationToken): Promise<void> {
+    private async validateGo(project: vscode.Uri, env: Readonly<Record<string, string>>, token?: vscode.CancellationToken): Promise<GoTools> {
         if (!await fileExists(this.code, this.code.Uri.joinPath(project, 'go.mod'))) {
             throw new ExternalError(this.code.l10n.t('Native worker debugging requires a Go Functions project with go.mod. Custom handlers are not supported.'));
         }
@@ -114,6 +139,7 @@ export class FunctionsDebugPreparation {
             if (CancellationError.test(error) || error instanceof ExternalError) { throw error; }
             throw new ExternalError(this.code.l10n.t('Could not run the Go debugging tools. Install Go 1.24 or later and install dlv with Go: Install/Update Tools.'));
         }
+        return tools;
     }
 
     public async executable(project: vscode.Uri, token?: vscode.CancellationToken): Promise<string> {
@@ -125,8 +151,8 @@ export class FunctionsDebugPreparation {
     }
 
     /** Builds Go with optimizations and inlining disabled so Delve can attach reliably. */
-    public async buildGo(project: vscode.Uri, env: Readonly<Record<string, string>>, token?: vscode.CancellationToken): Promise<void> {
-        const tools = await this.goTools(project);
+    public async buildGo(launch: Extract<FunctionsDebugLaunch, { readonly runtime: 'native' }>, token?: vscode.CancellationToken): Promise<void> {
+        const { project, tools, environment: env } = launch;
         await this.code.workspace.fs.createDirectory(this.code.Uri.joinPath(project, 'bin'));
         await this.processes.spawn({
             execution: 'foreground',
@@ -138,13 +164,23 @@ export class FunctionsDebugPreparation {
     }
 
     /** Applies project/launch overrides above Python environment defaults, then sets the owned debugger coordinates. */
-    public async workerEnvironment(project: vscode.Uri, runtime: FunctionsDebugRuntime, port: number, pipe: string, env: Readonly<Partial<Record<string, string>>> = {}): Promise<Readonly<Record<string, string>>> {
+    public async workerEnvironment(launch: FunctionsDebugLaunch, port: number, pipe: string): Promise<Readonly<Record<string, string>>> {
+        const environment = new CaselessMap(Object.entries(launch.environment));
+        applyEnvironmentOverrides(environment, {
+            ...await this.workerOverrides(launch, port, pipe),
+            ['FUNCTIONS_WORKER_RUNTIME']: launch.runtime,
+            ['FUNCTIONS_WORKER_PROCESS_COUNT']: '1',
+        });
+        return Object.fromEntries(environment);
+    }
+
+    private async workerOverrides(launch: FunctionsDebugLaunch, port: number, pipe: string): Promise<Readonly<Record<string, string>>> {
         const debuggerExtensions: Partial<Record<FunctionsDebugRuntime, string>> = {
             java: 'vscjava.vscode-java-debug',
             powershell: 'ms-vscode.PowerShell',
             ['dotnet-isolated']: 'ms-dotnettools.csharp',
         };
-        const extensionId = debuggerExtensions[runtime];
+        const extensionId = debuggerExtensions[launch.runtime];
         if (extensionId) {
             const extension = this.code.extensions.getExtension(extensionId);
             if (!extension) {
@@ -152,7 +188,7 @@ export class FunctionsDebugPreparation {
             }
             await extension.activate();
         }
-        switch (runtime) {
+        switch (launch.runtime) {
             case 'node':
                 return { ['languageWorkers__node__arguments']: `--inspect-brk=127.0.0.1:${port}` };
             case 'java':
@@ -160,16 +196,17 @@ export class FunctionsDebugPreparation {
             case 'powershell':
                 return { ['PSWorkerCustomPipeName']: pipe };
             case 'native':
-                return this.goWorkerEnvironment(project, port, env);
+                return this.goWorkerEnvironment(launch, port);
             case 'python':
-                return this.pythonWorkerEnvironment(project, port, env);
+                return this.pythonWorkerEnvironment(launch.python, port, launch.environment);
             case 'dotnet-isolated':
                 return {};
         }
     }
 
-    private async goWorkerEnvironment(project: vscode.Uri, port: number, env: Readonly<Partial<Record<string, string>>>): Promise<Readonly<Record<string, string>>> {
-        const tools = await this.goTools(project);
+    private async goWorkerEnvironment(launch: Extract<FunctionsDebugLaunch, { readonly runtime: 'native' }>, port: number): Promise<Readonly<Record<string, string>>> {
+        const { project, tools } = launch;
+        const env: Readonly<Partial<Record<string, string>>> = launch.environment;
         const binary = this.goBinary(project);
         if (!await fileExists(this.code, binary)) {
             throw new ExternalError(this.code.l10n.t('Build the Go Functions project to bin/app (app.exe on Windows) with -gcflags=all=-N -l before debugging.'));
@@ -189,8 +226,8 @@ export class FunctionsDebugPreparation {
         };
     }
 
-    private async pythonWorkerEnvironment(project: vscode.Uri, port: number, env: Readonly<Partial<Record<string, string>>>): Promise<Readonly<Record<string, string>>> {
-        const { executable: python, variables, virtualEnvironment } = await this.selectedPython(project);
+    private async pythonWorkerEnvironment(pythonEnvironment: PythonEnvironment, port: number, env: Readonly<Record<string, string>>): Promise<Readonly<Record<string, string>>> {
+        const { executable: python, variables, virtualEnvironment } = pythonEnvironment;
         const extension = this.code.extensions.getExtension<PythonDebugApi | undefined>('ms-python.debugpy');
         if (!extension) {
             throw new ExternalError(this.code.l10n.t('Install the Python Debugger extension before debugging this project.'));
@@ -225,7 +262,7 @@ export class FunctionsDebugPreparation {
         return this.code.Uri.joinPath(project, 'bin', process.platform === 'win32' ? 'app.exe' : 'app');
     }
 
-    private async goTools(project: vscode.Uri): Promise<{ readonly go: string; readonly delve: string }> {
+    private async goTools(project: vscode.Uri): Promise<GoTools> {
         const extension = this.code.extensions.getExtension<GoApi | undefined>('golang.Go');
         if (!extension) {
             throw new ExternalError(this.code.l10n.t('Install the Go extension (golang.Go) before debugging native Go Functions.'));
@@ -242,11 +279,7 @@ export class FunctionsDebugPreparation {
         return { go, delve };
     }
 
-    private async selectedPython(project: vscode.Uri): Promise<{
-        readonly executable: string;
-        readonly virtualEnvironment: vscode.Uri;
-        readonly variables: Readonly<Partial<Record<string, string>>>;
-    }> {
+    private async selectedPython(project: vscode.Uri): Promise<PythonEnvironment> {
         const extension = this.code.extensions.getExtension<PythonApi | undefined>('ms-python.python');
         if (!extension) {
             throw new ExternalError(this.code.l10n.t('Install the Python extension and select an interpreter for this project before debugging.'));
@@ -272,6 +305,13 @@ export class FunctionsDebugPreparation {
             variables: Object.fromEntries(Object.entries(api.environments.getEnvironmentVariables(project))
                 .filter((entry): entry is [string, string] => typeof entry[1] === 'string')),
         };
+    }
+}
+
+function applyEnvironmentOverrides(environment: CaselessMap<string>, overrides: Readonly<Record<string, string>>): void {
+    for (const [key, value] of Object.entries(overrides)) {
+        environment.delete(key);
+        environment.set(key, value);
     }
 }
 

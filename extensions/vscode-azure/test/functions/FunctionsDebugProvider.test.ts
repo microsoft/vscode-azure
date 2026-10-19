@@ -8,6 +8,7 @@ import { addMockExtension, addWorkspaceFolder, MockCancellationToken, waitFor } 
 import { delimiter } from 'node:path';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
+import type { FunctionsDebugLaunch } from '../../src/functions/debug/FunctionsDebugPreparation';
 import type { FunctionsHostStart } from '../../src/functions/host/LocalFunctionsHostProcess';
 import { createFunctionsDebugFixture, selectPythonEnvironment } from './mockFunctionsDebug';
 
@@ -66,10 +67,59 @@ describe('Functions debug provider (unit)', () => {
         expect(s.spawn.mock.callCount()).to.equal(0);
     });
 
+    it('keeps validated settings and Python selection consistent through startup and reads fresh settings for the next launch', async () => {
+        const s = setup('python');
+        const executable = s.code.Uri.joinPath(s.folder, '.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
+        const python = selectPythonEnvironment(s, executable, { ['CUSTOM_SETTING']: 'python' });
+        addMockExtension(s.m, 'ms-python.debugpy', {
+            debug: {
+                getRemoteLauncherCommand: () => Promise.resolve(['debugpy', '--listen', '127.0.0.1:9001']),
+                getDebuggerPackagePath: () => Promise.resolve('/debugpy'),
+            },
+        });
+        const read = mock.method(s.settings, 'read');
+        const worker = mock.method(s.preparation, 'workerEnvironment');
+        mock.method(s.tools, 'acquire', () => {
+            s.m.fs.addFile(s.code.Uri.joinPath(s.folder, 'local.settings.json'), JSON.stringify({
+                Values: { ['FUNCTIONS_WORKER_RUNTIME']: 'node', ['AzureWebJobsStorage__accountName']: 'updated' },
+            }));
+            s.m.installedExtensions.delete('ms-python.python');
+            return Promise.resolve({ executablePath: 'func' });
+        });
+        mock.method(s.owners, 'start', async (request: FunctionsHostStart) => {
+            await request.prepare(9001, 'owned-pipe');
+            return { id: 'owned', hostPort: 7072, debugPort: 9001, pipe: 'owned-pipe' };
+        });
+
+        const first = await s.debugProvider.resolveDebugConfigurationWithSubstitutedVariables(undefined, {
+            ...s.config, env: { ['CUSTOM_SETTING']: 'launch' },
+        });
+        expect(first?.type).to.equal('debugpy');
+        const environment = await worker.mock.calls[0].result;
+        expect(environment?.languageWorkers__python__defaultExecutablePath).to.equal(executable.fsPath);
+        expect(environment?.FUNCTIONS_WORKER_RUNTIME).to.equal('python');
+        expect(environment?.AzureWebJobsStorage).to.equal('UseDevelopmentStorage=true');
+        expect(environment?.CUSTOM_SETTING).to.equal('launch');
+        expect(read.mock.callCount()).to.equal(1);
+        expect(python.resolveEnvironment.mock.callCount()).to.equal(1);
+        expect(python.getEnvironmentVariables.mock.callCount()).to.equal(1);
+
+        const second = await s.debugProvider.resolveDebugConfigurationWithSubstitutedVariables(undefined, s.config);
+        expect(second?.type).to.equal('pwa-node');
+        const nextEnvironment = await worker.mock.calls[1].result;
+        expect(nextEnvironment?.AzureWebJobsStorage__accountName).to.equal('updated');
+        expect(nextEnvironment?.AzureWebJobsStorage).to.be.undefined;
+        expect(read.mock.callCount()).to.equal(2);
+    });
+
     for (const [runtime, type] of [['node', 'pwa-node'], ['python', 'debugpy'], ['java', 'java'], ['powershell', 'PowerShell'], ['dotnet-isolated', 'coreclr'], ['native', 'go']]) {
         it(`returns ${runtime} attach coordinates owned by the selected project`, async () => {
             const s = setup(runtime);
-            mock.method(s.preparation, 'workerEnvironment', () => Promise.resolve({}));
+            mock.method(s.preparation, 'workerEnvironment', (launch: FunctionsDebugLaunch) => Promise.resolve({
+                ...launch.environment,
+                ['FUNCTIONS_WORKER_RUNTIME']: launch.runtime,
+                ['FUNCTIONS_WORKER_PROCESS_COUNT']: '1',
+            }));
             const start = mock.method(s.owners, 'start', async (request: FunctionsHostStart) => {
                 const env = await request.prepare(9229, 'owned-pipe');
                 expect(env.FUNCTIONS_WORKER_RUNTIME).to.equal(runtime);
@@ -122,17 +172,19 @@ describe('Functions debug provider (unit)', () => {
             addMockExtension(s.m, 'ms-python.debugpy', {
                 debug: { getRemoteLauncherCommand: launcher, getDebuggerPackagePath: () => Promise.resolve('C:\\Python Debugger\\debugpy') },
             });
-            const env = await s.preparation.workerEnvironment(s.folder, 'python', 9001, 'pipe');
+            const launch = await s.preparation.prepare(s.folder, {});
+            const env = await s.preparation.workerEnvironment(launch, 9001, 'pipe');
             expect(env.languageWorkers__python__defaultExecutablePath).to.equal(python.fsPath);
             expect(env.languageWorkers__python__arguments).to.equal('"C:\\Python Debugger\\debugpy" "--listen" "127.0.0.1:9001" "--wait-for-client"');
             expect(env.CUSTOM_PYTHON_ENV).to.equal('configured');
             expect(env.VIRTUAL_ENV).to.equal(virtualEnvironment.fsPath);
             expect(env.PATH).to.contain('environment-path');
             expect(launcher.mock.calls[0].arguments).to.deep.equal(['127.0.0.1', 9001, true]);
-            const overridden = await s.preparation.workerEnvironment(s.folder, 'python', 9001, 'pipe', {
+            const overriddenLaunch = await s.preparation.prepare(s.folder, {
                 ['CUSTOM_PYTHON_ENV']: 'launch', [pathName]: 'launch-path',
                 [platform === 'win32' ? 'Virtual_Env' : 'VIRTUAL_ENV']: 'another-environment',
             });
+            const overridden = await s.preparation.workerEnvironment(overriddenLaunch, 9001, 'pipe');
             expect(overridden.CUSTOM_PYTHON_ENV).to.equal('launch');
             expect(overridden.PATH).to.equal(`${executableDirectory.fsPath}${delimiter}${expectedPath}`);
             expect(overridden.VIRTUAL_ENV).to.equal(virtualEnvironment.fsPath);
@@ -155,9 +207,12 @@ describe('Functions debug provider (unit)', () => {
         const s = setup();
         addMockExtension(s.m, 'vscjava.vscode-java-debug', {});
         addMockExtension(s.m, 'ms-vscode.PowerShell', {});
-        expect((await s.preparation.workerEnvironment(s.folder, 'node', 9001, 'pipe')).languageWorkers__node__arguments).to.equal('--inspect-brk=127.0.0.1:9001');
-        expect((await s.preparation.workerEnvironment(s.folder, 'java', 9002, 'pipe')).languageWorkers__java__arguments).to.include('address=127.0.0.1:9002');
-        expect((await s.preparation.workerEnvironment(s.folder, 'powershell', 9003, 'owned-pipe')).PSWorkerCustomPipeName).to.equal('owned-pipe');
+        const node = await s.preparation.prepare(s.folder, {});
+        const java = await s.preparation.prepare(s.folder, { ['FUNCTIONS_WORKER_RUNTIME']: 'java' });
+        const powershell = await s.preparation.prepare(s.folder, { ['FUNCTIONS_WORKER_RUNTIME']: 'powershell' });
+        expect((await s.preparation.workerEnvironment(node, 9001, 'pipe')).languageWorkers__node__arguments).to.equal('--inspect-brk=127.0.0.1:9001');
+        expect((await s.preparation.workerEnvironment(java, 9002, 'pipe')).languageWorkers__java__arguments).to.include('address=127.0.0.1:9002');
+        expect((await s.preparation.workerEnvironment(powershell, 9003, 'owned-pipe')).PSWorkerCustomPipeName).to.equal('owned-pipe');
     });
 
     it('starts Go with the owned Delve executable, loopback port, and worker argument separator', async () => {
@@ -200,7 +255,11 @@ describe('Functions debug provider (unit)', () => {
     for (const runtime of ['node', 'python', 'java', 'powershell', 'dotnet-isolated', 'native']) {
         it(`assigns ${runtime} builds to the CLI or the Go debug build and honors build overrides`, async () => {
             const s = setup(runtime);
-            const buildGo = mock.method(s.preparation, 'buildGo', () => Promise.resolve());
+            const buildGo = mock.method(s.preparation, 'buildGo', (launch: Extract<FunctionsDebugLaunch, { readonly runtime: 'native' }>) => {
+                expect(launch.project.toString()).to.equal(s.folder.toString());
+                expect(launch.environment.AzureWebJobsStorage).to.equal('UseDevelopmentStorage=true');
+                return Promise.resolve();
+            });
             const start = mock.method(s.owners, 'start', () => Promise.resolve({
                 id: 'owned', hostPort: 7072, debugPort: 9229, pipe: 'pipe', workerPid: 1234,
             }));
@@ -213,9 +272,6 @@ describe('Functions debug provider (unit)', () => {
             }
             expect(start.mock.callCount()).to.equal(3);
             expect(buildGo.mock.callCount()).to.equal(runtime === 'native' ? 1 : 0);
-            if (runtime === 'native') {
-                expect(buildGo.mock.calls[0].arguments).to.deep.equal([s.folder, {}, undefined]);
-            }
         });
     }
 
@@ -302,10 +358,10 @@ describe('Functions debug provider (unit)', () => {
     it('requires storage configuration and a running development emulator', async () => {
         const s = setup();
         mock.method(s.network, 'listening', () => Promise.resolve(false));
-        await expect(s.preparation.validate(s.folder, {})).to.be.rejectedWith('Start Azurite');
+        await expect(s.preparation.prepare(s.folder, {})).to.be.rejectedWith('Start Azurite');
         s.m.fs.addFile(s.code.Uri.joinPath(s.folder, 'local.settings.json'), '{"Values":{"FUNCTIONS_WORKER_RUNTIME":"node"}}');
-        await expect(s.preparation.validate(s.folder, {})).to.be.rejectedWith('Configure AzureWebJobsStorage');
-        expect(await s.preparation.validate(s.folder, { ['AzureWebJobsStorage__accountName']: 'account' })).to.equal('node');
+        await expect(s.preparation.prepare(s.folder, {})).to.be.rejectedWith('Configure AzureWebJobsStorage');
+        expect((await s.preparation.prepare(s.folder, { ['AzureWebJobsStorage__accountName']: 'account' })).runtime).to.equal('node');
     });
 
     it('does not acquire tools or start a host after cancellation', async () => {

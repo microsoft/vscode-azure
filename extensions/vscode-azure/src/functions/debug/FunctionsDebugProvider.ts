@@ -3,13 +3,12 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { CancellationError, CaselessMap, dirname, Disposable, ExternalError, IActionExecutor, IVsCode } from '@microsoft/vscode-azure-utils';
+import { CancellationError, dirname, Disposable, ExternalError, IActionExecutor, IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 import { FunctionsHostFileTag } from '../../tree/workspace/functions/FunctionsWorkspaceDataProvider';
 import { IWorkspaceIndexService } from '../../utils/workspaceIndex/WorkspaceIndexService';
 import { FunctionsProjectSelector } from '../FunctionsProjectSelector';
-import { LocalFunctionSettings } from '../LocalFunctionSettings';
 import { LocalFunctionsHostProcess, type FunctionsHostAttachment } from '../host/LocalFunctionsHostProcess';
 import { FunctionsDebugPreparation, type FunctionsDebugRuntime } from './FunctionsDebugPreparation';
 
@@ -32,7 +31,6 @@ export class FunctionsDebugProvider implements vscode.DebugConfigurationProvider
         @inject(FunctionsProjectSelector) private readonly projects: FunctionsProjectSelector,
         @inject(FunctionsDebugPreparation) private readonly preparation: FunctionsDebugPreparation,
         @inject(LocalFunctionsHostProcess) private readonly hosts: LocalFunctionsHostProcess,
-        @inject(LocalFunctionSettings) private readonly settings: LocalFunctionSettings,
     ) { }
 
     /** Registers only provider/adapter lifecycle hooks; activation never acquires tools or starts a host. */
@@ -83,37 +81,19 @@ export class FunctionsDebugProvider implements vscode.DebugConfigurationProvider
             const hostArgs = hostArguments(config.hostArgs, this.code);
             const hostPort = portOption(config.hostPort, this.code);
             const debugPort = portOption(config.debugPort, this.code);
-            const runtime = await this.preparation.validate(project, env, token);
+            const launch = await this.preparation.prepare(project, env, token);
             const executable = await this.preparation.executable(project, token);
             const skipBuild = config.skipBuild === true || !!config.preLaunchTask;
-            if (runtime === 'native' && !skipBuild) {
-                await this.preparation.buildGo(project, env, token);
+            if (launch.runtime === 'native' && !skipBuild) {
+                await this.preparation.buildGo(launch, token);
             }
             const host = await this.hosts.start({
-                project, runtime, executable, hostPort, debugPort, hostArgs,
-                skipBuild: skipBuild || runtime === 'native',
-                prepare: (port, pipe) => this.hostEnvironment(project, runtime, port, pipe, env),
+                project, runtime: launch.runtime, executable, hostPort, debugPort, hostArgs,
+                skipBuild: skipBuild || launch.runtime === 'native',
+                prepare: (port, pipe) => this.preparation.workerEnvironment(launch, port, pipe),
             }, token);
-            return attachConfiguration(config, runtime, project, host);
+            return attachConfiguration(config, launch.runtime, project, host);
         });
-    }
-
-    private async hostEnvironment(
-        project: vscode.Uri,
-        runtime: FunctionsDebugRuntime,
-        port: number,
-        pipe: string,
-        overrides: Readonly<Record<string, string>>,
-    ): Promise<Readonly<Record<string, string>>> {
-        const environment = new CaselessMap((await this.settings.read(project)).values);
-        applyEnvironmentOverrides(environment, overrides);
-        const worker = await this.preparation.workerEnvironment(project, runtime, port, pipe, Object.fromEntries(environment));
-        applyEnvironmentOverrides(environment, {
-            ...worker,
-            ['FUNCTIONS_WORKER_RUNTIME']: runtime,
-            ['FUNCTIONS_WORKER_PROCESS_COUNT']: '1',
-        });
-        return Object.fromEntries(environment);
     }
 
     public dispose(): void {
@@ -142,13 +122,6 @@ function attachConfiguration(config: vscode.DebugConfiguration, runtime: Functio
             return { ...common, type: 'go', mode: 'remote', debugAdapter: 'dlv-dap', host: '127.0.0.1', port: host.debugPort, cwd: project.fsPath };
         case 'dotnet-isolated':
             return { ...common, type: 'coreclr', processId: String(host.workerPid), justMyCode: true };
-    }
-}
-
-function applyEnvironmentOverrides(environment: CaselessMap<string>, overrides: Readonly<Record<string, string>>): void {
-    for (const [key, value] of Object.entries(overrides)) {
-        environment.delete(key);
-        environment.set(key, value);
     }
 }
 

@@ -27,16 +27,18 @@ describe('Functions debug preparation (unit)', () => {
             },
         }));
 
-        expect(await s.preparation.validate(s.folder, {
+        expect((await s.preparation.prepare(s.folder, {
             ['FUNCTIONS_WORKER_RUNTIME']: 'node', ['FUNCTIONS_EXTENSION_VERSION']: '~4',
-        })).to.equal('node');
-        await expect(s.preparation.validate(s.folder, { ['FUNCTIONS_WORKER_RUNTIME']: 'node' }))
+        })).runtime).to.equal('node');
+        await expect(s.preparation.prepare(s.folder, { ['FUNCTIONS_WORKER_RUNTIME']: 'node' }))
             .to.be.rejectedWith('runtime v4 only');
     });
 
     it('builds native Go with optimizations and inlining disabled using the resource-scoped Go executable', async () => {
         const s = setup('native');
-        const building = s.preparation.buildGo(s.folder, { ['CUSTOM_GO_ENV']: 'configured' });
+        const launch = await s.preparation.prepare(s.folder, { ['CUSTOM_GO_ENV']: 'configured' });
+        if (launch.runtime !== 'native') { throw new Error('Expected a native Go launch.'); }
+        const building = s.preparation.buildGo(launch);
         const build = await getMockTaskExecution(s.m);
         if (!(build.task.execution instanceof MockShellExecution)) { throw new Error('Expected a shell task.'); }
         const command = build.task.execution.command;
@@ -52,17 +54,56 @@ describe('Functions debug preparation (unit)', () => {
 
     it('propagates Go build failures before starting a worker', async () => {
         const s = setup('native');
-        const building = s.preparation.buildGo(s.folder, {});
+        const launch = await s.preparation.prepare(s.folder, {});
+        if (launch.runtime !== 'native') { throw new Error('Expected a native Go launch.'); }
+        const building = s.preparation.buildGo(launch);
         const rejected = expect(building).to.be.rejectedWith('failed with exit code 1');
         const build = await getMockTaskExecution(s.m);
         s.m.taskProcessEndEmitter.fire({ execution: build, exitCode: 1 });
         await rejected;
     });
 
+    it('uses the validated Go tools and merged environment for build and startup while resolving each launch independently', async () => {
+        const s = setup('native');
+        const command = mock.fn((tool: string) => ({ binPath: s.code.Uri.file(`/Selected Tools/${tool}`).fsPath }));
+        addMockExtension(s.m, 'golang.Go', { settings: { getExecutionCommand: command } });
+        const read = mock.method(s.settings, 'read');
+        const launch = await s.preparation.prepare(s.folder, { ['CUSTOM_GO_ENV']: 'launch' });
+        if (launch.runtime !== 'native') { throw new Error('Expected a native Go launch.'); }
+        command.mock.mockImplementation(tool => ({ binPath: s.code.Uri.file(`/Other Tools/${tool}`).fsPath }));
+        s.m.fs.addFile(s.code.Uri.joinPath(s.folder, 'local.settings.json'), JSON.stringify({
+            Values: { ['FUNCTIONS_WORKER_RUNTIME']: 'native', ['AzureWebJobsStorage__accountName']: 'updated' },
+        }));
+
+        const building = s.preparation.buildGo(launch);
+        const build = await getMockTaskExecution(s.m);
+        if (!(build.task.execution instanceof MockShellExecution)) { throw new Error('Expected a shell task.'); }
+        const executable = build.task.execution.command;
+        expect(typeof executable === 'string' ? executable : executable?.value).to.equal(s.code.Uri.file('/Selected Tools/go').fsPath);
+        expect(build.task.execution.options?.env?.CUSTOM_GO_ENV).to.equal('launch');
+        expect(build.task.execution.options?.env?.AzureWebJobsStorage).to.equal('UseDevelopmentStorage=true');
+        s.m.fs.addFile(s.code.Uri.joinPath(s.folder, 'bin', process.platform === 'win32' ? 'app.exe' : 'app'), 'binary');
+        s.m.taskProcessEndEmitter.fire({ execution: build, exitCode: 0 });
+        await building;
+        const environment = await s.preparation.workerEnvironment(launch, 9004, 'unused');
+        expect(environment.languageWorkers__native__defaultExecutablePath).to.equal(s.code.Uri.file('/Selected Tools/dlv').fsPath);
+        expect(environment.CUSTOM_GO_ENV).to.equal('launch');
+        expect(environment.AzureWebJobsStorage).to.equal('UseDevelopmentStorage=true');
+        expect(command.mock.callCount()).to.equal(2);
+        expect(read.mock.callCount()).to.equal(1);
+
+        const next = await s.preparation.prepare(s.folder, {});
+        if (next.runtime !== 'native') { throw new Error('Expected a native Go launch.'); }
+        expect(next.tools.go).to.equal(s.code.Uri.file('/Other Tools/go').fsPath);
+        expect(next.environment.AzureWebJobsStorage__accountName).to.equal('updated');
+        expect(command.mock.callCount()).to.equal(4);
+        expect(read.mock.callCount()).to.equal(2);
+    });
+
     for (const version of ['1.24.0', '1.25.1', '2.0.0']) {
         it(`accepts Go ${version} and validates Delve for the selected project`, async () => {
             const s = setup('native', { stdout: `go version go${version} windows/amd64\nDelve Debugger\nVersion: 1.25.0\n` });
-            expect(await s.preparation.validate(s.folder, {})).to.equal('native');
+            expect((await s.preparation.prepare(s.folder, {})).runtime).to.equal('native');
             expect(s.spawn.mock.calls.map(call => call.arguments[1])).to.deep.equal([['version'], ['version']]);
             expect(s.tools.acquire.mock.callCount()).to.equal(0);
         });
@@ -71,7 +112,7 @@ describe('Functions debug preparation (unit)', () => {
     for (const output of ['go version go1.23.9 windows/amd64', 'go version go0.99.0 windows/amd64', 'not a Go version']) {
         it(`rejects unsupported toolchain output: ${output}`, async () => {
             const s = setup('native', { stdout: output });
-            await expect(s.preparation.validate(s.folder, {})).to.be.rejectedWith('Go 1.24 or later');
+            await expect(s.preparation.prepare(s.folder, {})).to.be.rejectedWith('Go 1.24 or later');
             expect(s.spawn.mock.callCount()).to.equal(1);
         });
     }
@@ -79,23 +120,23 @@ describe('Functions debug preparation (unit)', () => {
     it('requires the Go extension public API, a Go module, and usable Go/Delve tools', async () => {
         const s = setup('native');
         s.m.installedExtensions.delete('golang.Go');
-        await expect(s.preparation.validate(s.folder, {})).to.be.rejectedWith('Install the Go extension');
+        await expect(s.preparation.prepare(s.folder, {})).to.be.rejectedWith('Install the Go extension');
         addMockExtension(s.m, 'golang.Go', {});
-        await expect(s.preparation.validate(s.folder, {})).to.be.rejectedWith('public tool execution API');
+        await expect(s.preparation.prepare(s.folder, {})).to.be.rejectedWith('public tool execution API');
         addMockExtension(s.m, 'golang.Go', { settings: { getExecutionCommand: () => undefined } });
-        await expect(s.preparation.validate(s.folder, {})).to.be.rejectedWith('Select a Go toolchain');
+        await expect(s.preparation.prepare(s.folder, {})).to.be.rejectedWith('Select a Go toolchain');
         await s.code.workspace.fs.delete(s.code.Uri.joinPath(s.folder, 'go.mod'));
-        await expect(s.preparation.validate(s.folder, {})).to.be.rejectedWith('project with go.mod');
+        await expect(s.preparation.prepare(s.folder, {})).to.be.rejectedWith('project with go.mod');
         const missing = setup('native', { spawnError: new Error('Tool missing') });
-        await expect(missing.preparation.validate(missing.folder, {})).to.be.rejectedWith('Could not run the Go debugging tools');
+        await expect(missing.preparation.prepare(missing.folder, {})).to.be.rejectedWith('Could not run the Go debugging tools');
         const malformed = setup('native', { stdout: 'go version go1.24.0 windows/amd64' });
-        await expect(malformed.preparation.validate(malformed.folder, {})).to.be.rejectedWith('Delve did not report a valid version');
+        await expect(malformed.preparation.prepare(malformed.folder, {})).to.be.rejectedWith('Delve did not report a valid version');
     });
 
     it('cancels a Go tool probe without acquiring Core Tools or starting a host', async () => {
         const s = setup('native', { keepAlive: true });
         const token = new MockCancellationToken();
-        const validation = s.preparation.validate(s.folder, {}, token);
+        const validation = s.preparation.prepare(s.folder, {}, token);
         const rejected = expect(validation).to.be.rejectedWith(CancellationError);
         await waitFor(() => s.spawn.mock.callCount() === 1);
         token.cancel();
@@ -108,21 +149,23 @@ describe('Functions debug preparation (unit)', () => {
         const s = setup('native');
         s.m.fs.addFile(s.code.Uri.joinPath(s.folder, 'bin', process.platform === 'win32' ? 'app.exe' : 'app'), 'binary');
         for (const key of ['languageWorkers__native__arguments', 'languageWorkers:native:arguments:0', 'languageWorkers:native:defaultExecutablePath']) {
-            await expect(s.preparation.workerEnvironment(s.folder, 'native', 9004, 'unused', { [key]: 'unowned' }))
+            const launch = await s.preparation.prepare(s.folder, { [key]: 'unowned' });
+            await expect(s.preparation.workerEnvironment(launch, 9004, 'unused'))
                 .to.be.rejectedWith('Native worker executable and argument overrides');
         }
     });
 
     it('reports a missing Python Debugger extension for worker preparation', async () => {
         const s = setup('python');
-        await expect(s.preparation.workerEnvironment(s.folder, 'python', 9001, 'pipe')).to.be.rejectedWith('Install the Python Debugger');
+        const launch = await s.preparation.prepare(s.folder, {});
+        await expect(s.preparation.workerEnvironment(launch, 9001, 'pipe')).to.be.rejectedWith('Install the Python Debugger');
     });
 
     it('requires a selected Python virtual environment before tool acquisition or host launch', async () => {
         const s = setup('python');
         const executable = s.code.Uri.file('/system/python');
         selectPythonEnvironment(s, executable);
-        await expect(s.preparation.validate(s.folder, {})).to.be.rejectedWith('Select a Python virtual environment');
+        await expect(s.preparation.prepare(s.folder, {})).to.be.rejectedWith('Select a Python virtual environment');
         expect(s.tools.acquire.mock.callCount()).to.equal(0);
         expect(s.spawn.mock.callCount()).to.equal(0);
         expect(s.m.tasks.executeTask.mock.callCount()).to.equal(0);
