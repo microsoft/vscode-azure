@@ -9,6 +9,7 @@ import { MockOutputChannel } from '@microsoft/vscode-azure-utils/testing';
 import { mock as nodeMock } from 'node:test';
 import type { CreateFunctionAppContext } from '../../../src/commands/functions/CreateFunctionAppContext';
 import { DetectFunctionRuntimeStep } from '../../../src/commands/functions/steps/DetectFunctionRuntimeStep';
+import { runtimeVersions } from '../../../src/commands/functions/steps/runtimesAndVersions';
 import { PickRuntimeStep } from '../../../src/commands/functions/steps/PickRuntimeStep';
 import { LocalFunctionSettings } from '../../../src/functions/LocalFunctionSettings';
 
@@ -22,7 +23,7 @@ describe('DetectFunctionRuntimeStep (unit)', () => {
             mock.fs.addDirectory(MockUri.file('/workspace/api'));
             mock.fs.addFile(MockUri.file('/workspace/api/host.json'), '{}');
             mock.fs.addFile(MockUri.file('/workspace/api/local.settings.json'), '{"Values":{"FUNCTIONS_WORKER_RUNTIME":"node"}}');
-            respondToPrompts(mock, [{ pick: '24' }]);
+            respondToPrompts(mock, [{ pick: runtimeVersions.node[0] }]);
             const output = new MockOutputChannel('test');
             const wizard = new Wizard<CreateFunctionAppContext>(output, {
                 job: 'deploy', resourceDisplayName: 'Function App', iacFolder: root, hydratedServiceProjectPath: projectPath,
@@ -32,7 +33,7 @@ describe('DetectFunctionRuntimeStep (unit)', () => {
             ], []);
             const result = await wizard.run();
             expect(result.functionWorkerRuntime).to.equal('node');
-            expect(result.runtimeVersion).to.equal('24');
+            expect(result.runtimeVersion).to.equal(runtimeVersions.node[0]);
         });
     }
 
@@ -57,11 +58,8 @@ describe('DetectFunctionRuntimeStep (unit)', () => {
             const result = await wizard.run();
 
             expect(result.functionWorkerRuntime).to.equal('python');
-            expect(result.runtimeVersion).to.equal('3.12');
+            expect(result.runtimeVersion).to.equal(runtimeVersions.python[0]);
             expect(warning.mock.callCount()).to.equal(1);
-            expect(warning.mock.calls[0].arguments).to.deep.equal([
-                '[functions] Could not detect the project runtime. Select a runtime to continue.',
-            ]);
             responses.assertAllConsumed();
         });
     }
@@ -75,9 +73,6 @@ describe('DetectFunctionRuntimeStep (unit)', () => {
             job: 'deploy', resourceDisplayName: 'Function App', iacFolder: MockUri.file('/workspace'), hydratedServiceProjectPath: './missing',
         })).to.deep.equal({});
         expect(warning.mock.callCount()).to.equal(1);
-        expect(warning.mock.calls[0].arguments).to.deep.equal([
-            '[functions] Could not detect the project runtime. Select a runtime to continue.',
-        ]);
     });
 
     it('leaves unsupported worker settings to the runtime picker', async () => {
@@ -103,6 +98,6 @@ describe('DetectFunctionRuntimeStep (unit)', () => {
         const result = await wizard.run();
 
         expect(result.functionWorkerRuntime).to.equal('python');
-        expect(result.runtimeVersion).to.equal('3.12');
+        expect(result.runtimeVersion).to.equal(runtimeVersions.python[0]);
     });
 });

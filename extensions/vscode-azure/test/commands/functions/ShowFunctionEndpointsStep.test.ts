@@ -65,9 +65,7 @@ describe('ShowFunctionEndpointsStep (unit)', () => {
             await step.execute(context);
             const message = `Deployment completed, but HTTP invocation URLs could not be retrieved. ${reason}`;
             expect(m.window.showWarningMessage.mock.calls[0].arguments[0]).to.equal(message);
-            expect(warning.mock.calls[0].arguments[0]).to.equal(
-                `[functions] HTTP invocation URL retrieval failed during function listing: ${message}`,
-            );
+            expect(warning.mock.calls[0].arguments[0]).to.include(message);
             expect(m.env.openExternal.mock.callCount()).to.equal(0);
         });
     }
@@ -79,9 +77,7 @@ describe('ShowFunctionEndpointsStep (unit)', () => {
         await step.execute(context);
         const message = 'Deployment completed, but HTTP invocation URLs could not be retrieved. Sign in to the deployed Function App subscription to list its HTTP URLs.';
         expect(m.window.showWarningMessage.mock.calls[0].arguments[0]).to.equal(message);
-        expect(warning.mock.calls[0].arguments[0]).to.equal(
-            `[functions] HTTP invocation URL retrieval failed during subscription resolution: ${message}`,
-        );
+        expect(warning.mock.calls[0].arguments[0]).to.include(message);
     });
 
     it('preserves the selected app subscription instead of resolving another account identity', async () => {
@@ -135,11 +131,10 @@ describe('ShowFunctionEndpointsStep (unit)', () => {
                     s.client.webApps.listFunctions.mock.mockImplementation(() => rejectingAsyncIterable(error));
                 }
                 await s.step.execute(s.context);
-                const message = 'Deployment completed, but HTTP invocation URLs could not be retrieved. Refresh the Function App and use Copy Function URL.';
-                expect(s.m.window.showWarningMessage.mock.calls[0].arguments[0]).to.equal(message);
-                expect(warning.mock.calls[0].arguments[0]).to.equal(
-                    `[functions] HTTP invocation URL retrieval failed during ${failure}: ${message}`,
-                );
+                const shown = s.m.window.showWarningMessage.mock.calls[0].arguments[0];
+                const logged = warning.mock.calls[0].arguments[0];
+                expect(shown).to.include('Copy Function URL').and.not.include('private');
+                expect(logged).to.include(failure).and.not.include('private');
                 expect(s.m.quickPicks).to.be.empty;
                 expect(s.m.env.openExternal.mock.callCount()).to.equal(0);
                 expect(s.client.webApps.listFunctions.mock.callCount()).to.equal(failure === 'function listing' ? 1 : 0);

@@ -5,6 +5,7 @@
 
 import { createMockCodeContext, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import type { CreateFunctionAppContext } from '../../../src/commands/functions/CreateFunctionAppContext';
+import { runtimeVersions } from '../../../src/commands/functions/steps/runtimesAndVersions';
 import { PickRuntimeVersionStep } from '../../../src/commands/functions/steps/PickRuntimeVersionStep';
 
 describe('PickRuntimeVersionStep (unit)', () => {
@@ -18,7 +19,7 @@ describe('PickRuntimeVersionStep (unit)', () => {
         it('should return false when runtimeVersion is already set', () => {
             const { ctx } = createMockCodeContext();
             const step = new PickRuntimeVersionStep(ctx);
-            const context: Partial<CreateFunctionAppContext> = { functionWorkerRuntime: 'node', runtimeVersion: '24' };
+            const context: Partial<CreateFunctionAppContext> = { functionWorkerRuntime: 'node', runtimeVersion: runtimeVersions.node[0] };
             expect(step.shouldPrompt({ resourceDisplayName: 'Function App', ...context })).to.be.false;
         });
 
@@ -47,12 +48,12 @@ describe('PickRuntimeVersionStep (unit)', () => {
     describe('prompt', () => {
         it('should return the selected version for the chosen runtime', async () => {
             const { ctx, mock: mockResult } = createMockCodeContext();
-            respondToPrompts(mockResult, [{ pick: '24' }]);
+            respondToPrompts(mockResult, [{ pick: runtimeVersions.node[0] }]);
 
             const step = new PickRuntimeVersionStep(ctx);
             const result = await step.prompt({ resourceDisplayName: 'Function App', functionWorkerRuntime: 'node' });
 
-            expect(result.runtimeVersion).to.equal('24');
+            expect(result.runtimeVersion).to.equal(runtimeVersions.node[0]);
         });
 
         it('should resolve the single supported version without prompting', async () => {
@@ -61,7 +62,7 @@ describe('PickRuntimeVersionStep (unit)', () => {
             const step = new PickRuntimeVersionStep(ctx);
             const result = await step.prompt({ resourceDisplayName: 'Function App', functionWorkerRuntime: 'python' });
 
-            expect(result.runtimeVersion).to.equal('3.12');
+            expect(result.runtimeVersion).to.equal(runtimeVersions.python[0]);
         });
     });
 });
