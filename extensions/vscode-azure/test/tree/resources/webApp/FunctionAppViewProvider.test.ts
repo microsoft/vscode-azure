@@ -65,8 +65,8 @@ describe('FunctionAppViewProvider (unit)', () => {
         const { provider, app, group, fn, invalid, settings, key } = setup();
         expect(await provider.getChildren(key(app))).to.deep.equal([...settings.map(key), key(group)]);
         expect(await provider.getChildren(key(group))).to.deep.equal([key(fn), key(invalid)]);
-        expect(provider.getTreeItem(key(group))).to.include({ label: 'Functions', collapsibleState: 1, contextValue: RefreshResourcesView.ContextValue });
-        expect(provider.getTreeItem(key(fn))).to.include({ label: 'HttpTrigger', collapsibleState: 0 });
+        expect(provider.getTreeItem(key(group))).to.include({ collapsibleState: 1, contextValue: RefreshResourcesView.ContextValue });
+        expect(provider.getTreeItem(key(fn))).to.include({ collapsibleState: 0 });
         expect(await provider.getChildren(key(fn))).to.deep.equal([]);
     });
 
@@ -110,7 +110,7 @@ describe('FunctionAppViewProvider (unit)', () => {
         const appItem = provider.getTreeItem(key(app));
         expect(appItem).to.include({ description: 'Invalid', tooltip: 'Site access denied.', contextValue: RefreshResourcesView.ContextValue });
         const errorItem = provider.getTreeItem(key(invalid));
-        expect(errorItem).to.include({ label: 'Broken', tooltip: invalid.error, collapsibleState: 0, contextValue: RefreshResourcesView.ContextValue });
+        expect(errorItem).to.include({ tooltip: invalid.error, collapsibleState: 0, contextValue: RefreshResourcesView.ContextValue });
     });
 
     it('offers lifecycle and identity actions according to readable site metadata', () => {

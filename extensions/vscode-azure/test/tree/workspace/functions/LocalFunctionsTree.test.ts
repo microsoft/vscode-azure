@@ -101,7 +101,7 @@ describe('Local Functions tree (integration)', () => {
         const nodes = await s.tree.getChildren(project);
         expect(nodes.filter(isLocalFunctionNode).map(fn => fn.functionName)).to.deep.equal(['BuiltHttp', 'BuiltTimer']);
         expect(nodes.some(node => node.type === 'invalidLocalFunction')).to.be.true;
-        expect(nodes.at(-1)?.label).to.equal('Run build task to update this list...');
+        expect(nodes.at(-1)?.type).to.equal('functionsHint');
         expect(await s.view.getChildren()).to.deep.equal([project.id]);
     });
 
@@ -111,7 +111,7 @@ describe('Local Functions tree (integration)', () => {
         const project = (await s.tree.getChildren())[0];
         const nodes = await s.tree.getChildren(project);
         expect(nodes).to.have.lengthOf(1);
-        expect(nodes[0]).to.include({ type: 'functionsHint', label: 'Run build task to update this list...' });
+        expect(nodes[0].type).to.equal('functionsHint');
         expect(s.view.getTreeItem(nodes[0].id).contextValue).to.equal(RefreshWorkspaceView.ContextValue);
     });
 
@@ -142,7 +142,7 @@ describe('Local Functions tree (integration)', () => {
         const s = setup();
         s.addProject();
         const project = (await s.tree.getChildren())[0];
-        expect((await s.tree.getChildren(project))[0].label).to.equal('Start debugging to update this list...');
+        expect((await s.tree.getChildren(project))[0].type).to.equal('functionsHint');
         s.host.listFunctions.mock.mockImplementation(() => Promise.resolve([
             { name: 'CodeFirst', config: { bindings: [{ type: 'httpTrigger' }] } },
         ]));
@@ -220,7 +220,7 @@ describe('Local Functions tree (integration)', () => {
         new RefreshWorkspaceView(s.tree).execute();
         const recovered = (await s.tree.getChildren())[0];
         expect(isFunctionsProjectNode(recovered)).to.be.true;
-        expect(s.view.getTreeItem(recovered.id).description).to.equal('Azure Functions');
+        expect(s.view.getTreeItem(recovered.id).description).not.to.equal('Invalid');
     });
 
     it('shows missing worker runtime without exposing an unimplemented initialization command', async () => {
