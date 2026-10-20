@@ -124,7 +124,7 @@ import { createMockCodeContext } from '@microsoft/vscode-azure-utils/testing';
 
 const { ctx, mock: mockResult } = createMockCodeContext();
 // ctx has both .code (IVsCode) and .extensionContext (IExtensionContext)
-// extensionContext includes extensionUri, storageUri, globalStorageUri, etc.
+// extensionContext includes subscriptions, extensionUri, storageUri, globalStorageUri, etc.
 // mockResult is the full MockVsCodeResult with fs, workspaceFolders, etc.
 ```
 

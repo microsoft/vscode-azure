@@ -5,7 +5,7 @@
 
 import { StaticWebAppResourceType, type StaticSiteBuildARMResource } from '@microsoft/vscode-azure-azutils';
 import { makeGenericResource } from '@microsoft/vscode-azure-azutils/testing';
-import type { StaticWebApp, StaticWebAppEnvironment } from '../../../../src/tree/resources/staticWebApps/StaticWebApp';
+import type { StaticWebApp, StaticWebAppEnvironment, StaticWebAppFunctions } from '../../../../src/tree/resources/staticWebApps/StaticWebApp';
 import { StaticWebAppVirtualTypes } from '../../../../src/tree/resources/staticWebApps/StaticWebApp';
 
 /** Creates a Static Web App ARM resource with stable test defaults. */
@@ -52,5 +52,18 @@ export function makeStaticWebAppEnvironment(overrides?: Partial<StaticWebAppEnvi
         status: data.status,
         ...overrides,
         data,
+    };
+}
+
+/** Creates a Functions group beneath a Static Web App environment. */
+export function makeStaticWebAppFunctions(overrides?: Partial<StaticWebAppFunctions>): StaticWebAppFunctions {
+    const environmentBuildId = overrides?.environmentBuildId ?? 'default';
+    return {
+        virtualType: StaticWebAppVirtualTypes.Functions,
+        virtualPath: `environments/${environmentBuildId}/functions`,
+        azureResource: makeStaticWebApp(),
+        environmentBuildId,
+        isProduction: environmentBuildId === 'default',
+        ...overrides,
     };
 }

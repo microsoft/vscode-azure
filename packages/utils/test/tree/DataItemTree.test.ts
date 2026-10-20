@@ -212,6 +212,19 @@ describe('DataItemTree (unit)', () => {
     });
 
     describe('pagination', () => {
+        it('should reject loadMore before children are initialized', async () => {
+            const tree = createTree();
+            tree.registerProvider(createRootProvider([{ id: 'root' }]));
+            await tree.getChildren();
+            const onChange = mock.fn();
+            tree.onDidChange(onChange);
+
+            await expect(tree.loadMore({ id: 'root' })).to.be.rejectedWith(
+                'Cannot loadMore before getChildren has been called for: root',
+            );
+            expect(onChange.mock.callCount()).to.equal(0);
+        });
+
         function createPagedProvider(parentId: string, pages: Page<TestResource>[]): DataProvider<TestResource> {
             return {
                 isRoot: false,
@@ -301,6 +314,30 @@ describe('DataItemTree (unit)', () => {
     });
 
     describe('enrichment', () => {
+        it('should surface enrichment failure to waiters without invalidating the node', async () => {
+            const tree = createTree();
+            const enrichment = Promise.withResolvers<boolean>();
+            const enrich = mock.fn(() => enrichment.promise);
+            tree.registerProvider({
+                isRoot: true,
+                canHandle: canHandleAll,
+                getChildren: () => [{ id: 'root' }],
+                enrich,
+            });
+            const [root] = await tree.getChildren();
+            const onChange = mock.fn();
+            tree.onDidChange(onChange);
+            const result = tree.whenEnriched(root);
+            const failure = new Error('Enrichment failed');
+            enrichment.reject(failure);
+
+            expect(await expect(result).to.be.rejected).to.equal(failure);
+            await expect(tree.whenEnriched(root)).to.be.rejectedWith(failure.message);
+            expect(tree.get(root.id)).to.equal(root);
+            expect(enrich.mock.callCount()).to.equal(1);
+            expect(onChange.mock.callCount()).to.equal(0);
+        });
+
         it('should run enrich on loaded resources', async () => {
             const tree = createTree();
             const enriched: string[] = [];
@@ -642,6 +679,33 @@ describe('DataItemTree (unit)', () => {
     });
 
     describe('remove', () => {
+        for (const descendantFirst of [false, true]) {
+            it(`should remove overlapping targets with one parent notification (descendant first: ${descendantFirst})`, async () => {
+                const tree = createTree();
+                tree.registerProvider(createRootProvider([{ id: 'root' }]));
+                tree.registerProvider(createBranchProvider(new Map([
+                    ['root', [{ id: 'parent' }, { id: 'keep' }]],
+                    ['parent', [{ id: 'child' }]],
+                    ['child', [{ id: 'leaf' }]],
+                ])));
+                await tree.getChildren();
+                await tree.getChildren({ id: 'root' });
+                await tree.getChildren({ id: 'parent' });
+                await tree.getChildren({ id: 'child' });
+                const onChange = mock.fn();
+                tree.onDidChange(onChange);
+
+                tree.remove(descendantFirst ? ['child', 'parent'] : ['parent', 'child']);
+
+                expect((await tree.getChildren({ id: 'root' })).map(node => node.id)).to.deep.equal(['keep']);
+                for (const id of ['parent', 'child', 'leaf']) {
+                    expect(tree.get(id)).to.be.undefined;
+                }
+                expect(onChange.mock.callCount()).to.equal(1);
+                expect(onChange.mock.calls[0].arguments).to.deep.equal([{ id: 'root' }]);
+            });
+        }
+
         it('should remove a branch child without evicting siblings', async () => {
             const tree = createTree();
             tree.registerProvider(createRootProvider([{ id: 'parent' }]));

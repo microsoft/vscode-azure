@@ -11,13 +11,15 @@ import {
     isStaticWebAppEnvironment,
     isStaticWebAppVirtualNode,
     StaticWebAppVirtualTypes,
+    type InvalidStaticWebAppNode,
     type StaticWebAppEnvironment,
+    type StaticWebAppFunction,
     type StaticWebAppFunctions,
 } from '../../../../src/tree/resources/staticWebApps/StaticWebApp';
 import { StaticWebAppSettingsAdapter } from '../../../../src/settings/adapters/StaticWebAppSettingsAdapter';
 import { isSettingsNode, SettingsVirtualType } from '../../../../src/tree/resources/settings/SettingsNode';
 import { StaticWebAppDataProvider } from '../../../../src/tree/resources/staticWebApps/StaticWebAppDataProvider';
-import { makeStaticWebApp, makeStaticWebAppEnvironment } from './mockStaticWebApp';
+import { makeStaticWebApp, makeStaticWebAppEnvironment, makeStaticWebAppFunctions } from './mockStaticWebApp';
 
 describe('StaticWebAppDataProvider (unit)', () => {
     function createProvider(options?: {
@@ -72,6 +74,56 @@ describe('StaticWebAppDataProvider (unit)', () => {
         expect(site.defaultHostname).to.equal('site.azurestaticapps.net');
         expect(site.id).to.include('/Microsoft.Web/staticSites/mySwa');
     });
+
+    it('should enrich a site before listing its environments', async () => {
+        const { provider, mockClient } = createProvider();
+        const site = makeStaticWebApp({ staticSite: undefined, branch: undefined });
+
+        const children = await provider.getChildren(site);
+
+        expect(mockClient.staticSites.getStaticSite.mock.callCount()).to.equal(1);
+        expect(site.branch).to.equal('main');
+        expect(children).to.have.length(1);
+        expect(isStaticWebAppEnvironment(children[0]) && children[0].isProduction).to.be.true;
+    });
+
+    for (const environmentBuildId of ['default', '42']) {
+        it(`should list valid functions and isolate malformed siblings in environment ${environmentBuildId}`, async () => {
+            const { provider, mockClient } = createProvider({
+                functions: [
+                    { functionName: 'HttpTrigger' },
+                    { name: 'broken' },
+                    {},
+                    { functionName: 'TimerTrigger' },
+                ],
+            });
+            const group = makeStaticWebAppFunctions({ environmentBuildId });
+
+            const children = await provider.getChildren(group);
+
+            expect(children).to.have.length(4);
+            const functions = children.filter((node): node is StaticWebAppFunction =>
+                isStaticWebAppVirtualNode(node) && node.virtualType === StaticWebAppVirtualTypes.Function);
+            expect(functions.map(func => func.functionName)).to.deep.equal(['HttpTrigger', 'TimerTrigger']);
+            for (const func of functions) {
+                expect(func.environmentBuildId).to.equal(environmentBuildId);
+                expect(func.azureResource).to.equal(group.azureResource);
+                expect(func.virtualPath).to.equal(`${group.virtualPath}/${func.functionName}`);
+            }
+            const invalid = children.filter((node): node is InvalidStaticWebAppNode => isStaticWebAppVirtualNode(node)
+                && node.virtualType === StaticWebAppVirtualTypes.Invalid);
+            expect(invalid.map(node => node.invalidContextValue)).to.deep.equal(['invalidFunction', 'invalidFunction']);
+            expect(invalid.map(node => node.sourceLabel)).to.deep.equal(['broken', 'unknown']);
+            expect(new Set(children.map(node => AzureNodeId.from(node).toString())).size).to.equal(4);
+            const operation = group.isProduction
+                ? mockClient.staticSites.listStaticSiteFunctions
+                : mockClient.staticSites.listStaticSiteBuildFunctions;
+            expect(operation.mock.callCount()).to.equal(1);
+            expect(operation.mock.calls[0].arguments).to.deep.equal(group.isProduction
+                ? ['rg1', group.azureResource.name]
+                : ['rg1', group.azureResource.name, environmentBuildId]);
+        });
+    }
 
     it('should sort Production first and preview environments by label', async () => {
         const builds: StaticSiteBuildARMResource[] = [
