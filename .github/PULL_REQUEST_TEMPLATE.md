@@ -8,7 +8,7 @@
 
 ## Checklist
 
-- [ ] I followed the repository conventions in [docs/](../docs/) and [CONTRIBUTING.md](../CONTRIBUTING.md)
+- [ ] I followed the repository conventions in [docs/](https://github.com/microsoft/vscode-azure/tree/main/docs) and [CONTRIBUTING.md](https://github.com/microsoft/vscode-azure/blob/main/CONTRIBUTING.md)
 - [ ] `pnpm run lint`, `pnpm run build`, and `pnpm run test` pass
 - [ ] New and changed behavior is covered by tests (fast and deterministic, or registered as long-running)
 - [ ] The change follows the VS Code UX guidelines and the repository's UX conventions
