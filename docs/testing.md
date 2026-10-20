@@ -489,6 +489,25 @@ pnpm --filter vscode-azure run testcov
 
 ## Coverage
 
+### TypeScript Source Maps
+
+The workspace applies a pnpm patch to `tsx` that disables whitespace minification
+when `NODE_V8_COVERAGE` is set. Both c8 and the VS Code test CLI set this variable
+when collecting coverage. Normal runs retain tsx's default transform behavior.
+
+Whitespace-minified output puts generated module and decorator helpers on the same
+line as mapped source. c8's `v8-to-istanbul` converter can then attribute uncovered
+helper branches to the first source line instead of excluding the unmapped code.
+Keeping generated helpers on separate lines lets the converter omit those ranges
+without ignoring application branches.
+
+The patch is registered in [`pnpm-workspace.yaml`](../pnpm-workspace.yaml) and
+applied automatically by `pnpm install`. It covers both tsx's CommonJS and ESM
+transforms. When upgrading tsx, re-evaluate the workaround and regenerate the patch
+with `pnpm patch` / `pnpm patch-commit` if still needed. Validate with the extension's
+full coverage suite: generated helpers must not appear as uncovered branches on
+the copyright header.
+
 ### Package Coverage
 
 Packages use **c8** (V8 native coverage) with Mocha:
