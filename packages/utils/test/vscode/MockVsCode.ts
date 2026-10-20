@@ -650,6 +650,7 @@ export function createMockCodeContext(terminalOptions?: MockVsCodeOptions): Mock
     const mockResult = createMockVsCode(undefined, terminalOptions);
     const extensionContext = {
         extensionMode: MockExtensionMode.Test,
+        subscriptions: [],
         workspaceState: new MockMemento(),
         globalState: Object.assign(new MockMemento(), {
             setKeysForSync: () => { /* noop */ },

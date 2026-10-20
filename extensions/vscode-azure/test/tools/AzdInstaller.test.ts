@@ -4,6 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { argToString, argsToStrings } from '@microsoft/vscode-azure-utils';
+import { join, win32 } from 'node:path';
+import { mock } from 'node:test';
 import { AzdInstaller } from '../../src/tools/AzdInstaller';
 import { createInstallerHarness, installOptions, installedWith, usePlatform, type SpawnOpts } from './installerTestHelpers';
 
@@ -13,6 +15,66 @@ function createInstaller(onPath: readonly string[] = []) {
 
 describe('AzdInstaller (unit)', () => {
     const setPlatform = usePlatform();
+
+    afterEach(() => {
+        mock.restoreAll();
+    });
+
+    describe('getKnownPaths', () => {
+        it('should discover Windows installs under configured user and program directories', () => {
+            setPlatform('win32');
+            mock.property(process, 'env', {
+                ...process.env,
+                USERPROFILE: '/profiles/user',
+                HOME: '/home/other',
+                LOCALAPPDATA: '/apps/local',
+                ProgramFiles: 'D:\\Programs',
+                'ProgramFiles(x86)': 'D:\\Programs32',
+            });
+            const { installer } = createInstaller();
+
+            expect(installer.getKnownPaths()).to.deep.equal([
+                join('/apps/local', 'Programs', 'Azure Dev CLI', 'azd.exe'),
+                win32.join('D:\\Programs', 'Azure Dev CLI', 'azd.exe'),
+                win32.join('D:\\Programs32', 'Azure Dev CLI', 'azd.exe'),
+                join('/profiles/user', '.azd', 'bin', 'azd.exe'),
+            ]);
+        });
+
+        it('should use Windows program directory defaults without optional environment roots', () => {
+            setPlatform('win32');
+            mock.property(process, 'env', {
+                ...process.env,
+                USERPROFILE: undefined,
+                HOME: undefined,
+                LOCALAPPDATA: undefined,
+                ProgramFiles: undefined,
+                'ProgramFiles(x86)': undefined,
+            });
+            const { installer } = createInstaller();
+
+            expect(installer.getKnownPaths()).to.deep.equal([
+                win32.join('C:\\Program Files', 'Azure Dev CLI', 'azd.exe'),
+                win32.join('C:\\Program Files (x86)', 'Azure Dev CLI', 'azd.exe'),
+            ]);
+        });
+
+        for (const platform of ['darwin', 'linux'] as const) {
+            for (const home of ['/home/user', undefined]) {
+                it(`should discover ${platform} installs with ${home ? 'a home directory' : 'no home directory'}`, () => {
+                    setPlatform(platform);
+                    mock.property(process, 'env', { ...process.env, USERPROFILE: undefined, HOME: home });
+                    const { installer } = createInstaller();
+
+                    expect(installer.getKnownPaths()).to.deep.equal([
+                        ...(home ? [join(home, '.azd', 'bin', 'azd')] : []),
+                        '/usr/local/bin/azd',
+                        ...(platform === 'darwin' ? ['/opt/homebrew/bin/azd'] : []),
+                    ]);
+                });
+            }
+        }
+    });
 
     describe('getVersion', () => {
         it('should read the version from azd JSON output', async () => {

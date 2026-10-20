@@ -5,7 +5,7 @@
 
 import type { ClientOptions as RestClientOptions } from '@azure-rest/core-client';
 import type { TokenCredential } from '@azure/core-auth';
-import type { PipelinePolicy, PipelineRequest } from '@azure/core-rest-pipeline';
+import type { ChallengeCallbacks, PipelinePolicy, PipelineRequest } from '@azure/core-rest-pipeline';
 import { delay } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
@@ -376,6 +376,79 @@ describe('createArmRestClient (unit)', () => {
 });
 
 describe('createDataPlaneRestClient (unit)', () => {
+    afterEach(() => {
+        mock.restoreAll();
+    });
+
+    for (const scopes of [undefined, ['https://example.test/.default']]) {
+        it(`should retry a challenged request using the callback (${scopes ? 'explicit scopes' : 'no scopes'})`, async () => {
+            const { ctx } = createMockCodeContext();
+            const { executor } = createTestActionExecutor();
+            const credential = makeCredential();
+            const getToken = mock.method(credential, 'getToken');
+            const authorize = mock.fn<NonNullable<ChallengeCallbacks['authorizeRequestOnChallenge']>>(({ request }) => {
+                request.headers.set('authorization', 'Bearer service-token');
+                return Promise.resolve(true);
+            });
+            const send = mock.fn((request: PipelineRequest) => makeResponse(
+                request,
+                request.headers.get('authorization') === 'Bearer service-token' ? 200 : 401,
+                undefined,
+                { 'www-authenticate': 'Bearer scope="https://example.test/.default"' },
+            ));
+            const httpClient = new MockHttpClient({ handler: send });
+            const client = createDataPlaneRestClient(ctx, executor, {
+                name: 'example-service',
+                endpoint: 'https://example.test',
+                credential,
+                scopes,
+                challengeCallbacks: { authorizeRequestOnChallenge: authorize },
+            }, { httpClient });
+
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+            await client.path('/items').get();
+
+            expect(getToken.mock.callCount()).to.equal(1);
+            expect(getToken.mock.calls[0].arguments[0]).to.deep.equal(scopes ?? []);
+            expect(authorize.mock.callCount()).to.equal(1);
+            expect(send.mock.calls.map(call => call.result?.status)).to.deep.equal([401, 200]);
+            expect(httpClient.requests).to.have.length(2);
+        });
+    }
+
+    it('should preserve authentication scopes and standard policies on credentialed requests', async () => {
+        const { ctx } = createMockCodeContext();
+        const { executor } = createTestActionExecutor();
+        const credential = makeCredential();
+        const getToken = mock.method(credential, 'getToken');
+        const scopes = ['https://example.test/read', 'https://example.test/write'];
+        const httpClient = new MockHttpClient({
+            handler: request => {
+                expect(request.headers.get('authorization')).to.equal('Bearer mock-token');
+                expect(request.headers.get('accept-language')).to.equal(ctx.code.env.language);
+                expect(request.headers.get('user-agent')).to.include(ctx.extensionContext.extension.id);
+                return makeResponse(request);
+            },
+        });
+        const client = createDataPlaneRestClient(ctx, executor, {
+            name: 'example-service',
+            endpoint: 'https://example.test',
+            credential,
+            scopes,
+        }, { httpClient });
+        scopes.push('https://example.test/unrequested');
+
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+        await client.path('/items').get();
+
+        expect(getToken.mock.callCount()).to.equal(1);
+        expect(getToken.mock.calls[0].arguments[0]).to.deep.equal([
+            'https://example.test/read',
+            'https://example.test/write',
+        ]);
+        expect(httpClient.requests).to.have.length(1);
+    });
+
     it('should send requests through the configured endpoint and standard pipeline', async () => {
         const { ctx } = createMockCodeContext();
         const { executor } = createTestActionExecutor();

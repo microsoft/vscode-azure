@@ -5,11 +5,44 @@
 
 import { collectPages, delay, stringifyError } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
-import { AppServiceLogicalType, ApplicationInsightsResourceType, FunctionAppLogicalType, LogicAppLogicalType, ResourceClient, StaticWebAppResourceType } from '../../../src/rest/clients/ResourceClient';
-import { makeCredential, makeSubscription } from '../../mockAzure';
+import { AIFoundryProjectLogicalType, AIServicesLogicalType, AppServiceLogicalType, ApplicationInsightsResourceType, CognitiveServicesAccountType, CosmosDBLogicalType, CosmosDBMongoLogicalType, DocumentDBAccountType, DurableTaskHubLogicalType, DurableTaskPrefix, FunctionAppLogicalType, LogicAppLogicalType, MLWorkspaceType, ResourceClient, StaticWebAppResourceType } from '../../../src/rest/clients/ResourceClient';
+import { makeCredential, makeGenericResource, makeSubscription } from '../../mockAzure';
 import { makeResponse, MockHttpClient } from '../../mockPipeline';
 
 describe('ResourceClient (unit)', () => {
+    for (const { type, kind, expected } of [
+        { type: CognitiveServicesAccountType, kind: 'AIServices', expected: AIServicesLogicalType },
+        { type: CognitiveServicesAccountType, kind: 'OpenAI', expected: undefined },
+        { type: CognitiveServicesAccountType, kind: undefined, expected: undefined },
+        { type: DocumentDBAccountType, kind: 'MongoDB', expected: CosmosDBMongoLogicalType },
+        { type: DocumentDBAccountType, kind: 'GlobalDocumentDB', expected: CosmosDBLogicalType },
+        { type: DocumentDBAccountType, kind: undefined, expected: CosmosDBLogicalType },
+        { type: MLWorkspaceType, kind: 'Project', expected: AIFoundryProjectLogicalType },
+        { type: MLWorkspaceType, kind: 'Hub', expected: undefined },
+        { type: MLWorkspaceType, kind: undefined, expected: undefined },
+        { type: `${DurableTaskPrefix}/schedulers/taskHubs`, kind: undefined, expected: DurableTaskHubLogicalType },
+        { type: `${DurableTaskPrefix}/alternative/taskHubs`, kind: undefined, expected: DurableTaskHubLogicalType },
+    ]) {
+        for (const uppercase of [false, true]) {
+            it(`should classify ${type} with kind ${kind ?? '<none>'} (uppercase: ${uppercase})`, async () => {
+                const responseType = uppercase ? type.toUpperCase() : type;
+                const resource = makeGenericResource({
+                    type: responseType,
+                    kind: uppercase ? kind?.toUpperCase() : kind,
+                });
+                const httpClient = new MockHttpClient({
+                    handler: request => makeResponse(request, 200, JSON.stringify({ value: [resource] })),
+                });
+
+                const [page] = await collectPages(createClient(httpClient).resources.list());
+
+                expect(page.items).to.have.length(1);
+                expect(page.items[0].logicalType).to.equal(expected ?? responseType);
+                expect(page.items[0].type).to.equal(responseType);
+            });
+        }
+    }
+
     it('reads live provider properties by ARM ID with the resolved API version and subscription metadata', async () => {
         const subscription = makeSubscription();
         const id = `/subscriptions/${subscription.subscriptionId}/resourceGroups/MyRG/providers/${ApplicationInsightsResourceType}/MyInsights`;

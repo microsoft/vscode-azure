@@ -41,13 +41,16 @@ overrides:
   serialize-javascript: ^7.0.0
   diff: ^8.0.3
 
+patchedDependencies:
+  tsx@4.23.15: 0e3cbbe0e25b11172e3f12921f34ad4909b14c9a050340549ef21a4db83c22b7
+
 importers:
 
   .:
     devDependencies:
       '@microsoft/vscode-azext-eng':
         specifier: ^1.2.0
-        version: 1.2.0(@vscode/test-cli@0.0.15)(@vscode/test-electron@3.1.0)(esbuild@0.28.2)(tsx@4.23.15)
+        version: 1.2.0(@vscode/test-cli@0.0.15)(@vscode/test-electron@3.1.0)(esbuild@0.28.2)(tsx@4.23.15(patch_hash=0e3cbbe0e25b11172e3f12921f34ad4909b14c9a050340549ef21a4db83c22b7))
       '@types/node':
         specifier: ~24
         version: 24.13.3
@@ -105,7 +108,7 @@ importers:
         version: 0.28.2
       tsx:
         specifier: 'catalog:'
-        version: 4.23.15
+        version: 4.23.15(patch_hash=0e3cbbe0e25b11172e3f12921f34ad4909b14c9a050340549ef21a4db83c22b7)
 
   packages/azutils:
     dependencies:
@@ -2120,7 +2123,7 @@ snapshots:
     dependencies:
       '@nevware21/ts-utils': 0.16.0
 
-  '@microsoft/vscode-azext-eng@1.2.0(@vscode/test-cli@0.0.15)(@vscode/test-electron@3.1.0)(esbuild@0.28.2)(tsx@4.23.15)':
+  '@microsoft/vscode-azext-eng@1.2.0(@vscode/test-cli@0.0.15)(@vscode/test-electron@3.1.0)(esbuild@0.28.2)(tsx@4.23.15(patch_hash=0e3cbbe0e25b11172e3f12921f34ad4909b14c9a050340549ef21a4db83c22b7))':
     dependencies:
       '@eslint/js': 10.0.1(eslint@10.12.0)
       '@tony.ganchev/eslint-plugin-header': 3.4.4(eslint@10.12.0)
@@ -2138,7 +2141,7 @@ snapshots:
       '@vscode/test-cli': 0.0.15
       '@vscode/test-electron': 3.1.0
       esbuild: 0.28.2
-      tsx: 4.23.15
+      tsx: 4.23.15(patch_hash=0e3cbbe0e25b11172e3f12921f34ad4909b14c9a050340549ef21a4db83c22b7)
     transitivePeerDependencies:
       - jiti
       - supports-color
@@ -3118,7 +3121,7 @@ snapshots:
 
   tslib@2.8.1: {}
 
-  tsx@4.23.15:
+  tsx@4.23.15(patch_hash=0e3cbbe0e25b11172e3f12921f34ad4909b14c9a050340549ef21a4db83c22b7):
     dependencies:
       esbuild: 0.28.2
     optionalDependencies:
