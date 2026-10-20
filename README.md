@@ -15,7 +15,7 @@ This is the repository for the Azure for Visual Studio Code extension.
 
 ## Contributing
 
-There are several ways you can contribute to this extension.
+There are several ways you can contribute to this extension. Please read [CONTRIBUTING.md](CONTRIBUTING.md) for the full guidelines.
 
 ### Ideas, feature requests, and bugs
 We are open to all ideas and we want to get rid of bugs! Use the Issues section to either report a new issue, provide your ideas or contribute to existing threads.
