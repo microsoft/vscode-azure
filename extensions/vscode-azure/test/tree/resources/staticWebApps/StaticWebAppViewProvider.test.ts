@@ -4,29 +4,93 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureNodeId, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
+import { createMockHierarchicalDataItemTree } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
+import { mock } from 'node:test';
 import { DeleteAzureResource } from '../../../../src/commands/tree/DeleteAzureResource';
 import { OpenInPortal } from '../../../../src/commands/tree/OpenInPortal';
 import {
     StaticWebAppVirtualTypes,
     type InvalidStaticWebAppNode,
+    type StaticWebAppFunction,
     type StaticWebAppNoFunctions,
 } from '../../../../src/tree/resources/staticWebApps/StaticWebApp';
 import { StaticWebAppViewProvider } from '../../../../src/tree/resources/staticWebApps/StaticWebAppViewProvider';
-import { makeStaticWebApp, makeStaticWebAppEnvironment } from './mockStaticWebApp';
+import { makeStaticWebApp, makeStaticWebAppEnvironment, makeStaticWebAppFunctions } from './mockStaticWebApp';
 
 describe('StaticWebAppViewProvider (unit)', () => {
-    function render(resource: ConcreteAzureNode) {
+    function createProvider(resources: ConcreteAzureNode[], children = new Map<ConcreteAzureNode, ConcreteAzureNode[]>()) {
         const { ctx } = createMockCodeContext();
         const { executor } = createTestActionExecutor();
+        const cache = createMockHierarchicalDataItemTree(resources, children);
+        const provider = new StaticWebAppViewProvider(ctx, executor, cache);
+        return { provider, ctx, cache };
+    }
+
+    function render(resource: ConcreteAzureNode) {
+        const { provider, ctx } = createProvider([resource]);
         const key = AzureNodeId.from(resource).toString();
-        const cache = {
-            get: (candidate: string) => candidate === key ? resource : undefined,
-            getChildren: () => Promise.resolve([]),
-        };
-        const provider = new StaticWebAppViewProvider(ctx, executor, cache as never);
         return { item: provider.getTreeItem(key), key, ctx };
     }
+
+    afterEach(() => {
+        mock.restoreAll();
+    });
+
+    it('should convert cached children into view keys', async () => {
+        const site = makeStaticWebApp();
+        const environment = makeStaticWebAppEnvironment({ azureResource: site });
+        const { provider } = createProvider([site], new Map([[site, [environment]]]));
+        const key = AzureNodeId.from(site).toString();
+
+        expect(provider.canHandle(key)).to.be.true;
+        expect(await provider.getChildren(key)).to.deep.equal([AzureNodeId.from(environment).toString()]);
+    });
+
+    it('should render a fallback item and empty children for a missing cached node', async () => {
+        const { provider, cache } = createProvider([]);
+        const key = AzureNodeId.from(makeStaticWebApp()).toString();
+        const getChildren = mock.method(cache, 'getChildren');
+
+        expect(provider.canHandle(key)).to.be.false;
+        expect(provider.canHandle('not-an-azure-node')).to.be.false;
+        expect(provider.getTreeItem(key).label).to.equal(key);
+        expect(provider.getTreeItem(key).contextValue).to.be.undefined;
+        expect(await provider.getChildren(key)).to.deep.equal([]);
+        expect(await provider.getChildren()).to.deep.equal([]);
+        expect(getChildren.mock.callCount()).to.equal(0);
+    });
+
+    it('should render a collapsible Functions group with portal actions', () => {
+        const group = makeStaticWebAppFunctions();
+        const { item, key, ctx } = render(group);
+
+        expect(item.id).to.equal(key);
+        expect(item.label).to.equal('Functions');
+        expect(item.collapsibleState).to.equal(ctx.code.TreeItemCollapsibleState.Collapsed);
+        expect(item.contextValue).to.include('azureStaticFunctions');
+        expect(item.contextValue).to.include(OpenInPortal.ContextValue);
+        expect(item.iconPath).to.deep.equal(new ctx.code.ThemeIcon('list-unordered'));
+    });
+
+    it('should render a function as a named leaf with a function icon', () => {
+        const group = makeStaticWebAppFunctions({ environmentBuildId: '42' });
+        const func: StaticWebAppFunction = {
+            virtualType: StaticWebAppVirtualTypes.Function,
+            virtualPath: `${group.virtualPath}/HttpTrigger`,
+            azureResource: group.azureResource,
+            environmentBuildId: group.environmentBuildId,
+            data: { functionName: 'HttpTrigger' },
+            functionName: 'HttpTrigger',
+        };
+        const { item, key, ctx } = render(func);
+
+        expect(item.id).to.equal(key);
+        expect(item.label).to.equal(func.functionName);
+        expect(item.collapsibleState).to.equal(ctx.code.TreeItemCollapsibleState.None);
+        expect(item.contextValue).to.equal('azureStaticFunction');
+        expect(item.iconPath).to.deep.equal(new ctx.code.ThemeIcon('symbol-function'));
+    });
 
     it('should render the site root with stable compatibility and portal contexts', () => {
         const { item, ctx } = render(makeStaticWebApp());

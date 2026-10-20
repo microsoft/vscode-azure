@@ -1,0 +1,42 @@
+name: Bug report
+description: Report something that isn't working
+type: Bug
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the problem and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. ...
+        2. ...
+    validations:
+      required: true
+  - type: input
+    id: extension-version
+    attributes:
+      label: Extension version
+    validations:
+      required: true
+  - type: input
+    id: vscode-version
+    attributes:
+      label: VS Code version
+      description: Help > About
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Relevant output from the Azure output channel. Remove tokens, subscription IDs, emails, and other sensitive data first.

@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Node.js (see `.nvmrc` or `engines` in `package.json`)
+- Node.js 24 or later (see `.nvmrc` for the development version). The root and library package manifests declare the Node.js minimum; the extension manifest declares the VS Code minimum.
 - pnpm (activated via Corepack: run `corepack enable` to use the version pinned in `package.json`'s `packageManager` field)
 
 ## Setup

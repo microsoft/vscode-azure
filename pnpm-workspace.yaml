@@ -38,3 +38,7 @@ catalog:
   tsx: ^4.23.15
   vscode-uri: ^3.1.0
   zod: ^4.4.3
+
+patchedDependencies:
+  # Keep tsx's generated helpers on separate lines during V8 coverage collection.
+  tsx@4.23.15: patches/tsx@4.23.15.patch

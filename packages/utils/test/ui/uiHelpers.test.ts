@@ -98,6 +98,77 @@ describe('uiHelpers (unit)', () => {
     });
 
     describe('showSmartInputBox', () => {
+        for (const event of ['accept', 'changeValue'] as const) {
+            it(`should reject and dispose when sync validation throws on ${event}`, async () => {
+                const { ctx, mock } = createMockCodeContext();
+                const failure = new Error('Validation failed');
+                const result = showSmartInputBox(ctx, {
+                    prompt: 'Enter value',
+                    validateInput: () => { throw failure; },
+                });
+                const input = mock.inputBoxes[0];
+
+                if (event === 'accept') {
+                    input.accept();
+                } else {
+                    input.changeValue('value');
+                }
+
+                expect(await expect(result).to.be.rejected).to.equal(failure);
+                expect(input.dispose.mock.callCount()).to.equal(1);
+                expect(ctx.extensionContext.workspaceState.keys()).to.be.empty;
+            });
+        }
+
+        it('should reject and dispose when async validation rejects', async () => {
+            const { ctx, mock } = createMockCodeContext();
+            const failure = new Error('Validation unavailable');
+            const result = showSmartInputBox(ctx, {
+                prompt: 'Enter value',
+                validateInputAsync: () => Promise.reject(failure),
+            });
+            const input = mock.inputBoxes[0];
+            input.value = 'value';
+            input.accept();
+
+            expect(await expect(result).to.be.rejected).to.equal(failure);
+            expect(input.dispose.mock.callCount()).to.equal(1);
+            expect(ctx.extensionContext.workspaceState.keys()).to.be.empty;
+        });
+
+        for (const action of ['cancel', 'goBack'] as const) {
+            for (const message of [undefined, 'Invalid value']) {
+                it(`should preserve ${action} when pending validation resolves with ${message ?? 'success'}`, async () => {
+                    const { ctx, mock } = createMockCodeContext();
+                    const validation = Promise.withResolvers<string | undefined>();
+                    const result = showSmartInputBox(ctx, {
+                        prompt: 'Enter value',
+                        showBack: true,
+                        validateInputAsync: () => validation.promise,
+                    });
+                    const input = mock.inputBoxes[0];
+                    input.value = 'value';
+                    input.accept();
+                    expect(input.enabled).to.be.false;
+                    expect(input.busy).to.be.true;
+
+                    if (action === 'cancel') {
+                        input.triggerHide();
+                    } else {
+                        input.pressButton(ctx.code.QuickInputButtons.Back);
+                    }
+                    await expect(result).to.be.rejectedWith(action === 'cancel' ? CancellationError : GoBackError);
+
+                    validation.resolve(message);
+                    await validation.promise;
+                    expect(input.dispose.mock.callCount()).to.equal(1);
+                    expect(input.validationMessage).to.be.undefined;
+                    expect(input.enabled).to.be.false;
+                    expect(ctx.extensionContext.workspaceState.keys()).to.be.empty;
+                });
+            }
+        }
+
         it('should accept input and return the value', async () => {
             const { ctx, mock } = createMockCodeContext();
             respondToPrompts(mock, [{ input: 'hello' }]);
@@ -542,6 +613,36 @@ describe('uiHelpers (unit)', () => {
             qp.activeItems = [qp.items[1]];
             qp.accept();
             await resultPromise;
+        });
+
+        it('should reject and dispose when an item button handler throws', async () => {
+            const { ctx, mock } = createMockCodeContext();
+            const failure = new Error('Item action failed');
+            const button = { iconPath: { id: 'trash' } };
+            const result = showSmartQuickPick(ctx, [{ label: 'A', buttons: [button] }], {
+                onDidTriggerItemButton: () => { throw failure; },
+            });
+            const picker = mock.quickPicks[0];
+            picker.pressItemButton(picker.items[0], button);
+
+            expect(await expect(result).to.be.rejected).to.equal(failure);
+            expect(picker.dispose.mock.callCount()).to.equal(1);
+            expect(ctx.extensionContext.workspaceState.keys()).to.be.empty;
+        });
+
+        it('should cancel and dispose when accepting an empty multi-selection', async () => {
+            const { ctx, mock } = createMockCodeContext();
+            const result = showSmartQuickPick(ctx, [{ label: 'A' }], {
+                canPickMany: true,
+                stepName: 'chooseResources',
+            });
+            const picker = mock.quickPicks[0];
+            picker.accept();
+
+            const error: CancellationError = await expect(result).to.be.rejectedWith(CancellationError);
+            expect(error.stepName).to.equal('chooseResources');
+            expect(picker.dispose.mock.callCount()).to.equal(1);
+            expect(ctx.extensionContext.workspaceState.keys()).to.be.empty;
         });
 
         it('should reject with GoBackError when back button is pressed on quick pick', async () => {

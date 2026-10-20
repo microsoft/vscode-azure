@@ -84,6 +84,28 @@ describe('ProcessExecutor (unit)', () => {
             expect(error.message).to.not.contain('host failure');
         });
 
+        it('propagates an unrelated stream error to the output consumer', async () => {
+            const spawn = createMockSpawn({ keepAlive: true, keepStreamsOpen: true });
+            const executor = new ProcessExecutor(createMockVsCode().vscode, spawn);
+            const result = await executor.spawn({
+                execution: 'background', command: ['func'], streamOutput: true,
+            });
+            const child = spawn.mock.calls[0].result!;
+            const failure = new Error('Output stream failed');
+            const output = collectAsync(result.stdout);
+            const rejection = expect(output).to.be.rejected;
+
+            child.stdout!.destroy(failure);
+
+            try {
+                expect(await rejection).to.equal(failure);
+            } finally {
+                child.stderr!.push(null);
+                child.emit('close', 0, null);
+                await result.completed;
+            }
+        });
+
         it('pauses unread output and preserves chunk order within each channel', async () => {
             const spawn = createMockSpawn({ stdoutChunks: ['first', 'second', 'third'], stderrLines: ['error one', 'error two'] });
             const executor = new ProcessExecutor(createMockVsCode().vscode, spawn);
@@ -591,6 +613,38 @@ describe('ProcessExecutor (unit)', () => {
 
     describe('foreground execution', () => {
         const getTaskExecution = getMockTaskExecution;
+
+        it('should terminate the task when cancellation precedes startup', async () => {
+            const m = createMockVsCode();
+            const executor = new ProcessExecutor(m.vscode);
+            const controller = new AbortController();
+            controller.abort();
+            const terminate = mock.fn();
+            m.tasks.executeTask.mock.mockImplementation(task => Promise.resolve({ task, terminate }));
+            const promise = executor.spawn({
+                execution: 'foreground',
+                command: [process.execPath],
+                name: 'Cancelled Task',
+            }, controller.signal);
+
+            await expect(promise).to.be.rejectedWith(CancellationError);
+            expect(m.tasks.executeTask.mock.callCount()).to.equal(1);
+            expect(terminate.mock.callCount()).to.equal(1);
+        });
+
+        it('should report an unknown task exit code as a failure', async () => {
+            const m = createMockVsCode();
+            const executor = new ProcessExecutor(m.vscode);
+            const promise = executor.spawn({
+                execution: 'foreground',
+                command: [process.execPath],
+                name: 'Interrupted Task',
+            });
+            const taskExecution = await getTaskExecution(m);
+            m.taskProcessEndEmitter.fire({ execution: taskExecution, exitCode: undefined });
+
+            await expect(promise).to.be.rejectedWith(Error, "'Interrupted Task' failed with exit code -1");
+        });
 
         it('should create a task and resolve on exit code 0', async () => {
             const m = createMockVsCode();
