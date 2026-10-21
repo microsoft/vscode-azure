@@ -5,7 +5,8 @@
 
 import { AppServiceLogicalType, AzureNodeId, FunctionAppLogicalType, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
 import { createMockHierarchicalDataItemTree, createMockWebAppClient } from '@microsoft/vscode-azure-azutils/testing';
-import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, createTestActionExecutor, withSettings } from '@microsoft/vscode-azure-utils/testing';
+import { ConfigurationSection } from '../../../../src/constants';
 import { BrowseWebsite } from '../../../../src/commands/tree/BrowseWebsite';
 import { CopyFunctionUrl } from '../../../../src/commands/functions/CopyFunctionUrl';
 import { DeleteFunction } from '../../../../src/commands/functions/DeleteFunction';
@@ -47,7 +48,7 @@ describe('FunctionAppViewProvider (unit)', () => {
         ]));
         const provider = new FunctionAppViewProvider(codeContext.ctx, executor, tree);
         const key = (node: ConcreteAzureNode) => AzureNodeId.from(node).toString();
-        return { app, group, fn, invalid, tree, provider, settings, key };
+        return { app, group, fn, invalid, tree, provider, settings, key, codeContext };
     }
 
     it('claims Function Apps and their virtual children but leaves application settings to the shared provider', () => {
@@ -161,6 +162,22 @@ describe('FunctionAppViewProvider (unit)', () => {
         expect(provider.getParent(key(group))).to.equal(key(app));
         expect(provider.getParent(key(app))).to.equal(AzureNodeId.from(app).parentNodeId()?.toString());
     });
+
+    for (const [groupBy, groupingValue] of [
+        ['resourceType', FunctionAppLogicalType],
+        ['location', 'westus'],
+        ['armTag', 'prod'],
+    ] as const) {
+        it(`parents the app under its virtual group when grouping by ${groupBy}`, async () => {
+            const app = makeSettingsResource({ location: 'westus', tags: { env: 'prod' } });
+            const { provider, key, codeContext } = setup(app);
+            const group = { subscription: app.subscription, groupingStrategy: groupBy, groupingValue };
+            const overrides = { [`${ConfigurationSection}.groupBy`]: groupBy, [`${ConfigurationSection}.groupByTag`]: 'env' };
+            await withSettings(codeContext.mock, overrides, () => {
+                expect(provider.getParent(key(app))).to.equal(AzureNodeId.from(group).toString());
+            });
+        });
+    }
 
     for (const kind of ['app', 'functions'] as const) {
         it(`resolves invalid ${kind} parentage before the view has loaded its children`, () => {

@@ -45,6 +45,17 @@ describe('FunctionAppDataProvider (unit)', () => {
         expect(provider.canHandle(page.items[0])).to.be.false;
     });
 
+    it('shares one in-flight site read between enrichment and expansion', async () => {
+        const { provider, client } = setup();
+        const app = makeSettingsResource();
+        const enriching = provider.enrich(app);
+        const expanding = provider.getChildren(app);
+        await Promise.all([enriching, expanding]);
+        expect(client.webApps.get.mock.callCount()).to.equal(1);
+        await provider.enrich(app);
+        expect(client.webApps.get.mock.callCount()).to.equal(2);
+    });
+
     it('contributes Application Settings before Functions with the owning adapter and resource', async () => {
         const { provider, adapter, client } = setup();
         const app = makeSettingsResource();

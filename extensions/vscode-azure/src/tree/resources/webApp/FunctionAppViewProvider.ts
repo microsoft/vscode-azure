@@ -17,7 +17,7 @@ import { SetFunctionState } from '../../../commands/functions/SetFunctionState';
 import { StreamFunctionLogs } from '../../../commands/functions/StreamFunctionLogs';
 import { IAzureViewDataTree } from '../../../services';
 import { combineContextValues, resourceContextValue } from '../../contextValueHelpers';
-import { createGenericResourceTreeItem } from '../GenericAzureViewProvider';
+import { createGenericResourceTreeItem, getGroupedParentKey } from '../GenericAzureViewProvider';
 import {
     FunctionAppVirtualTypes,
     isFunctionApp,
@@ -89,6 +89,12 @@ export class FunctionAppViewProvider implements ViewProvider<string> {
                 }).toString();
             }
             return AzureNodeId.from(resource.azureResource).toString();
+        }
+        if (isFunctionApp(resource)) {
+            const groupKey = getGroupedParentKey(this.ctx.code, resource);
+            if (groupKey) {
+                return groupKey;
+            }
         }
         return AzureNodeId.parse(key).parentNodeId()?.toString();
     }

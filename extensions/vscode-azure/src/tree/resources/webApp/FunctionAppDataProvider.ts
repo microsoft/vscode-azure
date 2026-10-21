@@ -26,6 +26,8 @@ import {
  */
 @injectable()
 export class FunctionAppDataProvider implements DataProvider<ConcreteAzureNode> {
+    private readonly reads = new WeakMap<FunctionApp, Promise<boolean>>();
+
     public constructor(
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IWebAppClientProvider) private readonly createClient: IWebAppClientProvider,
@@ -39,11 +41,22 @@ export class FunctionAppDataProvider implements DataProvider<ConcreteAzureNode> 
     }
 
     /** @inheritdoc */
-    public async enrich(resource: ConcreteAzureNode): Promise<boolean> {
+    public enrich(resource: ConcreteAzureNode): Promise<boolean> {
         if (!isFunctionApp(resource)) {
-            return false;
+            return Promise.resolve(false);
         }
 
+        // Enrichment and expansion share one read per app so a slower, older reply cannot overwrite newer state.
+        let read = this.reads.get(resource);
+        if (!read) {
+            const pending = this.readSite(resource).finally(() => { this.reads.delete(resource); });
+            read = pending;
+            this.reads.set(resource, pending);
+        }
+        return read;
+    }
+
+    private async readSite(resource: FunctionApp): Promise<boolean> {
         this.executor.setTelProp('nodeType', getNodeType(resource));
         try {
             const client = this.createClient(resource.subscription);

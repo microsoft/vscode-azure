@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureNodeId, type ConcreteAzureNode } from '@microsoft/vscode-azure-azutils';
-import { DataItemTree, type DataProvider, IActionExecutor, IExtensionContext, IVsCode, type LoadMoreOptions, Roots, ViewItemTree, type ViewProvider } from '@microsoft/vscode-azure-utils';
+import { DataItemTree, type DataProvider, type Disposable, Everything, IActionExecutor, IExtensionContext, IVsCode, type LoadMoreOptions, ViewItemTree, type ViewProvider } from '@microsoft/vscode-azure-utils';
 import type { Container, ResolutionContext, ServiceIdentifier } from 'inversify';
 import { defaultLoadMoreOptions } from '../commands/tree/LoadMore';
 import { ActivityTreeViewId, AzureResourceTreeViewId, WorkspaceTreeViewId } from '../constants';
@@ -82,14 +82,8 @@ export function registerTrees(container: Container, products: ProductRegistrar):
         ],
     });
 
-    // Refresh the whole workspace tree when the index changes. Subscribed here,
-    // once, rather than by each provider -- otherwise a single workspace change
-    // would refresh the tree once per provider reading from the index.
-    const workspaceDataTree = container.get(IWorkspaceViewDataTree);
     container.get(IExtensionContext).subscriptions.push(
-        container.get(IWorkspaceIndexService).onDidChangeIndex(() => {
-            workspaceDataTree.invalidate(Roots);
-        })
+        refreshWorkspaceTreeOnIndexChange(container.get(IWorkspaceIndexService), container.get(IWorkspaceViewDataTree)),
     );
 
     // Activity tree
@@ -113,6 +107,21 @@ export function registerTrees(container: Container, products: ProductRegistrar):
             ActivityViewProvider, // generic fallback last
         ],
     });
+}
+
+/**
+ * Invalidates the whole workspace tree when the index changes. Subscribed once, rather than by each
+ * provider, so a single workspace change does not refresh the tree once per provider reading the index.
+ *
+ * Project children are derived from indexed files (host, settings, metadata, build files), and
+ * invalidating only the roots would keep the existing project nodes and their cached children, so
+ * the entire cache is dropped. The workspace tree is small and discovery is cheap.
+ */
+export function refreshWorkspaceTreeOnIndexChange(
+    index: Pick<IWorkspaceIndexService, 'onDidChangeIndex'>,
+    tree: Pick<IWorkspaceViewDataTree, 'invalidate'>,
+): Disposable {
+    return index.onDidChangeIndex(() => { tree.invalidate(Everything); });
 }
 
 // #region Internal provider collection identifiers
