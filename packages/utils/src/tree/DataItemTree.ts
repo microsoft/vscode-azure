@@ -233,9 +233,10 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
 
     private async getBranchChildren(resource: T): Promise<T[]> {
         const key = this.getKey(resource);
-        if (this.findProvider(resource)?.awaitEnrichment) {
+        const provider = this.findProvider(resource);
+        if (provider?.awaitEnrichment) {
             // A failed enrichment is already reported; children are still loaded from whatever state it left.
-            await this.enrichmentPromises.get(key)?.catch(() => { /* noop */ });
+            await this.whenEnriched(resource).catch(() => { /* noop */ });
         }
         const node = this.nodes.get(key);
 
@@ -255,8 +256,6 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
         this.wipeSubtree(node);
         node.children = [];
 
-        // Find the provider that handles this resource
-        const provider = this.findProvider(resource);
         if (!provider) {
             node.staleAt = this.computeStaleAt(this.ttl);
             this.executor.output.debug(`[data] ${this.name} branch fetch done key=${key} count=0 provider=<none>`);
