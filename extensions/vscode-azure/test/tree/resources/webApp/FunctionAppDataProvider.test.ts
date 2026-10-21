@@ -45,12 +45,11 @@ describe('FunctionAppDataProvider (unit)', () => {
         expect(provider.canHandle(page.items[0])).to.be.false;
     });
 
-    it('expansion awaits the enrichment read instead of reading the site again', async () => {
+    it('does not read the site again when expanding an enriched app', async () => {
         const { provider, client } = setup();
         const app = makeSettingsResource();
-        const enriching = provider.enrich(app);
-        const expanding = provider.getChildren(app);
-        await Promise.all([enriching, expanding]);
+        await provider.enrich(app);
+        await provider.getChildren(app);
         await provider.getChildren(app);
         expect(client.webApps.get.mock.callCount()).to.equal(1);
     });

@@ -92,6 +92,16 @@ export interface DataProvider<TResource> {
     enrich?(resource: TResource): boolean | Promise<boolean>;
 
     /**
+     * When `true`, the tree waits for a resource's pending {@linkcode enrich}
+     * call to settle before loading its children, so {@linkcode getChildren}
+     * sees the enriched state and cached children invalidated by enrichment are
+     * fetched once. Enrichment failures do not prevent children from loading.
+     * Leave unset when children do not depend on enrichment, so slow
+     * enrichment never delays expansion.
+     */
+    readonly awaitEnrichment?: boolean;
+
+    /**
      * Whether a provider can return root-level resources (i.e. be called with `undefined`).
      */
     readonly isRoot?: boolean;

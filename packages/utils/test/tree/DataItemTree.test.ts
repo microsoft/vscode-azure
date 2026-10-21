@@ -338,6 +338,41 @@ describe('DataItemTree (unit)', () => {
             expect(onChange.mock.callCount()).to.equal(0);
         });
 
+        for (const awaitEnrichment of [true, false]) {
+            it(`should ${awaitEnrichment ? '' : 'not '}hold back children until enrichment settles when awaitEnrichment is ${awaitEnrichment}`, async () => {
+                const tree = createTree();
+                const enrichment = Promise.withResolvers<boolean>();
+                const getChildren = mock.fn((r?: TestResource) => r ? [{ id: 'child' }] : [{ id: 'root' }]);
+                tree.registerProvider({
+                    isRoot: true,
+                    canHandle: canHandleAll,
+                    getChildren,
+                    enrich: () => enrichment.promise,
+                    awaitEnrichment,
+                });
+                const [root] = await tree.getChildren();
+                let loaded = false;
+                const children = tree.getChildren(root).then(result => { loaded = true; return result; });
+                await delay(10);
+                expect(loaded).to.equal(!awaitEnrichment);
+                enrichment.resolve(false);
+                expect((await children).map(c => c.id)).to.deep.equal(['child']);
+            });
+        }
+
+        it('should load children after a failed enrichment when awaitEnrichment is set', async () => {
+            const tree = createTree();
+            tree.registerProvider({
+                isRoot: true,
+                canHandle: canHandleAll,
+                getChildren: (r?: TestResource) => r ? [{ id: 'child' }] : [{ id: 'root' }],
+                enrich: () => Promise.reject(new Error('Enrichment failed')),
+                awaitEnrichment: true,
+            });
+            const [root] = await tree.getChildren();
+            expect((await tree.getChildren(root)).map(c => c.id)).to.deep.equal(['child']);
+        });
+
         it('should run enrich on loaded resources', async () => {
             const tree = createTree();
             const enriched: string[] = [];
