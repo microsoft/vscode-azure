@@ -91,6 +91,7 @@ Resources can be enriched with additional data lazily after loading:
 3. `enrich()` mutates the resource in-place (same object reference)
 4. When enrichment completes, `onDidChange` fires so the view re-renders
 5. Commands that need enriched data call `await cache.whenEnriched<EnrichedType>(resource)`
+6. Providers whose children depend on enriched data set `awaitEnrichment = true`; the tree then waits for the resource's pending enrichment (success or failure) before calling that provider's `getChildren()`
 
 **Important:** Enrichment must not change any properties that contribute to the resource's `AzureNodeId` key (for generic resources, effectively `id` plus subscription identity fields used by `AzureNodeId.from`, such as account id and tenant id). The key is computed once when the resource is added to the `NodeMap`, and changing key-contributing properties would make the resource unreachable in the cache.
 
