@@ -37,6 +37,25 @@ describe('DetectFunctionRuntimeStep (unit)', () => {
         });
     }
 
+    it('resolves an absolute service path inside a remote workspace without dropping the root scheme', async () => {
+        const { ctx, mock } = createMockCodeContext();
+        const root = MockUri.from({ scheme: 'vscode-remote', authority: 'ssh-remote+host', path: '/workspace' });
+        const remote = (path: string) => root.with({ path });
+        mock.fs.addDirectory(remote('/workspace/api'));
+        mock.fs.addFile(remote('/workspace/api/local.settings.json'), '{"Values":{"FUNCTIONS_WORKER_RUNTIME":"node"}}');
+        respondToPrompts(mock, [{ pick: runtimeVersions.node[0] }]);
+        const output = new MockOutputChannel('test');
+        const wizard = new Wizard<CreateFunctionAppContext>(output, {
+            job: 'deploy', resourceDisplayName: 'Function App', iacFolder: root, hydratedServiceProjectPath: '/workspace/api',
+        }, [
+            new DetectFunctionRuntimeStep(ctx, new LocalFunctionSettings(ctx.code), output),
+            new PickRuntimeStep(ctx),
+        ], []);
+        const result = await wizard.run();
+        expect(result.functionWorkerRuntime).to.equal('node');
+        expect(result.runtimeVersion).to.equal(runtimeVersions.node[0]);
+    });
+
     for (const { name, settings } of [
         { name: 'encrypted', settings: '{"IsEncrypted":true,"Values":{"FUNCTIONS_WORKER_RUNTIME":"node"}}' },
         { name: 'malformed', settings: '{"Values":' },

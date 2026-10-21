@@ -8,7 +8,7 @@ import { dirname, ExternalError, ICodeContext, showMessage, showSmartQuickPick }
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 import { IAzdService } from '../../azd/AzdService';
-import { IWorkspaceViewDataTree } from '../../services';
+import { IAzureViewDataTree, IWorkspaceViewDataTree } from '../../services';
 import { AzdDeployStep } from '../../azd/wizard/AzdDeployStep';
 import type { CreateFunctionAppContext } from './CreateFunctionAppContext';
 import { IResourceSelector } from '../../tree/resources/ResourceSelector';
@@ -34,6 +34,7 @@ export class DeployFunctionApp implements ManagedCommand {
         @inject(IAzdService) private readonly azd: IAzdService,
         @inject(AzdDeployStep) private readonly deploy: AzdDeployStep<CreateFunctionAppContext>,
         @inject(ShowFunctionEndpointsStep) private readonly endpoints: Pick<ShowFunctionEndpointsStep, 'execute'>,
+        @inject(IAzureViewDataTree) private readonly dataTree: Pick<IAzureViewDataTree, 'invalidate'>,
     ) { }
 
     public async execute(target?: string | vscode.Uri): Promise<void> {
@@ -74,7 +75,8 @@ export class DeployFunctionApp implements ManagedCommand {
             resourceDisplayName: this.ctx.code.l10n.t('Function App'),
         };
         await this.deploy.execute(context, service);
-        await this.endpoints.execute(context);
+        this.dataTree.invalidate(app);
+        await this.endpoints.execute(context, service);
     }
 
     private async matchingProjects(service: string, appId: string): Promise<{ label: string; folder: vscode.Uri }[]> {

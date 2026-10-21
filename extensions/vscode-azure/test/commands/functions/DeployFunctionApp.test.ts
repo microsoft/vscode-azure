@@ -12,6 +12,7 @@ import type { CreateFunctionApp } from '../../../src/commands/functions/CreateFu
 import { DeployFunctionApp } from '../../../src/commands/functions/DeployFunctionApp';
 import type { ShowFunctionEndpointsStep } from '../../../src/commands/functions/steps/ShowFunctionEndpointsStep';
 import { AzdProjectFileTag } from '../../../src/tree/workspace/azd/AzdWorkspaceDataProvider';
+import type { IAzureViewDataTree } from '../../../src/services';
 import { createMockAzdService } from '../../azd/MockAzdService';
 import { AzdDeployStep } from '../../../src/azd/wizard/AzdDeployStep';
 import { CodeDeploymentDataProvider } from '../../../src/tree/activity/CodeDeploymentDataProvider';
@@ -29,10 +30,11 @@ describe('DeployFunctionApp (unit)', () => {
         const project = makeFunctionsProjectNode({ resourceUri: MockUri.file('/workspace/nested/host.json') });
         const activities = new CodeDeploymentDataProvider();
         const endpoints = { execute: mock.fn<ShowFunctionEndpointsStep['execute']>(() => Promise.resolve()) };
+        const dataTree = { invalidate: mock.fn<IAzureViewDataTree['invalidate']>() };
         const cmd = new DeployFunctionApp(ctx, create, selector, { get: key => key === project.id ? project : undefined },
             createMockWorkspaceIndexService({ [AzdProjectFileTag]: [MockUri.file('/workspace/azure.yaml')] }), azd,
-            new AzdDeployStep(createActionContext('test'), ctx.code, azd, activities), endpoints);
-        return { cmd, create, azd, app, project, activities, codeContext };
+            new AzdDeployStep(createActionContext('test'), ctx.code, azd, activities), endpoints, dataTree);
+        return { cmd, create, azd, app, project, activities, codeContext, endpoints, dataTree };
     }
 
     it('targets the nested local project folder', async () => {
@@ -43,9 +45,13 @@ describe('DeployFunctionApp (unit)', () => {
     });
 
     it('deploys only the matching tagged service and completes the activity', async () => {
-        const { cmd, app, azd, activities, create } = setup({ 'azd-service-name': 'api' });
+        const { cmd, app, azd, activities, create, endpoints, dataTree } = setup({ 'azd-service-name': 'api' });
         azd.show.mock.mockImplementation(() => Promise.resolve({ services: { api: { target: { resourceIds: [app.id.toUpperCase()] } }, other: {} } }));
         await cmd.execute(AzureNodeId.from(app).toString());
+        expect(dataTree.invalidate.mock.calls.map(call => call.arguments[0])).to.deep.equal([app]);
+        expect(endpoints.execute.mock.callCount()).to.equal(1);
+        expect(endpoints.execute.mock.calls[0].arguments[0].iacFolder?.path).to.equal('/workspace');
+        expect(endpoints.execute.mock.calls[0].arguments[1]).to.equal('api');
         expect(azd.deploy.mock.calls[0].arguments[0].path).to.equal('/workspace');
         expect(azd.deploy.mock.calls[0].arguments[1]).to.equal('api');
         expect(create.execute.mock.callCount()).to.equal(0);
@@ -60,11 +66,13 @@ describe('DeployFunctionApp (unit)', () => {
     });
 
     it('records deployment failure and propagates the error', async () => {
-        const { cmd, app, azd, activities } = setup({ 'azd-service-name': 'api' });
+        const { cmd, app, azd, activities, endpoints, dataTree } = setup({ 'azd-service-name': 'api' });
         azd.show.mock.mockImplementation(() => Promise.resolve({ services: { api: { target: { resourceIds: [app.id] } } } }));
         azd.deploy.mock.mockImplementation(() => Promise.reject(new Error('Deployment failed')));
         await expect(cmd.execute(AzureNodeId.from(app).toString())).to.be.rejectedWith('Deployment failed');
         expect((await activities.getChildren())[0].status).to.equal('Failed');
+        expect(endpoints.execute.mock.callCount()).to.equal(0);
+        expect(dataTree.invalidate.mock.callCount()).to.equal(0);
     });
 
     it('does not deploy to another environment with the same service name', async () => {

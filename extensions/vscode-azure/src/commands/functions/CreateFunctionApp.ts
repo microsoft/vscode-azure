@@ -75,7 +75,7 @@ export class CreateFunctionApp implements ManagedCommand {
         let iacFolder: vscode.Uri | undefined;
         if (target) {
             const stat = await this.code.workspace.fs.stat(target);
-            iacFolder = stat.type === this.code.FileType.Directory ? target : dirname(target);
+            iacFolder = (stat.type & this.code.FileType.Directory) !== 0 ? target : dirname(target);
         }
         const wizard = new Wizard<CreateFunctionAppContext>(
             this.output,

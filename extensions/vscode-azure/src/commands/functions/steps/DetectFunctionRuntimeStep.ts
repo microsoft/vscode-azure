@@ -28,13 +28,13 @@ export class DetectFunctionRuntimeStep extends PromptStep<CreateFunctionAppConte
         const path = context.hydratedServiceProjectPath;
         let uri = context.iacFolder;
         if (path && uri) {
-            uri = isAbsolute(path) ? this.ctx.code.Uri.file(path) : this.ctx.code.Uri.joinPath(uri, path);
+            uri = isAbsolute(path) ? uri.with({ path: this.ctx.code.Uri.file(path).path }) : this.ctx.code.Uri.joinPath(uri, path);
         }
         if (!uri) {
             return {};
         }
         try {
-            const folder = context.hydratedServiceProjectPath && (await this.ctx.code.workspace.fs.stat(uri)).type === this.ctx.code.FileType.File
+            const folder = context.hydratedServiceProjectPath && ((await this.ctx.code.workspace.fs.stat(uri)).type & this.ctx.code.FileType.File) !== 0
                 ? dirname(uri) : uri;
             const { values } = await this.settings.read(folder);
             const runtime = values.get('FUNCTIONS_WORKER_RUNTIME')?.trim().toLowerCase();

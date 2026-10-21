@@ -6,6 +6,7 @@
 import { CaselessSet, ExternalError, fileExists, ICodeContext, readText, Roots, showMessage, showSmartQuickPick, type ICaselessSetReader } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { findNodeAtLocation, getNodeValue } from 'jsonc-parser';
+import { posix } from 'node:path';
 import type * as vscode from 'vscode';
 import { ExtensionId } from '../../constants';
 import { FunctionsProjectSelector } from '../../functions/FunctionsProjectSelector';
@@ -23,6 +24,9 @@ const RuntimeRecommendations: ReadonlyMap<string, readonly string[]> = new Map([
     ['powershell', ['ms-vscode.PowerShell']],
     ['native', ['golang.Go']],
 ]);
+
+// eslint-disable-next-line no-template-curly-in-string -- VS Code launch variable, not a template
+const WorkspaceFolderVariable = '${workspaceFolder}';
 
 /** Initializes local workspace recommendations and optionally adds a product launch configuration. */
 @injectable()
@@ -48,7 +52,7 @@ export class InitializeFunctionsProject implements ManagedCommand {
         await this.addRecommendations(directory, runtime);
         this.tree.remove(`${FunctionsProjectKeyPrefix}${this.ctx.code.Uri.joinPath(project, 'host.json').toString()}`);
         this.tree.invalidate(Roots);
-        await this.offerLaunchConfiguration(directory, project, runtime);
+        await this.offerLaunchConfiguration(directory, workspace.uri, project, runtime);
     }
 
     private async selectRuntime(project: vscode.Uri): Promise<string> {
@@ -85,7 +89,7 @@ export class InitializeFunctionsProject implements ManagedCommand {
         });
     }
 
-    private async offerLaunchConfiguration(directory: vscode.Uri, project: vscode.Uri, runtime: string): Promise<void> {
+    private async offerLaunchConfiguration(directory: vscode.Uri, workspace: vscode.Uri, project: vscode.Uri, runtime: string): Promise<void> {
         if (!isFunctionsDebugRuntime(runtime)) {
             await showMessage(this.ctx.code, this.ctx.code.l10n.t(
                 'Functions project initialized. Local debugging supports Node.js, Python, Java, PowerShell, .NET isolated, and native Go projects.',
@@ -103,14 +107,30 @@ export class InitializeFunctionsProject implements ManagedCommand {
             if (!Array.isArray(value) || !value.every(isConfiguration)) {
                 throw new ExternalError(this.ctx.code.l10n.t('launch.json configurations must be an array of configuration objects.'));
             }
-            const exists = value.some(entry => entry.type === FunctionsDebugType && entry.projectPath === project.fsPath);
+            const exists = value.some(entry => entry.type === FunctionsDebugType && typeof entry.projectPath === 'string'
+                && this.resolveProjectPath(entry.projectPath, workspace) === project.fsPath);
             return exists ? [] : [{
                 name: this.ctx.code.l10n.t('Debug Azure Functions'),
                 type: FunctionsDebugType,
                 request: 'launch',
-                projectPath: project.fsPath,
+                projectPath: this.toProjectPath(workspace, project),
             }];
         });
+    }
+
+    /** Produces a `${workspaceFolder}`-relative path when the project is inside the workspace folder so the file is portable. */
+    private toProjectPath(workspace: vscode.Uri, project: vscode.Uri): string {
+        const relative = posix.relative(workspace.path, project.path);
+        if (project.scheme !== workspace.scheme || project.authority !== workspace.authority || relative.startsWith('..') || posix.isAbsolute(relative)) {
+            return project.fsPath;
+        }
+        return relative ? `${WorkspaceFolderVariable}/${relative}` : WorkspaceFolderVariable;
+    }
+
+    private resolveProjectPath(projectPath: string, workspace: vscode.Uri): string {
+        return projectPath.startsWith(WorkspaceFolderVariable)
+            ? this.ctx.code.Uri.joinPath(workspace, projectPath.slice(WorkspaceFolderVariable.length)).fsPath
+            : projectPath;
     }
 
     private async append(uri: vscode.Uri, key: string, additions: (value: unknown) => readonly unknown[]): Promise<void> {

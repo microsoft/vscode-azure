@@ -43,7 +43,8 @@ describe('Initialize Functions project (integration)', () => {
         expect(launchText).to.include('// launch options');
         expect(launchText).to.include('/* existing debugger */');
         expect(parse(launchText ?? '').configurations).to.have.length(2);
-        expect(parse(launchText ?? '').configurations[1].projectPath).to.equal(s.folder.fsPath);
+        // eslint-disable-next-line no-template-curly-in-string -- VS Code launch variable, not a template
+        expect(parse(launchText ?? '').configurations[1].projectPath).to.equal('${workspaceFolder}');
         expect(await readText(s.code, tasks)).to.equal('{ "tasks": [{ "type": "func" }] }');
     });
 
@@ -93,6 +94,24 @@ describe('Initialize Functions project (integration)', () => {
             expect(s.m.window.showInformationMessage.mock.calls[0].arguments[0]).to.include('Local debugging supports');
             const extensions = parse(await readText(s.code, s.code.Uri.joinPath(s.folder, '.vscode', 'extensions.json')) ?? '');
             expect(extensions.recommendations).to.deep.equal([ExtensionId]);
+        });
+    }
+
+    for (const [runtime, recommendations] of [
+        ['node', []],
+        ['python', ['ms-python.python', 'ms-python.debugpy']],
+        ['java', ['redhat.java', 'vscjava.vscode-java-debug']],
+        ['dotnet-isolated', ['ms-dotnettools.csharp']],
+        ['powershell', ['ms-vscode.PowerShell']],
+        ['native', ['golang.Go']],
+    ] as const) {
+        it(`recommends exactly the ${runtime} runtime extensions`, async () => {
+            const s = setup(runtime);
+            s.m.fs.addFile(s.code.Uri.joinPath(s.folder, 'go.mod'), 'module app\n\ngo 1.24\n');
+            respondToPrompts(s.m, ['cancel']);
+            await s.command.execute(s.folder);
+            const extensions = parse(await readText(s.code, s.code.Uri.joinPath(s.folder, '.vscode', 'extensions.json')) ?? '');
+            expect(extensions.recommendations).to.deep.equal([ExtensionId, ...recommendations]);
         });
     }
 

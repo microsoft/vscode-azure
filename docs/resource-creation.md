@@ -13,7 +13,7 @@ Each creation command receives an `AzdJob` that determines how the wizard behave
 
 ## Wizard Context
 
-All azd creation wizards share `AzdWizardContext`. Resource-specific commands extend it (e.g. `CreateFunctionAppContext` adds `functionWorkerRuntime`, `runtimeVersion`, `appServicePlanSkuName`).
+All azd creation wizards share `AzdWizardContext`. Resource-specific commands extend it (e.g. `CreateFunctionAppContext` adds `functionWorkerRuntime`, `runtimeVersion`).
 
 ### Core fields
 
@@ -55,8 +55,7 @@ Using `CreateFunctionApp` as the concrete example:
 | 5 | `ProjectNameStep` | Unless `environmentName` set | `environmentName`, `azdServiceName` (if not already hydrated) |
 | 6 | `PickRuntimeStep` | Unless `hasInfra` | `functionWorkerRuntime` |
 | 6a | `PickRuntimeVersionStep` (subprompt of `PickRuntimeStep`) | Unless `hasInfra` or version already set (only shows a pick when the runtime has more than one supported version) | `runtimeVersion` |
-| 7 | `PickHostingPlanStep` | Unless `hasInfra` | `appServicePlanSkuName` |
-| 8 | `ConfirmProvisionStep` | Only when Bootstrapped | `provision` (may flip to `false`) |
+| 7 | `ConfirmProvisionStep` | Only when Bootstrapped | `provision` (may flip to `false`) |
 
 ### Execute steps (in order)
 
@@ -67,7 +66,7 @@ Using `CreateFunctionApp` as the concrete example:
 | 3 | `CreateAzdEnvStep` | No `existingDefaultEnvName` | Runs `azd env new` |
 | 4 | `AzdProvisionStep` | `provision === true` | Runs `azd provision` as a foreground VS Code task |
 | 5 | `AzdDeployStep` | `deploy === true` | Runs `azd deploy`; tracks progress via `CodeDeploymentHandle` |
-| 6 | `ShowEndpointUrlStep` | `iacFolder` is set | Shows a toast with the deployed endpoint URL |
+| 6 | `ShowFunctionEndpointsStep` | `deploy === true` and `iacFolder` is set | Lists the deployed HTTP function templates (without keys) and offers to open one |
 
 ## Scenario Matrix
 

@@ -36,7 +36,8 @@ export class ShowFunctionEndpointsStep extends ExecuteStep<CreateFunctionAppCont
         return context.deploy === true && !!context.iacFolder;
     }
 
-    public async execute(context: Readonly<CreateFunctionAppContext>): Promise<void> {
+    /** Lists endpoints for the deployed `service`, or for every service when the deployment was not scoped. */
+    public async execute(context: Readonly<CreateFunctionAppContext>, service?: string): Promise<void> {
         if (!context.iacFolder) {
             return;
         }
@@ -44,7 +45,7 @@ export class ShowFunctionEndpointsStep extends ExecuteStep<CreateFunctionAppCont
         let operation = this.ctx.code.l10n.t('deployment discovery');
         try {
             const show = await this.azd.show(context.iacFolder);
-            const services = context.azdServiceName ? [show?.services?.[context.azdServiceName]] : Object.values(show?.services ?? {});
+            const services = service ? [show?.services?.[service]] : Object.values(show?.services ?? {});
             const resourceIds = services.flatMap(service => service?.target?.resourceIds ?? []);
             for (const id of resourceIds) {
                 operation = this.ctx.code.l10n.t('deployment discovery');

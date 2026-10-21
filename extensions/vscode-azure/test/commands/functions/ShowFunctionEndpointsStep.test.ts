@@ -96,12 +96,35 @@ describe('ShowFunctionEndpointsStep (unit)', () => {
                     other: { target: { resourceIds: [`${prefix}Microsoft.Web/sites/other`] } },
                 },
             }));
-            await s.step.execute({ ...s.context, azdServiceName: scoped ? 'api' : undefined });
+            await s.step.execute(s.context, scoped ? 'api' : undefined);
             expect(s.client.webApps.listFunctions.mock.calls.map(call => call.arguments)).to.deep.equal(
                 scoped ? [['rg', 'api']] : [['rg', 'api'], ['rg', 'other']],
             );
         });
     }
+
+    it('does not warn or leak a rejection when the endpoint quick pick is cancelled', async () => {
+        const { step, context, m, output } = setup();
+        const warning = mock.method(output, 'warn');
+        const responses = respondToPrompts(m, [{ button: 'View HTTP URLs' }, 'cancel']);
+        await step.execute(context);
+        await waitFor(() => responses.remaining === 0, 'the quick pick to be cancelled');
+        await new Promise(resolve => setImmediate(resolve));
+        expect(warning.mock.callCount()).to.equal(0);
+        expect(m.window.showWarningMessage.mock.callCount()).to.equal(0);
+        expect(m.env.openExternal.mock.callCount()).to.equal(0);
+    });
+
+    it('warns without leaking a rejection when opening the selected endpoint fails', async () => {
+        const { step, context, m, output } = setup();
+        const warning = mock.method(output, 'warn');
+        m.env.openExternal.mock.mockImplementation(() => Promise.reject(new Error('private failure')));
+        respondToPrompts(m, [{ button: 'View HTTP URLs' }, { pick: 'Orders' }]);
+        await step.execute(context);
+        await waitFor(() => warning.mock.callCount() === 1, 'the failure to be logged');
+        expect(warning.mock.calls[0].arguments[0]).to.equal('[functions] Could not open the deployed function endpoint.');
+        await waitFor(() => m.window.showWarningMessage.mock.callCount() === 1, 'the failure to be shown');
+    });
 
     it('reports a successful deployment with no HTTP functions without offering an endpoint', async () => {
         const s = setup();
