@@ -180,7 +180,7 @@ The Azure resources tree composes three data providers. They split responsibilit
 | `AcrDataProvider` | No | Service-specific resources and their virtual children | default | default TTL |
 | `SettingsDataProvider` | No | Settings virtual-node leaves created by product providers | default | default TTL |
 | `FunctionAppDataProvider` | No | Function Apps and their virtual function children; composes settings and Functions nodes before the Web App fallback | default | default TTL |
-| `WebAppDataProvider` | No | Function App, App Service, and Logic App resources; composes their settings nodes | default | default TTL |
+| `WebAppDataProvider` | No | App Service and Logic App resources, and Function Apps not handled by `FunctionAppDataProvider`; composes their settings nodes | default | default TTL |
 | `AzureResourceDataProvider` | No | Resource groups (under a subscription), and generic resources as the leaf fallback | default | default TTL |
 
 `AzureAccountDataProvider` owns none of the listing itself. It is a thin adapter over the **Azure listing layer** in azutils (`packages/azutils/src/auth/listing/`), passing the extension's subscription filter on every read. Because it returns `Infinity` from `getTtl`, its results never go stale on their own — it fires `onDidChange` instead when auth, the sovereign-cloud setting, the manual-tenant setting, or the filter changes.
