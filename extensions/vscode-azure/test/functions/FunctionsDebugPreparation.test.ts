@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { CancellationError } from '@microsoft/vscode-azure-utils';
 import { addMockExtension, getMockTaskExecution, MockCancellationToken, MockShellExecution, waitFor } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import { createFunctionsDebugFixture, selectPythonEnvironment } from './mockFunctionsDebug';
@@ -65,12 +64,12 @@ describe('Functions debug preparation (unit)', () => {
 
     it('uses the validated Go tools and merged environment for build and startup while resolving each launch independently', async () => {
         const s = setup('native');
-        const command = mock.fn((tool: string) => ({ binPath: s.code.Uri.file(`/Selected Tools/${tool}`).fsPath }));
+        const command = mock.fn((tool: string, _resource?: unknown) => ({ binPath: s.code.Uri.file(`/Selected Tools/${tool}`).fsPath }));
         addMockExtension(s.m, 'golang.Go', { settings: { getExecutionCommand: command } });
         const read = mock.method(s.settings, 'read');
         const launch = await s.preparation.prepare(s.folder, { ['CUSTOM_GO_ENV']: 'launch' });
         if (launch.runtime !== 'native') { throw new Error('Expected a native Go launch.'); }
-        command.mock.mockImplementation(tool => ({ binPath: s.code.Uri.file(`/Other Tools/${tool}`).fsPath }));
+        command.mock.mockImplementation((tool: string) => ({ binPath: s.code.Uri.file(`/Other Tools/${tool}`).fsPath }));
         s.m.fs.addFile(s.code.Uri.joinPath(s.folder, 'local.settings.json'), JSON.stringify({
             Values: { ['FUNCTIONS_WORKER_RUNTIME']: 'native', ['AzureWebJobsStorage__accountName']: 'updated' },
         }));
@@ -90,6 +89,7 @@ describe('Functions debug preparation (unit)', () => {
         expect(environment.CUSTOM_GO_ENV).to.equal('launch');
         expect(environment.AzureWebJobsStorage).to.equal('UseDevelopmentStorage=true');
         expect(command.mock.callCount()).to.equal(2);
+        expect(command.mock.calls.map(call => call.arguments[1])).to.deep.equal([s.folder, s.folder]);
         expect(read.mock.callCount()).to.equal(1);
 
         const next = await s.preparation.prepare(s.folder, {});
@@ -136,11 +136,11 @@ describe('Functions debug preparation (unit)', () => {
     it('cancels a Go tool probe without acquiring Core Tools or starting a host', async () => {
         const s = setup('native', { keepAlive: true });
         const token = new MockCancellationToken();
-        const validation = s.preparation.prepare(s.folder, {}, token);
-        const rejected = expect(validation).to.be.rejectedWith(CancellationError);
+        const resolved = s.debugProvider.resolveDebugConfigurationWithSubstitutedVariables(
+            undefined, { type: 'azure-functions', request: 'launch', name: 'Functions', projectPath: s.folder.fsPath }, token);
         await waitFor(() => s.spawn.mock.callCount() === 1);
         token.cancel();
-        await rejected;
+        expect(await resolved).to.be.undefined;
         expect(s.tools.acquire.mock.callCount()).to.equal(0);
         expect(s.m.tasks.executeTask.mock.callCount()).to.equal(0);
     });

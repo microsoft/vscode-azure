@@ -373,6 +373,22 @@ describe('Functions debug provider (unit)', () => {
         expect(s.spawn.mock.callCount()).to.equal(0);
     });
 
+    it('registers resolve hooks once and keeps the dynamic registration provide-only', () => {
+        const s = setup();
+        s.debugProvider.register();
+        const calls = s.m.debug.registerDebugConfigurationProvider.mock.calls;
+        const withResolve = calls.filter(call => 'resolveDebugConfigurationWithSubstitutedVariables' in call.arguments[1]);
+        expect(calls).to.have.length(2);
+        expect(withResolve).to.have.length(1);
+        expect(calls.find(call => !withResolve.includes(call))?.arguments[1]).to.have.property('provideDebugConfigurations');
+    });
+
+    it('selects the canonical indexed project for a path with a trailing separator', async () => {
+        const s = setup();
+        const selected = await s.projects.select(undefined, `${s.folder.fsPath}/`);
+        expect(selected.toString()).to.equal(s.folder.toString());
+    });
+
     it('cleans up attach failures before session start and normal session termination without touching unowned sessions', async () => {
         const s = setup();
         const stop = mock.method(s.owners, 'stop', () => Promise.resolve());

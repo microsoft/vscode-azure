@@ -18,6 +18,8 @@ export interface LocalSettingsSnapshot {
 /** Reads and surgically edits local Values without uploading settings or exposing them in a tree. */
 @injectable()
 export class LocalFunctionSettings {
+    private readonly writes = new Map<string, Promise<void>>();
+
     public constructor(@inject(IVsCode) private readonly code: IVsCode) { }
 
     /** Rejects encrypted or malformed files instead of treating them as empty settings. */
@@ -36,8 +38,19 @@ export class LocalFunctionSettings {
         await this.writeValue(project, 'FUNCTIONS_WORKER_RUNTIME', runtime);
     }
 
-    private async writeValue(project: vscode.Uri, key: string, value: string): Promise<void> {
+    /** Serializes read-modify-write cycles per file so concurrent edits cannot overwrite each other. */
+    private writeValue(project: vscode.Uri, key: string, value: string): Promise<void> {
         const uri = this.code.Uri.joinPath(project, 'local.settings.json');
+        const id = uri.toString();
+        const run = (this.writes.get(id) ?? Promise.resolve()).catch(() => undefined).then(() => this.writeValueNow(uri, key, value));
+        const tail = run.finally(() => {
+            if (this.writes.get(id) === tail) { this.writes.delete(id); }
+        });
+        this.writes.set(id, tail);
+        return run;
+    }
+
+    private async writeValueNow(uri: vscode.Uri, key: string, value: string): Promise<void> {
         const document = this.code.workspace.textDocuments.find(doc => doc.uri.toString() === uri.toString());
         if (document?.isDirty) {
             throw new ExternalError(this.code.l10n.t('Save local.settings.json before editing function settings.'));

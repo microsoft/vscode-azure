@@ -35,9 +35,12 @@ export class FunctionsDebugProvider implements vscode.DebugConfigurationProvider
 
     /** Registers only provider/adapter lifecycle hooks; activation never acquires tools or starts a host. */
     public register(): void {
-        for (const trigger of [this.code.DebugConfigurationProviderTriggerKind.Initial, this.code.DebugConfigurationProviderTriggerKind.Dynamic]) {
-            this.subscriptions.push(this.code.debug.registerDebugConfigurationProvider(FunctionsDebugType, this, trigger));
-        }
+        const { Initial, Dynamic } = this.code.DebugConfigurationProviderTriggerKind;
+        this.subscriptions.push(this.code.debug.registerDebugConfigurationProvider(FunctionsDebugType, this, Initial));
+        // VS Code runs resolve hooks for every registration, so the dynamic one only supplies configurations.
+        this.subscriptions.push(this.code.debug.registerDebugConfigurationProvider(FunctionsDebugType, {
+            provideDebugConfigurations: folder => this.provideDebugConfigurations(folder),
+        }, Dynamic));
         const stop = (session: vscode.DebugSession) => {
             const id: unknown = session.configuration.__azureFunctionsHostId;
             if (typeof id === 'string') {

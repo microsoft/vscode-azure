@@ -39,6 +39,7 @@ export class FunctionsProjectSelector {
             }
             throw error;
         }
+        project = dirname(host);
         if (process.platform === 'win32') {
             project = (await this.index.getIndex()).withTag(FunctionsHostFileTag).map(dirname)
                 .find(uri => uri.toString().toLowerCase() === project.toString().toLowerCase()) ?? project;

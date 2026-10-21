@@ -25,7 +25,7 @@ interface PythonApi {
     readonly environments?: {
         getActiveEnvironmentPath(resource: vscode.Uri): { readonly path: string };
         resolveEnvironment(path: { readonly path: string }): Promise<{ readonly executable: { readonly uri?: vscode.Uri } } | undefined>;
-        getEnvironmentVariables(resource: vscode.Uri): Readonly<Record<string, string | undefined>>;
+        getEnvironmentVariables(resource: vscode.Uri): Promise<Readonly<Record<string, string | undefined>>>;
     };
 }
 interface PythonDebugApi {
@@ -292,10 +292,11 @@ export class FunctionsDebugPreparation {
         if (!await fileExists(this.code, this.code.Uri.joinPath(virtualEnvironment, 'pyvenv.cfg'))) {
             throw new ExternalError(this.code.l10n.t('Select a Python virtual environment for this project before debugging with Core Tools v5.'));
         }
+        const variables = await api.environments.getEnvironmentVariables(project);
         return {
             executable: python,
             virtualEnvironment,
-            variables: Object.fromEntries(Object.entries(api.environments.getEnvironmentVariables(project))
+            variables: Object.fromEntries(Object.entries(variables)
                 .filter((entry): entry is [string, string] => typeof entry[1] === 'string')),
         };
     }

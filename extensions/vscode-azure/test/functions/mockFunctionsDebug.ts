@@ -36,7 +36,7 @@ export function selectPythonEnvironment(
     const environments = {
         getActiveEnvironmentPath: mock.fn(() => ({ path: executable.fsPath })),
         resolveEnvironment: mock.fn(() => Promise.resolve({ executable: { uri: executable } })),
-        getEnvironmentVariables: mock.fn(() => variables),
+        getEnvironmentVariables: mock.fn(() => Promise.resolve(variables)),
     };
     addMockExtension(s.m, 'ms-python.python', {
         ready: Promise.resolve(), environments,
