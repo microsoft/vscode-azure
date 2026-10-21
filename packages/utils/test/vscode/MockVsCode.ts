@@ -119,8 +119,10 @@ export interface MockVsCodeResult {
     /** The mock `commands` namespace -- access `.executeCommand.mock` etc. for assertions. */
     readonly commands: MockedNamespace<typeof vscode.commands>;
 
-    /** The mock `env` namespace -- access `.openExternal.mock` for assertions. */
-    readonly env: MockedNamespace<typeof vscode.env>;
+    /** The mock `env` namespace, including tracked clipboard methods. */
+    readonly env: MockedNamespace<Omit<typeof vscode.env, 'clipboard'>> & {
+        readonly clipboard: MockedNamespace<typeof vscode.env.clipboard>;
+    };
 
     /** The mock `window` namespace -- access `.showWarningMessage.mock` etc. for assertions. */
     readonly window: MockedNamespace<typeof vscode.window>;
