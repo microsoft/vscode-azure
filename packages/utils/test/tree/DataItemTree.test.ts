@@ -360,6 +360,42 @@ describe('DataItemTree (unit)', () => {
             });
         }
 
+        it('should coalesce a branch request made from an onDidChange subscriber while an awaited enrichment settles', async () => {
+            const tree = createTree();
+            const firstPage = Promise.withResolvers<undefined>();
+            const getChildren = mock.fn((r?: TestResource) => {
+                if (!r) {
+                    return [{ id: 'root' }];
+                }
+                return (async function* (): AsyncGenerator<Page<TestResource>> {
+                    await firstPage.promise;
+                    yield { items: [{ id: 'child' }], hasMore: false };
+                })();
+            });
+            tree.registerProvider({
+                isRoot: true,
+                canHandle: canHandleAll,
+                getChildren,
+                enrich: (r: TestResource) => Promise.resolve(r.id === 'root'),
+                awaitEnrichment: true,
+            });
+            const [root] = await tree.getChildren();
+            const requests: Promise<TestResource[]>[] = [];
+            tree.onDidChange(() => { requests.push(tree.getChildren(root)); });
+            requests.push(tree.getChildren(root));
+
+            await delay(10);
+            firstPage.resolve(undefined);
+            const results = await Promise.all(requests);
+
+            expect(requests.length).to.be.greaterThan(1);
+            for (const result of results) {
+                expect(result.map(c => c.id)).to.deep.equal(['child']);
+            }
+            expect(getChildren.mock.calls.filter(c => c.arguments[0]).length).to.equal(1);
+            expect((await tree.getChildren(root)).map(c => c.id)).to.deep.equal(['child']);
+        });
+
         it('should load children after a failed enrichment when awaitEnrichment is set', async () => {
             const tree = createTree();
             tree.registerProvider({

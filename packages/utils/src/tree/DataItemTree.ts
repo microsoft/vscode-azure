@@ -68,6 +68,16 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
      */
     private readonly loadsInFlight = new InflightMap<void>();
 
+    /**
+     * In-flight branch requests per resource key, covering the enrichment wait
+     * and the child fetch. Concurrent {@linkcode getChildren} calls for the same
+     * branch share one request. An entry is dropped when its request settles, when
+     * its node is removed, and -- once the child fetch has begun (`fetching`) --
+     * when the node is invalidated, so a later request refetches. Distinct from
+     * {@linkcode loadsInFlight}, which coordinates page pulls.
+     */
+    private readonly branchRequests = new Map<string, { readonly promise: Promise<T[]>; fetching: boolean }>();
+
     /** Cached root nodes and their staleness timestamp. */
     private roots: TreeNode<T>[] | undefined;
     private rootsStaleAt = 0;
@@ -182,6 +192,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
             if (!newKeySet.has(this.getKey(rootNode.resource))) {
                 for (const removedKey of this.nodes.removeSubtrees([rootNode])) {
                     this.enrichmentPromises.delete(removedKey);
+                    this.dropBranchRequest(removedKey, true);
                 }
             }
         }
@@ -231,8 +242,24 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
         return loaded !== undefined && loaded !== null && Date.now() < staleAt;
     }
 
-    private async getBranchChildren(resource: T): Promise<T[]> {
+    private getBranchChildren(resource: T): Promise<T[]> {
         const key = this.getKey(resource);
+        const existing = this.branchRequests.get(key);
+        if (existing) {
+            return existing.promise;
+        }
+
+        const request = { promise: undefined as unknown as Promise<T[]>, fetching: false };
+        request.promise = this.loadBranchChildren(resource, key, request).finally(() => {
+            if (this.branchRequests.get(key) === request) {
+                this.branchRequests.delete(key);
+            }
+        });
+        this.branchRequests.set(key, request);
+        return request.promise;
+    }
+
+    private async loadBranchChildren(resource: T, key: string, request: { fetching: boolean }): Promise<T[]> {
         const provider = this.findProvider(resource);
         if (provider?.awaitEnrichment) {
             // A failed enrichment is already reported; children are still loaded from whatever state it left.
@@ -255,6 +282,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
         // any in-flight page load is discarded), then start from an empty list.
         this.wipeSubtree(node);
         node.children = [];
+        request.fetching = true;
 
         if (!provider) {
             node.staleAt = this.computeStaleAt(this.ttl);
@@ -603,10 +631,24 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
     private wipeSubtree(node: TreeNode<T>): void {
         for (const removedKey of this.nodes.removeSubtrees(node.children)) {
             this.enrichmentPromises.delete(removedKey);
+            this.dropBranchRequest(removedKey, true);
         }
         node.children = undefined;
         node.pageIterator = undefined;
         node.staleAt = 0;
+        this.dropBranchRequest(this.getKey(node.resource), false);
+    }
+
+    /**
+     * Forget the in-flight branch request for {@linkcode key} so the next
+     * request starts fresh. Unless `always`, a request still waiting on
+     * enrichment is kept: it has not read any state yet and will observe the
+     * invalidation itself.
+     */
+    private dropBranchRequest(key: string, always: boolean): void {
+        if (always || this.branchRequests.get(key)?.fetching) {
+            this.branchRequests.delete(key);
+        }
     }
 
     /** Normalize a resource / key / array input into a flat list of entries. */
@@ -783,6 +825,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
     private removeNodeInternal(node: TreeNode<T>): T | undefined {
         for (const removedKey of this.nodes.removeSubtrees([node])) {
             this.enrichmentPromises.delete(removedKey);
+            this.dropBranchRequest(removedKey, true);
         }
 
         const parent = node.parent;
@@ -813,6 +856,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
         this.executor.output.debug(`[cache] ${this.name} invalidate all`);
         this.nodes.clear();
         this.enrichmentPromises.clear();
+        this.branchRequests.clear();
         this.roots = undefined;
         this.rootsStaleAt = 0;
         this.changeEmitter.fire(undefined);
