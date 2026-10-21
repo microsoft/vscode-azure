@@ -45,15 +45,25 @@ describe('FunctionAppDataProvider (unit)', () => {
         expect(provider.canHandle(page.items[0])).to.be.false;
     });
 
-    it('shares one in-flight site read between enrichment and expansion', async () => {
+    it('expansion awaits the enrichment read instead of reading the site again', async () => {
         const { provider, client } = setup();
         const app = makeSettingsResource();
         const enriching = provider.enrich(app);
         const expanding = provider.getChildren(app);
         await Promise.all([enriching, expanding]);
+        await provider.getChildren(app);
         expect(client.webApps.get.mock.callCount()).to.equal(1);
+    });
+
+    it('retries the site read on expansion after a failed enrichment', async () => {
+        const { provider, client } = setup();
+        const app: FunctionApp = makeSettingsResource();
+        client.webApps.get.mock.mockImplementationOnce(() => Promise.reject(new Error('offline')));
         await provider.enrich(app);
+        expect(app.siteError).to.not.equal(undefined);
+        await provider.getChildren(app);
         expect(client.webApps.get.mock.callCount()).to.equal(2);
+        expect(app.siteError).to.equal(undefined);
     });
 
     it('contributes Application Settings before Functions with the owning adapter and resource', async () => {

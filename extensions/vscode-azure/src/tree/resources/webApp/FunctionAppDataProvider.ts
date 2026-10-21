@@ -26,7 +26,9 @@ import {
  */
 @injectable()
 export class FunctionAppDataProvider implements DataProvider<ConcreteAzureNode> {
+    /** Latest site read per app, started by the tree's background enrichment. */
     private readonly reads = new WeakMap<FunctionApp, Promise<boolean>>();
+    private readonly settled = new WeakSet<FunctionApp>();
 
     public constructor(
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
@@ -46,13 +48,9 @@ export class FunctionAppDataProvider implements DataProvider<ConcreteAzureNode> 
             return Promise.resolve(false);
         }
 
-        // Enrichment and expansion share one read per app so a slower, older reply cannot overwrite newer state.
-        let read = this.reads.get(resource);
-        if (!read) {
-            const pending = this.readSite(resource).finally(() => { this.reads.delete(resource); });
-            read = pending;
-            this.reads.set(resource, pending);
-        }
+        this.settled.delete(resource);
+        const read = this.readSite(resource).finally(() => { this.settled.add(resource); });
+        this.reads.set(resource, read);
         return read;
     }
 
@@ -78,7 +76,10 @@ export class FunctionAppDataProvider implements DataProvider<ConcreteAzureNode> 
     /** @inheritdoc */
     public async getChildren(resource?: ConcreteAzureNode): Promise<ChildResult<ConcreteAzureNode>> {
         if (isFunctionApp(resource)) {
-            await this.enrich(resource);
+            // Expansion waits for the tree's enrichment read; a failed read is retried on expansion.
+            const existing = this.reads.get(resource);
+            const retry = existing === undefined || (this.settled.has(resource) && resource.siteError !== undefined);
+            await (retry ? this.enrich(resource) : existing);
             if (resource.siteError !== undefined) {
                 return [this.invalidNode(resource, 'app', 'invalid', resource.siteError)];
             }
