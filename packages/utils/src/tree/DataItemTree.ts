@@ -15,6 +15,13 @@ import { NodeMap } from './NodeMap';
 import { ProviderRegistry } from './ProviderRegistry';
 import { Everything, isKeyMatch, Roots, subtreeOf, type KeyMatch, type MatchScope, type Selector, type Target } from './Selector';
 
+/** An in-flight branch fetch; `superseded` is set once it is dropped so it can no longer commit state. */
+interface BranchRequest<T> {
+    promise: Promise<T[]>;
+    fetching: boolean;
+    superseded: boolean;
+}
+
 /**
  * Internal node wrapping a resource with its cached children and staleness info.
  * @internal
@@ -76,7 +83,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
      * when the node is invalidated, so a later request refetches. Distinct from
      * {@linkcode loadsInFlight}, which coordinates page pulls.
      */
-    private readonly branchRequests = new Map<string, { readonly promise: Promise<T[]>; fetching: boolean }>();
+    private readonly branchRequests = new Map<string, BranchRequest<T>>();
 
     /** Cached root nodes and their staleness timestamp. */
     private roots: TreeNode<T>[] | undefined;
@@ -249,7 +256,7 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
             return existing.promise;
         }
 
-        const request = { promise: undefined as unknown as Promise<T[]>, fetching: false };
+        const request: BranchRequest<T> = { promise: undefined as unknown as Promise<T[]>, fetching: false, superseded: false };
         request.promise = this.loadBranchChildren(resource, key, request).finally(() => {
             if (this.branchRequests.get(key) === request) {
                 this.branchRequests.delete(key);
@@ -259,11 +266,14 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
         return request.promise;
     }
 
-    private async loadBranchChildren(resource: T, key: string, request: { fetching: boolean }): Promise<T[]> {
+    private async loadBranchChildren(resource: T, key: string, request: BranchRequest<T>): Promise<T[]> {
         const provider = this.findProvider(resource);
         if (provider?.awaitEnrichment) {
             // A failed enrichment is already reported; children are still loaded from whatever state it left.
             await this.whenEnriched(resource).catch(() => { /* noop */ });
+        }
+        if (this.isSuperseded(request)) {
+            return this.getBranchChildren(resource);
         }
         const node = this.nodes.get(key);
 
@@ -305,6 +315,12 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
             return provider.getChildren(resource);
         });
 
+        // A dropped request must not commit: its node may have been wiped or
+        // removed, and a newer request owns the state now.
+        if (this.isSuperseded(request)) {
+            return this.getBranchChildren(resource);
+        }
+
         if (!result) {
             // No children -- leave the empty array
         } else if (isAsyncIterable(result)) {
@@ -326,6 +342,10 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
             await this.loadOnePage(resource);
         } else {
             node.children = this.addChildNodes(result, node);
+        }
+
+        if (this.isSuperseded(request)) {
+            return this.getBranchChildren(resource);
         }
 
         node.staleAt = this.computeStaleAt(provider.getTtl?.(resource) ?? this.ttl);
@@ -359,12 +379,15 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
                         return provider.enrich!(resource); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- It's asserted non-null above
                     }))
                     .then((includeChildren) => {
-                        this.enrichmentPromises.delete(key);
+                        // A same-key node removed and reloaded owns a newer promise; leave it.
+                        if (this.enrichmentPromises.get(key) === promise) {
+                            this.enrichmentPromises.delete(key);
+                        }
                         this.executor.output.debug(`[data] ${this.name} enrich done key=${key} includeChildren=${includeChildren}`);
                         // Guard: if the node was removed (e.g. via remove) while
                         // enrichment was in flight, skip the invalidation to avoid
                         // spurious change events for items no longer in the tree.
-                        if (this.nodes.get(key)) {
+                        if (this.nodes.get(key)?.resource === resource) {
                             // `includeChildren` is `undefined` only if enrichment was
                             // suppressed/errored; default to re-fetching children, matching
                             // the historical default-parameter behavior.
@@ -639,6 +662,11 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
         this.dropBranchRequest(this.getKey(node.resource), false);
     }
 
+    // Read through a method so control-flow narrowing does not pin the flag across awaits.
+    private isSuperseded(request: BranchRequest<T>): boolean {
+        return request.superseded;
+    }
+
     /**
      * Forget the in-flight branch request for {@linkcode key} so the next
      * request starts fresh. Unless `always`, a request still waiting on
@@ -646,7 +674,9 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
      * invalidation itself.
      */
     private dropBranchRequest(key: string, always: boolean): void {
-        if (always || this.branchRequests.get(key)?.fetching) {
+        const request = this.branchRequests.get(key);
+        if (request && (always || request.fetching)) {
+            request.superseded = true;
             this.branchRequests.delete(key);
         }
     }
@@ -856,6 +886,9 @@ export class DataItemTree<T> extends ProviderRegistry<T, DataProvider<T>> implem
         this.executor.output.debug(`[cache] ${this.name} invalidate all`);
         this.nodes.clear();
         this.enrichmentPromises.clear();
+        for (const request of this.branchRequests.values()) {
+            request.superseded = true;
+        }
         this.branchRequests.clear();
         this.roots = undefined;
         this.rootsStaleAt = 0;

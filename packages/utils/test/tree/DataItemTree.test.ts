@@ -396,6 +396,57 @@ describe('DataItemTree (unit)', () => {
             expect((await tree.getChildren(root)).map(c => c.id)).to.deep.equal(['child']);
         });
 
+        it('should not let a stale enrichment release or invalidate a reloaded same-key node', async () => {
+            const tree = createTree();
+            const enrichments = [Promise.withResolvers<boolean>(), Promise.withResolvers<boolean>()];
+            let call = 0;
+            tree.registerProvider({
+                isRoot: true,
+                canHandle: canHandleAll,
+                getChildren: () => [{ id: 'item' }],
+                enrich: () => enrichments[call++].promise,
+            });
+            await tree.getChildren();
+            tree.invalidate(Everything);
+            const [reloaded] = await tree.getChildren();
+            const onChange = mock.fn();
+            tree.onDidChange(onChange);
+
+            let settled = false;
+            void tree.whenEnriched(reloaded).then(() => { settled = true; });
+            enrichments[0].resolve(true);
+            await delay(10);
+
+            expect(settled).to.equal(false);
+            expect(onChange.mock.callCount()).to.equal(0);
+
+            enrichments[1].resolve(false);
+            await delay(10);
+            expect(settled).to.equal(true);
+        });
+
+        it('should not let a superseded branch fetch overwrite a newer one', async () => {
+            const tree = createTree();
+            const fetches = [Promise.withResolvers<TestResource[]>(), Promise.withResolvers<TestResource[]>()];
+            let call = 0;
+            tree.registerProvider({
+                isRoot: true,
+                canHandle: canHandleAll,
+                getChildren: (r?: TestResource) => r ? fetches[call++].promise : [{ id: 'branch' }],
+            });
+            const [branch] = await tree.getChildren();
+
+            const stale = tree.getChildren(branch);
+            tree.invalidate(branch);
+            const fresh = tree.getChildren(branch);
+            fetches[1].resolve([{ id: 'new' }]);
+            expect((await fresh).map(c => c.id)).to.deep.equal(['new']);
+
+            fetches[0].resolve([{ id: 'old' }]);
+            expect((await stale).map(c => c.id)).to.deep.equal(['new']);
+            expect((await tree.getChildren(branch)).map(c => c.id)).to.deep.equal(['new']);
+        });
+
         it('should load children after a failed enrichment when awaitEnrichment is set', async () => {
             const tree = createTree();
             tree.registerProvider({
