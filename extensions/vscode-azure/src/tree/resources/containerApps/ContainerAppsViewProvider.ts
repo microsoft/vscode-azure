@@ -14,6 +14,7 @@ import { IAzureViewDataTree } from '../../../services';
 import { resourceContextValue } from '../../contextValueHelpers';
 import { getResourceTypeIconUri } from '../../iconPath';
 import { isContainerApp, type ContainerApp } from './ContainerApp';
+import { getGroupedParentKey } from '../GenericAzureViewProvider';
 import { getContainerVirtualPath, isContainerNode } from './ContainerAppsDataProvider';
 import { isManagedEnvironment } from './ManagedEnvironment';
 
@@ -113,7 +114,9 @@ export class ContainerAppsViewProvider implements ViewProvider<string> {
 
     /** @inheritdoc */
     public getParent(key: string): string | undefined {
-        return AzureNodeId.parse(key).parentNodeId()?.toString();
+        const node = this.tree.get(key);
+        const groupKey = isContainerApp(node) || isManagedEnvironment(node) ? getGroupedParentKey(this.ctx.code, node) : undefined;
+        return groupKey ?? AzureNodeId.parse(key).parentNodeId()?.toString();
     }
 
     /**

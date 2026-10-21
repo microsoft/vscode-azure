@@ -5,7 +5,8 @@
 
 import { AcrResourceType, AzureNodeId, type ConcreteAzureNode, type VirtualResource } from '@microsoft/vscode-azure-azutils';
 import { makeGenericResource, makeVirtualResource } from '@microsoft/vscode-azure-azutils/testing';
-import { createMockCodeContext, createTestActionExecutor, MockTreeItemCollapsibleState } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, createTestActionExecutor, MockTreeItemCollapsibleState, withSettings } from '@microsoft/vscode-azure-utils/testing';
+import { ConfigurationSection } from '../../../../src/constants';
 import { DisableAcrAdminUser } from '../../../../src/commands/acr/DisableAcrAdminUser';
 import { OpenInPortal } from '../../../../src/commands/tree/OpenInPortal';
 import { AcrViewProvider } from '../../../../src/tree/resources/acr/AcrViewProvider';
@@ -188,5 +189,17 @@ describe('AcrViewProvider (unit)', () => {
             expect(parentKey).to.not.be.undefined;
             expect(AzureNodeId.parse(parentKey!).isResourceGroupNodeId()).to.be.true;
         });
+
+        for (const [groupBy, groupingValue] of [['resourceType', AcrResourceType], ['location', 'westus']] as const) {
+            it(`should return the virtual group when grouping by ${groupBy}`, async () => {
+                const registry = makeAcrRegistry({ location: 'westus' });
+                const key = AzureNodeId.from(registry).toString();
+                const provider = createProvider(new Map<string, ConcreteAzureNode>([[key, registry]]));
+                const group = { subscription: registry.subscription, groupingStrategy: groupBy, groupingValue };
+                await withSettings(ctx.mock, { [`${ConfigurationSection}.groupBy`]: groupBy }, () => {
+                    expect(provider.getParent(key)).to.equal(AzureNodeId.from(group).toString());
+                });
+            });
+        }
     });
 });

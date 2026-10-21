@@ -6,7 +6,7 @@
 import type { AzureNode, AzureSubscription, ConcreteAzureNode, GenericResource, GroupingStrategy, VirtualGroup } from '@microsoft/vscode-azure-azutils';
 import { AzureNodeId, getNodeType, getResourceTypePresentation, isAccount, isGenericResource, isResourceGroup, isSubscription, isTenant, ResourceGroupArmType, SubscriptionArmType } from '@microsoft/vscode-azure-azutils';
 import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
-import { Disposable, EventEmitter, Everything, IActionExecutor, ICodeContext, Limiter, type DataProviderChangeEvent } from '@microsoft/vscode-azure-utils';
+import { Disposable, EventEmitter, Everything, IActionExecutor, ICodeContext, Limiter, type IVsCode, type DataProviderChangeEvent } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { DeleteAzureResource } from '../../commands/tree/DeleteAzureResource';
 import { OpenInPortal } from '../../commands/tree/OpenInPortal';
@@ -204,15 +204,13 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
         // For generic resources under a non-resourceGroup grouping strategy,
         // the parent is a virtual group node -- not the ARM resource group.
         // We must construct the correct virtual group key from the resource.
-        if (nodeId.isGenericResourceNodeId() && this.groupingStrategy !== 'resourceGroup') {
+        if (nodeId.isGenericResourceNodeId()) {
             const resource = this.cache.get(key);
             if (resource && isGenericResource(resource)) {
-                const group: VirtualGroup = {
-                    subscription: resource.subscription,
-                    groupingStrategy: this.groupingStrategy satisfies VirtualGroup['groupingStrategy'],
-                    groupingValue: this.groupingValue(resource),
-                };
-                return toKey(group);
+                const groupKey = getGroupedParentKey(this.ctx.code, resource);
+                if (groupKey) {
+                    return groupKey;
+                }
             }
         }
 
@@ -412,17 +410,39 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
      * Derive the grouping value for a resource given the current strategy.
      */
     private groupingValue(resource: GenericResource): string {
-        switch (this.groupingStrategy) {
-            case 'resourceType':
-                return resource.logicalType;
-            case 'location':
-                return resource.location;
-            case 'armTag':
-                return resource.tags?.[this.groupByTag] || untaggedSentinel;
-            default:
-                return resource.logicalType;
-        }
+        return groupingValueFor(this.groupingStrategy, this.groupByTag, resource);
     }
+}
+
+function groupingValueFor(strategy: GroupingStrategy, tag: string, resource: GenericResource): string {
+    switch (strategy) {
+        case 'resourceType':
+            return resource.logicalType;
+        case 'location':
+            return resource.location;
+        case 'armTag':
+            return resource.tags?.[tag] || untaggedSentinel;
+        default:
+            return resource.logicalType;
+    }
+}
+
+/**
+ * Returns the virtual group key that parents a generic resource under the configured grouping
+ * strategy, or `undefined` when resources are shown under their ARM resource group.
+ */
+export function getGroupedParentKey(code: IVsCode, resource: GenericResource): string | undefined {
+    const config = code.workspace.getConfiguration(ConfigurationSection);
+    const strategy = config.get<GroupingStrategy>('groupBy', 'resourceGroup');
+    if (strategy === 'resourceGroup') {
+        return undefined;
+    }
+    const group: VirtualGroup = {
+        subscription: resource.subscription,
+        groupingStrategy: strategy satisfies VirtualGroup['groupingStrategy'],
+        groupingValue: groupingValueFor(strategy, config.get<string>('groupByTag', ''), resource),
+    };
+    return toKey(group);
 }
 
 function toKey(node: AzureNode): string {

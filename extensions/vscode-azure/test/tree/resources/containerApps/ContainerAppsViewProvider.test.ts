@@ -6,7 +6,8 @@
 import type { ConcreteAzureNode, GenericResource } from '@microsoft/vscode-azure-azutils';
 import { AzureNodeId, ContainerAppResourceType, ManagedEnvironmentResourceType } from '@microsoft/vscode-azure-azutils';
 import { createMockContainerAppsClient, makeContainerApp, makeGenericResource } from '@microsoft/vscode-azure-azutils/testing';
-import { createMockCodeContext, createTestActionExecutor, MockTreeItemCollapsibleState } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, createTestActionExecutor, MockTreeItemCollapsibleState, withSettings } from '@microsoft/vscode-azure-utils/testing';
+import { ConfigurationSection } from '../../../../src/constants';
 import { OpenContainerAppConsole, OpenContainerAppLogs } from '../../../../src/commands/containerApps/portalBlades';
 import { RevealContainerAppEnvironment } from '../../../../src/commands/containerApps/RevealContainerAppEnvironment';
 import { StartStreamingLogs } from '../../../../src/commands/containerApps/StartStreamingLogs';
@@ -26,6 +27,7 @@ function makeEnvironment(): GenericResource {
 function createProvider(
     nodes: readonly ConcreteAzureNode[],
     children: readonly ConcreteAzureNode[] = [],
+    codeContext = createMockCodeContext(),
 ) {
     const byKey = new Map(nodes.map(node => [AzureNodeId.from(node).toString(), node]));
     const tree = {
@@ -33,10 +35,23 @@ function createProvider(
         getChildren: () => Promise.resolve(children),
     };
     const { executor } = createTestActionExecutor();
-    return new ContainerAppsViewProvider(createMockCodeContext().ctx, executor, tree as never);
+    return new ContainerAppsViewProvider(codeContext.ctx, executor, tree as never);
 }
 
 describe('ContainerAppsViewProvider (unit)', () => {
+    for (const make of [makeContainerApp, makeEnvironment]) {
+        it(`parents a resource under its virtual group when grouping by location (${make.name})`, async () => {
+            const resource = make();
+            const codeContext = createMockCodeContext();
+            const provider = createProvider([resource], [], codeContext);
+            const group = { subscription: resource.subscription, groupingStrategy: 'location' as const, groupingValue: resource.location };
+            await withSettings(codeContext.mock, { [`${ConfigurationSection}.groupBy`]: 'location' }, () => {
+                expect(provider.getParent(AzureNodeId.from(resource).toString())).to.equal(AzureNodeId.from(group).toString());
+            });
+            expect(AzureNodeId.parse(provider.getParent(AzureNodeId.from(resource).toString())!).isResourceGroupNodeId()).to.be.true;
+        });
+    }
+
     it('renders mixed named and unnamed containers with distinct keys and their own images', async () => {
         const app = makeContainerApp({
             containers: [{ image: 'unnamed:1' }, { name: 'container-0', image: 'named:1' }, { image: 'another:1' }],
