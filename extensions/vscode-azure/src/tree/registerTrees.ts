@@ -113,9 +113,9 @@ export function registerTrees(container: Container, products: ProductRegistrar):
  * Invalidates the whole workspace tree when the index changes. Subscribed once, rather than by each
  * provider, so a single workspace change does not refresh the tree once per provider reading the index.
  *
- * Project children are derived from indexed files (host, settings, metadata, build files), and
- * invalidating only the roots would keep the existing project nodes and their cached children, so
- * the entire cache is dropped. The workspace tree is small and discovery is cheap.
+ * Child nodes are derived from indexed files, and invalidating only the roots would keep the existing
+ * nodes and their cached children, so the entire cache is dropped. The workspace tree is small and
+ * discovery is cheap.
  */
 export function refreshWorkspaceTreeOnIndexChange(
     index: Pick<IWorkspaceIndexService, 'onDidChangeIndex'>,

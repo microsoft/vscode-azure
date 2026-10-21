@@ -5,7 +5,8 @@
 
 import { AppServiceLogicalType, AzureNodeId, LogicAppLogicalType } from '@microsoft/vscode-azure-azutils';
 import { createMockDataItemTree, createMockWebAppClient } from '@microsoft/vscode-azure-azutils/testing';
-import { createMockCodeContext, createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, createMockVsCode, createTestActionExecutor, withSettings } from '@microsoft/vscode-azure-utils/testing';
+import { ConfigurationSection } from '../../../../src/constants';
 import { WebAppSettingsAdapter } from '../../../../src/settings/adapters/WebAppSettingsAdapter';
 import { getSettingsNodes } from '../../../../src/tree/resources/settings/SettingsNode';
 import { WebAppViewProvider } from '../../../../src/tree/resources/webApp/WebAppViewProvider';
@@ -35,6 +36,16 @@ describe('WebAppViewProvider (unit)', () => {
     it('claims resources supported by its settings adapter', () => {
         expect(provider.canHandle(key)).to.be.true;
         expect(provider.canHandle('not-a-node')).to.be.false;
+    });
+
+    it('parents the app under its virtual group when grouping by location', async () => {
+        const codeContext = createMockCodeContext();
+        const view = new WebAppViewProvider(codeContext.ctx, executor, tree as never);
+        const group = { subscription: resource.subscription, groupingStrategy: 'location' as const, groupingValue: resource.location };
+        await withSettings(codeContext.mock, { [`${ConfigurationSection}.groupBy`]: 'location' }, () => {
+            expect(view.getParent(key)).to.equal(AzureNodeId.from(group).toString());
+        });
+        expect(AzureNodeId.parse(view.getParent(key)!).isResourceGroupNodeId()).to.be.true;
     });
 
     it('renders the owning resource as expandable', () => {
