@@ -11,6 +11,7 @@ import { DisableAcrAdminUser } from '../../../commands/acr/DisableAcrAdminUser';
 import { IAzureViewDataTree } from '../../../services';
 import { resourceContextValue } from '../../contextValueHelpers';
 import { getResourceTypeIconUri } from '../../iconPath';
+import { getGroupedParentKey } from '../GenericAzureViewProvider';
 import { isAcrRegistry } from './AcrRegistry';
 
 /**
@@ -121,7 +122,9 @@ export class AcrViewProvider implements ViewProvider<string> {
 
     /** @inheritdoc */
     public getParent(key: string): string | undefined {
-        return AzureNodeId.parse(key).parentNodeId()?.toString();
+        const node = this.cache.get(key);
+        const groupKey = isAcrRegistry(node) ? getGroupedParentKey(this.ctx.code, node) : undefined;
+        return groupKey ?? AzureNodeId.parse(key).parentNodeId()?.toString();
     }
 
     // #endregion

@@ -9,7 +9,7 @@ import { inject, injectable } from 'inversify';
 import { IAzureViewDataTree } from '../../../services';
 import { WebAppLifecycle } from '../../../commands/webApp/WebAppLifecycle';
 import { resourceContextValue } from '../../contextValueHelpers';
-import { createGenericResourceTreeItem } from '../GenericAzureViewProvider';
+import { createGenericResourceTreeItem, getGroupedParentKey } from '../GenericAzureViewProvider';
 import { isWebApp } from './WebApp';
 
 /**
@@ -64,6 +64,8 @@ export class WebAppViewProvider implements ViewProvider<string> {
 
     /** @inheritdoc */
     public getParent(key: string): string | undefined {
-        return AzureNodeId.parse(key).parentNodeId()?.toString();
+        const resource = this.tree.get(key);
+        const groupKey = isWebApp(resource) ? getGroupedParentKey(this.ctx.code, resource) : undefined;
+        return groupKey ?? AzureNodeId.parse(key).parentNodeId()?.toString();
     }
 }
