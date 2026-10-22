@@ -143,14 +143,11 @@ Concurrent stop requests await the same owned process completion. Finalization
 releases subscriptions and ownership and closes or finishes the task once.
 
 Initialize Project for VS Code selects a missing worker runtime and appends
-workspace extension recommendations. Supported runtimes offer an optional
-`azure-functions` launch entry for customization or compound launches. JSONC
-comments, existing entries, and unrelated properties are preserved; malformed,
-duplicate-property, and dirty files are rejected. Initialization refreshes the
-selected project without evicting unrelated projects. Custom handlers receive
-recommendations and an explanation of the supported debugging runtimes.
-Runtime selection, recommendation editing, and the optional launch offer are
-separate stages. Recommendation IDs are matched case-insensitively while
+workspace extension recommendations; debugging is started with F5 and needs no
+launch configuration. JSONC comments, existing entries, and unrelated properties
+are preserved; malformed, duplicate-property, and dirty files are rejected.
+Initialization refreshes the selected project without evicting unrelated
+projects. Recommendation IDs are matched case-insensitively while
 preserving the existing file's spelling.
 Initialization and local settings share JSONC-object validation and path editing
 in `utils/jsonc.ts`; file-specific validation remains with their respective callers.
