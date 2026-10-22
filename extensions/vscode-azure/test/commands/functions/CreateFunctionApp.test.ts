@@ -75,25 +75,6 @@ describe('CreateFunctionApp (unit)', () => {
         return { cmd, ctx, mockResult, fs: mockResult.fs, azd, dataTree };
     }
 
-    function bootstrapWorkspace(azd: ReturnType<typeof createMockAzdService>, fs: ReturnType<typeof createMockCodeContext>['mock']['fs']): void {
-        const workspaceYaml = MockUri.file('/workspace/azure.yaml');
-        fs.addFile(workspaceYaml, 'name: my-app\nservices:\n  api:\n    project: ./\n');
-        fs.addFile(MockUri.file('/workspace/infra/main.bicep'), '// bicep');
-        azd.findAzureYaml.mock.mockImplementation(() => Promise.resolve([workspaceYaml]));
-        azd.show.mock.mockImplementation(() => Promise.resolve({
-            name: 'my-app',
-            services: { api: { project: { path: './', language: 'node' } } },
-        }));
-        azd.envList.mock.mockImplementation(() => Promise.resolve([{ Name: 'my-app', IsDefault: true }]));
-        azd.envExists.mock.mockImplementation((name: string) => Promise.resolve(name === 'my-app'));
-        azd.envGetValues.mock.mockImplementation(() => Promise.resolve({
-            /* eslint-disable @typescript-eslint/naming-convention -- azd env keys */
-            AZURE_LOCATION: 'eastus',
-            AZURE_SUBSCRIPTION_ID: 'sub-1',
-            /* eslint-enable @typescript-eslint/naming-convention */
-        }));
-    }
-
     it('should run the createNew flow into the temp directory', async () => {
         const { cmd, mockResult, fs, azd } = createCommand({ workspaceFolder: false });
 
@@ -105,7 +86,7 @@ describe('CreateFunctionApp (unit)', () => {
             { pick: runtimeVersions.node[0] },                     // PickRuntimeVersionStep
         ]);
 
-        await cmd.execute('createNew');
+        await cmd.execute();
 
         expect(fs.createDirectory.mock.callCount()).to.be.greaterThanOrEqual(1);
         expect(fs.copy.mock.callCount()).to.be.greaterThanOrEqual(1);
@@ -120,82 +101,6 @@ describe('CreateFunctionApp (unit)', () => {
         expect(azd.provision.mock.callCount()).to.equal(1);
     });
 
-    it('should run the deploy job Fresh flow against the workspace folder', async () => {
-        const { cmd, mockResult, fs, azd } = createCommand();
-
-        respondToPrompts(mockResult, [
-            { pick: 'sub-1' },
-            { pick: 'East US' },
-            { input: 'my-app' },
-            { pick: 'Node.js' },
-            { pick: runtimeVersions.node[0] },
-        ]);
-
-        await cmd.execute('deploy');
-
-        expect(azd.init.mock.callCount()).to.equal(1);
-        expect(fs.copy.mock.callCount()).to.be.greaterThanOrEqual(1);
-        expect(azd.envNew.mock.callCount()).to.equal(1);
-        expect(azd.provision.mock.callCount()).to.equal(1);
-    });
-
-    it('should skip yaml/bicep/env-new in the deploy job Bootstrapped flow', async () => {
-        const { cmd, mockResult, fs, azd } = createCommand();
-
-        bootstrapWorkspace(azd, mockResult.fs);
-
-        respondToPrompts(mockResult, [
-            // ProjectNameStep skipped (environmentName hydrated)
-            // ChooseSubscription / ChooseLocation skipped (hydrated values)
-            // PickRuntime skipped (hasInfra)
-            { pick: 'Yes' },                            // ConfirmProvisionStep
-        ]);
-
-        await cmd.execute('deploy');
-
-        expect(azd.init.mock.callCount()).to.equal(0);
-        expect(fs.copy.mock.callCount()).to.equal(0);
-        expect(azd.envNew.mock.callCount()).to.equal(0);
-        expect(azd.provision.mock.callCount()).to.equal(1);
-    });
-
-    it('deploys a selected nested folder using its detected runtime and chosen version', async () => {
-        const { cmd, mockResult, fs, azd } = createCommand();
-        const target = MockUri.file('/workspace/nested');
-        fs.addDirectory(target);
-        fs.addFile(MockUri.file('/workspace/nested/local.settings.json'), '{"Values":{"FUNCTIONS_WORKER_RUNTIME":"node"}}');
-        const prompts = respondToPrompts(mockResult, [
-            { pick: runtimeVersions.node[0] },
-            { pick: 'sub-1' },
-            { pick: 'East US' },
-            { input: 'my-app' },
-        ]);
-        await cmd.execute('deploy', target);
-        prompts.assertAllConsumed();
-        expect(azd.deploy.mock.calls[0].arguments[0].path).to.equal('/workspace/nested');
-        const parameters = fs.writeFile.mock.calls.find(call => call.arguments[0].path === '/workspace/nested/infra/main.parameters.json');
-        if (!parameters) {
-            throw new Error('Expected generated Function App parameters');
-        }
-        const content = JSON.parse(new TextDecoder().decode(parameters.arguments[1]));
-        expect(content.parameters.functionWorkerRuntime.value).to.equal('node');
-        expect(content.parameters.runtimeVersion.value).to.equal(runtimeVersions.node[0]);
-    });
-
-    it('should skip provisioning when user picks No on ConfirmProvisionStep', async () => {
-        const { cmd, mockResult, azd } = createCommand();
-
-        bootstrapWorkspace(azd, mockResult.fs);
-
-        respondToPrompts(mockResult, [
-            { pick: 'No' },
-        ]);
-
-        await cmd.execute('deploy');
-
-        expect(azd.provision.mock.callCount()).to.equal(0);
-    });
-
     it('should invalidate the data tree after execution', async () => {
         const { cmd, mockResult, dataTree } = createCommand();
 
@@ -207,29 +112,7 @@ describe('CreateFunctionApp (unit)', () => {
             { pick: runtimeVersions.node[0] },
         ]);
 
-        await cmd.execute('createNew');
-
-        const invalidate = (dataTree as unknown as { invalidate: ReturnType<typeof mock.fn> }).invalidate;
-        expect(invalidate.mock.callCount()).to.equal(1);
-        const target = invalidate.mock.calls[0].arguments[0] as (node: unknown) => string | undefined;
-        expect(target).to.be.a('function');
-        expect(target(sub)).to.equal('subtree');
-        expect(target(makeSubscription({ subscriptionId: 'other', displayName: 'Other' }))).to.be.undefined;
-    });
-
-    it('should invalidate by hydrated subscription when no subscription was picked', async () => {
-        const { cmd, mockResult, azd, dataTree } = createCommand();
-
-        // Bootstrapped deploy flow: the subscription picker is skipped because the
-        // existing default env hydrates AZURE_SUBSCRIPTION_ID, so context.subscription
-        // is never set and we must fall back to context.hydratedSubscriptionId.
-        bootstrapWorkspace(azd, mockResult.fs);
-
-        respondToPrompts(mockResult, [
-            { pick: 'Yes' }, // ConfirmProvisionStep
-        ]);
-
-        await cmd.execute('deploy');
+        await cmd.execute();
 
         const invalidate = (dataTree as unknown as { invalidate: ReturnType<typeof mock.fn> }).invalidate;
         expect(invalidate.mock.callCount()).to.equal(1);

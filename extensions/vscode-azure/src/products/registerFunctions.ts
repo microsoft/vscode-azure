@@ -6,7 +6,6 @@
 import { FunctionsHostClient, IFunctionsHostClientProvider, ILogsQueryClientProvider, IWebAppClientProvider, LogsQueryClient, WebAppClient } from '@microsoft/vscode-azure-azutils';
 import { IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
 import { CreateFunctionApp } from '../commands/functions/CreateFunctionApp';
-import { DeployFunctionApp } from '../commands/functions/DeployFunctionApp';
 import { InitializeFunctionsProject } from '../commands/functions/InitializeFunctionsProject';
 import { FunctionsProjectSelector } from '../functions/FunctionsProjectSelector';
 import { FunctionsDebugPreparation } from '../functions/debug/FunctionsDebugPreparation';
@@ -64,8 +63,7 @@ export function registerFunctions(registrar: ProductRegistrar): void {
     registrar.registerResourceDataProvider(WebAppDataProvider);
     registrar.registerResourceViewProvider(FunctionAppViewProvider);
     registrar.registerResourceViewProvider(WebAppViewProvider);
-    registrar.registerCommand('vscode-azure/functions/createNew', CreateFunctionApp, 'createNew');
-    registrar.registerCommand('vscode-azure/functions/deploy', DeployFunctionApp);
+    registrar.registerCommand('vscode-azure/functions/createNew', CreateFunctionApp);
     registrar.registerCommand('vscode-azure/functions/initializeProject', InitializeFunctionsProject);
     registrar.registerActivation(container => { container.get(FunctionsDebugProvider).register(); });
     registrar.registerCommand('vscode-azure/webApp/start', WebAppLifecycle, 'start');

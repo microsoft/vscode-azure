@@ -10,7 +10,6 @@ import { RefreshResourcesView } from '../../../commands/tree/RefreshResourcesVie
 import { WebAppLifecycle } from '../../../commands/webApp/WebAppLifecycle';
 import { CopyFunctionUrl } from '../../../commands/functions/CopyFunctionUrl';
 import { DeleteFunction } from '../../../commands/functions/DeleteFunction';
-import { DeployFunctionApp } from '../../../commands/functions/DeployFunctionApp';
 import { ExecuteFunction } from '../../../commands/functions/ExecuteFunction';
 import { RevealFunctionAppIdentity } from '../../../commands/functions/RevealFunctionAppIdentity';
 import { SetFunctionState } from '../../../commands/functions/SetFunctionState';
@@ -111,7 +110,7 @@ export class FunctionAppViewProvider implements ViewProvider<string> {
 
         const description: string[] = [];
         const contexts = [
-            FunctionAppViewProvider.ContextValue, RefreshResourcesView.ContextValue, DeployFunctionApp.ContextValue,
+            FunctionAppViewProvider.ContextValue, RefreshResourcesView.ContextValue,
             ...WebAppLifecycle.contextValues(app.site?.state),
         ];
         const state = app.site?.state?.toLowerCase();

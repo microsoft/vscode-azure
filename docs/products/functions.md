@@ -5,33 +5,12 @@
 Function App creation uses the pinned `avm/ptn/app/function-app:0.1.0` pattern
 module with Flex Consumption FC1, managed identity, storage, Application Insights,
 Log Analytics, and role assignments. Runtime and version selection use the shared
-wizard. Workspace deployment detects `FUNCTIONS_WORKER_RUNTIME` from the selected
-service's local settings, then selects its runtime version. Relative azd service
-paths resolve against the selected IaC folder.
+wizard. Provisioning offers Node.js, Python, .NET isolated, Java, and PowerShell
+stacks; custom handlers are not supported by the pinned provisioning module.
 
-Provisioning offers Node.js, Python, .NET isolated, Java, and PowerShell stacks.
-Custom handlers are not supported by the pinned provisioning module; their local
-settings leave stack selection to the provisioning picker.
-
-Deploy is available from a local Functions project, an Explorer folder, or the
-command palette in a trusted, non-virtual workspace. A nested project targets its
-own folder. The azd wizard hydrates existing infrastructure and environments
-instead of replacing their configuration.
-
-Remote Deploy requires an `azd-service-name` tag and an indexed azd project whose
-active environment reports the selected app's ARM ID under that service's
-`target.resourceIds`. Matching is case-insensitive for ARM IDs. A service name
-alone cannot establish a target. Unmatched apps explain the requirement and offer
-workspace deployment; dismissing the offer makes no deployment. A match runs
-`azd deploy <service>` through the shared deployment step and activity tracking.
-The external contract is
-[azd's show result](https://github.com/Azure/azure-dev/blob/main/cli/azd/pkg/contracts/show.go).
-
-Completion lists management-plane HTTP invocation templates, preserving actual
-routes rather than constructing `/api/<name>` URLs. Authentication query parameters
-are excluded, and keys are not retrieved. Copy Function URL remains the action for
-authenticated URLs. Missing endpoints and failed endpoint discovery are reported
-without changing a completed deployment's status.
+Creation emits its infrastructure into a temporary directory and never modifies
+the workspace. Code deployment starts only from an initialized azd project through
+the shared azd deployment workflow; there is no Functions-specific deploy command.
 
 `function.json` and `host.json` receive the published SchemaStore schemas.
 The `function.json` association applies to runtime v4 projects with file-based
