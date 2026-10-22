@@ -17,7 +17,7 @@ import type * as vscode from 'vscode';
  * - `azdService` -- a single service declared under `services:` in `azure.yaml`
  * - `functionsProject` -- a folder that contains a Functions `host.json`
  * - `localFunction` -- a function belonging to a local Functions project
- * - `functionsHint` -- a build or host-start hint beneath a Functions project
+ * - `functionsHint` -- a host-start hint beneath a Functions project
  * - `invalidLocalFunction` -- unreadable function metadata or a failed local listing
  * - `emulatorsGroup` -- a virtual grouping node for local emulators
  * - `emulator` -- a single (currently stubbed) local emulator entry
@@ -90,7 +90,7 @@ export interface FunctionsProjectNode extends WorkspaceNode {
     readonly error?: string;
 }
 
-/** A local function listed from source, generated output, or its ready host. */
+/** A local function listed from its project's ready host. */
 export interface LocalFunctionNode extends WorkspaceNode {
     readonly type: 'localFunction';
     readonly project: FunctionsProjectNode;
@@ -100,7 +100,7 @@ export interface LocalFunctionNode extends WorkspaceNode {
     readonly isDisabled: boolean;
 }
 
-/** A build/host hint or malformed function under a local project. */
+/** A host-start hint or malformed function under a local project. */
 export interface FunctionsInfoNode extends WorkspaceNode {
     readonly type: 'functionsHint' | 'invalidLocalFunction';
     readonly project: FunctionsProjectNode;

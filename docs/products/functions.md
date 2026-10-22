@@ -58,8 +58,7 @@ dependencies. Go uses an extension-owned debug build.
 
 Core Tools compilation and restoration output appears in the owned host task.
 Go's debug build runs as a separate visible task. Java's CLI startup selects the
-most recently written staged app when multiple outputs exist; offline tree
-listing reports ambiguity instead of selecting an app.
+most recently written staged app when multiple outputs exist.
 The stack preparation contracts are implemented by Core Tools'
 [Node](https://github.com/Azure/azure-functions-core-tools/blob/f8f54ba328758b2165d835930e391af23e60f090/src/Workloads/Stacks/Node/NodeFunctionsProject.cs),
 [Python](https://github.com/Azure/azure-functions-core-tools/blob/f8f54ba328758b2165d835930e391af23e60f090/src/Workloads/Stacks/Python/PythonFunctionsProject.cs),
@@ -170,39 +169,18 @@ Each function requires exactly one trigger; authentication levels apply only to 
 triggers. Local disable settings and Azure's reported disable state take precedence
 over the metadata disable flag.
 
-`FunctionsProjectReader` uses a registered, ready local host as the authoritative
-source of function metadata. Offline script-model projects use immediate-child
-`function.json` files. Code-first projects without file metadata show a
-"Start debugging to update this list..." hint; language source is not parsed.
-This distinction follows the
-[Node programming-model contract](https://learn.microsoft.com/en-us/azure/azure-functions/functions-reference-node?pivots=nodejs-model-v4).
+`FunctionsProjectReader` lists functions from the project's registered, ready
+local host (`/admin/functions`), which is the only source of function metadata;
+language source, `function.json` files, and build output are not read. Until a
+host is ready, the project shows a "Start debugging to list functions..." hint.
 `host.json.functions`, when supplied, limits the visible function names.
-
-Offline .NET isolated projects read the most recently modified
-`functions.metadata` under `bin`, with path ordering as a tie-breaker. The
-[Worker SDK copies this metadata into the build output](https://github.com/Azure/azure-functions-dotnet-worker/blob/main/sdk/Sdk/Targets/Microsoft.Azure.Functions.Worker.Sdk.targets).
-Java projects read immediate-child `function.json` files under the single
-packaged app in `target/azure-functions`, following the Maven plugin's
-[staging-directory contract](https://github.com/microsoft/azure-maven-plugins/blob/975dd140d802c0fcb4fd61f4083095e6d299f7be/azure-appservice-maven-plugin-lib/src/main/java/com/microsoft/azure/maven/appservice/AbstractAppServiceMojo.java)
-and [package step](https://github.com/microsoft/azure-maven-plugins/blob/975dd140d802c0fcb4fd61f4083095e6d299f7be/azure-functions-maven-plugin/src/main/java/com/microsoft/azure/maven/function/PackageMojo.java).
-Precompiled listings include a build hint because output can be stale.
-Multiple Java app outputs produce an actionable error rather than choosing one.
-
-Generated output stays excluded from the shared source index. Output watcher
-events are debounced for 250 milliseconds and refresh each affected project once
-per burst. Explicit output reads are bounded to 2,000 directory entries and four
-descendant-directory levels, skipping symbolic links and the `.azurefunctions`,
-`lib`, and `runtimes` dependency directories. Exceeding these limits is a visible listing error.
-Custom build-output locations require the running-host path.
 
 Malformed functions remain visible beside readable siblings. Project validation
 shows invalid metadata or a missing worker runtime without putting local settings
 values in nodes. Invalid and hint nodes offer workspace refresh only.
-Source metadata, local settings, and project-file changes use the shared index
-watcher. A separate string-glob subscription matches `bin` and `target`
-directories and their descendants, including directory deletion events;
-generated-output and host-registration events invalidate the affected project
-subtree. Workspace refresh invalidates the complete workspace tree.
+Local settings changes use the shared index watcher, and host-registration
+events invalidate the affected project subtree. Workspace refresh invalidates the
+complete workspace tree.
 
 ## Local actions and host ownership
 

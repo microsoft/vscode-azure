@@ -13,17 +13,13 @@ const functions = 'functions';
 
 /** The `host.json` that marks an Azure Functions project. */
 export const FunctionsHostFileTag = createTag(functions, StandardTagNames.projectFile);
-/** Function metadata files in source folders, excluding generated output. */
-export const FunctionsMetadataFileTag = createTag(functions, 'metadata');
 /** Files that affect local function state or runtime selection. */
 export const FunctionsSettingsFileTag = createTag(functions, 'settings');
-/** Source project files identifying precompiled Functions projects. */
-export const FunctionsBuildFileTag = createTag(functions, 'build');
 
 /**
  * Tags the `host.json` of every Azure Functions project.
  *
- * Source metadata and settings are tagged so edits invalidate the shared tree.
+ * Local settings files are tagged so edits invalidate the shared tree.
  */
 export const functionsDetector: WorkspaceDetector = {
     id: 'functions',
@@ -34,12 +30,8 @@ export const functionsDetector: WorkspaceDetector = {
         }
         if (node.name === FunctionsHostFileName) {
             node.tag(FunctionsHostFileTag);
-        } else if (node.name === 'function.json') {
-            node.tag(FunctionsMetadataFileTag);
         } else if (node.name === 'local.settings.json') {
             node.tag(FunctionsSettingsFileTag);
-        } else if (node.name.endsWith('.csproj') || node.name === 'pom.xml') {
-            node.tag(FunctionsBuildFileTag);
         }
     },
 };

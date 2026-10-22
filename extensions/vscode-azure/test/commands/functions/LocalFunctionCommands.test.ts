@@ -16,17 +16,16 @@ import { WebAppSettingsAdapter } from '../../../src/settings/adapters/WebAppSett
 
 describe('Local function commands (integration)', () => {
     let fixtures: ReturnType<typeof createLocalFunctions>[] = [];
-    async function setup(ready = true) {
+    async function setup() {
         const s = createLocalFunctions();
         fixtures.push(s);
         s.addProject();
-        s.addFunction('Http');
         const metadata = {
             name: 'Http', config: { bindings: [{ type: 'httpTrigger', authLevel: 'function' }] },
             ['invoke_url_template']: 'http://localhost:8090/custom/orders/{id}?mode=local',
         };
         s.host.listFunctions.mock.mockImplementation(() => Promise.resolve([metadata]));
-        const registration = ready ? s.hosts.register(s.folder, 8090) : undefined;
+        const registration = s.hosts.register(s.folder, 8090);
         const project = (await s.tree.getChildren())[0];
         const fn = (await s.tree.getChildren(project)).find(isLocalFunctionNode);
         if (!fn) {
@@ -65,9 +64,10 @@ describe('Local function commands (integration)', () => {
     });
 
     it('rejects offline execution and stale local keys instead of falling through to remote selection', async () => {
-        const s = await setup(false);
+        const s = await setup();
         const command = new ExecuteFunction(s.context.ctx, s.selector, s.remote, s.createHost, s.target);
-        await expect(command.execute(s.fn.id)).to.be.rejectedWith(/Start debugging/);
+        s.registration.dispose();
+        expect(() => s.target.host(s.fn)).to.throw(/Start debugging/);
         await expect(command.execute(`${s.project.id}/function/Stale`)).to.be.rejectedWith(/Refresh/);
         expect(s.host.invoke.mock.callCount()).to.equal(0);
         expect(s.remote.mock.callCount()).to.equal(0);
@@ -164,7 +164,7 @@ describe('Local function commands (integration)', () => {
     });
 
     it('edits disable flags without disturbing comments, secrets, Host, or ConnectionStrings', async () => {
-        const s = await setup(false);
+        const s = await setup();
         const uri = s.code.Uri.joinPath(s.folder, 'local.settings.json');
         const original = [
             '{',
@@ -198,7 +198,7 @@ describe('Local function commands (integration)', () => {
     });
 
     it('rejects writes to a dirty local settings document', async () => {
-        const s = await setup(false);
+        const s = await setup();
         const uri = s.code.Uri.joinPath(s.folder, 'local.settings.json');
         const document = await s.code.workspace.openTextDocument(uri);
         Object.assign(document, { isDirty: true });
@@ -216,7 +216,7 @@ describe('Local function commands (integration)', () => {
         ['{"Values":', /valid JSON object/],
     ] as const) {
         it(`rejects encrypted or malformed local settings without replacing the file (${text.length})`, async () => {
-            const s = await setup(false);
+            const s = await setup();
             const uri = s.code.Uri.joinPath(s.folder, 'local.settings.json');
             s.m.fs.addFile(uri, text);
             const write = mock.method(s.code.workspace.fs, 'writeFile');
@@ -227,7 +227,7 @@ describe('Local function commands (integration)', () => {
     }
 
     it('does not invalidate the tree when a local settings write fails', async () => {
-        const s = await setup(false);
+        const s = await setup();
         mock.method(s.code.workspace.fs, 'writeFile', () => Promise.reject(new Error('write rejected')));
         const invalidate = mock.method(s.tree, 'invalidate');
         await expect(s.target.setDisabled(s.fn, true)).to.be.rejectedWith('write rejected');
@@ -235,7 +235,7 @@ describe('Local function commands (integration)', () => {
     });
 
     it('creates Values for a missing local settings file without copying remote settings', async () => {
-        const s = await setup(false);
+        const s = await setup();
         const uri = s.code.Uri.joinPath(s.folder, 'local.settings.json');
         await s.code.workspace.fs.delete(uri);
         await s.target.setDisabled(s.fn, true);

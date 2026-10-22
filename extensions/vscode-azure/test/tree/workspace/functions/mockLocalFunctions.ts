@@ -18,7 +18,7 @@ import type { WorkspaceNode } from '../../../../src/tree/workspace/WorkspaceNode
 import { WorkspaceIndexService } from '../../../../src/utils/workspaceIndex/WorkspaceIndexService';
 import { createTestResourceSelector } from '../../resources/testResourceSelector';
 import { mock } from 'node:test';
-import type { FunctionsHostTarget } from '@microsoft/vscode-azure-azutils';
+import type { FunctionsHostTarget, HostFunction } from '@microsoft/vscode-azure-azutils';
 import { makeFunctionsProjectNode } from '../mockWorkspaceNode';
 
 /** Real workspace index, tree, local settings, and host tracking with a deterministic host client. */
@@ -35,8 +35,7 @@ export function createLocalFunctions() {
     const createHost = mock.fn((_target: FunctionsHostTarget) => host);
     const settings = new LocalFunctionSettings(code);
     const reader = new FunctionsProjectReader(code, executor, settings, hosts, createHost);
-    const outputScheduler = new ManualDebounceScheduler();
-    const provider = new FunctionsWorkspaceDataProvider(code, index, executor, reader, hosts, outputScheduler);
+    const provider = new FunctionsWorkspaceDataProvider(code, index, executor, reader, hosts);
     const tree = new DataItemTree<WorkspaceNode>(code, 'local-functions-test', executor, node => node.id, Infinity);
     tree.registerProvider(provider);
     const view = new FunctionsWorkspaceViewProvider(context.ctx, executor, tree, hosts);
@@ -51,14 +50,16 @@ export function createLocalFunctions() {
         }));
         return makeFunctionsProjectNode({ resourceUri: hostUri, runtime, initialized: !!runtime });
     };
-    const addFunction = (name: string, config: unknown = { bindings: [{ type: 'httpTrigger', authLevel: 'function' }] }, relative = name) => {
-        const uri = code.Uri.joinPath(folder, relative, 'function.json');
-        m.fs.addFile(uri, JSON.stringify(config));
-        return uri;
+    /** Makes the host report `functions` and registers it as ready for the project folder. */
+    const startHost = (functions: readonly HostFunction[], port = 8090) => {
+        host.listFunctions.mock.mockImplementation(() => Promise.resolve(functions.map(fn => ({
+            config: { bindings: [{ type: 'httpTrigger', authLevel: 'function' }] }, ...fn,
+        }))));
+        return hosts.register(folder, port);
     };
     return {
-        m, code, context, folder, executor, scheduler, outputScheduler, index, hosts, host, createHost,
-        settings, reader, provider, tree, view, projects, target, addProject, addFunction, selector: remoteSelection.selector,
+        m, code, context, folder, executor, scheduler, index, hosts, host, createHost,
+        settings, reader, provider, tree, view, projects, target, addProject, startHost, selector: remoteSelection.selector,
         resourceCache: remoteSelection.cache,
         dispose: () => {
             tree.dispose();

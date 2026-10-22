@@ -4,17 +4,17 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    basename, DebounceScheduler, dirname, Disposable, EventEmitter, IActionExecutor, IDebounceScheduler, IVsCode, relativePath, Roots,
+    basename, dirname, Disposable, EventEmitter, IActionExecutor, IVsCode, relativePath, Roots,
     type DataProvider, type DataProviderChangeEvent,
 } from '@microsoft/vscode-azure-utils';
-import { inject, injectable, unmanaged } from 'inversify';
+import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 import { IWorkspaceIndexService } from '../../../utils/workspaceIndex/WorkspaceIndexService';
 import type { FunctionsProjectNode, WorkspaceNode } from '../WorkspaceNode';
 import { isFunctionsProjectNode } from '../WorkspaceNode';
 import { FunctionsProjectReader } from '../../../functions/FunctionsProjectReader';
 import { LocalFunctionsHostTracker } from '../../../functions/host/LocalFunctionsHostTracker';
-import { FunctionsBuildFileTag, FunctionsHostFileName, FunctionsHostFileTag, FunctionsMetadataFileTag } from '../../../functions/functionsDetector';
+import { FunctionsHostFileTag } from '../../../functions/functionsDetector';
 
 /** Data-layer provider for {@linkcode FunctionsProjectNode}s. */
 @injectable()
@@ -23,7 +23,6 @@ export class FunctionsWorkspaceDataProvider implements DataProvider<WorkspaceNod
     private readonly changeEmitter = new EventEmitter<DataProviderChangeEvent<WorkspaceNode>>();
     public readonly onDidChange = this.changeEmitter.event;
     private readonly disposables: Disposable[] = [this.changeEmitter];
-    private readonly pendingProjects = new Set<string>();
     private projects: FunctionsProjectNode[] = [];
 
     public constructor(
@@ -32,14 +31,8 @@ export class FunctionsWorkspaceDataProvider implements DataProvider<WorkspaceNod
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(FunctionsProjectReader) private readonly reader: FunctionsProjectReader,
         @inject(LocalFunctionsHostTracker) hosts: LocalFunctionsHostTracker,
-        @unmanaged() private readonly outputScheduler: IDebounceScheduler = new DebounceScheduler(250),
     ) {
-        this.disposables.push(outputScheduler);
         this.disposables.push(hosts.onDidChange(folder => { this.refreshHostProject(folder); }));
-        // String-glob watching reuses VS Code's watcher; include output directories themselves for deletion events.
-        const watcher = code.workspace.createFileSystemWatcher('**/{bin,target,bin/**,target/**}');
-        const changed = (uri: vscode.Uri) => { this.queueOutputRefresh(uri); };
-        this.disposables.push(watcher, watcher.onDidCreate(changed), watcher.onDidChange(changed), watcher.onDidDelete(changed));
     }
 
     private refreshHostProject(folder: vscode.Uri): void {
@@ -51,26 +44,6 @@ export class FunctionsWorkspaceDataProvider implements DataProvider<WorkspaceNod
             if (dirname(project.resourceUri).toString() === folder.toString()) {
                 this.changeEmitter.fire({ target: project });
             }
-        }
-    }
-
-    private queueOutputRefresh(uri: vscode.Uri): void {
-        for (const project of this.projects) {
-            const relative = relativePath(dirname(project.resourceUri), uri);
-            if (relative && /^(?:bin|target)(?:\/|$)/.test(relative)) {
-                this.pendingProjects.add(project.id);
-            }
-        }
-        if (this.pendingProjects.size) {
-            this.outputScheduler.debounce(() => { this.flushOutputRefreshes(); });
-        }
-    }
-
-    private flushOutputRefreshes(): void {
-        const changedProjects = this.projects.filter(project => this.pendingProjects.has(project.id));
-        this.pendingProjects.clear();
-        for (const project of changedProjects) {
-            this.changeEmitter.fire({ target: project });
         }
     }
 
@@ -87,19 +60,7 @@ export class FunctionsWorkspaceDataProvider implements DataProvider<WorkspaceNod
         if (!isFunctionsProjectNode(resource)) {
             return [];
         }
-        const index = await this.indexService.getIndex();
-        const folder = dirname(resource.resourceUri);
-        const files = index.withTag(FunctionsMetadataFileTag).filter(uri =>
-            dirname(dirname(uri)).toString() === folder.toString()
-            && !index.has(this.code.Uri.joinPath(dirname(uri), FunctionsHostFileName), FunctionsHostFileTag));
-        const buildFiles = index.withTag(FunctionsBuildFileTag).filter(uri => dirname(uri).toString() === folder.toString());
-        let compiled: 'java' | 'dotnet' | undefined;
-        if (buildFiles.some(uri => basename(uri) === 'pom.xml')) {
-            compiled = 'java';
-        } else if (buildFiles.some(uri => basename(uri).endsWith('.csproj'))) {
-            compiled = 'dotnet';
-        }
-        return this.reader.functions(resource, files, compiled);
+        return this.reader.functions(resource);
     }
 
     private async discoverProjects(): Promise<FunctionsProjectNode[]> {
@@ -121,9 +82,8 @@ export class FunctionsWorkspaceDataProvider implements DataProvider<WorkspaceNod
         return projects;
     }
 
-    /** Disposes output and host subscriptions when the workspace tree is released. */
+    /** Disposes host subscriptions when the workspace tree is released. */
     public dispose(): void {
         Disposable.disposeAll(this.disposables);
-        this.pendingProjects.clear();
     }
 }
