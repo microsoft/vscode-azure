@@ -44,9 +44,7 @@ export class BufferedPseudoterminal implements vscode.Pseudoterminal {
         this.pending.length = 0;
         if (this.exitCode !== undefined) {
             this.finish(this.exitCode);
-        // A listener can close the terminal while buffered output is delivered, which control-flow narrowing cannot see.
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-        } else if (!this.closed) {
+        } else if (!this.closed) { // eslint-disable-line @typescript-eslint/no-unnecessary-condition -- a listener can close the terminal during buffered delivery
             this.options.onOpen?.();
         }
     }
