@@ -39,13 +39,22 @@ export class FunctionsProjectSelector {
             }
             throw error;
         }
-        project = dirname(host);
-        if (process.platform === 'win32') {
-            project = (await this.index.getIndex()).withTag(FunctionsHostFileTag).map(dirname)
-                .find(uri => uri.toString().toLowerCase() === project.toString().toLowerCase()) ?? project;
-        }
+        project = await this.toIndexedCasing(dirname(host));
         await this.ctx.extensionContext.workspaceState.update('functions.lastDebugProject', project.toString());
         return project;
+    }
+
+    /**
+     * Windows paths are case-insensitive, but project identity is compared by exact URI string.
+     * Returns the indexed project's URI when one matches ignoring case, so the same project always has the same casing.
+     */
+    private async toIndexedCasing(project: vscode.Uri): Promise<vscode.Uri> {
+        if (process.platform !== 'win32') {
+            return project;
+        }
+        const key = project.toString().toLowerCase();
+        return (await this.index.getIndex()).withTag(FunctionsHostFileTag).map(dirname)
+            .find(uri => uri.toString().toLowerCase() === key) ?? project;
     }
 
     private resolveTarget(folder?: vscode.WorkspaceFolder, target?: string | vscode.Uri): vscode.Uri | undefined {
