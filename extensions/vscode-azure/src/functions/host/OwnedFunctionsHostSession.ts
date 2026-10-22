@@ -5,22 +5,13 @@
 
 import type { IFunctionsHostClientProvider } from '@microsoft/vscode-azure-azutils';
 import { CancellationError, delay, type Disposable, ExternalError, type IOutputChannel, type IProcessExecutor, type IVsCode } from '@microsoft/vscode-azure-utils';
+import type { ServiceIdentifier } from 'inversify';
 import type * as vscode from 'vscode';
 import { BufferedPseudoterminal } from '../../utils/BufferedPseudoterminal';
 import type { FunctionsHostStart } from './LocalFunctionsHostProcess';
 import type { LocalFunctionsHostTracker } from './LocalFunctionsHostTracker';
 import type { LocalFunctionsNetwork } from './LocalFunctionsNetwork';
 import { workerProcessId } from './workerProcessId';
-
-/** Services a session uses to run and observe its process. */
-export interface OwnedFunctionsHostServices {
-    readonly code: IVsCode;
-    readonly processes: IProcessExecutor;
-    readonly client: IFunctionsHostClientProvider;
-    readonly tracker: LocalFunctionsHostTracker;
-    readonly network: LocalFunctionsNetwork;
-    readonly output: IOutputChannel;
-}
 
 /** Identity and launch inputs for one owned host. */
 export interface OwnedFunctionsHostSessionInit {
@@ -31,6 +22,12 @@ export interface OwnedFunctionsHostSessionInit {
     /** Runs once when the session has ended and its resources are released. */
     readonly onEnded: () => void;
 }
+
+/** Identifier for the {@linkcode OwnedFunctionsHostSession} factory. */
+export const IOwnedFunctionsHostSessionFactory: ServiceIdentifier<IOwnedFunctionsHostSessionFactory> = Symbol.for('IOwnedFunctionsHostSessionFactory');
+
+/** Creates a session for one launch; the services it runs on are supplied by the container. */
+export type IOwnedFunctionsHostSessionFactory = (init: OwnedFunctionsHostSessionInit) => OwnedFunctionsHostSession;
 
 /**
  * One launch of an owned Functions host: its task terminal, subprocess, readiness
@@ -54,7 +51,12 @@ export class OwnedFunctionsHostSession {
     private ended = false;
 
     public constructor(
-        private readonly services: OwnedFunctionsHostServices,
+        private readonly code: IVsCode,
+        private readonly processes: IProcessExecutor,
+        private readonly createClient: IFunctionsHostClientProvider,
+        private readonly tracker: LocalFunctionsHostTracker,
+        private readonly network: LocalFunctionsNetwork,
+        private readonly output: IOutputChannel,
         private readonly init: OwnedFunctionsHostSessionInit,
     ) {
         this.id = init.id;
@@ -86,27 +88,26 @@ export class OwnedFunctionsHostSession {
 
     /** Runs the host in a task terminal and begins watching its HTTP readiness; the process starts when VS Code opens the terminal. */
     public async execute(env: Readonly<Record<string, string>>): Promise<void> {
-        const { code } = this.services;
         if (this.abort.signal.aborted) {
             throw new CancellationError();
         }
         this.env = env;
-        const task = new code.Task(
-            { type: 'azure-functions-host', id: this.id }, code.workspace.getWorkspaceFolder(this.project) ?? code.TaskScope.Workspace,
-            code.l10n.t('Azure Functions Host'), 'Azure Functions',
-            new code.CustomExecution(() => Promise.resolve(this.terminal)),
+        const task = new this.code.Task(
+            { type: 'azure-functions-host', id: this.id }, this.code.workspace.getWorkspaceFolder(this.project) ?? this.code.TaskScope.Workspace,
+            this.code.l10n.t('Azure Functions Host'), 'Azure Functions',
+            new this.code.CustomExecution(() => Promise.resolve(this.terminal)),
         );
         task.isBackground = true;
-        task.presentationOptions = { reveal: code.TaskRevealKind.Always };
-        this.execution = await code.tasks.executeTask(task);
-        this.subscriptions.push(code.tasks.onDidEndTask(event => {
+        task.presentationOptions = { reveal: this.code.TaskRevealKind.Always };
+        this.execution = await this.code.tasks.executeTask(task);
+        this.subscriptions.push(this.code.tasks.onDidEndTask(event => {
             if (event.execution === this.execution) { this.abort.abort(); }
         }));
         void this.waitForHttp().catch((error: unknown) => {
             if (!CancellationError.test(error)) {
                 this.error ??= this.readinessError(error);
                 this.terminal.write(`${this.error.message}\n`);
-                this.services.output.warn(code.l10n.t('[functions] Owned host readiness failed.'));
+                this.output.warn(this.code.l10n.t('[functions] Owned host readiness failed.'));
                 this.abort.abort();
             }
         });
@@ -124,7 +125,7 @@ export class OwnedFunctionsHostSession {
             }
             await delay(100, this.abort.signal);
         }
-        throw new ExternalError(this.services.code.l10n.t('The Functions worker did not expose its debugger. See the host terminal for details.'));
+        throw new ExternalError(this.code.l10n.t('The Functions worker did not expose its debugger. See the host terminal for details.'));
     }
 
     /** Records and ends a failed start, returning the error to report. */
@@ -152,7 +153,7 @@ export class OwnedFunctionsHostSession {
 
     private readinessError(error: unknown): Error {
         return error instanceof ExternalError ? error
-            : new ExternalError(this.services.code.l10n.t('The Functions host did not become ready. See its terminal for details.'));
+            : new ExternalError(this.code.l10n.t('The Functions host did not become ready. See its terminal for details.'));
     }
 
     private async isDebuggerReady(): Promise<boolean> {
@@ -165,14 +166,13 @@ export class OwnedFunctionsHostSession {
             case 'powershell':
                 return this.registration !== undefined;
             case 'native':
-                return this.debuggerListening && await this.services.network.listening(this.init.debugPort);
+                return this.debuggerListening && await this.network.listening(this.init.debugPort);
             default:
-                return this.services.network.listening(this.init.debugPort);
+                return this.network.listening(this.init.debugPort);
         }
     }
 
     private async run(): Promise<void> {
-        const { code, output } = this.services;
         const { request, hostPort } = this.init;
         const args = ['run', request.project.fsPath, ...request.hostArgs, '--port', String(hostPort)];
         if (request.skipBuild) {
@@ -183,7 +183,7 @@ export class OwnedFunctionsHostSession {
             args.push('--dotnet-isolated-debug', '--enable-json-output');
         }
         try {
-            const process = await this.services.processes.spawn({
+            const process = await this.processes.spawn({
                 execution: 'background', command: [request.executable, ...args], cwd: request.project, env: this.env,
                 killTreeOnCancel: true, streamOutput: true,
             }, this.abort.signal);
@@ -191,28 +191,28 @@ export class OwnedFunctionsHostSession {
                 await Promise.all([this.consumeOutput(process.stdout), this.consumeOutput(process.stderr)]);
             } catch {
                 this.abort.abort();
-                this.error ??= new ExternalError(code.l10n.t('The Functions host output stream failed. See its terminal for details.'));
+                this.error ??= new ExternalError(this.code.l10n.t('The Functions host output stream failed. See its terminal for details.'));
                 this.terminal.write(`${this.error.message}\n`);
-                output.warn(code.l10n.t('[functions] Owned host output stream failed.'));
+                this.output.warn(this.code.l10n.t('[functions] Owned host output stream failed.'));
             } finally {
                 await process.completed;
             }
             if (!this.abort.signal.aborted) {
-                this.error = new ExternalError(code.l10n.t('The Functions host exited. See its terminal for details.'));
+                this.error = new ExternalError(this.code.l10n.t('The Functions host exited. See its terminal for details.'));
                 this.terminal.write(`${this.error.message}\n`);
             }
         } catch (error: unknown) {
             if (this.abort.signal.aborted && !CancellationError.test(error)) {
-                this.stopError = new ExternalError(code.l10n.t('Could not terminate the owned Functions process tree. Check its terminal and stop the remaining processes before debugging again.'));
+                this.stopError = new ExternalError(this.code.l10n.t('Could not terminate the owned Functions process tree. Check its terminal and stop the remaining processes before debugging again.'));
                 this.terminal.write(`${this.stopError.message}\n`);
-                output.warn(code.l10n.t('[functions] Owned process-tree termination failed.'));
+                this.output.warn(this.code.l10n.t('[functions] Owned process-tree termination failed.'));
             }
             if (!this.abort.signal.aborted && !CancellationError.test(error)) {
                 this.error = new ExternalError(request.runtime === 'native'
-                    ? code.l10n.t('The Functions host failed. Native Go requires the Core Tools v5 Go worker workload. See its terminal for details.')
-                    : code.l10n.t('The Functions host failed. See its terminal for details.'));
+                    ? this.code.l10n.t('The Functions host failed. Native Go requires the Core Tools v5 Go worker workload. See its terminal for details.')
+                    : this.code.l10n.t('The Functions host failed. See its terminal for details.'));
                 this.terminal.write(`${this.error.message}\n`);
-                output.warn(code.l10n.t('[functions] Owned host process failed.'));
+                this.output.warn(this.code.l10n.t('[functions] Owned host process failed.'));
             }
         } finally {
             this.finalize();
@@ -243,8 +243,7 @@ export class OwnedFunctionsHostSession {
     }
 
     private async waitForHttp(): Promise<void> {
-        const { code, output, tracker } = this.services;
-        const client = this.services.client({ port: this.init.hostPort });
+        const client = this.createClient({ port: this.init.hostPort });
         for (;;) {
             this.checkRunning();
             if (!this.process) {
@@ -255,19 +254,19 @@ export class OwnedFunctionsHostSession {
                 const status = await client.getStatus({ abortSignal: this.abort.signal, requestOptions: { timeout: 1000 } });
                 this.checkRunning();
                 if (status.state.toLowerCase() === 'running') {
-                    this.registration = tracker.register(this.project, this.init.hostPort);
+                    this.registration = this.tracker.register(this.project, this.init.hostPort);
                     return;
                 }
                 if (status.errors?.length) {
-                    throw new ExternalError(code.l10n.t('The Functions host reported startup errors. See its terminal for details.'));
+                    throw new ExternalError(this.code.l10n.t('The Functions host reported startup errors. See its terminal for details.'));
                 }
             } catch (error) {
                 if (CancellationError.test(error) || error instanceof ExternalError) { throw error; }
                 if (error instanceof TypeError || (error && typeof error === 'object' && 'statusCode' in error
                     && typeof error.statusCode === 'number' && ![408, 429, 500, 502, 503, 504].includes(error.statusCode))) {
-                    throw new ExternalError(code.l10n.t('The owned Functions host rejected its readiness request. Check local host authentication and its terminal.'));
+                    throw new ExternalError(this.code.l10n.t('The owned Functions host rejected its readiness request. Check local host authentication and its terminal.'));
                 }
-                output.trace('[functions] Waiting for the owned host HTTP endpoint.');
+                this.output.trace('[functions] Waiting for the owned host HTTP endpoint.');
             }
             await delay(200, this.abort.signal);
         }
@@ -292,4 +291,12 @@ export class OwnedFunctionsHostSession {
             this.terminal.close();
         }
     }
+}
+
+/** Builds an {@linkcode IOwnedFunctionsHostSessionFactory} over the services the container resolves. */
+export function createOwnedFunctionsHostSessionFactory(
+    code: IVsCode, processes: IProcessExecutor, client: IFunctionsHostClientProvider,
+    tracker: LocalFunctionsHostTracker, network: LocalFunctionsNetwork, output: IOutputChannel,
+): IOwnedFunctionsHostSessionFactory {
+    return init => new OwnedFunctionsHostSession(code, processes, client, tracker, network, output, init);
 }

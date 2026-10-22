@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { FunctionsHostClient, IFunctionsHostClientProvider, ILogsQueryClientProvider, IWebAppClientProvider, LogsQueryClient, WebAppClient } from '@microsoft/vscode-azure-azutils';
-import { IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
+import { IActionExecutor, ICodeContext, IOutputChannel, IProcessExecutor, IVsCode } from '@microsoft/vscode-azure-utils';
 import { CreateFunctionApp } from '../commands/functions/CreateFunctionApp';
 import { InitializeFunctionsProject } from '../commands/functions/InitializeFunctionsProject';
 import { FunctionsProjectSelector } from '../functions/FunctionsProjectSelector';
@@ -12,6 +12,7 @@ import { FunctionsDebugPreparation } from '../functions/debug/FunctionsDebugPrep
 import { FunctionsDebugProvider } from '../functions/debug/FunctionsDebugProvider';
 import { LocalFunctionsNetwork } from '../functions/host/LocalFunctionsNetwork';
 import { LocalFunctionsHostProcess } from '../functions/host/LocalFunctionsHostProcess';
+import { createOwnedFunctionsHostSessionFactory, IOwnedFunctionsHostSessionFactory } from '../functions/host/OwnedFunctionsHostSession';
 import { FunctionUrlResolver } from '../functions/FunctionUrlResolver';
 import { CopyFunctionUrl } from '../commands/functions/CopyFunctionUrl';
 import { DeleteFunction } from '../commands/functions/DeleteFunction';
@@ -56,6 +57,10 @@ export function registerFunctions(registrar: ProductRegistrar): void {
         container.bind(FunctionsProjectSelector).toSelf().inSingletonScope();
         container.bind(FunctionsDebugPreparation).toSelf().inSingletonScope();
         container.bind(LocalFunctionsNetwork).toSelf().inSingletonScope();
+        container.bind(IOwnedFunctionsHostSessionFactory).toFactory(context => createOwnedFunctionsHostSessionFactory(
+            context.get(IVsCode), context.get(IProcessExecutor), context.get(IFunctionsHostClientProvider),
+            context.get(LocalFunctionsHostTracker), context.get(LocalFunctionsNetwork), context.get(IOutputChannel),
+        ));
         container.bind(LocalFunctionsHostProcess).toSelf().inSingletonScope().onActivation(pushDisposable);
         container.bind(FunctionsDebugProvider).toSelf().inSingletonScope().onActivation(pushDisposable);
         container.bind(FunctionAppLogStream).toSelf().inSingletonScope().onActivation(pushDisposable);

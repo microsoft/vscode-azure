@@ -3,14 +3,12 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IFunctionsHostClientProvider } from '@microsoft/vscode-azure-azutils';
-import { CancellationError, Disposable, ExternalError, IOutputChannel, IProcessExecutor, IVsCode } from '@microsoft/vscode-azure-utils';
+import { CancellationError, Disposable, ExternalError, IOutputChannel, IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { randomUUID } from 'node:crypto';
 import type * as vscode from 'vscode';
-import { LocalFunctionsHostTracker } from './LocalFunctionsHostTracker';
 import { LocalFunctionsNetwork, type FunctionsPortReservation } from './LocalFunctionsNetwork';
-import { OwnedFunctionsHostSession } from './OwnedFunctionsHostSession';
+import { IOwnedFunctionsHostSessionFactory, type OwnedFunctionsHostSession } from './OwnedFunctionsHostSession';
 
 /** Inputs supplied after project validation and any custom or Go debug build. */
 export interface FunctionsHostStart {
@@ -43,9 +41,7 @@ export class LocalFunctionsHostProcess implements Disposable {
 
     public constructor(
         @inject(IVsCode) private readonly code: IVsCode,
-        @inject(IProcessExecutor) private readonly processes: IProcessExecutor,
-        @inject(IFunctionsHostClientProvider) private readonly client: IFunctionsHostClientProvider,
-        @inject(LocalFunctionsHostTracker) private readonly tracker: LocalFunctionsHostTracker,
+        @inject(IOwnedFunctionsHostSessionFactory) private readonly createSession: IOwnedFunctionsHostSessionFactory,
         @inject(LocalFunctionsNetwork) private readonly network: LocalFunctionsNetwork,
         @inject(IOutputChannel) private readonly output: IOutputChannel,
     ) { }
@@ -80,10 +76,9 @@ export class LocalFunctionsHostProcess implements Disposable {
         }
         const id = randomUUID();
         const pipe = `azure-functions-${id}`;
-        const session = new OwnedFunctionsHostSession(
-            { code: this.code, processes: this.processes, client: this.client, tracker: this.tracker, network: this.network, output: this.output },
-            { id, request, hostPort: hostPort.port, debugPort: debugPort.port, onEnded: () => { this.hosts.delete(id); } },
-        );
+        const session = this.createSession({
+            id, request, hostPort: hostPort.port, debugPort: debugPort.port, onEnded: () => { this.hosts.delete(id); },
+        });
         this.hosts.set(id, session);
         let released = false;
         try {
