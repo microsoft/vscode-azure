@@ -165,7 +165,10 @@ describe('Functions debug preparation (unit)', () => {
         const s = setup('python');
         const executable = s.code.Uri.file('/system/python');
         selectPythonEnvironment(s, executable);
-        await expect(s.preparation.prepare(s.folder, {})).to.be.rejectedWith('Select a Python virtual environment');
+        const resolved = await s.debugProvider.resolveDebugConfigurationWithSubstitutedVariables(
+            undefined, { type: 'azure-functions', request: 'launch', name: 'Functions', projectPath: s.folder.fsPath }, new MockCancellationToken());
+        expect(resolved).to.be.undefined;
+        expect(s.m.window.showErrorMessage.mock.calls.at(-1)?.arguments[0]).to.include('Select a Python virtual environment');
         expect(s.tools.acquire.mock.callCount()).to.equal(0);
         expect(s.spawn.mock.callCount()).to.equal(0);
         expect(s.m.tasks.executeTask.mock.callCount()).to.equal(0);

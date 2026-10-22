@@ -238,7 +238,8 @@ describe('Local function commands (integration)', () => {
         const s = await setup();
         const uri = s.code.Uri.joinPath(s.folder, 'local.settings.json');
         await s.code.workspace.fs.delete(uri);
-        await s.target.setDisabled(s.fn, true);
+        await new SetFunctionState(s.code, s.selector, s.remoteSettings, s.resourceCache, s.target).execute(true, s.fn.id);
         expect(Object.fromEntries((await s.settings.read(s.folder)).values)).to.deep.equal({ ['AzureWebJobs.Http.Disabled']: 'true' });
+        expect(s.remote.mock.callCount()).to.equal(0);
     });
 });
