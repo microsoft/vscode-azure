@@ -16,6 +16,8 @@ import {
     ISubscriptionClientProvider,
     ResourceClient,
     findSubscriptionById,
+    ISubscriptionTenantHints,
+    SubscriptionTenantHints,
     SubscriptionClient,
 } from '@microsoft/vscode-azure-azutils';
 import { IActionExecutor, ICodeContext, IOutputChannel, IVsCode } from '@microsoft/vscode-azure-utils';
@@ -54,12 +56,19 @@ export function registerGenericAzure(registrar: ProductRegistrar): void {
     registrar.registerBinding(container => {
         container.bind(IWorkspaceDetector).toConstantValue(azdDetector);
         container.bind(ICredentialOptionsScope).to(CredentialOptionsScope).inSingletonScope();
+        container.bind(ISubscriptionTenantHints).toConstantValue(new SubscriptionTenantHints());
         container.bind(ICredentialFactory).toDynamicValue(context => {
             const scope = context.get(ICredentialOptionsScope);
+            const hints = context.get(ISubscriptionTenantHints);
             return createDefaultCredentialFactory(
                 context.get(IVsCode),
                 context.get(IOutputChannel),
                 () => scope.current,
+                ({ subscriptionId, tenantId }) => {
+                    if (subscriptionId) {
+                        hints.record(subscriptionId, tenantId);
+                    }
+                },
             );
         }).inSingletonScope();
 
@@ -84,7 +93,8 @@ export function registerGenericAzure(registrar: ProductRegistrar): void {
 
         container.bind(ISubscriptionResolver).toDynamicValue(context => {
             const cache = context.get(IAzureListingCache);
-            return (subscriptionId: string) => findSubscriptionById(cache, subscriptionId);
+            const hints = context.get(ISubscriptionTenantHints);
+            return (subscriptionId: string) => findSubscriptionById(cache, subscriptionId, hints);
         }).inSingletonScope();
 
         container.bind(IResourceSelector).to(ResourceSelector).inSingletonScope();

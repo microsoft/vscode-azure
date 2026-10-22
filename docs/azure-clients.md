@@ -41,6 +41,8 @@ const context = createArmRestClient(
 
 **CAE / MFA step-up:** Conditional Access Evaluation and MFA step-up challenges are handled by the SDK's built-in `bearerTokenAuthenticationPolicy` together with `VsCodeExtensionCredential`. The credential reads `GetTokenOptions.claims` and forwards them to VS Code's `getSession` as a synthetic `WWW-Authenticate` / claims challenge. There is no custom MFA policy.
 
+**Wrong-tenant 401:** ARM answers a token minted for the wrong tenant with a `401` whose `WWW-Authenticate` challenge names the authority that would have worked. `TenantChallengePolicy` reads it and retries the request once with a token for that tenant, acquired **silently** (`TenantChallengeCredential.getTokenSilentlyForTenant`); if no session can supply one the original `401` is returned, never a prompt. It acts only on a `Bearer` challenge with `error="invalid_token"` and no `claims`, whose `authorization_uri` is an `https` URI on one of `EnvironmentLike.loginHosts` with a GUID tenant, naming a tenant other than the one already tried, for a request body that can be replayed. The URI is never followed; only the tenant id is extracted. After a successful retry the credential reports the tenant (and the subscription id from the request path) to `SubscriptionTenantHints`, which `findSubscriptionById` consults before walking every tenant.
+
 ### User Agent Prefix
 
 All factory functions set a `userAgentPrefix` that includes the extension's ID and version. If the caller supplies its own `userAgentOptions.userAgentPrefix`, the two are concatenated -- e.g. `my-publisher.my-extension/1.0.0 CustomClient/2.0.0`.
@@ -51,13 +53,14 @@ Callers can provide custom pipeline policies via `options.additionalPolicies`. T
 
 ## Pipeline Policies
 
-Every client created through the factory functions gets three custom pipeline policies:
+Every client created through the factory functions gets three custom pipeline policies, and ARM clients whose credential implements `TenantChallengeCredential` get a fourth:
 
 | Policy | Position | Description |
 |--------|----------|-------------|
 | `DedupeRequestPolicy` | perCall | Deduplicates concurrent equivalent GET operations across independently created clients. In-flight state is transient and partitioned by Azure identity plus selected response-affecting headers. Streaming and abortable requests are excluded. |
 | `CorrelationIdPolicy` | perCall | Sets the `x-ms-correlation-request-id` header from the current `IActionContext.telemetry.properties.correlationId`, linking ARM requests back to the VS Code command or tree operation that initiated them. The context is looked up via `IActionExecutor.currentContext` (backed by `AsyncLocalStorage`), so policies don't need `IActionContext` passed explicitly — it's established by whichever scope wraps the call (command execution or `DataItemTree` provider call). |
 | `AcceptLanguagePolicy` | perCall | Sets the `accept-language` header to VS Code's UI language (`vscode.env.language`), so ARM responses match the user's locale. |
+| `TenantChallengePolicy` | perRetry | ARM clients only. Retries a wrong-tenant `401` once with a silently acquired token for the tenant the `WWW-Authenticate` challenge names. Runs after the SDK's bearer policy so it can replace the `Authorization` header that policy set. |
 
 Authentication (including CAE/MFA step-up) is handled by the SDK's built-in `bearerTokenAuthenticationPolicy`, which is wired up by the SDK's own credential plumbing from the supplied `TokenCredential` — not added by these factories.
 

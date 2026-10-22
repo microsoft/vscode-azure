@@ -4,8 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
+import { mock } from 'node:test';
 import type * as vscode from 'vscode';
-import { VsCodeExtensionCredential } from '../../src/auth/VsCodeExtensionCredential';
+import { isTenantChallengeCredential, VsCodeExtensionCredential, type VsCodeExtensionCredentialOptions } from '../../src/auth/VsCodeExtensionCredential';
 
 interface CreateCredentialOptions {
     readonly tenantId?: string;
@@ -16,6 +17,7 @@ interface CreateCredentialOptions {
      * with an access token. Pass `null` to simulate no available session.
      */
     readonly session?: Record<string, unknown> | null;
+    readonly onTenantDiscovered?: VsCodeExtensionCredentialOptions['onTenantDiscovered'];
 }
 
 function createCredential(options?: CreateCredentialOptions) {
@@ -23,7 +25,7 @@ function createCredential(options?: CreateCredentialOptions) {
     if (options?.cloud === 'china') {
         mock.settings.set('microsoft-sovereign-cloud.environment', 'ChinaCloud');
     }
-    const credential = new VsCodeExtensionCredential({ code: mock.vscode, tenantId: options?.tenantId, sessionOptions: options?.sessionOptions });
+    const credential = new VsCodeExtensionCredential({ code: mock.vscode, tenantId: options?.tenantId, sessionOptions: options?.sessionOptions, onTenantDiscovered: options?.onTenantDiscovered });
 
     const getSession = mock.authentication.getSession;
     const session = options?.session === undefined ? { accessToken: 'tok' } : options.session;
@@ -341,6 +343,47 @@ describe('VsCodeExtensionCredential (unit)', () => {
             expect(getSession.mock.calls[0].arguments[0]).to.equal('microsoft');
             expect(lastScopes(getSession)).to.include('VSCODE_TENANT:my-tenant');
             expect(lastSessionOptions(getSession).createIfNone).to.equal(true);
+        });
+    });
+
+    describe('tenant challenge support', () => {
+        it('should be detected as a tenant challenge credential', () => {
+            const { credential } = createCredential();
+
+            expect(isTenantChallengeCredential(credential)).to.be.true;
+        });
+
+        it('should acquire for the named tenant without prompting, even when configured to prompt', async () => {
+            const { credential, getSession } = createCredential({ tenantId: 'home', sessionOptions: { createIfNone: true, account: { id: 'acct-1', label: '' } } });
+
+            const token = await credential.getTokenSilentlyForTenant('scope1', 'other');
+
+            expect(token?.token).to.equal('tok');
+            expect(lastScopes(getSession)).to.include('VSCODE_TENANT:other');
+            expect(lastScopes(getSession)).to.not.include('VSCODE_TENANT:home');
+            const sessionOptions = lastSessionOptions(getSession);
+            expect(sessionOptions.silent).to.equal(true);
+            expect(sessionOptions.createIfNone).to.be.undefined;
+            expect(sessionOptions.account).to.deep.equal({ id: 'acct-1', label: '' });
+        });
+
+        it('should return null when no session can supply a token silently', async () => {
+            const { credential } = createCredential({ session: null });
+
+            expect(await credential.getTokenSilentlyForTenant('scope1', 'other')).to.be.null;
+        });
+
+        it('should expose the configured tenant', () => {
+            expect(createCredential({ tenantId: 'home' }).credential.tenantId).to.equal('home');
+        });
+
+        it('should forward a discovered tenant to the configured callback', () => {
+            const onTenantDiscovered = mock.fn();
+            const { credential } = createCredential({ onTenantDiscovered });
+
+            credential.reportTenantDiscovered({ tenantId: 'other', subscriptionId: 'sub' });
+
+            expect(onTenantDiscovered.mock.calls[0].arguments[0]).to.deep.equal({ tenantId: 'other', subscriptionId: 'sub' });
         });
     });
 });

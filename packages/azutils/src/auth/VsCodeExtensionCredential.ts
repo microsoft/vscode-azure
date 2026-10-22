@@ -36,6 +36,61 @@ export interface VsCodeExtensionCredentialOptions {
      * non-interactive acquisition.
      */
     readonly sessionOptions?: vscode.AuthenticationGetSessionOptions;
+
+    /**
+     * (Optional) Called after a request that was rejected as wrong-tenant
+     * succeeded against the tenant the service named (see
+     * {@linkcode TenantChallengeCredential.reportTenantDiscovered}).
+     */
+    readonly onTenantDiscovered?: (discovery: TenantDiscovery) => void;
+}
+
+/**
+ * Token options understood by {@linkcode VsCodeExtensionCredential} on top of the
+ * standard {@linkcode GetTokenOptions}.
+ */
+export interface VsCodeGetTokenOptions extends GetTokenOptions {
+    /**
+     * Acquire only from an existing session, never prompting, regardless of the
+     * credential's own session options.
+     */
+    readonly silent?: boolean;
+}
+
+/** A tenant a service said a request should have been authenticated to. */
+export interface TenantDiscovery {
+    /** The tenant the service named. */
+    readonly tenantId: string;
+    /** The subscription the request was addressed to, when its path named one. */
+    readonly subscriptionId?: string;
+}
+
+/**
+ * A {@linkcode TokenCredential} that can re-acquire a token for another tenant
+ * without prompting, which is what lets a wrong-tenant `401` repair itself.
+ *
+ * Kept as a capability rather than a concrete class so the request pipeline
+ * stays auth-agnostic and a credential without it simply opts out.
+ */
+export interface TenantChallengeCredential extends TokenCredential {
+    /** The tenant the credential was configured with, if any. */
+    readonly tenantId: string | undefined;
+
+    /**
+     * Acquire a token for `tenantId` from an existing session only.
+     *
+     * @returns `null` when no session can supply one without interaction.
+     */
+    getTokenSilentlyForTenant(scopes: string | string[], tenantId: string, options?: Pick<GetTokenOptions, 'abortSignal'>): Promise<AccessToken | null>;
+
+    /** Record that `discovery.tenantId` served a request that another tenant's token could not. */
+    reportTenantDiscovered(discovery: TenantDiscovery): void;
+}
+
+/** Whether `credential` supports {@linkcode TenantChallengeCredential} retries. */
+export function isTenantChallengeCredential(credential: TokenCredential): credential is TenantChallengeCredential {
+    const candidate = credential as Partial<TenantChallengeCredential>;
+    return typeof candidate.getTokenSilentlyForTenant === 'function' && typeof candidate.reportTenantDiscovered === 'function';
 }
 
 /**
@@ -61,10 +116,15 @@ export interface VsCodeExtensionCredentialOptions {
  * Callers wanting non-interactive acquisition pass `silent: true` via
  * {@linkcode VsCodeExtensionCredentialOptions.sessionOptions}.
  */
-export class VsCodeExtensionCredential implements TokenCredential {
+export class VsCodeExtensionCredential implements TenantChallengeCredential {
     private environment: EnvironmentLike | undefined;
 
     public constructor(private readonly options: VsCodeExtensionCredentialOptions) { }
+
+    /** @inheritdoc */
+    public get tenantId(): string | undefined {
+        return this.options.tenantId;
+    }
 
     /**
      * Acquire the underlying VS Code {@linkcode vscode.AuthenticationSession}
@@ -85,7 +145,7 @@ export class VsCodeExtensionCredential implements TokenCredential {
      * @returns The established session, or `null` when none is available (e.g.
      * silent acquisition with no existing session, or the user cancels sign-in).
      */
-    public async authenticate(scopes: string | string[] = [], options?: GetTokenOptions): Promise<vscode.AuthenticationSession | null> {
+    public async authenticate(scopes: string | string[] = [], options?: VsCodeGetTokenOptions): Promise<vscode.AuthenticationSession | null> {
         const { code, output } = this.options;
         this.environment ??= getConfiguredAzureEnv(code);
         const provider = getAuthProviderId(this.environment);
@@ -104,7 +164,7 @@ export class VsCodeExtensionCredential implements TokenCredential {
             ? { wwwAuthenticate: buildClaimsChallenge(claims), fallbackScopes: scopesArray }
             : scopesArray;
 
-        const sessionOptions = this.resolveSessionOptions();
+        const sessionOptions = this.resolveSessionOptions(options?.silent);
 
         output?.debug(`[auth] authenticate start provider=${provider} tenant=${tenantId ?? '<default>'} challenge=${claims ? 'true' : 'false'} scopes=${JSON.stringify(scopesArray)}`);
         const session = await code.authentication.getSession(provider, scopesOrChallenge, sessionOptions);
@@ -126,7 +186,7 @@ export class VsCodeExtensionCredential implements TokenCredential {
      * Thin wrapper over {@linkcode authenticate} that converts the resolved
      * session into an {@linkcode AccessToken} (deriving the token expiry).
      */
-    public async getToken(scopes: string | string[], options?: GetTokenOptions): Promise<AccessToken | null> {
+    public async getToken(scopes: string | string[], options?: VsCodeGetTokenOptions): Promise<AccessToken | null> {
         const session = await this.authenticate(scopes, options);
         if (!session) {
             return null;
@@ -143,6 +203,20 @@ export class VsCodeExtensionCredential implements TokenCredential {
     }
 
     /**
+     * Acquire a token for `tenantId` from an existing session, never prompting.
+     * The credential's own `account` scoping is kept, so the retry stays on the
+     * account the original request used.
+     */
+    public getTokenSilentlyForTenant(scopes: string | string[], tenantId: string, options?: Pick<GetTokenOptions, 'abortSignal'>): Promise<AccessToken | null> {
+        return this.getToken(scopes, { abortSignal: options?.abortSignal, tenantId, silent: true });
+    }
+
+    /** @inheritdoc */
+    public reportTenantDiscovered(discovery: TenantDiscovery): void {
+        this.options.onTenantDiscovered?.(discovery);
+    }
+
+    /**
      * Resolve the {@linkcode vscode.authentication.getSession getSession} options
      * for a token request.
      *
@@ -153,9 +227,16 @@ export class VsCodeExtensionCredential implements TokenCredential {
      * `createIfNone` and `silent` are mutually exclusive in the VS Code API, the
      * `createIfNone` default is omitted in that case. Any other caller-provided
      * options (including an explicit `createIfNone: false`) override the default.
+     *
+     * A per-request `silent` forces non-interactive acquisition and drops any
+     * `createIfNone` the credential was configured with.
      */
-    private resolveSessionOptions(): vscode.AuthenticationGetSessionOptions | undefined {
+    private resolveSessionOptions(silent?: boolean): vscode.AuthenticationGetSessionOptions | undefined {
         const sessionOptions = this.options.sessionOptions;
+        if (silent) {
+            const { createIfNone: _createIfNone, forceNewSession: _forceNewSession, ...rest } = sessionOptions ?? {};
+            return { ...rest, silent: true };
+        }
         if (sessionOptions?.silent) {
             return sessionOptions;
         }

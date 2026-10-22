@@ -10,6 +10,7 @@ import { delay } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import { AzurePublicCloud } from '../../src/auth/Environment';
+import type { TenantChallengeCredential } from '../../src/auth/VsCodeExtensionCredential';
 import { createArmRestClient, createArmRestSubscriptionClient, createDataPlaneRestClient } from '../../src/rest/createAzureClient';
 import { makeCredential, makeSubscription } from '../mockAzure';
 import { makeRequest, makeResponse, MockHttpClient } from '../mockPipeline';
@@ -248,6 +249,58 @@ describe('createArmRestSubscriptionClient (unit)', () => {
         const callCount = await countConcurrentRequests(getDedupePolicy(client1), getDedupePolicy(client2));
 
         expect(callCount).to.equal(2);
+    });
+});
+
+describe('tenant challenge policy installation (unit)', () => {
+    function makeTenantChallengeCredential(): TenantChallengeCredential {
+        return {
+            ...makeCredential(),
+            tenantId: undefined,
+            getTokenSilentlyForTenant: () => Promise.resolve(null),
+            reportTenantDiscovered: () => undefined,
+        };
+    }
+
+    function perRetryPolicyNames(client: FakeResult | FakeSubResult): string[] {
+        return (client.opts?.additionalPolicies ?? []).filter(p => p.position === 'perRetry').map(p => p.policy.name);
+    }
+
+    it('should install it per-retry on subscription clients when the credential supports it', () => {
+        const { ctx } = createMockCodeContext();
+        const { executor } = createTestActionExecutor();
+
+        const client = createArmRestSubscriptionClient(ctx, executor, typedSubFactory, makeTenantChallengeCredential(), makeSubscription({ subscriptionId: 'my-sub-id' })) as unknown as FakeSubResult;
+
+        expect(perRetryPolicyNames(client)).to.deep.equal(['TenantChallengePolicy']);
+    });
+
+    it('should install it per-retry on non-subscription clients when the credential supports it', () => {
+        const { ctx } = createMockCodeContext();
+        const { executor } = createTestActionExecutor();
+
+        const client = createArmRestClient(ctx, executor, typedFactory, makeTenantChallengeCredential(), AzurePublicCloud) as unknown as FakeResult;
+
+        expect(perRetryPolicyNames(client)).to.deep.equal(['TenantChallengePolicy']);
+    });
+
+    it('should not install it for a credential that cannot re-acquire per tenant', () => {
+        const { ctx } = createMockCodeContext();
+        const { executor } = createTestActionExecutor();
+
+        const client = createArmRestClient(ctx, executor, typedFactory, makeCredential(), AzurePublicCloud) as unknown as FakeResult;
+
+        expect(perRetryPolicyNames(client)).to.be.empty;
+    });
+
+    it('should not install it on data-plane clients', () => {
+        const { ctx } = createMockCodeContext();
+        const { executor } = createTestActionExecutor();
+
+        const client = createDataPlaneRestClient(ctx, executor, { name: 'test', endpoint: 'https://example.test', credential: makeTenantChallengeCredential() });
+
+        const policyNames = client.pipeline.getOrderedPolicies().map(policy => policy.name);
+        expect(policyNames).to.not.include('TenantChallengePolicy');
     });
 });
 

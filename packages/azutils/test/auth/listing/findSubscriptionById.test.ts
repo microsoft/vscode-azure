@@ -8,6 +8,7 @@ import { createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing'
 import * as assert from 'node:assert';
 import { AzureListingCache } from '../../../src/auth/listing/AzureListingCache';
 import { findSubscriptionById } from '../../../src/auth/listing/findSubscriptionById';
+import { SubscriptionTenantHints } from '../../../src/auth/listing/SubscriptionTenantHints';
 import { createMockAzureListingFetcher, makeAccount, makeSubscription, makeTenant, type MockAzureListingFetcherOptions } from '../../mockAzure';
 
 const account = makeAccount({ id: 'acct', label: 'Account' });
@@ -123,5 +124,39 @@ describe('findSubscriptionById (unit)', () => {
         const resolved = await findSubscriptionById(cache, subB.subscriptionId);
 
         assert.strictEqual(resolved?.tenantId, tenantB.tenantId);
+    });
+
+    describe('with a tenant hint', () => {
+        it('lists the hinted tenant without touching the tenants ahead of it', async () => {
+            const { cache, fetcher } = createCache();
+            const hints = new SubscriptionTenantHints();
+            hints.record(subB.subscriptionId, tenantB.tenantId);
+
+            const resolved = await findSubscriptionById(cache, subB.subscriptionId, hints);
+
+            assert.strictEqual(resolved?.tenantId, tenantB.tenantId);
+            assert.ok(fetcher.fetchSubscriptions.mock.calls.every(call => call.arguments[0].tenantId === tenantB.tenantId),
+                'only the hinted tenant should have been listed');
+        });
+
+        it('falls back to the walk when the hinted tenant does not hold the subscription', async () => {
+            const { cache } = createCache();
+            const hints = new SubscriptionTenantHints();
+            hints.record(subB.subscriptionId, tenantA.tenantId);
+
+            const resolved = await findSubscriptionById(cache, subB.subscriptionId, hints);
+
+            assert.strictEqual(resolved?.tenantId, tenantB.tenantId);
+        });
+
+        it('falls back to the walk when the hinted tenant is not listed', async () => {
+            const { cache } = createCache();
+            const hints = new SubscriptionTenantHints();
+            hints.record(subB.subscriptionId, 'tenant-unknown');
+
+            const resolved = await findSubscriptionById(cache, subB.subscriptionId, hints);
+
+            assert.strictEqual(resolved?.tenantId, tenantB.tenantId);
+        });
     });
 });

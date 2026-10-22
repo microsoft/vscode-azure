@@ -48,6 +48,16 @@ export interface EnvironmentLike {
     readonly portalUrl: string;
 
     /**
+     * Lowercased hostnames of the cloud's Entra ID authority, e.g.
+     * `login.microsoftonline.com`.
+     *
+     * An allowlist for validating authorities that arrive over the network (such
+     * as the `authorization_uri` of a `WWW-Authenticate` challenge) before
+     * anything is acted on. It is never a place to send requests.
+     */
+    readonly loginHosts: readonly string[];
+
+    /**
      * The Log Analytics query endpoint, e.g. `https://api.loganalytics.io`.
      *
      * Doubles as the authentication audience for log queries.
@@ -81,6 +91,8 @@ export interface EnvironmentParametersLike {
     readonly name: string;
     readonly resourceManagerEndpointUrl: string;
     readonly portalUrl: string;
+    /** Hostnames of the cloud's Entra ID authority; see {@linkcode EnvironmentLike.loginHosts}. */
+    readonly loginHosts: readonly string[];
     /** Log Analytics query endpoint, e.g. `https://api.loganalytics.io`. */
     readonly logAnalyticsEndpoint: string;
     /** Storage DNS suffix, e.g. `core.windows.net`. */
@@ -114,6 +126,7 @@ export function createEnvironment(parameters: EnvironmentParametersLike, isCusto
         resourceManagerEndpointUrl,
         resourceManagerDefaultScope: `${resourceManagerEndpointUrl}/.default`,
         portalUrl: stripTrailingSlash(parameters.portalUrl),
+        loginHosts: parameters.loginHosts.map(host => host.toLowerCase()),
         logAnalyticsEndpoint: stripTrailingSlash(parameters.logAnalyticsEndpoint),
         storageEndpoint: (accountName: string) => `https://${accountName}.blob.${storageEndpointSuffix}`,
         containerRegistryEndpoint: (registryName: string) => `https://${registryName}.${containerRegistryDnsSuffix}`,
@@ -131,6 +144,7 @@ const publicCloudParameters: EnvironmentParametersLike = {
     name: 'AzureCloud',
     resourceManagerEndpointUrl: 'https://management.azure.com',
     portalUrl: 'https://portal.azure.com',
+    loginHosts: ['login.microsoftonline.com', 'login.windows.net', 'sts.windows.net'],
     logAnalyticsEndpoint: 'https://api.loganalytics.io',
     storageEndpointSuffix: 'core.windows.net',
     containerRegistryDnsSuffix: 'azurecr.io',
@@ -145,6 +159,7 @@ export const AzureUSGovernment: EnvironmentLike = createEnvironment({
     name: 'AzureUSGovernment',
     resourceManagerEndpointUrl: 'https://management.usgovcloudapi.net',
     portalUrl: 'https://portal.azure.us',
+    loginHosts: ['login.microsoftonline.us', 'login.usgovcloudapi.net'],
     logAnalyticsEndpoint: 'https://api.loganalytics.us',
     storageEndpointSuffix: 'core.usgovcloudapi.net',
     containerRegistryDnsSuffix: 'azurecr.us',
@@ -156,11 +171,31 @@ export const AzureChinaCloud: EnvironmentLike = createEnvironment({
     name: 'AzureChinaCloud',
     resourceManagerEndpointUrl: 'https://management.chinacloudapi.cn',
     portalUrl: 'https://portal.azure.cn',
+    loginHosts: ['login.chinacloudapi.cn', 'login.partner.microsoftonline.cn'],
     logAnalyticsEndpoint: 'https://api.loganalytics.azure.cn',
     storageEndpointSuffix: 'core.chinacloudapi.cn',
     containerRegistryDnsSuffix: 'azurecr.cn',
     azureWebSitesEndpointSuffix: 'chinacloudsites.cn',
 });
+
+/**
+ * Shape of the `customEnvironment` setting: the endpoint parameters plus the
+ * `activeDirectoryEndpointUrl` key VS Code's Microsoft authentication provider
+ * defines for the cloud's authority.
+ */
+type CustomEnvironmentSetting = Partial<EnvironmentParametersLike> & { readonly activeDirectoryEndpointUrl?: string };
+
+/** The hostname of `url`, or `undefined` when it is absent or not a valid URL. */
+function tryGetHost(url: string | undefined): string | undefined {
+    if (!url) {
+        return undefined;
+    }
+    try {
+        return new URL(url).hostname;
+    } catch {
+        return undefined;
+    }
+}
 
 const CloudEnvironmentSettingName = 'environment';
 const CustomEnvironmentSettingName = 'customEnvironment';
@@ -204,14 +239,21 @@ export function getConfiguredAzureEnv(code: IVsCode): EnvironmentLike {
     } else if (setting === 'USGovernment') {
         return AzureUSGovernment;
     } else if (setting === 'custom') {
-        const custom = config.get<Partial<EnvironmentParametersLike>>(CustomEnvironmentSettingName);
+        const custom = config.get<CustomEnvironmentSetting>(CustomEnvironmentSettingName);
         if (!custom) {
             throw new Error(code.l10n.t('The custom cloud choice is not configured. Please configure the setting `{0}.{1}`.', SovereignCloudConfigurationSection, CustomEnvironmentSettingName));
         }
         // Layer the user-provided values on top of the public-cloud defaults.
         // `name` defaults to 'Custom' (rather than the public cloud's name) so a
         // bare custom cloud is not misclassified as the public auth provider.
-        return createEnvironment({ ...publicCloudParameters, name: 'Custom', ...custom }, true);
+        const { activeDirectoryEndpointUrl, ...overrides } = custom;
+        const loginHost = tryGetHost(activeDirectoryEndpointUrl);
+        return createEnvironment({
+            ...publicCloudParameters,
+            name: 'Custom',
+            ...(loginHost ? { loginHosts: [loginHost] } : undefined),
+            ...overrides,
+        }, true);
     }
 
     return AzurePublicCloud;

@@ -9,9 +9,11 @@ import { bearerTokenAuthenticationPolicy, type ChallengeCallbacks } from '@azure
 import type { IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
 import type { AzureSubscriptionTarget } from '../auth/AzureSubscription';
 import type { EnvironmentLike } from '../auth/Environment';
+import { isTenantChallengeCredential } from '../auth/VsCodeExtensionCredential';
 import { AcceptLanguagePolicy } from './pipeline/AcceptLanguagePolicy';
 import { CorrelationIdPolicy } from './pipeline/CorrelationIdPolicy';
 import { DedupeRequestPolicy, type DedupeRequestIdentity } from './pipeline/DedupeRequestPolicy';
+import { TenantChallengePolicy } from './pipeline/TenantChallengePolicy';
 
 export type { ChallengeCallbacks } from '@azure/core-rest-pipeline';
 export type { DedupeRequestIdentity } from './pipeline/DedupeRequestPolicy';
@@ -28,7 +30,9 @@ export type { DedupeRequestIdentity } from './pipeline/DedupeRequestPolicy';
  *
  * CAE and MFA step-up challenges are handled by the SDK's built-in
  * `bearerTokenAuthenticationPolicy` together with the supplied
- * {@linkcode TokenCredential} (see `VsCodeExtensionCredential`).
+ * {@linkcode TokenCredential} (see `VsCodeExtensionCredential`). When the
+ * credential supports it, a wrong-tenant `401` is additionally repaired by
+ * {@linkcode TenantChallengePolicy}.
  *
  * @param credential - The token credential used to authenticate requests.
  * @param environment - The Azure environment (cloud) whose ARM endpoint is used.
@@ -48,7 +52,7 @@ export function createArmRestClient<TClient extends RestClient, TOptions extends
     const endpoint = environment.resourceManagerEndpointUrl;
     const requestIdentity = getDedupeIdentity(dedupeIdentity ?? credential, options);
     executor.output.debug(`[rest] create rest client ${getClient.name}`);
-    return getClient(credential, applyDefaults(ctx, executor, requestIdentity, { ...options, endpoint } as TOptions));
+    return getClient(credential, applyDefaults(ctx, executor, requestIdentity, { ...options, endpoint } as TOptions, getTenantChallengePolicy(executor, credential, environment)));
 }
 
 /**
@@ -86,7 +90,7 @@ export function createArmRestSubscriptionClient<TClient extends RestClient, TOpt
     const endpoint = subscription.environment.resourceManagerEndpointUrl;
     const requestIdentity = getDedupeIdentity(subscription, options);
     executor.output.debug(`[rest] create rest subscription client ${getClient.name} subscription=${subscriptionId}`);
-    return getClient(credential, subscriptionId, applyDefaults(ctx, executor, requestIdentity, { ...options, endpoint } as TOptions));
+    return getClient(credential, subscriptionId, applyDefaults(ctx, executor, requestIdentity, { ...options, endpoint } as TOptions, getTenantChallengePolicy(executor, credential, subscription.environment)));
 }
 
 /**
@@ -172,11 +176,29 @@ export function createDataPlaneRestClient(
     return client;
 }
 
+/**
+ * The wrong-tenant challenge policy for an ARM client, or `undefined` when the
+ * credential cannot re-acquire a token for another tenant.
+ */
+function getTenantChallengePolicy(executor: IActionExecutor, credential: TokenCredential, environment: EnvironmentLike): TenantChallengePolicy | undefined {
+    if (!isTenantChallengeCredential(credential)) {
+        return undefined;
+    }
+
+    return new TenantChallengePolicy({
+        credential,
+        environment,
+        scopes: [environment.resourceManagerDefaultScope],
+        output: executor.output,
+    });
+}
+
 function applyDefaults<TOptions extends RestClientOptions>(
     ctx: ICodeContext,
     executor: IActionExecutor,
     dedupeIdentity: DedupeRequestIdentity | object,
     options?: TOptions,
+    tenantChallengePolicy?: TenantChallengePolicy,
 ): TOptions {
     const extensionUserAgentPrefix = `${ctx.extensionContext.extension.id}/${(ctx.extensionContext.extension.packageJSON as { version: string }).version}`;
 
@@ -200,6 +222,9 @@ function applyDefaults<TOptions extends RestClientOptions>(
                 policy: new DedupeRequestPolicy(dedupeIdentity),
                 position: 'perCall',
             },
+            // Per-retry so it runs after the SDK's bearer policy, which would otherwise
+            // overwrite the retry's Authorization header with its cached token.
+            ...(tenantChallengePolicy ? [{ policy: tenantChallengePolicy, position: 'perRetry' as const }] : []),
         ],
     } satisfies RestClientOptions as TOptions;
 }

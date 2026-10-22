@@ -8,7 +8,7 @@ import type { IOutputChannel, IVsCode, SyncFactory } from '@microsoft/vscode-azu
 import type { ServiceIdentifier } from 'inversify';
 import type * as vscode from 'vscode';
 import { isAzureSubscriptionTarget, type AzureSubscriptionTarget } from './AzureSubscription';
-import { VsCodeExtensionCredential } from './VsCodeExtensionCredential';
+import { VsCodeExtensionCredential, type TenantDiscovery } from './VsCodeExtensionCredential';
 
 export type { TokenCredential };
 
@@ -109,11 +109,14 @@ function mergeSessionOptions(
  * @param output - (Optional) Output channel for auth lifecycle logging.
  * @param getDefaults - (Optional) Callback returning ambient options to merge
  * beneath each request's input, evaluated per credential.
+ * @param onTenantDiscovered - (Optional) Called when a request rejected as
+ * wrong-tenant succeeded against the tenant the service named.
  */
 export function createDefaultCredentialFactory(
     code: IVsCode,
     output?: IOutputChannel,
     getDefaults?: () => CredentialFactoryOptions | undefined,
+    onTenantDiscovered?: (discovery: TenantDiscovery) => void,
 ): ICredentialFactory {
     return (input) => {
         const options = toCredentialFactoryOptions(input);
@@ -123,6 +126,7 @@ export function createDefaultCredentialFactory(
             output,
             tenantId: options?.tenantId ?? defaults?.tenantId,
             sessionOptions: mergeSessionOptions(defaults?.sessionOptions, options?.sessionOptions),
+            onTenantDiscovered,
         });
     };
 }

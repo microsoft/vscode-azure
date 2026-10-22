@@ -107,6 +107,24 @@ describe('Environment (unit)', () => {
             expect(env.storageEndpoint('acct')).to.equal('https://acct.blob.core.windows.net');
         });
 
+        it('should take the login host of a custom cloud from activeDirectoryEndpointUrl', () => {
+            const mock = createMockVsCode();
+            mock.settings.set('microsoft-sovereign-cloud.environment', 'custom');
+            mock.settings.set('microsoft-sovereign-cloud.customEnvironment', {
+                activeDirectoryEndpointUrl: 'https://Login.MyCloud.example/',
+            });
+
+            expect(getConfiguredAzureEnv(mock.vscode).loginHosts).to.deep.equal(['login.mycloud.example']);
+        });
+
+        it('should keep the public login hosts for a custom cloud without activeDirectoryEndpointUrl', () => {
+            const mock = createMockVsCode();
+            mock.settings.set('microsoft-sovereign-cloud.environment', 'custom');
+            mock.settings.set('microsoft-sovereign-cloud.customEnvironment', { activeDirectoryEndpointUrl: 'not a url' });
+
+            expect(getConfiguredAzureEnv(mock.vscode).loginHosts).to.deep.equal(AzurePublicCloud.loginHosts);
+        });
+
         it('should throw when custom is selected but no customEnvironment is configured', () => {
             const mock = createMockVsCode();
             mock.settings.set('microsoft-sovereign-cloud.environment', 'custom');
