@@ -49,4 +49,13 @@ describe('BufferedPseudoterminal (unit)', () => {
         terminal.close();
         expect(onClose.mock.callCount()).to.equal(1);
     });
+
+    it('does not run onOpen when closed while buffered output is delivered', () => {
+        const onOpen = mock.fn();
+        const terminal = new BufferedPseudoterminal({ onOpen, onClose: mock.fn() });
+        terminal.write('output');
+        terminal.onDidWrite(() => { terminal.close(); });
+        terminal.open();
+        expect(onOpen.mock.callCount()).to.equal(0);
+    });
 });
