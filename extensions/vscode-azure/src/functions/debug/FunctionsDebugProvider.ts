@@ -6,6 +6,7 @@
 import { CancellationError, dirname, Disposable, ExternalError, IActionExecutor, IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
+import * as z from 'zod/mini';
 import { FunctionsHostFileTag } from '../functionsDetector';
 import { IWorkspaceIndexService } from '../../utils/workspaceIndex/WorkspaceIndexService';
 import { FunctionsProjectSelector } from '../FunctionsProjectSelector';
@@ -72,18 +73,19 @@ export class FunctionsDebugProvider implements vscode.DebugConfigurationProvider
     public async resolveDebugConfigurationWithSubstitutedVariables(folder: vscode.WorkspaceFolder | undefined, config: vscode.DebugConfiguration, token?: vscode.CancellationToken): Promise<vscode.DebugConfiguration | undefined> {
         return this.actions.callWithTelemetryAndErrorHandling('functions/debug', async () => {
             if (token?.isCancellationRequested) { throw new CancellationError(); }
-            const path: unknown = config.projectPath;
-            if (path !== undefined && (typeof path !== 'string' || !path.trim())) {
-                throw new ExternalError(this.code.l10n.t('projectPath must be a filesystem path.'));
-            }
+            const path = parseOption(ProjectPathSchema, config.projectPath, this.code.l10n.t('projectPath must be a filesystem path.'));
             const project = await this.projects.select(folder, path);
-            const env = stringRecord(config.env, this.code);
+            const env = parseOption(EnvSchema, config.env, this.code.l10n.t('env must contain string-valued environment variables.')) ?? {};
             if (Object.keys(env).some(isOwnedWorkerSetting)) {
                 throw new ExternalError(this.code.l10n.t('env cannot override the owned worker debugger or process settings. Use debugPort instead.'));
             }
-            const hostArgs = hostArguments(config.hostArgs, this.code);
-            const hostPort = portOption(config.hostPort, this.code);
-            const debugPort = portOption(config.debugPort, this.code);
+            const hostArgs = parseOption(HostArgsSchema, config.hostArgs, this.code.l10n.t('hostArgs must be an array of strings.')) ?? [];
+            if (hostArgs.some(arg => ProtectedHostOptions.has(arg.split('=', 1)[0].toLowerCase()))) {
+                throw new ExternalError(this.code.l10n.t('hostArgs cannot override the owned host transport, runtime, or debugger options. Use hostPort, debugPort, or skipBuild instead.'));
+            }
+            const portMessage = this.code.l10n.t('A configured port must be an integer from 1 to 65535.');
+            const hostPort = parseOption(PortSchema, config.hostPort, portMessage);
+            const debugPort = parseOption(PortSchema, config.debugPort, portMessage);
             const launch = await this.preparation.prepare(project, env, token);
             const executable = await this.preparation.executable(project, token);
             const skipBuild = config.skipBuild === true || !!config.preLaunchTask;
@@ -128,35 +130,22 @@ function attachConfiguration(config: vscode.DebugConfiguration, runtime: Functio
     }
 }
 
+const ProjectPathSchema = z.string().check(z.refine(path => path.trim().length > 0));
+const EnvSchema = z.record(z.string(), z.string());
+const HostArgsSchema = z.array(z.string());
+const PortSchema = z.int().check(z.gte(1), z.lte(65535));
+
 function isOwnedWorkerSetting(key: string): boolean {
     const normalized = key.replaceAll('__', ':').toLowerCase();
     return normalized === 'psworkercustompipename' || normalized === 'functions_worker_process_count'
         || /^languageworkers:.*:(?:arguments(?::.*)?|defaultexecutablepath)$/.test(normalized);
 }
 
-function hostArguments(value: unknown, code: IVsCode): string[] {
-    if (value === undefined) { return []; }
-    if (!Array.isArray(value) || !value.every((arg: unknown) => typeof arg === 'string')) {
-        throw new ExternalError(code.l10n.t('hostArgs must be an array of strings.'));
-    }
-    if (value.some(arg => ProtectedHostOptions.has(arg.split('=', 1)[0].toLowerCase()))) {
-        throw new ExternalError(code.l10n.t('hostArgs cannot override the owned host transport, runtime, or debugger options. Use hostPort, debugPort, or skipBuild instead.'));
-    }
-    return value;
-}
-
-function stringRecord(value: unknown, code: IVsCode): Readonly<Record<string, string>> {
-    if (value === undefined) { return {}; }
-    if (!value || typeof value !== 'object' || Array.isArray(value) || !Object.values(value).every(entry => typeof entry === 'string')) {
-        throw new ExternalError(code.l10n.t('env must contain string-valued environment variables.'));
-    }
-    return value as Readonly<Record<string, string>>;
-}
-
-function portOption(value: unknown, code: IVsCode): number | undefined {
+function parseOption<T extends z.ZodMiniType>(schema: T, value: unknown, message: string): z.output<T> | undefined {
     if (value === undefined) { return undefined; }
-    if (typeof value !== 'number' || !Number.isInteger(value) || value < 1 || value > 65535) {
-        throw new ExternalError(code.l10n.t('A configured port must be an integer from 1 to 65535.'));
+    const result = schema.safeParse(value);
+    if (!result.success) {
+        throw new ExternalError(message);
     }
-    return value;
+    return result.data;
 }

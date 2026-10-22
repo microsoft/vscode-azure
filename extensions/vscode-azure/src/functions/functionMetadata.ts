@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ExternalError, type IVsCode } from '@microsoft/vscode-azure-utils';
+import * as z from 'zod/mini';
 
 /** Binding metadata shared by local and remote functions; callers apply settings and service state overrides. */
 export interface FunctionMetadata {
@@ -12,30 +13,26 @@ export interface FunctionMetadata {
     readonly isDisabled: boolean;
 }
 
-interface FunctionTriggerBinding {
-    readonly type: string;
-    readonly authLevel?: unknown;
-}
+const FunctionConfigSchema = z.looseObject({
+    bindings: z.array(z.unknown()),
+    disabled: z.optional(z.unknown()),
+});
 
-/** Recognizes the bindings container without trusting its individual entries or optional properties. */
-export function hasFunctionBindings(config: unknown): config is { readonly bindings: readonly unknown[] } {
-    return !!config && typeof config === 'object'
-        && 'bindings' in config && Array.isArray(config.bindings);
-}
-
-/** Recognizes trigger bindings in untrusted function configuration. */
-export function isFunctionTriggerBinding(binding: unknown): binding is FunctionTriggerBinding {
-    return !!binding && typeof binding === 'object'
-        && 'type' in binding && typeof binding.type === 'string'
-        && binding.type.toLowerCase().endsWith('trigger');
-}
+const TriggerBindingSchema = z.looseObject({
+    type: z.string().check(z.refine(type => type.toLowerCase().endsWith('trigger'))),
+    authLevel: z.optional(z.unknown()),
+});
 
 /** Requires exactly one trigger and normalizes HTTP authentication and the metadata disable flag. */
 export function parseFunctionMetadata(code: IVsCode, config: unknown): FunctionMetadata {
-    if (!hasFunctionBindings(config)) {
+    const parsed = FunctionConfigSchema.safeParse(config);
+    if (!parsed.success) {
         throw new ExternalError(code.l10n.t('Function metadata must include a bindings array.'));
     }
-    const triggers = config.bindings.filter(isFunctionTriggerBinding);
+    const triggers = parsed.data.bindings.flatMap(binding => {
+        const trigger = TriggerBindingSchema.safeParse(binding);
+        return trigger.success ? [trigger.data] : [];
+    });
     const trigger = triggers.at(0);
     if (triggers.length !== 1 || !trigger) {
         throw new ExternalError(code.l10n.t('Function metadata must include exactly one trigger binding.'));
@@ -44,6 +41,6 @@ export function parseFunctionMetadata(code: IVsCode, config: unknown): FunctionM
         triggerKind: trigger.type,
         authLevel: trigger.type.toLowerCase() === 'httptrigger' && typeof trigger.authLevel === 'string'
             ? trigger.authLevel.toLowerCase() : undefined,
-        isDisabled: 'disabled' in config && config.disabled === true,
+        isDisabled: parsed.data.disabled === true,
     };
 }
