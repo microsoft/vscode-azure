@@ -8,7 +8,7 @@ import { inject, injectable } from 'inversify';
 import { randomUUID } from 'node:crypto';
 import type * as vscode from 'vscode';
 import { LocalFunctionsNetwork, type FunctionsPortReservation } from './LocalFunctionsNetwork';
-import { IOwnedFunctionsHostSessionFactory, type OwnedFunctionsHostSession } from './OwnedFunctionsHostSession';
+import { IOwnedFunctionsHostSessionProvider, type OwnedFunctionsHostSession } from './OwnedFunctionsHostSession';
 
 /** Inputs supplied after project validation and any custom or Go debug build. */
 export interface FunctionsHostStart {
@@ -41,7 +41,7 @@ export class LocalFunctionsHostProcess implements Disposable {
 
     public constructor(
         @inject(IVsCode) private readonly code: IVsCode,
-        @inject(IOwnedFunctionsHostSessionFactory) private readonly createSession: IOwnedFunctionsHostSessionFactory,
+        @inject(IOwnedFunctionsHostSessionProvider) private readonly createSession: IOwnedFunctionsHostSessionProvider,
         @inject(LocalFunctionsNetwork) private readonly network: LocalFunctionsNetwork,
         @inject(IOutputChannel) private readonly output: IOutputChannel,
     ) { }
@@ -76,7 +76,8 @@ export class LocalFunctionsHostProcess implements Disposable {
         }
         const id = randomUUID();
         const pipe = `azure-functions-${id}`;
-        const session = this.createSession({
+        const session = this.createSession();
+        session.initialize({
             id, request, hostPort: hostPort.port, debugPort: debugPort.port, onEnded: () => { this.hosts.delete(id); },
         });
         this.hosts.set(id, session);

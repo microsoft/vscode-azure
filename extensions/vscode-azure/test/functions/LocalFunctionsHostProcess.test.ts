@@ -9,7 +9,7 @@ import { addWorkspaceFolder, createMockProcessExecutor, createMockSpawn, createM
 import { mock } from 'node:test';
 import { LocalFunctionsHostProcess } from '../../src/functions/host/LocalFunctionsHostProcess';
 import { LocalFunctionsHostTracker } from '../../src/functions/host/LocalFunctionsHostTracker';
-import { createOwnedFunctionsHostSessionFactory } from '../../src/functions/host/OwnedFunctionsHostSession';
+import { OwnedFunctionsHostSession } from '../../src/functions/host/OwnedFunctionsHostSession';
 import { LocalFunctionsNetwork } from '../../src/functions/host/LocalFunctionsNetwork';
 import { workerProcessId } from '../../src/functions/host/workerProcessId';
 import { BufferedPseudoterminal } from '../../src/utils/BufferedPseudoterminal';
@@ -44,7 +44,7 @@ describe('Local Functions host ownership (unit)', () => {
             this.onDidClose(finished);
             openTerminal.call(this);
         });
-        const owner = new LocalFunctionsHostProcess(m.vscode, createOwnedFunctionsHostSessionFactory(m.vscode, processes, () => client, tracker, network, output), network, output);
+        const owner = new LocalFunctionsHostProcess(m.vscode, () => new OwnedFunctionsHostSession(m.vscode, processes, () => client, tracker, network, output), network, output);
         owners.push(owner);
         const request = { project, executable: 'func', runtime: 'node', skipBuild: true, hostArgs: [], prepare: () => Promise.resolve({}) };
         return { m, owner, request, spawn, client, tracker, network, reserve, terminateTree, output, written, finished };

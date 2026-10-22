@@ -3,14 +3,14 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { IFunctionsHostClientProvider } from '@microsoft/vscode-azure-azutils';
-import { CancellationError, delay, type Disposable, ExternalError, type IOutputChannel, type IProcessExecutor, type IVsCode } from '@microsoft/vscode-azure-utils';
-import type { ServiceIdentifier } from 'inversify';
+import { IFunctionsHostClientProvider } from '@microsoft/vscode-azure-azutils';
+import { CancellationError, delay, type Disposable, ExternalError, IOutputChannel, IProcessExecutor, IVsCode } from '@microsoft/vscode-azure-utils';
+import { inject, injectable, type ServiceIdentifier } from 'inversify';
 import type * as vscode from 'vscode';
 import { BufferedPseudoterminal } from '../../utils/BufferedPseudoterminal';
 import type { FunctionsHostStart } from './LocalFunctionsHostProcess';
-import type { LocalFunctionsHostTracker } from './LocalFunctionsHostTracker';
-import type { LocalFunctionsNetwork } from './LocalFunctionsNetwork';
+import { LocalFunctionsHostTracker } from './LocalFunctionsHostTracker';
+import { LocalFunctionsNetwork } from './LocalFunctionsNetwork';
 import { workerProcessId } from './workerProcessId';
 
 /** Identity and launch inputs for one owned host. */
@@ -23,21 +23,21 @@ export interface OwnedFunctionsHostSessionInit {
     readonly onEnded: () => void;
 }
 
-/** Identifier for the {@linkcode OwnedFunctionsHostSession} factory. */
-export const IOwnedFunctionsHostSessionFactory: ServiceIdentifier<IOwnedFunctionsHostSessionFactory> = Symbol.for('IOwnedFunctionsHostSessionFactory');
+/** Identifier for the provider of fresh, uninitialized {@linkcode OwnedFunctionsHostSession} instances. */
+export const IOwnedFunctionsHostSessionProvider: ServiceIdentifier<IOwnedFunctionsHostSessionProvider> = Symbol.for('IOwnedFunctionsHostSessionProvider');
 
-/** Creates a session for one launch; the services it runs on are supplied by the container. */
-export type IOwnedFunctionsHostSessionFactory = (init: OwnedFunctionsHostSessionInit) => OwnedFunctionsHostSession;
+/** Returns a new session on each call; the caller must {@linkcode OwnedFunctionsHostSession.initialize initialize} it. */
+export type IOwnedFunctionsHostSessionProvider = () => OwnedFunctionsHostSession;
 
 /**
  * One launch of an owned Functions host: its task terminal, subprocess, readiness
  * channels and finalization. A single abort signal ends everything the session owns, and
  * {@linkcode stop} is the only way to end it deliberately.
  */
+@injectable()
 export class OwnedFunctionsHostSession {
-    public readonly id: string;
-    public readonly project: vscode.Uri;
-    public readonly terminal: BufferedPseudoterminal;
+    private launch!: OwnedFunctionsHostSessionInit;
+    private pseudoterminal!: BufferedPseudoterminal;
     private readonly abort = new AbortController();
     private readonly subscriptions: Disposable[] = [];
     private env: Readonly<Record<string, string>> = {};
@@ -51,17 +51,18 @@ export class OwnedFunctionsHostSession {
     private ended = false;
 
     public constructor(
-        private readonly code: IVsCode,
-        private readonly processes: IProcessExecutor,
-        private readonly createClient: IFunctionsHostClientProvider,
-        private readonly tracker: LocalFunctionsHostTracker,
-        private readonly network: LocalFunctionsNetwork,
-        private readonly output: IOutputChannel,
-        private readonly init: OwnedFunctionsHostSessionInit,
-    ) {
-        this.id = init.id;
-        this.project = init.request.project;
-        this.terminal = new BufferedPseudoterminal({
+        @inject(IVsCode) private readonly code: IVsCode,
+        @inject(IProcessExecutor) private readonly processes: IProcessExecutor,
+        @inject(IFunctionsHostClientProvider) private readonly createClient: IFunctionsHostClientProvider,
+        @inject(LocalFunctionsHostTracker) private readonly tracker: LocalFunctionsHostTracker,
+        @inject(LocalFunctionsNetwork) private readonly network: LocalFunctionsNetwork,
+        @inject(IOutputChannel) private readonly output: IOutputChannel,
+    ) { }
+
+    /** Supplies the launch inputs; must be called exactly once, before any other member. */
+    public initialize(init: OwnedFunctionsHostSessionInit): void {
+        this.launch = init;
+        this.pseudoterminal = new BufferedPseudoterminal({
             onOpen: () => {
                 if (!this.abort.signal.aborted) {
                     this.process = this.run();
@@ -69,6 +70,18 @@ export class OwnedFunctionsHostSession {
             },
             onClose: () => { this.abort.abort(); },
         });
+    }
+
+    public get id(): string {
+        return this.launch.id;
+    }
+
+    public get project(): vscode.Uri {
+        return this.launch.request.project;
+    }
+
+    public get terminal(): BufferedPseudoterminal {
+        return this.pseudoterminal;
     }
 
     /** The .NET isolated worker process id, once the host has reported it. */
@@ -160,20 +173,20 @@ export class OwnedFunctionsHostSession {
         if (!this.process) {
             return false;
         }
-        switch (this.init.request.runtime) {
+        switch (this.launch.request.runtime) {
             case 'dotnet-isolated':
                 return this.workerPid !== undefined;
             case 'powershell':
                 return this.registration !== undefined;
             case 'native':
-                return this.debuggerListening && await this.network.listening(this.init.debugPort);
+                return this.debuggerListening && await this.network.listening(this.launch.debugPort);
             default:
-                return this.network.listening(this.init.debugPort);
+                return this.network.listening(this.launch.debugPort);
         }
     }
 
     private async run(): Promise<void> {
-        const { request, hostPort } = this.init;
+        const { request, hostPort } = this.launch;
         const args = ['run', request.project.fsPath, ...request.hostArgs, '--port', String(hostPort)];
         if (request.skipBuild) {
             args.push('--no-build');
@@ -220,7 +233,7 @@ export class OwnedFunctionsHostSession {
     }
 
     private async consumeOutput(stream: AsyncIterable<string>): Promise<void> {
-        const { runtime } = this.init.request;
+        const { runtime } = this.launch.request;
         let pending = '';
         for await (const text of stream) {
             this.terminal.write(text);
@@ -234,7 +247,7 @@ export class OwnedFunctionsHostSession {
                     this.workerPid ??= workerProcessId(line);
                 } else {
                     const listener = /(?:^|\s)API server listening at: 127\.0\.0\.1:(\d+)\s*$/.exec(line);
-                    if (listener && Number(listener[1]) === this.init.debugPort) {
+                    if (listener && Number(listener[1]) === this.launch.debugPort) {
                         this.debuggerListening = true;
                     }
                 }
@@ -243,7 +256,7 @@ export class OwnedFunctionsHostSession {
     }
 
     private async waitForHttp(): Promise<void> {
-        const client = this.createClient({ port: this.init.hostPort });
+        const client = this.createClient({ port: this.launch.hostPort });
         for (;;) {
             this.checkRunning();
             if (!this.process) {
@@ -254,7 +267,7 @@ export class OwnedFunctionsHostSession {
                 const status = await client.getStatus({ abortSignal: this.abort.signal, requestOptions: { timeout: 1000 } });
                 this.checkRunning();
                 if (status.state.toLowerCase() === 'running') {
-                    this.registration = this.tracker.register(this.project, this.init.hostPort);
+                    this.registration = this.tracker.register(this.project, this.launch.hostPort);
                     return;
                 }
                 if (status.errors?.length) {
@@ -283,7 +296,7 @@ export class OwnedFunctionsHostSession {
         this.abort.abort();
         this.registration?.dispose();
         this.subscriptions.splice(0).forEach(disposable => { disposable.dispose(); });
-        this.init.onEnded();
+        this.launch.onEnded();
         if (this.error || this.stopError) {
             this.terminal.finish(1);
         } else {
@@ -291,12 +304,4 @@ export class OwnedFunctionsHostSession {
             this.terminal.close();
         }
     }
-}
-
-/** Builds an {@linkcode IOwnedFunctionsHostSessionFactory} over the services the container resolves. */
-export function createOwnedFunctionsHostSessionFactory(
-    code: IVsCode, processes: IProcessExecutor, client: IFunctionsHostClientProvider,
-    tracker: LocalFunctionsHostTracker, network: LocalFunctionsNetwork, output: IOutputChannel,
-): IOwnedFunctionsHostSessionFactory {
-    return init => new OwnedFunctionsHostSession(code, processes, client, tracker, network, output, init);
 }

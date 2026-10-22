@@ -9,7 +9,7 @@ import { mock } from 'node:test';
 import type * as vscode from 'vscode';
 import { FunctionsDebugPreparation } from '../../src/functions/debug/FunctionsDebugPreparation';
 import { FunctionsDebugProvider } from '../../src/functions/debug/FunctionsDebugProvider';
-import { createOwnedFunctionsHostSessionFactory } from '../../src/functions/host/OwnedFunctionsHostSession';
+import { OwnedFunctionsHostSession } from '../../src/functions/host/OwnedFunctionsHostSession';
 import { LocalFunctionsHostProcess } from '../../src/functions/host/LocalFunctionsHostProcess';
 import { LocalFunctionsNetwork } from '../../src/functions/host/LocalFunctionsNetwork';
 import type { IToolService } from '../../src/tools/ToolService';
@@ -74,7 +74,7 @@ export function createFunctionsDebugFixture(runtime = 'node', processOptions?: P
     });
     const tools = { acquire: mock.fn<IToolService['acquire']>(() => Promise.resolve({ executablePath: 'func' })), getResolvedPath: mock.fn(() => 'func') };
     const preparation = new FunctionsDebugPreparation(s.code, processes, tools, s.settings, projects, network);
-    const owners = new LocalFunctionsHostProcess(s.code, createOwnedFunctionsHostSessionFactory(s.code, processes, s.createHost, s.hosts, network, output), network, output);
+    const owners = new LocalFunctionsHostProcess(s.code, () => new OwnedFunctionsHostSession(s.code, processes, s.createHost, s.hosts, network, output), network, output);
     const provider = new FunctionsDebugProvider(s.code, actions, s.index, projects, preparation, owners);
     return {
         ...s, projects, network, processes, spawn, tools, preparation, owners, debugProvider: provider,
