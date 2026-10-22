@@ -176,13 +176,13 @@ Target files:   extensions/vscode-azure/src/commands/webApp/WebAppLifecycle.ts (
                 extensions/vscode-azure/src/commands/functions/{ExecuteFunction,CopyFunctionUrl,SetFunctionState,
                   DeleteFunction,StreamFunctionLogs,RevealFunctionAppIdentity}.ts (bool-prefix enable/disable aliases)
                 extensions/vscode-azure/src/commands/tree/RevealResource.ts (new shared, id vscode-azure/resources/reveal)
-                extensions/vscode-azure/src/utils/logStream/LogStreamTerminal.ts (shared ACA/Functions pseudoterminal)
+                extensions/vscode-azure/src/utils/BufferedPseudoterminal.ts (shared ACA/Functions pseudoterminal)
                 extensions/vscode-azure/src/tree/resources/webApp/FunctionAppLogStream.ts (query-session owner)
 Precedent:      DeleteStaticWebAppEnvironment (virtual-node command + activity), BrowseWebsite (shared node capability)
 Sweep:          reused DeleteAzureResource, BrowseWebsite, ViewProperties, EditSettings + WebAppSettingsAdapter
                 (enable/disable writes AzureWebJobs.<name>.Disabled through it), OpenInPortal, ExternalError (#350),
                 IActionExecutor, ResourceSelector, AzureNodeId.forRelatedResource, abortable delay, CaselessMap.
-                Reused ACA's pseudoterminal via LogStreamTerminal and related-resource navigation via RevealResource;
+                Reused ACA's pseudoterminal via BufferedPseudoterminal and related-resource navigation via RevealResource;
                 ACA consumes both shared primitives. Reused mock entity factories, MockHttpClient, ManualTimers,
                 respondToPrompts, real listing/activity services. Promoted ACA's terminal fixture to MockTerminal in
                 the utils testing barrel. Searched live generic-resource reads: added ResourceClient.resources.getById
@@ -203,7 +203,7 @@ Tree contract:  per Slice 1; menu entries in view/item/context with word-boundar
 - [x] Enable / disable a function through the shared app-settings adapter.
   <- FUNC-043, FUNC-044
 - [x] Delete a remote function, reported in the activity tree. <- FUNC-045
-- [x] Stream logs: shared `LogStreamTerminal` polling `LogsQueryClient` for
+- [x] Stream logs: shared `BufferedPseudoterminal` polling `LogsQueryClient` for
   the app's Application Insights resource (resolved from
   `APPLICATIONINSIGHTS_CONNECTION_STRING`); closing the terminal stops polling.
   Container Apps also uses the shared terminal. <- FUNC-065
@@ -662,7 +662,7 @@ registration in `commands/registerCommands.ts`, and tree composition in
 | FUNC-062 | Restart app | Migrate | Landed as shared Web App action | `commands/webApp/WebAppLifecycle.ts`; registration prefix argument `restart` |
 | FUNC-063 | Browse website | Reuse | Wired | `commands/tree/BrowseWebsite.ts`; enriched URL drives `resourceContextValue` |
 | FUNC-064 | View properties | Reuse | Wired | `commands/tree/ViewProperties.ts`; `resourceContextValue` |
-| FUNC-065 | Stream logs | Adapt | Landed as cancellable polling terminal | `commands/functions/StreamFunctionLogs.ts`, `tree/resources/webApp/FunctionAppLogStream.ts`; shared `utils/logStream/LogStreamTerminal.ts` |
+| FUNC-065 | Stream logs | Adapt | Landed as cancellable polling terminal | `commands/functions/StreamFunctionLogs.ts`, `tree/resources/webApp/FunctionAppLogStream.ts`; shared `utils/BufferedPseudoterminal.ts` |
 | FUNC-072 | Add app setting | Reuse | Wired through JSONC editor | `settings/adapters/WebAppSettingsAdapter.ts`; shared `commands/settings/EditSettings.ts` |
 | FUNC-075 | Edit app setting | Reuse | Wired through JSONC editor | `settings/adapters/WebAppSettingsAdapter.ts`; shared `SettingsFileSystemProvider` |
 | FUNC-076 | Rename app setting | Reuse | Wired through JSONC editor | `settings/adapters/WebAppSettingsAdapter.ts`; shared JSONC document read-modify-write |

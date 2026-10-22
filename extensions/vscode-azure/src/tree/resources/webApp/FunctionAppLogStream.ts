@@ -11,7 +11,7 @@ import { CancellationError, CaselessMap, delay, ExternalError, IActionExecutor, 
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 import { WebAppSettingsAdapter } from '../../../settings/adapters/WebAppSettingsAdapter';
-import { LogStreamTerminal } from '../../../utils/logStream/LogStreamTerminal';
+import { BufferedPseudoterminal } from '../../../utils/BufferedPseudoterminal';
 import type { FunctionApp } from './FunctionApp';
 
 interface Stream {
@@ -74,8 +74,8 @@ export class FunctionAppLogStream implements Disposable {
             const cursor = Date.now() - LookbackMs;
             const first = this.records(await client.queryResource(resource.id, this.query(app.name, cursor), { abortSignal: signal, timespan: 'P2D' }));
             signal.throwIfAborted();
-            const pty = new LogStreamTerminal(() => {
-                this.stop(AzureNodeId.from(app).toString(), stream, false);
+            const pty = new BufferedPseudoterminal({
+                onClose: () => { this.stop(AzureNodeId.from(app).toString(), stream, false); },
             });
             stream.terminal = this.code.window.createTerminal({ name: this.code.l10n.t('Logs: {0}', app.name), pty });
             pty.write(this.code.l10n.t('Application Insights logs. Events can appear after an ingestion delay.\n'));
@@ -186,7 +186,7 @@ export class FunctionAppLogStream implements Disposable {
         resourceId: string,
         client: ILogsQueryClient,
         stream: Stream,
-        pty: LogStreamTerminal,
+        pty: BufferedPseudoterminal,
         cursor: number,
         records: LogRecord[],
     ): Promise<void> {

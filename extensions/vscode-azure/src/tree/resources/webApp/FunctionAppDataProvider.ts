@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { getNodeType, getResourceGroupName, IWebAppClientProvider, type ConcreteAzureNode, type FunctionEnvelope } from '@microsoft/vscode-azure-azutils';
-import { IActionExecutor, IVsCode, stringifyError, type ChildResult, type DataProvider, type Page } from '@microsoft/vscode-azure-utils';
+import { IActionExecutor, IVsCode, stringifyError, mapPages, type ChildResult, type DataProvider, type Page } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { parseFunctionMetadata } from '../../../functions/functionMetadata';
 import { WebAppSettingsAdapter } from '../../../settings/adapters/WebAppSettingsAdapter';
@@ -63,7 +63,7 @@ export class FunctionAppDataProvider implements DataProvider<ConcreteAzureNode> 
             resource.site = undefined;
             resource.siteError = stringifyError(error);
             setWebsiteUrl(resource, undefined);
-            this.executor.output.error(this.code.l10n.t('[data] Could not read Function App "{0}".', resource.name));
+            this.executor.output.error(this.code.l10n.t('[data] Could not read Function App "{0}": {1}', resource.name, resource.siteError));
             return true;
         }
     }
@@ -93,17 +93,14 @@ export class FunctionAppDataProvider implements DataProvider<ConcreteAzureNode> 
     private async *listFunctions(group: FunctionAppFunctions): AsyncIterable<Page<ConcreteAzureNode>> {
         const app = group.azureResource;
         this.executor.setTelProp('nodeType', getNodeType(group));
-        let index = 0;
         try {
             const client = this.createClient(app.subscription);
-            for await (const page of client.webApps.listFunctions(getResourceGroupName(app.id), app.name)) {
-                yield {
-                    items: page.items.map(data => this.toFunction(app, data, index++)),
-                    hasMore: page.hasMore,
-                };
-            }
+            yield* mapPages(
+                client.webApps.listFunctions(getResourceGroupName(app.id), app.name),
+                (data, index) => this.toFunction(app, data, index),
+            );
         } catch (error: unknown) {
-            this.executor.output.error(this.code.l10n.t('[data] Could not list functions for Function App "{0}".', app.name));
+            this.executor.output.error(this.code.l10n.t('[data] Could not list functions for Function App "{0}": {1}', app.name, stringifyError(error)));
             yield {
                 items: [this.invalidNode(app, 'functions', 'functions/invalid', stringifyError(error))],
                 hasMore: false,
@@ -128,7 +125,7 @@ export class FunctionAppDataProvider implements DataProvider<ConcreteAzureNode> 
                 isDisabled: data.isDisabled ?? metadata.isDisabled,
             };
         } catch (error: unknown) {
-            this.executor.output.error(this.code.l10n.t('[data] Could not read function metadata for Function App "{0}".', app.name));
+            this.executor.output.error(this.code.l10n.t('[data] Could not read function metadata for Function App "{0}": {1}', app.name, stringifyError(error)));
             return this.invalidNode(app, 'function', `functions/invalid/${index}`, stringifyError(error), functionName);
         }
     }

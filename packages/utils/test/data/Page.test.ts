@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { collectPages } from '../../src/index';
-import { filterPages, flattenPages, isAsyncIterable, type Page } from '../../src/data/Page';
+import { filterPages, flattenPages, isAsyncIterable, mapPages, type Page } from '../../src/data/Page';
 
 describe('Page (unit)', () => {
     describe('isAsyncIterable', () => {
@@ -58,6 +58,44 @@ describe('Page (unit)', () => {
             }
 
             expect(items).to.deep.equal([]);
+        });
+    });
+
+    describe('mapPages', () => {
+        function pages(): AsyncIterable<Page<string>> {
+            return toAsync<Page<string>>([
+                { items: ['a', 'b'], hasMore: true },
+                { items: [], hasMore: true },
+                { items: ['c'], hasMore: false },
+            ]);
+        }
+
+        it('should map items while preserving page boundaries and hasMore', async () => {
+            const result = await collectPages(mapPages(pages(), item => item.toUpperCase()));
+
+            expect(result).to.deep.equal([
+                { items: ['A', 'B'], hasMore: true },
+                { items: [], hasMore: true },
+                { items: ['C'], hasMore: false },
+            ]);
+        });
+
+        it('should keep the index counting across pages', async () => {
+            const result = await collectPages(mapPages(pages(), (item, index) => `${item}${index}`));
+
+            expect(result.flatMap(page => page.items)).to.deep.equal(['a0', 'b1', 'c2']);
+        });
+
+        it('should surface a mapper failure to the reader, not at call time', async () => {
+            const mapped = mapPages(pages(), item => {
+                if (item === 'c') { throw new Error('bad item'); }
+                return item;
+            });
+
+            let failure: unknown;
+            try { await collectPages(mapped); } catch (error) { failure = error; }
+
+            expect(failure).to.be.instanceOf(Error).with.property('message', 'bad item');
         });
     });
 

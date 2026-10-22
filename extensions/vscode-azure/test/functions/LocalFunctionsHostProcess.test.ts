@@ -7,11 +7,11 @@ import { createMockFunctionsHostClient } from '@microsoft/vscode-azure-azutils/t
 import { CancellationError } from '@microsoft/vscode-azure-utils';
 import { addWorkspaceFolder, createMockProcessExecutor, createMockSpawn, createMockVsCode, getMockTaskExecution, MockCancellationToken, MockOutputChannel, waitFor } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
-import { FunctionsHostTerminal } from '../../src/functions/host/FunctionsHostTerminal';
 import { LocalFunctionsHostProcess } from '../../src/functions/host/LocalFunctionsHostProcess';
 import { LocalFunctionsHostTracker } from '../../src/functions/host/LocalFunctionsHostTracker';
 import { LocalFunctionsNetwork } from '../../src/functions/host/LocalFunctionsNetwork';
 import { workerProcessId } from '../../src/functions/host/workerProcessId';
+import { BufferedPseudoterminal } from '../../src/utils/BufferedPseudoterminal';
 import { createMockFunctionsNetwork } from './mockFunctionsDebug';
 
 function dotnetToolingLog(message: string): string {
@@ -37,8 +37,8 @@ describe('Local Functions host ownership (unit)', () => {
         const written = mock.fn<(text: string) => void>();
         const finished = mock.fn<(code: number) => void>();
         // eslint-disable-next-line @typescript-eslint/unbound-method -- The wrapper supplies the terminal receiver with call().
-        const openTerminal = FunctionsHostTerminal.prototype.open;
-        mock.method(FunctionsHostTerminal.prototype, 'open', function (this: FunctionsHostTerminal) {
+        const openTerminal = BufferedPseudoterminal.prototype.open;
+        mock.method(BufferedPseudoterminal.prototype, 'open', function (this: BufferedPseudoterminal) {
             this.onDidWrite(written);
             this.onDidClose(finished);
             openTerminal.call(this);
@@ -365,11 +365,11 @@ describe('Local Functions host ownership (unit)', () => {
     });
 });
 
-describe('Functions host terminal (unit)', () => {
-    it('delivers buffered failure details before ending an unopened task without starting its process', () => {
-        const start = mock.fn();
-        const cancel = mock.fn();
-        const terminal = new FunctionsHostTerminal(start, cancel);
+describe('BufferedPseudoterminal (unit)', () => {
+    it('delivers buffered failure details before ending an unopened task without opening its process', () => {
+        const onOpen = mock.fn();
+        const onClose = mock.fn();
+        const terminal = new BufferedPseudoterminal({ onOpen, onClose });
         const written = mock.fn<(text: string) => void>();
         const finished = mock.fn<(code: number) => void>();
         terminal.onDidWrite(written);
@@ -382,21 +382,30 @@ describe('Functions host terminal (unit)', () => {
         terminal.finish(1);
         expect(written.mock.calls.map(call => call.arguments[0])).to.deep.equal(['Startup failed.\r\n']);
         expect(finished.mock.calls.map(call => call.arguments[0])).to.deep.equal([1]);
-        expect(start.mock.callCount()).to.equal(0);
-        expect(cancel.mock.callCount()).to.equal(1);
+        expect(onOpen.mock.callCount()).to.equal(0);
+        expect(onClose.mock.callCount()).to.equal(1);
     });
 
-    it('starts at most once and never starts after close', () => {
-        const start = mock.fn();
-        const closed = new FunctionsHostTerminal(start, mock.fn());
+    it('opens at most once and never opens after close', () => {
+        const onOpen = mock.fn();
+        const closed = new BufferedPseudoterminal({ onOpen, onClose: mock.fn() });
         closed.close();
         closed.open();
-        expect(start.mock.callCount()).to.equal(0);
-        const terminal = new FunctionsHostTerminal(start, mock.fn());
+        expect(onOpen.mock.callCount()).to.equal(0);
+        const terminal = new BufferedPseudoterminal({ onOpen, onClose: mock.fn() });
         terminal.open();
         terminal.open();
-        expect(start.mock.callCount()).to.equal(1);
+        expect(onOpen.mock.callCount()).to.equal(1);
         terminal.close();
+    });
+
+    it('runs onClose once however the terminal ends', () => {
+        const onClose = mock.fn();
+        const terminal = new BufferedPseudoterminal({ onClose });
+        terminal.open();
+        terminal.finish(0);
+        terminal.close();
+        expect(onClose.mock.callCount()).to.equal(1);
     });
 });
 

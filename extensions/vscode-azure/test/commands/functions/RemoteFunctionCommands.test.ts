@@ -8,6 +8,7 @@ import { createMockFunctionsHostClient, createMockWebAppClient, makeFunctionEnve
 import { CancellationError } from '@microsoft/vscode-azure-utils';
 import { mock } from 'node:test';
 import { CopyFunctionUrl } from '../../../src/commands/functions/CopyFunctionUrl';
+import { FunctionUrlResolver } from '../../../src/functions/FunctionUrlResolver';
 import { DeleteFunction } from '../../../src/commands/functions/DeleteFunction';
 import { ExecuteFunction } from '../../../src/commands/functions/ExecuteFunction';
 import { RevealFunctionAppIdentity } from '../../../src/commands/functions/RevealFunctionAppIdentity';
@@ -45,6 +46,10 @@ function setup(authLevel: string | undefined = 'function', isTrusted = true) {
     return { ...selection, fn, app, client, code, settings, local, key: AzureNodeId.from(fn).toString(), appKey: AzureNodeId.from(app).toString() };
 }
 
+function copyCommand(s: ReturnType<typeof setup>): CopyFunctionUrl {
+    return new CopyFunctionUrl(s.code, s.selector, new FunctionUrlResolver(s.code, () => s.client, s.local), s.local);
+}
+
 describe('Remote function commands (unit)', () => {
     afterEach(() => {
         localFixtures.forEach(fixture => { fixture.dispose(); });
@@ -55,7 +60,7 @@ describe('Remote function commands (unit)', () => {
     it('copies an anonymous URL without reading keys or retaining a stale code parameter', async () => {
         const s = setup('anonymous');
         const write = s.codeContext.mock.env.clipboard.writeText;
-        await new CopyFunctionUrl(s.code, s.selector, () => s.client, s.local).execute(s.key);
+        await copyCommand(s).execute(s.key);
         expect(write.mock.calls[0].arguments[0]).to.equal('https://my-functions.azurewebsites.net/api/HttpTrigger?custom=value');
         expect(s.client.webApps.listFunctionKeys.mock.callCount()).to.equal(0);
         expect(s.client.webApps.listHostKeys.mock.callCount()).to.equal(0);
@@ -67,7 +72,7 @@ describe('Remote function commands (unit)', () => {
         const write = s.codeContext.mock.env.clipboard.writeText;
         const prompts = respondToPrompts(s.codeContext.mock, [{ input: 'remote input' }]);
         await new ExecuteFunction(s.ctx, s.selector, () => s.client, () => host, s.local).execute(s.key);
-        await new CopyFunctionUrl(s.code, s.selector, () => s.client, s.local).execute(s.key);
+        await copyCommand(s).execute(s.key);
         const state = new SetFunctionState(s.code, s.selector, s.settings, s.cache, s.local);
         await state.execute(false, s.key);
         expect(s.client.settings[`AzureWebJobs.${s.fn.functionName}.Disabled`]).to.equal('false');
@@ -82,7 +87,7 @@ describe('Remote function commands (unit)', () => {
         const s = setup();
         const write = s.codeContext.mock.env.clipboard.writeText;
         s.client.webApps.listFunctionKeys.mock.mockImplementation(() => Promise.resolve({ properties: { default: 'key+/?=', other: 'other' } }));
-        await new CopyFunctionUrl(s.code, s.selector, () => s.client, s.local).execute(s.key);
+        await copyCommand(s).execute(s.key);
         expect(new URL(write.mock.calls[0].arguments[0]).searchParams.get('code')).to.equal('key+/?=');
         expect(s.client.webApps.listHostKeys.mock.callCount()).to.equal(0);
         expect(JSON.stringify(s.codeContext.mock.window.showInformationMessage.mock.calls)).to.not.include('key+/?=');
@@ -94,21 +99,21 @@ describe('Remote function commands (unit)', () => {
         s.client.webApps.listHostKeys.mock.mockImplementation(() => Promise.resolve({
             masterKey: 'master', functionKeys: { default: 'host-function-key' },
         }));
-        await new CopyFunctionUrl(s.code, s.selector, () => s.client, s.local).execute(s.key);
+        await copyCommand(s).execute(s.key);
         expect(new URL(write.mock.calls[0].arguments[0]).searchParams.get('code')).to.equal('host-function-key');
     });
 
     it('reports missing function keys without substituting the master key or changing the clipboard', async () => {
         const s = setup();
         const write = s.codeContext.mock.env.clipboard.writeText;
-        await expect(new CopyFunctionUrl(s.code, s.selector, () => s.client, s.local).execute(s.key)).to.be.rejectedWith(/No key/);
+        await expect(copyCommand(s).execute(s.key)).to.be.rejectedWith(/No key/);
         expect(write.mock.callCount()).to.equal(0);
     });
 
     it('requires confirmation before reading or copying an admin key', async () => {
         const s = setup('admin');
         const write = s.codeContext.mock.env.clipboard.writeText;
-        const command = new CopyFunctionUrl(s.code, s.selector, () => s.client, s.local);
+        const command = copyCommand(s);
         await expect(command.execute(s.key)).to.be.rejectedWith(CancellationError);
         expect(s.client.webApps.listHostKeys.mock.callCount()).to.equal(0);
         expect(write.mock.callCount()).to.equal(0);
@@ -123,7 +128,7 @@ describe('Remote function commands (unit)', () => {
             invokeUrlTemplate: 'https://my-functions.azurewebsites.net/api/HttpTrigger',
             config: { bindings: [{ type: 'httpTrigger', authLevel: 'ADMIN' }] },
         })));
-        await expect(new CopyFunctionUrl(s.code, s.selector, () => s.client, s.local).execute(s.key)).to.be.rejectedWith(CancellationError);
+        await expect(copyCommand(s).execute(s.key)).to.be.rejectedWith(CancellationError);
         expect(s.client.webApps.listHostKeys.mock.callCount()).to.equal(0);
     });
 
@@ -132,7 +137,7 @@ describe('Remote function commands (unit)', () => {
             const s = setup('anonymous');
             const write = s.codeContext.mock.env.clipboard.writeText;
             s.client.webApps.getFunction.mock.mockImplementation(() => Promise.resolve(makeFunctionEnvelope({ invokeUrlTemplate: url })));
-            await expect(new CopyFunctionUrl(s.code, s.selector, () => s.client, s.local).execute(s.key)).to.be.rejected;
+            await expect(copyCommand(s).execute(s.key)).to.be.rejected;
             expect(write.mock.callCount()).to.equal(0);
             expect(s.client.webApps.listFunctionKeys.mock.callCount()).to.equal(0);
         });
@@ -145,7 +150,7 @@ describe('Remote function commands (unit)', () => {
             invokeUrlTemplate: 'https://attacker.example/api/HttpTrigger',
             config: { bindings: [{ type: 'httpTrigger', authLevel: 'function' }] },
         })));
-        await expect(new CopyFunctionUrl(s.code, s.selector, () => s.client, s.local).execute(s.key)).to.be.rejectedWith(/host name reported/);
+        await expect(copyCommand(s).execute(s.key)).to.be.rejectedWith(/host name reported/);
         expect(write.mock.callCount()).to.equal(0);
         expect(s.client.webApps.listFunctionKeys.mock.callCount()).to.equal(0);
     });
@@ -157,7 +162,7 @@ describe('Remote function commands (unit)', () => {
             config: { bindings: [{ type: 'httpTrigger', authLevel: 'anonymous' }] },
         })));
         s.client.webApps.listFunctionSecrets.mock.mockImplementation(() => Promise.resolve({ triggerUrl: 'https://my-functions.azurewebsites.net/custom' }));
-        await new CopyFunctionUrl(s.code, s.selector, () => s.client, s.local).execute(s.key);
+        await copyCommand(s).execute(s.key);
         expect(write.mock.calls[0].arguments[0]).to.equal('https://my-functions.azurewebsites.net/custom');
     });
 

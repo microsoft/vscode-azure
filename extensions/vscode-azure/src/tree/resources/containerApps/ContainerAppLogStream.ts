@@ -11,7 +11,7 @@ import {
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
 import type * as vscode from 'vscode';
-import { LogStreamTerminal } from '../../../utils/logStream/LogStreamTerminal';
+import { BufferedPseudoterminal } from '../../../utils/BufferedPseudoterminal';
 
 /** Service identifier for {@linkcode ContainerAppLogStreamService}. */
 export const IContainerAppLogStreamService: ServiceIdentifier<IContainerAppLogStreamService> = Symbol.for('IContainerAppLogStreamService');
@@ -45,7 +45,7 @@ const MaxRedirects = 5;
 
 interface RunningStream {
     readonly terminal: vscode.Terminal;
-    readonly pty: LogStreamTerminal;
+    readonly pty: BufferedPseudoterminal;
 }
 
 interface Stream {
@@ -173,10 +173,12 @@ export class ContainerAppLogStreamService implements Disposable {
         const label = target.kind === 'system'
             ? this.code.l10n.t('{0} (system, JSON)', target.app.name)
             : this.code.l10n.t('{0} ({1})', target.replicaName, target.containerName);
-        const pty = new LogStreamTerminal(() => {
-            if (this.streams.get(id) === stream) {
-                this.stop(id, false);
-            }
+        const pty = new BufferedPseudoterminal({
+            onClose: () => {
+                if (this.streams.get(id) === stream) {
+                    this.stop(id, false);
+                }
+            },
         });
         const terminal = this.code.window.createTerminal({
             name: this.code.l10n.t('Logs: {0}', label),

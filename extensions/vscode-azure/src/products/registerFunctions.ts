@@ -12,6 +12,7 @@ import { FunctionsDebugPreparation } from '../functions/debug/FunctionsDebugPrep
 import { FunctionsDebugProvider } from '../functions/debug/FunctionsDebugProvider';
 import { LocalFunctionsNetwork } from '../functions/host/LocalFunctionsNetwork';
 import { LocalFunctionsHostProcess } from '../functions/host/LocalFunctionsHostProcess';
+import { FunctionUrlResolver } from '../functions/FunctionUrlResolver';
 import { CopyFunctionUrl } from '../commands/functions/CopyFunctionUrl';
 import { DeleteFunction } from '../commands/functions/DeleteFunction';
 import { ExecuteFunction } from '../commands/functions/ExecuteFunction';
@@ -49,6 +50,7 @@ export function registerFunctions(registrar: ProductRegistrar): void {
         container.bind(WebAppSettingsAdapter).toSelf().inSingletonScope();
         container.bind(LocalFunctionSettings).toSelf().inSingletonScope();
         container.bind(LocalFunctionTarget).toSelf();
+        container.bind(FunctionUrlResolver).toSelf();
         container.bind(FunctionsProjectReader).toSelf();
         container.bind(LocalFunctionsHostTracker).toSelf().inSingletonScope().onActivation(pushDisposable);
         container.bind(FunctionsProjectSelector).toSelf().inSingletonScope();

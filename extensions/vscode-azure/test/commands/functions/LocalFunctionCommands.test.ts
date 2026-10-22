@@ -8,11 +8,16 @@ import { respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import { parse } from 'jsonc-parser';
 import { CopyFunctionUrl } from '../../../src/commands/functions/CopyFunctionUrl';
+import { FunctionUrlResolver } from '../../../src/functions/FunctionUrlResolver';
 import { ExecuteFunction } from '../../../src/commands/functions/ExecuteFunction';
 import { SetFunctionState } from '../../../src/commands/functions/SetFunctionState';
 import { isLocalFunctionNode } from '../../../src/tree/workspace/WorkspaceNode';
 import { createLocalFunctions } from '../../tree/workspace/functions/mockLocalFunctions';
 import { WebAppSettingsAdapter } from '../../../src/settings/adapters/WebAppSettingsAdapter';
+
+function copyCommand(s: { code: ConstructorParameters<typeof FunctionUrlResolver>[0]; selector: ConstructorParameters<typeof CopyFunctionUrl>[1]; remote: ConstructorParameters<typeof FunctionUrlResolver>[1]; target: ConstructorParameters<typeof FunctionUrlResolver>[2] }): CopyFunctionUrl {
+    return new CopyFunctionUrl(s.code, s.selector, new FunctionUrlResolver(s.code, s.remote, s.target), s.target);
+}
 
 describe('Local function commands (integration)', () => {
     let fixtures: ReturnType<typeof createLocalFunctions>[] = [];
@@ -80,7 +85,7 @@ describe('Local function commands (integration)', () => {
         s.host.listFunctions.mock.resetCalls();
         await expect(new ExecuteFunction(s.context.ctx, s.selector, s.remote, s.createHost, s.target).execute(s.fn.id))
             .to.be.rejectedWith('trusted, non-virtual workspace');
-        await expect(new CopyFunctionUrl(s.code, s.selector, s.remote, s.target).execute(s.fn.id))
+        await expect(copyCommand(s).execute(s.fn.id))
             .to.be.rejectedWith('trusted, non-virtual workspace');
         const state = new SetFunctionState(s.code, s.selector, s.remoteSettings, s.resourceCache, s.target);
         await expect(state.execute(true, s.fn.id)).to.be.rejectedWith('trusted, non-virtual workspace');
@@ -121,7 +126,7 @@ describe('Local function commands (integration)', () => {
         const s = await setup();
         const current = { ...s.metadata, ['invoke_url_template']: 'http://127.0.0.1:8090/changed/{id}?mode=local' };
         s.host.listFunctions.mock.mockImplementation(() => Promise.resolve([current]));
-        await new CopyFunctionUrl(s.code, s.selector, s.remote, s.target).execute(s.fn.id);
+        await copyCommand(s).execute(s.fn.id);
         expect(s.writeClipboard.mock.calls[0].arguments[0]).to.equal(new URL(current.invoke_url_template).toString());
         expect(s.remote.mock.callCount()).to.equal(0);
     });
@@ -133,7 +138,7 @@ describe('Local function commands (integration)', () => {
         it(`rejects a host invocation URL outside the registered loopback origin (${url.split('@').at(-1)})`, async () => {
             const s = await setup();
             s.host.listFunctions.mock.mockImplementation(() => Promise.resolve([{ ...s.metadata, ['invoke_url_template']: url }]));
-            await expect(new CopyFunctionUrl(s.code, s.selector, s.remote, s.target).execute(s.fn.id)).to.be.rejectedWith(/registered loopback host/);
+            await expect(copyCommand(s).execute(s.fn.id)).to.be.rejectedWith(/registered loopback host/);
             expect(s.writeClipboard.mock.callCount()).to.equal(0);
         });
     }
@@ -141,7 +146,7 @@ describe('Local function commands (integration)', () => {
     it('rejects an invalid host invocation URL without writing to the clipboard', async () => {
         const s = await setup();
         s.host.listFunctions.mock.mockImplementation(() => Promise.resolve([{ ...s.metadata, ['invoke_url_template']: 'not-a-url' }]));
-        await expect(new CopyFunctionUrl(s.code, s.selector, s.remote, s.target).execute(s.fn.id)).to.be.rejectedWith(/HTTP invocation URL/);
+        await expect(copyCommand(s).execute(s.fn.id)).to.be.rejectedWith(/HTTP invocation URL/);
         expect(s.writeClipboard.mock.callCount()).to.equal(0);
     });
 
@@ -150,13 +155,13 @@ describe('Local function commands (integration)', () => {
         s.host.listFunctions.mock.mockImplementation(() => Promise.resolve([{
             ...s.metadata, config: { bindings: [{ type: 'timerTrigger' }] },
         }]));
-        await expect(new CopyFunctionUrl(s.code, s.selector, s.remote, s.target).execute(s.fn.id)).to.be.rejectedWith(/HTTP trigger/);
+        await expect(copyCommand(s).execute(s.fn.id)).to.be.rejectedWith(/HTTP trigger/);
         expect(s.writeClipboard.mock.callCount()).to.equal(0);
     });
 
     it('rejects a missing current function or host URL', async () => {
         const s = await setup();
-        const command = new CopyFunctionUrl(s.code, s.selector, s.remote, s.target);
+        const command = copyCommand(s);
         s.host.listFunctions.mock.mockImplementation(() => Promise.resolve([]));
         await expect(command.execute(s.fn.id)).to.be.rejectedWith(/does not report this function/);
         s.host.listFunctions.mock.mockImplementation(() => Promise.resolve([{ ...s.metadata, ['invoke_url_template']: undefined }]));

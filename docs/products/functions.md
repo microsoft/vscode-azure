@@ -114,7 +114,8 @@ Native Go compilation/output and `--no-build` behavior follow
 Go requires the Core Tools Go worker workload, installed with
 `func workload install go-worker --prerelease`.
 
-`LocalFunctionsHostProcess` starts `func run <project>` in an owned custom task with
+`LocalFunctionsHostProcess` manages project-level ownership and delegates each launch to an
+`OwnedFunctionsHostSession`, which runs `func run <project>` in an owned custom task with
 available host/debugger ports, or explicit validated `hostPort`/`debugPort`
 options. It passes `--no-build` for Go and for launches with `skipBuild` or
 `preLaunchTask`. Node, Python, and Java attach through their worker port; PowerShell uses
@@ -275,8 +276,8 @@ lazy management-plane master key in the `x-functions-key` header. The notificati
 reports acceptance, not completion. See the
 [host invocation contract](https://github.com/Azure/azure-functions-host/blob/dev/src/WebJobs.Script.WebHost/Controllers/FunctionsController.cs).
 
-Copy Function URL is available for HTTP triggers. The command reads current
-metadata, removes existing `code` parameters, and copies an HTTPS URL. Anonymous
+Copy Function URL is available for HTTP triggers. `FunctionUrlResolver` reads current
+metadata (never the cached tree node), removes existing `code` parameters, and copies an HTTPS URL. Anonymous
 functions need no key. Function-authenticated functions use a function key,
 falling back to a host function key. Admin-authenticated functions require modal
 confirmation before reading and copying the app-wide master key. Keys and URLs
@@ -298,7 +299,7 @@ an actionable error.
 
 ## Application Insights log terminal
 
-`FunctionAppLogStream` uses the shared `LogStreamTerminal` pseudoterminal also used
+`FunctionAppLogStream` uses the shared `BufferedPseudoterminal` pseudoterminal also used
 by Container Apps. Concurrent starts share initialization, existing sessions are
 focused instead of duplicated, and terminal closure or service disposal cancels
 polling and pending log queries. Discovery and initial-query failures occur
