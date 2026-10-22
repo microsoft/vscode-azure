@@ -49,6 +49,23 @@ describe('LocalFunctionSettings (unit)', () => {
         expect(values.get('FUNCTIONS_WORKER_RUNTIME')).to.equal('node');
     });
 
+    it('does not leave an unhandled rejection when a lone write fails', async () => {
+        const m = createMockVsCode();
+        const code = m.vscode;
+        const project = code.Uri.file('/repo');
+        m.fs.addFile(code.Uri.joinPath(project, 'local.settings.json'), '{"Values":{}}');
+        mock.method(code.workspace.fs, 'writeFile', () => Promise.reject(new Error('disk full')));
+        const unhandled = mock.fn();
+        process.on('unhandledRejection', unhandled);
+        try {
+            await expect(new LocalFunctionSettings(code).setWorkerRuntime(project, 'node')).to.be.rejectedWith('disk full');
+            await new Promise(resolve => setImmediate(resolve));
+        } finally {
+            process.off('unhandledRejection', unhandled);
+        }
+        expect(unhandled.mock.callCount()).to.equal(0);
+    });
+
     it('continues queued edits after one fails', async () => {
         const m = createMockVsCode();
         const code = m.vscode;

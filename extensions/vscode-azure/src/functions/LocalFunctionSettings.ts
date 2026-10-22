@@ -42,8 +42,8 @@ export class LocalFunctionSettings {
     private writeValue(project: vscode.Uri, key: string, value: string): Promise<void> {
         const uri = this.code.Uri.joinPath(project, 'local.settings.json');
         const id = uri.toString();
-        const run = (this.writes.get(id) ?? Promise.resolve()).catch(() => undefined).then(() => this.writeValueNow(uri, key, value));
-        const tail = run.finally(() => {
+        const run = (this.writes.get(id) ?? Promise.resolve()).then(() => this.writeValueNow(uri, key, value));
+        const tail: Promise<void> = run.then(() => undefined, () => undefined).then(() => {
             if (this.writes.get(id) === tail) { this.writes.delete(id); }
         });
         this.writes.set(id, tail);

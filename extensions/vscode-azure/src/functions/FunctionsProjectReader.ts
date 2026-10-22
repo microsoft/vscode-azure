@@ -116,7 +116,7 @@ export class FunctionsProjectReader {
         if (!config || typeof config !== 'object' || Array.isArray(config)) {
             throw new ExternalError(this.code.l10n.t('host.json must contain a JSON object.'));
         }
-        if ('version' in config && config.version !== '2.0') {
+        if ((config as { version?: unknown }).version !== '2.0') {
             throw new ExternalError(this.code.l10n.t('Use the host.json version 2.0 schema for a Functions runtime v4 project.'));
         }
         return config as Record<string, unknown>;

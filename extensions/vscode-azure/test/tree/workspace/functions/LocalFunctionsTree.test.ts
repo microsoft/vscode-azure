@@ -86,6 +86,15 @@ describe('Local Functions tree (integration)', () => {
         }
     });
 
+    for (const hostConfig of [{}, { version: '1.0' }]) {
+        it(`marks a project invalid when host.json reports ${JSON.stringify(hostConfig)}`, async () => {
+            const s = setup();
+            s.addProject('node', hostConfig);
+            const [project] = await s.tree.getChildren();
+            expect(s.view.getTreeItem(project.id).description).to.equal('Invalid');
+        });
+    }
+
     for (const runtime of ['node', 'dotnet-isolated', 'java']) {
         it(`shows only a start-debugging hint for ${runtime} before the host is ready`, async () => {
             const s = setup();
@@ -204,7 +213,7 @@ describe('Local Functions tree (integration)', () => {
         const s = setup();
         s.addProject();
         addWorkspaceFolder(s.m, '/other');
-        s.m.fs.addFile(s.code.Uri.file('/other/host.json'), '{}');
+        s.m.fs.addFile(s.code.Uri.file('/other/host.json'), '{"version":"2.0"}');
         const projects = await s.tree.getChildren();
         const own = projects.find(project => project.label === 'repo');
         const other = projects.find(project => project.label === 'other');

@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { getResourceGroupName, IWebAppClientProvider } from '@microsoft/vscode-azure-azutils';
-import { ExternalError, IVsCode, showMessage } from '@microsoft/vscode-azure-utils';
+import { CaselessSet, ExternalError, IVsCode, showMessage } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IResourceSelector } from '../../tree/resources/ResourceSelector';
 import { isFunctionAppFunction } from '../../tree/resources/webApp/FunctionApp';
@@ -77,6 +77,11 @@ export class CopyFunctionUrl implements ManagedCommand {
         const url = new URL(rawUrl);
         if (url.protocol !== 'https:' || url.username || url.password) {
             throw new ExternalError(this.code.l10n.t('The remote function URL must use HTTPS without embedded credentials.'));
+        }
+        const site = await client.webApps.get(group, app.name);
+        const hostNames = new CaselessSet([...(site.hostNames ?? []), ...(site.enabledHostNames ?? []), ...(site.defaultHostName ? [site.defaultHostName] : [])]);
+        if (!hostNames.has(url.hostname)) {
+            throw new ExternalError(this.code.l10n.t('The function URL must use a host name reported by the selected Function App.'));
         }
         for (const parameter of [...url.searchParams.keys()]) {
             if (parameter.toLowerCase() === 'code') {

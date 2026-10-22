@@ -138,6 +138,18 @@ describe('Remote function commands (unit)', () => {
         });
     }
 
+    it('rejects an invocation URL whose host the selected app does not report before reading keys', async () => {
+        const s = setup('function');
+        const write = s.codeContext.mock.env.clipboard.writeText;
+        s.client.webApps.getFunction.mock.mockImplementation(() => Promise.resolve(makeFunctionEnvelope({
+            invokeUrlTemplate: 'https://attacker.example/api/HttpTrigger',
+            config: { bindings: [{ type: 'httpTrigger', authLevel: 'function' }] },
+        })));
+        await expect(new CopyFunctionUrl(s.code, s.selector, () => s.client, s.local).execute(s.key)).to.be.rejectedWith(/host name reported/);
+        expect(write.mock.callCount()).to.equal(0);
+        expect(s.client.webApps.listFunctionKeys.mock.callCount()).to.equal(0);
+    });
+
     it('uses the management-plane trigger URL when no URL template is reported', async () => {
         const s = setup('anonymous');
         const write = s.codeContext.mock.env.clipboard.writeText;

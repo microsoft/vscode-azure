@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { injectable } from 'inversify';
-import { createConnection, createServer } from 'node:net';
+import { createConnection, createServer, type Socket } from 'node:net';
 
 /** A loopback port held exclusively until its process owner is ready to launch. */
 export interface FunctionsPortReservation {
@@ -16,7 +16,11 @@ export interface FunctionsPortReservation {
 @injectable()
 export class LocalFunctionsNetwork {
     public async reserve(port = 0): Promise<FunctionsPortReservation> {
-        const server = createServer();
+        const sockets = new Set<Socket>();
+        const server = createServer(socket => {
+            sockets.add(socket);
+            socket.once('close', () => { sockets.delete(socket); });
+        });
         await new Promise<void>((resolve, reject) => {
             server.once('error', reject);
             server.listen(port, '127.0.0.1', () => {
@@ -40,6 +44,7 @@ export class LocalFunctionsNetwork {
                         resolve();
                     }
                 });
+                sockets.forEach(socket => { socket.destroy(); });
             }),
         };
     }
