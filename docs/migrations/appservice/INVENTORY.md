@@ -312,7 +312,7 @@ Ordered prompt steps:
 
 Defaults sources: workspace/`az` CLI config (`readAzConfig.ts`, telemetry `hasAz<property>Default`), `setPrePromptDefaults` (domain-label scope tenant) and `SetPostPromptDefaultsStep` (priority 80; basic-mode plan/SKU/stack defaults, plan performance warning).
 
-Ordered execute steps (by `priority`): `VerifyProvidersStep(['Microsoft.Web', 'Microsoft.Insights'])`; `SetPostPromptDefaultsStep` (80, basic only); `ResourceGroupCreateStep` (basic only); `AppServicePlanCreateStep` (120); `LogAnalyticsCreateStep` (134); `AppInsightsCreateStep` (135); `WebAppCreateStep` (140). Basic enqueues the resource group, plan, and Application Insights create steps; advanced does not (the list steps enqueue creates only when "new" is chosen).
+Ordered execute steps (by `priority`): `VerifyProvidersStep(['Microsoft.Web', 'Microsoft.Insights'])`; `SetPostPromptDefaultsStep` (80, basic only); `ResourceGroupCreateStep` (basic only); `AppServicePlanCreateStep` (120); `LogAnalyticsCreateStep` (134); `AppInsightsCreateStep` (135); `WebAppCreateStep` (140). Basic enqueues the resource group, plan, and Application Insights create steps; advanced does not (the list steps enqueue creates only when "new" is chosen). When the user lacks create permissions, the shared lib instead enqueues select-existing steps (`AppServicePlanNoCreatePermissionsStep` 121, `AppInsightsNoCreatePermissionsStep` 136) that only log the chosen existing resource.
 
 Provisioning record:
 
@@ -320,7 +320,7 @@ Provisioning record:
 |---|---|---|---|---|
 | Resource group | `Microsoft.Resources/resourceGroups` | subscription | `ResourceGroupCreateStep` | location |
 | App Service plan | `Microsoft.Web/serverfarms` | resource group | `AppServicePlanCreateStep` (120) | resource group, location, SKU, OS (`reserved` for Linux), zone redundancy |
-| Log Analytics workspace | `Microsoft.OperationalInsights/workspaces` | resource group | `LogAnalyticsCreateStep` (134) | resource group |
+| Log Analytics workspace | `Microsoft.OperationalInsights/workspaces` | resource group | `LogAnalyticsCreateStep` (134); reuses an existing workspace in the same resource group (else same location) and creates one only when none exists | resource group, location |
 | Application Insights | `Microsoft.Insights/components` | resource group | `AppInsightsCreateStep` (135) | workspace |
 | Web app (primary) | `Microsoft.Web/sites` | resource group | `WebAppCreateStep` (140) via `webApps.beginCreateOrUpdateAndWait` | plan (`serverFarmId`), App Insights connection string |
 
@@ -399,7 +399,7 @@ None. The only detection is runtime-based: Java/.NET/Maven for pre-deploy config
 
 ## 9. Usage Summary (telemetry) (redacted: qualitative bands only)
 
-- Cluster / window / collected-on: `ddtelvscode` ; 90d ; 2026-10-22. A 365d re-run returned the same rows and counts, so the effective retention for this extension is about 90 days; no wider window is available to confirm very-low-adoption features.
+- Cluster / window / collected-on: `ddtelvscode`, 90d, 2026-10-22. A 365d re-run returned the same rows and counts, so the effective retention for this extension is about 90 days; no wider window is available to confirm very-low-adoption features.
 - Raw counts, result splits, and last-seen dates are intentionally **not** committed (see `.github/copilot-instructions.md`). Bands: very high (>= 1000 external machines), high (300-999), moderate (100-299), low (20-99), very low (< 20). Re-run the roll-up to refresh: [all events, external usage](https://dataexplorer.azure.com/clusters/ddtelvscode/databases/VSCodeExt?query=H4sIAAAAAAAAE5WSQWsbMRCF7%2F4Vykm7YIdcS3AvIQFDHErd9FJKmUjPiUArGc3s2gn58Z3d9S6k9BLdNDPvezMaRYjBScza2IZX9NYWSM6RLzt22WOM0OHAKF1wsNeLqIpjSD4fVfTlyl8vXGxZUCrrvSCOQltfehJ6IkZlf%2B5uNHR7Eo1%2Bp%2BNthyQ8Bxfv5viCArNTD5QfoQELNQfz1dBzrkaveq5SBRKHnB6ogVmv%2B%2FbnpGSWEtJz9a3kA4oE8C8bmJyEjkRF6L3t79pc6MRSWljVcts0VMIbFkbPJnXZDcWst7VxuU1S1csh2buXRPFRH4Q16Yds2FfjOFtyLyFh45dmw5s01vZN7ikyzoxd6xzg4fvLZKCI%2FzZfwG0cOlaKnaX2zLqjEM%2Bgz7JG6QS6oeQwoz4FmqQT6p5YdkCaUPtcGpI%2F%2Bh8gutyqoVP1z67rpbGvelbb7coraOA8vZrhq%2FSL1i3l4lGG4IcdeLD7C27OBlXGAgAA).
 
 | EventName | Feature | External-adoption band | Suggestion |
