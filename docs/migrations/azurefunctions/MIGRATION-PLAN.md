@@ -212,8 +212,9 @@ Tree contract:  per Slice 1; menu entries in view/item/context with word-boundar
 - [x] Wire shared delete, browse, and properties on the Function App node, and
   shared settings add/edit/rename/delete through the settings document.
   <- FUNC-059, FUNC-063, FUNC-064, FUNC-072, FUNC-075, FUNC-076, FUNC-077
-- [x] Manifest entries (commands, `view/item/context`, `commandPalette`
-  `when: false` for node-only commands) + `package.nls.json` strings.
+- [x] Manifest entries (commands, `view/item/context`) + `package.nls.json`
+  strings. The commands are also available from the Command Palette, where
+  `ResourceSelector` prompts for the target function or Function App.
 - [x] Unit tests per command with `createMockCodeContext()` and real
   `ActionExecutor`.
 

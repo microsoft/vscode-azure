@@ -314,34 +314,6 @@
                     "when": "false"
                 },
                 {
-                    "command": "vscode-azure/functions/execute",
-                    "when": "false"
-                },
-                {
-                    "command": "vscode-azure/functions/copyUrl",
-                    "when": "false"
-                },
-                {
-                    "command": "vscode-azure/functions/enable",
-                    "when": "false"
-                },
-                {
-                    "command": "vscode-azure/functions/disable",
-                    "when": "false"
-                },
-                {
-                    "command": "vscode-azure/functions/delete",
-                    "when": "false"
-                },
-                {
-                    "command": "vscode-azure/functions/streamLogs",
-                    "when": "false"
-                },
-                {
-                    "command": "vscode-azure/functions/revealIdentity",
-                    "when": "false"
-                },
-                {
                     "command": "vscode-azure/containerApps/verifyStart",
                     "when": "false"
                 },
