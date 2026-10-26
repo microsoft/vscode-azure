@@ -184,6 +184,15 @@ Delete Resource belong in these groups too, so product-specific commands
 appear alongside them on the same node. The `inline` group controls tree-item
 buttons separately.
 
+## Shared Extension Utilities
+
+`extensions/vscode-azure/src/utils/` holds helpers that are not tied to one product:
+
+- **`jsonc.ts`** -- `parseJsoncObject(code, text, label)` parses a JSONC document that must have an object root and no duplicate root properties, throwing a localized `ExternalError` otherwise. `editJsonc(text, path, value)` changes one path while preserving comments, unrelated properties, and the document's LF or CRLF line endings. Use these (built on `jsonc-parser`) instead of `JSON.parse`/`JSON.stringify` for user-edited files such as `settings.json`.
+- **`BufferedPseudoterminal.ts`** -- a `vscode.Pseudoterminal` for streamed output (for example Container Apps log streams). Output written before VS Code opens the terminal is buffered, and CRLF endings are normalized, including a CRLF split across chunks. `finish(code)` defers the exit code until buffered output has been delivered. Its options are `{ onOpen?, onClose }`: `onOpen` runs once after the terminal opens (skipped if it already closed or finished), and `onClose` runs exactly once however the terminal ends.
+
+In `@microsoft/vscode-azure-utils`, the paging helpers in `data/Page.ts` operate lazily on `AsyncIterable<Page<T>>`: `filterPages` filters items and `mapPages` maps them (the mapper gets an index that keeps counting across pages), both preserving page boundaries and `hasMore`.
+
 ## Comments and Documentation
 
 Comments and docs describe the code **as it is now**, not how it got that way. The
