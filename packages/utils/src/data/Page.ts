@@ -45,3 +45,18 @@ export async function* filterPages<T>(pages: AsyncIterable<Page<T>>, predicate?:
         yield predicate ? { items: page.items.filter(predicate), hasMore: page.hasMore } : page;
     }
 }
+
+/**
+ * Maps every item to a new value, preserving page boundaries and each page's
+ * `hasMore` flag. The mapper receives a zero-based index that keeps counting
+ * across pages, so it can derive stable per-item identifiers.
+ *
+ * Mapping is lazy: the mapper runs as the reader pulls each page, so a mapper
+ * (or source) failure surfaces at the reader's `for await`, not at call time.
+ */
+export async function* mapPages<T, U>(pages: AsyncIterable<Page<T>>, mapper: (item: T, index: number) => U): AsyncIterable<Page<U>> {
+    let index = 0;
+    for await (const page of pages) {
+        yield { items: page.items.map(item => mapper(item, index++)), hasMore: page.hasMore };
+    }
+}
