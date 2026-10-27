@@ -33,6 +33,11 @@ export class LocalFunctionSettings {
         await this.writeValue(project, `AzureWebJobs.${functionName}.Disabled`, String(disabled));
     }
 
+    /** Persists a selected runtime while preserving existing key casing and unrelated project settings. */
+    public async setWorkerRuntime(project: vscode.Uri, runtime: string): Promise<void> {
+        await this.writeValue(project, 'FUNCTIONS_WORKER_RUNTIME', runtime);
+    }
+
     /** Serializes read-modify-write cycles per file so concurrent edits cannot overwrite each other. */
     private writeValue(project: vscode.Uri, key: string, value: string): Promise<void> {
         const uri = this.code.Uri.joinPath(project, 'local.settings.json');

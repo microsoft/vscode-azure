@@ -81,8 +81,12 @@ export class FunctionsDebugPreparation {
         }
         const values = new CaselessMap((await this.settings.read(project)).values);
         applyEnvironmentOverrides(values, env);
-        const runtime = await this.selectRuntime(values.get('FUNCTIONS_WORKER_RUNTIME')?.trim().toLowerCase(), token);
+        const configuredRuntime = values.get('FUNCTIONS_WORKER_RUNTIME')?.trim().toLowerCase();
+        const runtime = await this.selectRuntime(configuredRuntime, token);
         this.projects.assertLocal(project);
+        if (!configuredRuntime) {
+            await this.settings.setWorkerRuntime(project, runtime);
+        }
         applyEnvironmentOverrides(values, { ['FUNCTIONS_WORKER_RUNTIME']: runtime });
         const version = values.get('FUNCTIONS_EXTENSION_VERSION');
         if (version && !/^~?4(?:\.|$)/.test(version)) {
@@ -117,7 +121,7 @@ export class FunctionsDebugPreparation {
         ];
         const selected = await showSmartQuickPick(this.ctx, items, {
             title: this.code.l10n.t('Select the Functions runtime to debug'),
-            placeHolder: this.code.l10n.t('Used for this debug launch; project files are not changed.'),
+            placeHolder: this.code.l10n.t('Saved as FUNCTIONS_WORKER_RUNTIME in local.settings.json for future launches.'),
         });
         throwIfCancelled(token);
         return selected.data;

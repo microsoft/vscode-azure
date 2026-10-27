@@ -35,8 +35,11 @@ dynamic configuration providers discover indexed `host.json` projects, including
 nested projects. F5 requires neither `tasks.json` nor `launch.json`. Multiple
 projects prompt for a selection, remembering the last choice per workspace.
 When `FUNCTIONS_WORKER_RUNTIME` is absent or blank in local settings and launch
-overrides, F5 asks which supported runtime to debug. The choice configures only
-that launch's environment; project files are not changed. An existing supported
+overrides, F5 asks which supported runtime to debug and saves the choice as
+`Values.FUNCTIONS_WORKER_RUNTIME` in `local.settings.json` for future launches.
+Existing key casing, comments, and unrelated properties are preserved; an absent
+file is created with only the runtime setting. Launch overrides are not copied
+into the file and still take precedence over saved settings. An existing supported
 runtime bypasses the picker, and an unsupported configured value is an error.
 Its type identifier and supported-runtime guard live in
 `functions/debug/functionsDebug.ts`, independently of debugger preparation and registration.
@@ -109,7 +112,9 @@ azd version supporting Go Functions. Custom handlers are not debugged.
 Pre-debug validation requires a supported selected/configured worker runtime,
 runtime v4 compatibility, storage configuration, and saved local settings.
 A missing `local.settings.json` is allowed when launch overrides provide the
-required storage configuration. `UseDevelopmentStorage=true` requires Azurite on its three
+required storage configuration; a runtime chosen in the picker is persisted even
+if a later prerequisite check prevents startup.
+`UseDevelopmentStorage=true` requires Azurite on its three
 default loopback ports; automatic emulator startup and custom proxy validation
 are outside this flow. Identity-based storage settings are accepted. Core Tools
 starts with `--no-azurite` to leave emulator management to the user. Host startup

@@ -41,8 +41,9 @@ describe('Functions debug provider (unit)', () => {
         prompts.assertAllConsumed();
         expect(config?.type).to.equal('pwa-node');
         expect(start.mock.callCount()).to.equal(1);
-        expect(s.m.fs.writeFile.mock.callCount()).to.equal(0);
-        await expect(s.code.workspace.fs.stat(uri)).to.be.rejectedWith('File not found');
+        expect(s.m.fs.writeFile.mock.callCount()).to.equal(1);
+        expect((await s.settings.read(s.folder)).values.get('FUNCTIONS_WORKER_RUNTIME')).to.equal('node');
+        expect((await s.settings.read(s.folder)).values.get('AzureWebJobsStorage__accountName')).to.be.undefined;
     });
 
     it('dismisses runtime selection without acquiring tools or starting a host', async () => {
@@ -54,6 +55,18 @@ describe('Functions debug provider (unit)', () => {
         expect(s.spawn.mock.callCount()).to.equal(0);
         expect(s.m.tasks.executeTask.mock.callCount()).to.equal(0);
         expect(s.m.fs.writeFile.mock.callCount()).to.equal(0);
+    });
+
+    it('reports a failed runtime-settings write without acquiring tools or starting a host', async () => {
+        const s = setup('');
+        const prompts = respondToPrompts(s.m, [{ pick: 'Node.js / TypeScript' }]);
+        mock.method(s.code.workspace.fs, 'writeFile', () => Promise.reject(new Error('Settings write denied')));
+        expect(await s.debugProvider.resolveDebugConfigurationWithSubstitutedVariables(undefined, s.config)).to.be.undefined;
+        prompts.assertAllConsumed();
+        expect(s.tools.acquire.mock.callCount()).to.equal(0);
+        expect(s.spawn.mock.callCount()).to.equal(0);
+        expect(s.m.tasks.executeTask.mock.callCount()).to.equal(0);
+        expect(s.m.window.showErrorMessage.mock.calls.at(-1)?.arguments[0]).to.include('Settings write denied');
     });
 
     it('applies launch and owned worker settings without duplicating mixed-case local keys', async () => {

@@ -6,6 +6,7 @@
 import { CancellationError, readText } from '@microsoft/vscode-azure-utils';
 import { addMockExtension, getMockTaskExecution, MockCancellationToken, MockShellExecution, respondToPrompts, waitFor } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
+import { parse } from 'jsonc-parser';
 import { createFunctionsDebugFixture, selectPythonEnvironment } from './mockFunctionsDebug';
 
 describe('Functions debug preparation (unit)', () => {
@@ -21,18 +22,26 @@ describe('Functions debug preparation (unit)', () => {
         ['node', 'Node.js / TypeScript'], ['python', 'Python'], ['dotnet-isolated', '.NET isolated'],
         ['java', 'Java'], ['powershell', 'PowerShell'], ['native', 'Go (native worker)'],
     ]) {
-        it(`selects ${runtime} for a launch with no configured runtime without editing settings`, async () => {
+        it(`persists the selected ${runtime} and reuses it on subsequent launches while preserving settings`, async () => {
             const s = setup(runtime);
             const uri = s.code.Uri.joinPath(s.folder, 'local.settings.json');
-            const settings = '{"Values":{"AzureWebJobsStorage":"UseDevelopmentStorage=true"}}';
+            const settings = '{\r\n // keep this comment\r\n "Values":{"functions_worker_runtime":" ", "AzureWebJobsStorage":"UseDevelopmentStorage=true", "Other":"preserved"},\r\n "Host":{"LocalHttpPort":8090}, "ConnectionStrings":{"database":"preserved"}\r\n}';
             s.m.fs.addFile(uri, settings);
             const prompts = respondToPrompts(s.m, [{ pick: label }]);
             const launch = await s.preparation.prepare(s.folder, {});
             prompts.assertAllConsumed();
             expect(launch.runtime).to.equal(runtime);
             expect(launch.environment.FUNCTIONS_WORKER_RUNTIME).to.equal(runtime);
-            expect(await readText(s.code, uri)).to.equal(settings);
-            expect(s.m.fs.writeFile.mock.callCount()).to.equal(0);
+            const text = await readText(s.code, uri);
+            expect(text).to.include('// keep this comment').and.include('\r\n');
+            const data: unknown = parse(text ?? '');
+            expect(data).to.deep.equal({
+                Values: { ['functions_worker_runtime']: runtime, ['AzureWebJobsStorage']: 'UseDevelopmentStorage=true', Other: 'preserved' },
+                Host: { LocalHttpPort: 8090 }, ConnectionStrings: { database: 'preserved' },
+            });
+            expect((await s.preparation.prepare(s.folder, {})).runtime).to.equal(runtime);
+            expect(s.m.quickPicks).to.have.length(1);
+            expect(s.m.fs.writeFile.mock.callCount()).to.equal(1);
         });
     }
 
@@ -64,6 +73,22 @@ describe('Functions debug preparation (unit)', () => {
         await rejected;
         expect(s.spawn.mock.callCount()).to.equal(0);
         expect(s.tools.acquire.mock.callCount()).to.equal(0);
+        expect(s.m.fs.writeFile.mock.callCount()).to.equal(0);
+    });
+
+    it('does not persist a runtime over settings made dirty while the picker is open', async () => {
+        const s = setup('');
+        const preparing = s.preparation.prepare(s.folder, {});
+        const rejected = expect(preparing).to.be.rejectedWith('Save local.settings.json');
+        await waitFor(() => s.m.quickPicks.some(pick => pick.show.mock.callCount() > 0));
+        const document = await s.code.workspace.openTextDocument(s.code.Uri.joinPath(s.folder, 'local.settings.json'));
+        mock.property(document, 'isDirty', true);
+        const picker = s.m.quickPicks[0];
+        picker.activeItems = [picker.items[0]];
+        picker.accept();
+        await rejected;
+        expect(s.m.fs.writeFile.mock.callCount()).to.equal(0);
+        expect(s.tools.acquire.mock.callCount()).to.equal(0);
     });
 
     it('validates mixed-case local setting names and gives launch overrides case-insensitive precedence', async () => {
@@ -82,6 +107,7 @@ describe('Functions debug preparation (unit)', () => {
         await expect(s.preparation.prepare(s.folder, { ['FUNCTIONS_WORKER_RUNTIME']: 'node' }))
             .to.be.rejectedWith('runtime v4 only');
         expect(s.m.quickPicks).to.be.empty;
+        expect(s.m.fs.writeFile.mock.callCount()).to.equal(0);
     });
 
     it('builds native Go with optimizations and inlining disabled using the resource-scoped Go executable', async () => {

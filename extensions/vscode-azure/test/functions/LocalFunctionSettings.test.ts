@@ -17,12 +17,14 @@ describe('LocalFunctionSettings (unit)', () => {
 
         await Promise.all([
             settings.setDisabled(project, 'Hello', true),
+            settings.setWorkerRuntime(project, 'node'),
             settings.setDisabled(project, 'World', false),
         ]);
 
         const values = (await settings.read(project)).values;
         expect(values.get('AzureWebJobs.Hello.Disabled')).to.equal('true');
         expect(values.get('AzureWebJobs.World.Disabled')).to.equal('false');
+        expect(values.get('FUNCTIONS_WORKER_RUNTIME')).to.equal('node');
     });
 
     it('does not leave an unhandled rejection when a lone write fails', async () => {

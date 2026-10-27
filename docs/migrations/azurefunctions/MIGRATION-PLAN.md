@@ -350,8 +350,9 @@ Resolution flow for one session:
   runtimes) and register its provider for initial and dynamic configurations,
   so projects appear in the Run and Debug dropdown with no `launch.json`.
   <- FUNC-030
-- [x] F5 selects a missing worker runtime for the current launch without writing
-  project settings, tasks, launch configurations, or recommendations. <- FUNC-030
+- [x] F5 selects a missing worker runtime and persists it in `local.settings.json`
+  for subsequent launches, preserving unrelated settings. No tasks, launch
+  configurations, or recommendations are generated. <- FUNC-030
 - [x] Attach configurations for Node, Python (via the Python extension's
   launcher), Java, and PowerShell, with free debug ports.
   <- FUNC-210, FUNC-211, FUNC-212, FUNC-214, FUNC-268
@@ -642,7 +643,7 @@ registration in `commands/registerCommands.ts`, and tree composition in
 | FUNC-008 | Function schema | Migrate | Landed | Extension `package.json`: `jsonValidation` for `function.json` |
 | FUNC-009 | Host schema | Migrate | Landed | Extension `package.json`: `jsonValidation` for `host.json` |
 | FUNC-021 | Core Tools version checks | Reuse | Wired on demand | `tools/ToolService.ts`, `tools/FuncInstaller.ts`; debug preparation requires v5 preview.3 or later |
-| FUNC-030 | Existing-project debug setup | Adapt | Landed through F5 runtime selection | `functions/debug/FunctionsDebugPreparation.ts`; launch-only runtime selection without generated workspace files |
+| FUNC-030 | Existing-project debug setup | Adapt | Landed through F5 runtime selection | `functions/debug/FunctionsDebugPreparation.ts`; selected runtime persisted through `LocalFunctionSettings` without generated debug/recommendation files |
 | FUNC-031 | Install/update Core Tools | Reuse | Wired | `commands/registerCommands.ts`: `vscode-azure/installFunc` -> `AcquireTool`; `extension.ts`: `FuncInstaller` binding |
 | FUNC-033 | .NET process selection | Adapt | Landed inside owned F5 | `functions/host/LocalFunctionsHostProcess.ts`; `functions/debug/FunctionsDebugProvider.ts` |
 | FUNC-041 | Execute function | Migrate | Landed locally and remotely | `commands/functions/ExecuteFunction.ts`; `functions/LocalFunctionTarget.ts` |
