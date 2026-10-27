@@ -175,6 +175,8 @@ local host (`/admin/functions`), which is the only source of function metadata;
 language source, `function.json` files, and build output are not read. Until a
 host is ready, the project shows a "Start debugging to list functions..." hint.
 `host.json.functions`, when supplied, limits the visible function names.
+Project validation requires the `2.0` host schema and a string-array function
+filter when present, including before a host is running.
 
 Malformed functions remain visible beside readable siblings. Project validation
 shows invalid metadata or a missing worker runtime without putting local settings

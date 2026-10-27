@@ -72,13 +72,15 @@ describe('Local Functions tree (integration)', () => {
             { name: 'Good' },
             { name: 'BadBindings', config: { bindings: [] } },
             { name: 'bad/name' },
+            { name: 'bad\\name' },
+            { name: ' ' },
             { name: 'Good' },
         ]);
         const project = (await s.tree.getChildren())[0];
         const children = await s.tree.getChildren(project);
         expect(children.filter(isLocalFunctionNode).map(fn => fn.functionName)).to.deep.equal(['Good']);
         const invalid = children.filter(child => child.type === 'invalidLocalFunction');
-        expect(invalid).to.have.lengthOf(3);
+        expect(invalid).to.have.lengthOf(5);
         for (const node of invalid) {
             const item = s.view.getTreeItem(node.id);
             expect(item.contextValue).to.equal(RefreshWorkspaceView.ContextValue);
@@ -86,12 +88,21 @@ describe('Local Functions tree (integration)', () => {
         }
     });
 
-    for (const hostConfig of [{}, { version: '1.0' }]) {
+    for (const [hostConfig, message] of [
+        [null, 'host.json must contain a JSON object.'],
+        [[], 'host.json must contain a JSON object.'],
+        [{}, 'Use the host.json version 2.0 schema'],
+        [{ version: '1.0' }, 'Use the host.json version 2.0 schema'],
+        [{ version: '2.0', functions: 'Http' }, 'host.json functions must be an array of function names.'],
+        [{ version: '2.0', functions: ['Http', 3] }, 'host.json functions must be an array of function names.'],
+    ] as const) {
         it(`marks a project invalid when host.json reports ${JSON.stringify(hostConfig)}`, async () => {
             const s = setup();
             s.addProject('node', hostConfig);
             const [project] = await s.tree.getChildren();
             expect(s.view.getTreeItem(project.id).description).to.equal('Invalid');
+            expect(s.view.getTreeItem(project.id).tooltip).to.include(message);
+            expect(s.createHost.mock.callCount()).to.equal(0);
         });
     }
 
@@ -185,6 +196,31 @@ describe('Local Functions tree (integration)', () => {
         s.startHost([{ name: 'Selected' }, { name: 'Ignored' }]);
         const project = (await s.tree.getChildren())[0];
         expect((await s.tree.getChildren(project)).map(node => node.label)).to.deep.equal(['Selected']);
+    });
+
+    it('honors an empty function filter while allowing unrelated host configuration', async () => {
+        const s = setup();
+        s.addProject('node', { version: '2.0', functions: [], extensions: { http: { routePrefix: 'custom' } } });
+        s.startHost([{ name: 'Http' }]);
+        const [project] = await s.tree.getChildren();
+        expect(s.view.getTreeItem(project.id).description).to.equal('Azure Functions');
+        expect(await s.tree.getChildren(project)).to.be.empty;
+    });
+
+    it('reports an invalid function filter changed after discovery and recovers after correction', async () => {
+        const s = setup();
+        s.addProject();
+        s.startHost([{ name: 'Http' }]);
+        const [project] = await s.tree.getChildren();
+        s.m.fs.addFile(s.code.Uri.joinPath(s.folder, 'host.json'), '{"version":"2.0","functions":[false]}');
+        const [invalid] = await s.tree.getChildren(project);
+        expect(invalid.type).to.equal('invalidLocalFunction');
+        expect(s.view.getTreeItem(invalid.id).tooltip).to.include('host.json functions must be an array of function names.');
+        expect(s.host.listFunctions.mock.callCount()).to.equal(0);
+        s.addProject();
+        new RefreshWorkspaceView(s.tree).execute();
+        const [refreshed] = await s.tree.getChildren();
+        expect((await s.tree.getChildren(refreshed)).map(node => node.label)).to.deep.equal(['Http']);
     });
 
     it('retains replacement host registrations when an old host owner stops', () => {

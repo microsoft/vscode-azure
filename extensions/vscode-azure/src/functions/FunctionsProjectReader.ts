@@ -3,20 +3,25 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IFunctionsHostClientProvider } from '@microsoft/vscode-azure-azutils';
+import { IFunctionsHostClientProvider, type HostFunction } from '@microsoft/vscode-azure-azutils';
 import { dirname, ExternalError, IActionExecutor, IVsCode, readRequiredJson, stringifyError, type ICaselessMapReader } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
+import * as z from 'zod/mini';
 import { FunctionsProjectKeyPrefix, type FunctionsProjectNode, type LocalFunctionsNode, type LocalFunctionNode } from '../tree/workspace/WorkspaceNode';
 import { LocalFunctionSettings } from './LocalFunctionSettings';
 import { LocalFunctionsHostTracker } from './host/LocalFunctionsHostTracker';
 import { parseFunctionMetadata } from './functionMetadata';
 
-interface FunctionMetadata {
-    readonly name: string;
-    readonly config: unknown;
-    readonly isDisabled?: boolean;
-}
+const HostConfigSchema = z.object({
+    version: z.literal('2.0'),
+    functions: z.optional(z.array(z.string())),
+});
+
+const FunctionNameSchema = z.string().check(
+    z.refine(name => name.trim().length > 0),
+    z.refine(name => !/[\\/]/.test(name)),
+);
 
 /** Reads local project contracts and lists functions from a ready host. */
 @injectable()
@@ -55,21 +60,16 @@ export class FunctionsProjectReader {
             if (!host) {
                 return [this.hint(project, 'host', this.code.l10n.t('Start debugging to list functions...'))];
             }
-            const metadata: FunctionMetadata[] = (await this.createHost({ port: host.port }).listFunctions()).map(fn => ({
-                name: fn.name, config: fn.config, isDisabled: fn.isDisabled,
-            }));
+            const metadata = await this.createHost({ port: host.port }).listFunctions();
             const allowed = config.functions;
-            if (allowed !== undefined && (!Array.isArray(allowed) || !allowed.every(name => typeof name === 'string'))) {
-                throw new ExternalError(this.code.l10n.t('host.json functions must be an array of function names.'));
-            }
             const names = new Set<string>();
             const nodes: LocalFunctionsNode[] = [];
             for (const fn of metadata) {
-                if (Array.isArray(allowed) && !allowed.includes(fn.name)) {
+                if (allowed && !allowed.includes(fn.name)) {
                     continue;
                 }
                 try {
-                    if (!fn.name.trim() || /[\\/]/.test(fn.name) || names.has(fn.name)) {
+                    if (!FunctionNameSchema.safeParse(fn.name).success || names.has(fn.name)) {
                         throw new ExternalError(this.code.l10n.t('The function name is missing, invalid, or duplicated.'));
                     }
                     names.add(fn.name);
@@ -86,7 +86,7 @@ export class FunctionsProjectReader {
         }
     }
 
-    private functionNode(project: FunctionsProjectNode, fn: FunctionMetadata, values: ICaselessMapReader<string>): LocalFunctionNode {
+    private functionNode(project: FunctionsProjectNode, fn: HostFunction, values: ICaselessMapReader<string>): LocalFunctionNode {
         const metadata = parseFunctionMetadata(this.code, fn.config);
         const setting = values.get(`AzureWebJobs.${fn.name}.Disabled`);
         const disabled = setting === undefined
@@ -111,14 +111,19 @@ export class FunctionsProjectReader {
         };
     }
 
-    private async hostConfig(uri: vscode.Uri): Promise<Record<string, unknown>> {
+    private async hostConfig(uri: vscode.Uri): Promise<z.output<typeof HostConfigSchema>> {
         const config = await readRequiredJson(this.code, uri);
-        if (!config || typeof config !== 'object' || Array.isArray(config)) {
-            throw new ExternalError(this.code.l10n.t('host.json must contain a JSON object.'));
+        const parsed = HostConfigSchema.safeParse(config);
+        if (parsed.success) {
+            return parsed.data;
         }
-        if ((config as { version?: unknown }).version !== '2.0') {
-            throw new ExternalError(this.code.l10n.t('Use the host.json version 2.0 schema for a Functions runtime v4 project.'));
+        switch (parsed.error.issues[0]?.path[0]) {
+            case 'version':
+                throw new ExternalError(this.code.l10n.t('Use the host.json version 2.0 schema for a Functions runtime v4 project.'));
+            case 'functions':
+                throw new ExternalError(this.code.l10n.t('host.json functions must be an array of function names.'));
+            default:
+                throw new ExternalError(this.code.l10n.t('host.json must contain a JSON object.'));
         }
-        return config as Record<string, unknown>;
     }
 }
