@@ -158,7 +158,8 @@ For each migrated node type:
 - [ ] **Prompt budget:** every retained prompt is justified in the mapping record; anything defaultable is a
       Bicep default the user can edit, not a question.
 - [ ] There is **one** create command — no "advanced" variant, mode flag, or basic-vs-advanced branch.
-- [ ] Conditionality lives in `shouldPrompt`/`shouldExecute`, not in conditionally assembled step arrays.
+- [ ] Applicability within a job uses `shouldPrompt`/`shouldExecute`; any job-specific execute-step
+      assembly follows `AzdJob`, not basic/advanced modes.
 - [ ] Mapping records the AVM repository path searched, candidate suitability, pinned registry version,
       and parameter/output mapping.
 - [ ] A resource module is used only for a single-resource topology; any topology with supporting resources

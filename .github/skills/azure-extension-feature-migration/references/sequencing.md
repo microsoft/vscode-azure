@@ -17,19 +17,18 @@ than treating broad generalization as a prerequisite to finishing each slice.
 
 ## Dependency order
 
-Build bottom-up. A feature can't be wired before the things it depends on exist:
+Build bottom-up from each slice's actual imports and DI dependencies. A typical order is:
 
 ```
 1. Constants & types      constants, ARM type + logicalType constants, resource type + guards
 2. Client wrappers        packages/azutils/src/rest/clients/<Product>Client.ts (+ re-export + factory)
-3. Data providers         <Product>DataProvider (getChildren + virtual nodes + enrich)
-4. View providers         <Product>ViewProvider (getTreeItem, icons, contextValue)
-5. Tree registration      product resource providers (specific before generic); workspace/activity arrays
+3. Reuse prerequisites    SettingsAdapter / existing auth and generic command contracts
+4. Data providers         <Product>DataProvider (getChildren + virtual nodes + enrich)
+5. Wizard prerequisites   contexts, prompt/execute steps, templates + azd steps per AzdJob
 6. Commands               ManagedCommand classes + static ContextValue + product registerCommand
-7. Wizards                AVM search/selection + Bicep consumer (or two-file fallback) + azd steps per AzdJob
-8. Manifest               package.json contributions + package.nls.json strings (+ new icon in azutils only if none matches)
-9. Reuse wiring           SettingsAdapter / auth / generic commands through product registration
-10. Tests                 unit (+ integration where the precedent has them)
+7. View providers         <Product>ViewProvider (getTreeItem, icons, contextValue)
+8. Registration           product bindings/commands/resource providers; workspace/activity arrays
+9. Manifest               package.json contributions + package.nls.json strings (+ new icon in azutils only if none matches)
 ```
 
 Rationale: view providers reference the commands' `ContextValue`s and read data resources;
@@ -37,6 +36,7 @@ data providers use client wrappers. Product bindings and resource providers come
 `ProductRegistrar`; `registerTrees.ts` composes trees and workspace/activity entries.
 The manifest `when` clauses must match the assembled `contextValue`s, so contribute the manifest after the
 view layer exists.
+Tests accompany each slice, not a separate final implementation stage.
 
 ## Slice the work vertically where you can
 

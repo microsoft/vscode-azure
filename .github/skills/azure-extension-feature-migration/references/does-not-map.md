@@ -57,8 +57,9 @@ whose step list survived nearly intact is a signal the adaptation never happened
 - **No "advanced" command variant.** One create command. Do not contribute a second "... (Advanced)" command,
   a mode flag, or a basic-vs-advanced branch, even if the source had one — the source's advanced deltas become
   Bicep parameters, not extra prompts.
-- **Express conditionality with `shouldPrompt` / `shouldExecute` on the step**, never by assembling different
-  step arrays per mode. The step list is static; each step decides whether it applies.
+- **Use `shouldPrompt` / `shouldExecute` for applicability within a job**, including hydration and
+  prompt choices. Commands may assemble job-specific execute steps for `AzdJob` (for example,
+  deployment steps only for `deploy`), as in `CreateFunctionApp`; do not add basic/advanced modes.
 - Use the [UX and behavioral contract](pattern-mapping.md#ux-and-behavioral-contract) to justify each
   retained prompt and specify persistence, precedence, cancellation/back behavior, and write timing.
 
