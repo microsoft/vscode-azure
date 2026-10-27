@@ -66,9 +66,10 @@ infra/
       main.bicep
 ```
 
-Bundle both files under `extensions/vscode-azure/resources/templates/` and extend the Bicep generation
-abstraction to copy both files while preserving their relative paths. Do not inline the module into
-the consumer merely because the current generator copies one file.
+Bundle both under one directory in `extensions/vscode-azure/resources/templates/`.
+[`GenerateBicepStep`](../../../../extensions/vscode-azure/src/azd/wizard/GenerateBicepStep.ts)
+copies the complete selected directory into `infra/`, preserving relative module paths.
+Add the directory name to `BicepTemplateName` and use `IGenerateBicepStepFactory` to select it.
 
 Design the local module as an AVM candidate:
 

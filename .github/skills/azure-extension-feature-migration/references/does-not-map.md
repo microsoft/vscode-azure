@@ -21,17 +21,15 @@ What changes:
   `HydratableChooseSubscriptionStep`, `HydratableChooseLocationStep`, `ProjectNameStep`) **plus** your
   resource-specific prompt steps (framework, SKU, runtime, etc.). Resource-specific steps check hydration
   flags (`hasInfra`) to skip when IaC already exists.
-- Execute steps become `GenerateBicepStep` (copies a bundled template + writes `main.parameters.json`),
+- Execute steps become `GenerateBicepStep` (copies a bundled template directory + writes `main.parameters.json`),
   `GenerateAzureYamlStep`, `CreateAzdEnvStep`, `AzdProvisionStep`, and (for the deploy job) `AzdDeployStep`
   + `ShowEndpointUrlStep`. You do **not** write ARM-deploy execute steps.
 - Infrastructure follows the mandatory [AVM-first decision process](avm-provisioning.md): search the
   current AVM repository before authoring Bicep. A single-resource topology may use a suitable AVM
   resource module; a topology with supporting resources requires a suitable AVM pattern module.
 - When no suitable AVM module exists, bundle exactly two Bicep entry points: one AVM-shaped local module
-  that owns the topology and one thin consumer that invokes it. Extend `GenerateBicepStep` (and its
-  template descriptor/factory contract) to copy both files with their relative paths intact. Do not
-  collapse the fallback into one monolithic file merely to work around the current generator's
-  single-file limitation; extend the generator instead.
+  that owns the topology and one thin consumer that invokes it. `GenerateBicepStep` copies the whole
+  selected template directory, preserving module-relative paths. Use its existing factory contract.
 
 **Outputs change too.** The source wizard's output (a live ARM resource + maybe a `.vscode` config) becomes
 IaC files in the workspace (`azure.yaml`, `infra/main.bicep`, `main.parameters.json`) plus an azd
@@ -59,10 +57,11 @@ whose step list survived nearly intact is a signal the adaptation never happened
 - **No "advanced" command variant.** One create command. Do not contribute a second "... (Advanced)" command,
   a mode flag, or a basic-vs-advanced branch, even if the source had one — the source's advanced deltas become
   Bicep parameters, not extra prompts.
-- **Express conditionality with `shouldPrompt` / `shouldExecute` on the step**, never by assembling different
-  step arrays per mode. The step list is static; each step decides whether it applies.
-- Justify every retained prompt in the mapping record: what it asks, and why no default or detection can
-  answer it.
+- **Use `shouldPrompt` / `shouldExecute` for applicability within a job**, including hydration and
+  prompt choices. Commands may assemble job-specific execute steps for `AzdJob` (for example,
+  deployment steps only for `deploy`), as in `CreateFunctionApp`; do not add basic/advanced modes.
+- Use the [UX and behavioral contract](pattern-mapping.md#ux-and-behavioral-contract) to justify each
+  retained prompt and specify persistence, precedence, cancellation/back behavior, and write timing.
 
 ---
 
@@ -86,7 +85,8 @@ differently:
   values, flags, counts), but it must not compute a formatted/derived display string, tree-item
   description/tooltip text, icon id, or `contextValue`, or stash one on a resource for the view to read.
   Turning state into words or pixels is the view provider's job.
-- Both are registered in `registerTrees.ts`, **specific before generic**, so dispatch order matters.
+- Resource providers are registered through `ProductRegistrar`; `registerProducts.ts` orders products
+  **specific before generic**. Workspace/activity providers use `registerTrees.ts` arrays.
 - `contextValue` is no longer authored on a node class — it is assembled from each acting command's static
   `ContextValue`, and gated in `package.json` by a **regex `when`** with word boundaries.
 
@@ -109,7 +109,7 @@ one.
 the logic inline.
 
 **Target shape:** an `@injectable()` class implementing `ManagedCommand`, dependencies via `@inject`,
-a static `ContextValue` if it acts on a tree item, registered with `registerManagedCommand(...)`. Telemetry
+a static `ContextValue` if it acts on a tree item, contributed with `registrar.registerCommand(...)`. Telemetry
 and error handling are automatic (the registry wraps `execute`). Resource selection uses `IResourceSelector`
 (key from the tree, or prompt from the palette) — don't hand-roll the "node or pick" branch.
 
@@ -123,7 +123,8 @@ and error handling are automatic (the registry wraps `execute`). Resource select
 with an `I<Product>Client` interface, an `I<Product>ClientProvider` factory service identifier, and a static
 `create()`. Consumers **never** import `@azure/*` directly — the wrapper re-exports any SDK types it exposes,
 and the extension imports from `@microsoft/vscode-azure-azutils`. The client is provided per-subscription via
-a DI factory binding in `extension.ts`. Don't re-vendor the source's client code.
+`ProductRegistrar.registerAzureClientProvider(...)` in the product's registration function.
+Don't re-vendor the source's client code.
 
 ---
 
@@ -189,6 +190,11 @@ Some source behavior is not ours to reimplement at all. Migrating it means ownin
 someone else's contract, which then breaks when that contract moves. Recognize these during triage and
 recommend **Drop**, **Defer**, or an upstream contribution.
 
+Apply the [ownership/capability gate](pattern-mapping.md#ownership-and-capability-gate) before design:
+check VS Code, the owning language extension, the supported product CLI/Core Tools, and azd rather
+than assuming this extension must orchestrate build, scaffolding, debug/setup, or deployment.
+Any new surface must provide incremental value beyond F5, ordinary file editing, or shared deployment.
+
 **`azure.yaml` is azd's file.** Do not author, template, patch, or parse it. `GenerateAzureYamlStep` is the
 one sanctioned writer, and it exists to hand azd a starting point — not to grow into a product-specific
 `azure.yaml` editor. If a feature needs a service path, build hook, or host setting expressed there, the fix
@@ -201,10 +207,11 @@ where every tool can see them. `contributes.configuration` is for *editor* prefe
 suppression, enable/disable) only. A source extension that stored project layout in workspace settings did so
 because it had nowhere better; we do.
 
-**Scaffolding is azd's job too.** Build presets, framework-specific project templates, and config-file
-generation that azd already performs default to **Drop** / **Defer**. Framework detection stays only where it
-feeds a decision we own (a wizard default, a Bicep parameter) — and it goes through the monorepo's workspace
-scanning service and workspace index, not a bespoke walker.
+**Scaffolding belongs to its upstream owner.** Build presets, framework-specific project templates, and
+config-file generation already supplied by azd, the product CLI/Core Tools, or the language extension
+default to **Reuse** / **Drop** / **Defer**, according to verified capability and signed triage.
+Framework detection stays only where it feeds a decision we own (a wizard default, a Bicep parameter)
+and goes through the monorepo's workspace scanning service and workspace index, not a bespoke walker.
 
 **Never depend on the extension being retired.** This monorepo replaces the per-service extensions, so
 migrated code must not call their commands (`azureFunctions.*`, `azureStaticWebApps.*`, ...), list them in
