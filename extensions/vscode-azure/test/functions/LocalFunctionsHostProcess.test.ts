@@ -220,11 +220,15 @@ describe('Local Functions host ownership (unit)', () => {
 
     it('runs from the project root and delegates compilation to Core Tools when requested', async () => {
         const s = setup();
-        const host = await s.owner.start({ ...s.request, skipBuild: false });
+        const project = s.m.vscode.Uri.joinPath(s.request.project, 'Project With Spaces');
+        const executable = s.m.vscode.Uri.file('/Core Tools/func.exe').fsPath;
+        const hostArgs = ['--cors', 'https://example.test', '--functions', 'HttpTrigger', 'TimerTrigger'];
+        const host = await s.owner.start({ ...s.request, project, executable, hostArgs, skipBuild: false });
+        expect(s.spawn.mock.calls[0].arguments[0]).to.equal(executable);
         expect(s.spawn.mock.calls[0].arguments[1]).to.deep.equal([
-            'run', s.request.project.fsPath, '--port', String(host.hostPort), '--no-azurite', '--output', 'plain',
+            'run', project.fsPath, ...hostArgs, '--port', String(host.hostPort), '--no-azurite', '--output', 'plain',
         ]);
-        expect(s.spawn.mock.calls[0].arguments[2]?.cwd).to.equal(s.request.project.fsPath);
+        expect(s.spawn.mock.calls[0].arguments[2]?.cwd).to.equal(project.fsPath);
         await s.owner.stop(host.id);
     });
 

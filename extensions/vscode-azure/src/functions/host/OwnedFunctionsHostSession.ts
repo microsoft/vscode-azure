@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { IFunctionsHostClientProvider } from '@microsoft/vscode-azure-azutils';
-import { CancellationError, delay, type Disposable, ExternalError, IOutputChannel, IProcessExecutor, IVsCode, throwIfCancelled } from '@microsoft/vscode-azure-utils';
+import { CancellationError, command, delay, type Disposable, ExternalError, IOutputChannel, IProcessExecutor, IVsCode, throwIfCancelled } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
 import type * as vscode from 'vscode';
 import { BufferedPseudoterminal } from '../../utils/BufferedPseudoterminal';
@@ -185,17 +185,18 @@ export class OwnedFunctionsHostSession {
 
     private async run(): Promise<void> {
         const { request, hostPort } = this.launch;
-        const args = ['run', request.project.fsPath, ...request.hostArgs, '--port', String(hostPort)];
-        if (request.skipBuild) {
-            args.push('--no-build');
-        }
-        args.push('--no-azurite', '--output', request.runtime === 'dotnet-isolated' ? 'json' : 'plain');
-        if (request.runtime === 'dotnet-isolated') {
-            args.push('--dotnet-isolated-debug', '--enable-json-output');
-        }
+        const dotnetIsolated = request.runtime === 'dotnet-isolated';
+        const hostCommand = command(request.executable)
+            .arg('run', request.project.fsPath, ...request.hostArgs)
+            .namedArg('--port', String(hostPort))
+            .flagArg('--no-build', request.skipBuild)
+            .arg('--no-azurite')
+            .namedArg('--output', dotnetIsolated ? 'json' : 'plain')
+            .flagArg('--dotnet-isolated-debug', dotnetIsolated)
+            .flagArg('--enable-json-output', dotnetIsolated);
         try {
             const process = await this.processes.spawn({
-                execution: 'background', command: [request.executable, ...args], cwd: request.project, env: this.env,
+                execution: 'background', command: hostCommand, cwd: request.project, env: this.env,
                 killTreeOnCancel: true, streamOutput: true,
             }, this.abort.signal);
             try {

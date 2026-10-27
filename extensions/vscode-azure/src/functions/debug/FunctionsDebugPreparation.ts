@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { CancellationError, CaselessMap, dirname, ExternalError, fileExists, IProcessExecutor, IVsCode, type ICaselessMapReader } from '@microsoft/vscode-azure-utils';
+import { CancellationError, CaselessMap, command, dirname, ExternalError, fileExists, IProcessExecutor, IVsCode, type ICaselessMapReader } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { delimiter } from 'node:path';
 import type * as vscode from 'vscode';
@@ -119,12 +119,12 @@ export class FunctionsDebugPreparation {
         }
         const tools = await this.goTools(project);
         try {
-            const { stdout } = await this.processes.spawn({ execution: 'background', command: [tools.go, 'version'], cwd: project, env }, token);
+            const { stdout } = await this.processes.spawn({ execution: 'background', command: command(tools.go).arg('version'), cwd: project, env }, token);
             const version = /go version go(\d+)\.(\d+)(?:[.\s]|$)/.exec(stdout);
             if (!version || Number(version[1]) < 1 || (Number(version[1]) === 1 && Number(version[2]) < 24)) {
                 throw new ExternalError(this.code.l10n.t('Go 1.24 or later is required to debug native Go Functions. Install or select a supported Go toolchain.'));
             }
-            const delve = await this.processes.spawn({ execution: 'background', command: [tools.delve, 'version'], cwd: project, env }, token);
+            const delve = await this.processes.spawn({ execution: 'background', command: command(tools.delve).arg('version'), cwd: project, env }, token);
             if (!delve.stdout.includes('Delve Debugger') || !/Version:\s*\d+\.\d+/.test(delve.stdout)) {
                 throw new ExternalError(this.code.l10n.t('Delve did not report a valid version. Install or update dlv with Go: Install/Update Tools.'));
             }
@@ -149,7 +149,11 @@ export class FunctionsDebugPreparation {
         await this.code.workspace.fs.createDirectory(this.code.Uri.joinPath(project, 'bin'));
         await this.processes.spawn({
             execution: 'foreground',
-            command: [tools.go, 'build', '-gcflags=all=-N -l', '-o', this.goBinary(project).fsPath, '.'],
+            command: command(tools.go)
+                .arg('build')
+                .namedArg('-gcflags', 'all=-N -l', { assignCharacter: '=' })
+                .namedArg('-o', this.goBinary(project).fsPath)
+                .arg('.'),
             cwd: project, env,
             name: this.code.l10n.t('Build Azure Functions'), source: 'Azure Functions', alwaysRunNew: true,
             workspaceFolder: this.code.workspace.getWorkspaceFolder(project),
