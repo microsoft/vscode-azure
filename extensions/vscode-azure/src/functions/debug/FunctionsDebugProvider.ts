@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { CancellationError, dirname, Disposable, ExternalError, IActionExecutor, IVsCode } from '@microsoft/vscode-azure-utils';
+import { dirname, Disposable, ExternalError, IActionExecutor, IVsCode, throwIfCancelled } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 import * as z from 'zod/mini';
@@ -72,7 +72,7 @@ export class FunctionsDebugProvider implements vscode.DebugConfigurationProvider
 
     public async resolveDebugConfigurationWithSubstitutedVariables(folder: vscode.WorkspaceFolder | undefined, config: vscode.DebugConfiguration, token?: vscode.CancellationToken): Promise<vscode.DebugConfiguration | undefined> {
         return this.actions.callWithTelemetryAndErrorHandling('functions/debug', async () => {
-            if (token?.isCancellationRequested) { throw new CancellationError(); }
+            throwIfCancelled(token);
             const path = parseOption(ProjectPathSchema, config.projectPath, this.code.l10n.t('projectPath must be a filesystem path.'));
             const project = await this.projects.select(folder, path);
             const env = parseOption(EnvSchema, config.env, this.code.l10n.t('env must contain string-valued environment variables.')) ?? {};
