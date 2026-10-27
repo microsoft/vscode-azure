@@ -90,7 +90,7 @@ Client:         re-export every SDK type used in the wrapper APIs from azutils
 - [x] Add `LogsQueryClient` (Application Insights / Log Analytics query) for
   log streaming. <- FUNC-065
 - [x] Unit tests with `MockHttpClient` through each client's `create()`
-  options.
+  options. <- FUNC-060, FUNC-061, FUNC-062, FUNC-065, FUNC-262, FUNC-263
 
 ### Slice 0 contracts and verified sources
 
@@ -165,7 +165,8 @@ provides the focused element for a tree-view pane argument.
 - [x] Wire shared refresh, listing, enrichment, and resource picking on the
   new nodes; no Functions-specific equivalents. <- FUNC-199, FUNC-200, FUNC-271
 - [x] Behavioral tests with shared resource, client, and tree fixtures; real
-  `DataItemTree` error recovery; shared refresh/menu consistency.
+  `DataItemTree` error recovery. <- FUNC-166, FUNC-168, FUNC-169, FUNC-170,
+  FUNC-173, FUNC-180, FUNC-271
 
 ## Slice 2 -- Remote commands
 
@@ -215,8 +216,11 @@ Tree contract:  per Slice 1; menu entries in view/item/context with word-boundar
 - [x] Manifest entries (commands, `view/item/context`) + `package.nls.json`
   strings. The commands are also available from the Command Palette, where
   `ResourceSelector` prompts for the target function or Function App.
+  <- FUNC-041, FUNC-042, FUNC-043, FUNC-044, FUNC-045, FUNC-060, FUNC-061,
+  FUNC-062, FUNC-065, FUNC-171
 - [x] Unit tests per command with `createMockCodeContext()` and real
-  `ActionExecutor`.
+  `ActionExecutor`. <- FUNC-041, FUNC-042, FUNC-043, FUNC-044, FUNC-045,
+  FUNC-060, FUNC-061, FUNC-062, FUNC-065, FUNC-171
 
 Slice 2 external contract sources:
 
@@ -275,8 +279,9 @@ after HTTP readiness and releases it when the host stops.
   against `FunctionsHostClient` (local) and `local.settings.json` values.
   <- FUNC-041, FUNC-042, FUNC-043, FUNC-044
 - [x] Unit/integration tests with shared fixtures and the real workspace
-  index/tree, including remote-command regression coverage and contribution
-  consistency checks.
+  index/tree, including remote-command regression coverage.
+  <- FUNC-041, FUNC-042, FUNC-043, FUNC-044, FUNC-182, FUNC-184, FUNC-185,
+  FUNC-186, FUNC-187, FUNC-188, FUNC-191, FUNC-198
 
 The listing contract is documented in
 [the product contract](../../products/functions.md#local-workspace-tree).
@@ -296,7 +301,7 @@ configuration after the extension has validated the project and started an owned
 Core Tools host. Core Tools owns ordinary builds and dependency restoration;
 the extension owns Go's debug build. Resolving to a different debug type is proven in the Container Tools
 extension. Debugging works with no `tasks.json` or `launch.json`, and neither
-is generated. No and no task type, problem matcher, or process-pick
+is generated. No task type, problem matcher, or process-pick
 command is contributed.
 
 ```
@@ -381,9 +386,11 @@ Resolution flow for one session:
 - [x] Unit tests for configuration resolution, build preparation, host tracking,
   cancellation, and readiness failures; runtime-selection integration tests against
   the real index/tree; shared integration test terminating a real parent/worker
-  process tree.
+  process tree. <- FUNC-030, FUNC-033, FUNC-140, FUNC-141, FUNC-195, FUNC-210,
+  FUNC-211, FUNC-212, FUNC-214, FUNC-215, FUNC-216, FUNC-268, FUNC-269
 - [ ] Live language attach-path smoke checks during Slice 7. The automated tests
   cover all six configuration/API paths, not live language debugger sessions.
+  <- FUNC-033, FUNC-195, FUNC-210, FUNC-211, FUNC-212, FUNC-214
 
 Live Core Tools v5 workload startup, language debugger sessions,
 storage/emulator integration, and Linux/macOS smoke checks remain in Slice 7.
@@ -454,9 +461,10 @@ Wizard:         SelectIacFolder -> HydrateAzdInfo -> subscription -> location ->
   prompts. <- FUNC-248
 - [x] Provisioning topology through the function-app pattern module (see
   below). <- FUNC-249
-- [x] Deleting a containerized Function App uses shared delete (applies once
-  containerized apps return from Deferred). <- FUNC-258
+- [x] Shared ARM deletion accepts site resources. Containerized Functions
+  product integration remains conditional under P6-01. <- FUNC-258
 - [x] Unit tests with `respondToPrompts()`; Bicep build of the consumer.
+  <- FUNC-057, FUNC-241, FUNC-246, FUNC-248, FUNC-249
 
 ### Provisioning decision
 
@@ -512,7 +520,11 @@ External facts: `https://json.schemastore.org/function.json` and `https://json.s
   settings are Drop or Defer in [TRIAGE.md](TRIAGE.md). <- FUNC-140, FUNC-141
 - [x] Product doc `docs/products/functions.md` (tree, commands, F5, creation,
   deploy constraints); framework docs get at most a link.
+  <- FUNC-030, FUNC-041, FUNC-057, FUNC-065, FUNC-166, FUNC-182, FUNC-195,
+  FUNC-210, FUNC-211, FUNC-212, FUNC-214, FUNC-215, FUNC-216
 - [x] Full `pnpm run lint` / `build` / `test` sweep before the PR.
+  <- FUNC-030, FUNC-041, FUNC-057, FUNC-065, FUNC-166, FUNC-182, FUNC-195,
+  FUNC-210, FUNC-211, FUNC-212, FUNC-214, FUNC-215, FUNC-216, FUNC-262, FUNC-263
 
 ## Deferred -- tracked, not built
 
@@ -605,190 +617,66 @@ External facts: `https://json.schemastore.org/function.json` and `https://json.s
 |---|---|---|
 | 2026-09-24 | `dfc8edaf` (#350) | Adopt `ExternalError` (`packages/utils`) for user-actionable failures in Slices 2, 4, and 6 (missing Core Tools, pre-debug validation). No other new shared surfaces; no slices landed yet. |
 | 2026-10-08 | `8993a3c1` | Slice 0 intake sweep: reuse the shared data-plane REST factory and cloud-aware Log Analytics endpoint. Container Apps already owns its log-stream pseudoterminal; inspect that implementation before Slice 2 instead of assuming a terminal primitive is absent. |
+| 2026-10-15 | `86e7a436` via `d1049998` | Main merge identified from its second parent. Current re-sweep confirms shared process execution/cancellation and azutils client consumers; the per-merge sweep was not recorded contemporaneously. |
+| 2026-10-16 | `f4dc74a7` via `1d0df593` | Main merge identified from its second parent. Current re-sweep confirms ProductRegistrar client/command wiring, shared tool acquisition, Web App lifecycle, resource selection/navigation, workspace index, and terminal reuse. |
+| 2026-10-20 | `50a6c765` via `edb2f2a3` | Main merge identified from its second parent. Current re-sweep confirms caseless readers, required JSON reads, URI helpers, and shared settings/fixture consumers; no claim of an independently recorded merge-time sweep. |
+| 2026-10-21 | `7ab33579` via `99988f10` | Main merge identified from its second parent. Current re-sweep confirms shared data-tree invalidation, grouping-aware parentage, and enrichment contracts. |
+| 2026-10-21 | `45bb4aec` via `37600ea4` | Main merge identified from its second parent. Current re-sweep confirms provider registration order and shared command/settings/index ownership. |
+| 2026-10-26 | `9ba6343f` via `27cfa45f` | Docs-only main delta. Current re-sweep confirms the existing shared consumers without a source adoption delta. |
+| 2026-10-26 | `25585e88` via `cc6e1ba6` | Adopted shared JSONC helpers, required JSON reader, `mapPages`, and generalized `BufferedPseudoterminal`; current re-sweep confirms imports/callers and the terminal closed guard. |
 
-## Parity and wiring audit -- 2026-10-12
+The additional first-parent merges on 2026-10-15 integrate shared topic
+branches, not main: `43f9c045`, `490b096d`, `538c68cf`, `ce3d1797`,
+`f282863a`, `0fb175c5`, `e5af2f9f`, `d4a3a961`, `c9127b5a`, `011c38cd`,
+and `6b370930`. Their current consumers are included in the Phase 6
+shared-primitive re-sweep. These retrospective entries establish present
+conformance evidence; they do not prove a sweep happened at every historical
+merge boundary.
 
-The three process artifacts are tracked. Their initial commit, `47de2cb4`,
-precedes the provisioning update (`6d8e60e2`) and implementation slices.
-All 271 IDs and inventory feature names match the original triage catalog;
-approved disposition changes are reflected in the signed current triage.
-The inventory's command, settings, tree, debug, wizard, and integration
-families are covered by that catalog.
+## Phase 6 verification
 
-| Signed disposition | IDs | Audited outcome |
-|---|---:|---|
-| Migrate | 24 | Landed and wired |
-| Adapt | 21 | Landed with the approved target behavior |
-| Reuse | 19 | 18 wired; one conditional shared capability (`FUNC-258`) |
-| Drop | 143 | Source-specific feature absent; exact ID partition recorded under Dropped |
-| Defer | 64 | Exact ID partition tracked under Deferred |
-| Total | 271 | No missing or duplicate IDs |
+The [parity report](PARITY-REPORT.md) accounts for all 271 IDs at implementation
+commit `72ebf165`. It records the artifact/history checks, scoped Drop evidence,
+exact Deferred partition, implementation/reuse consumers, conformance findings,
+external sources, and the 2026-10-27 full lint/build/test and Bicep results.
+The inventory and signed dispositions are unchanged.
 
-This is implementation and wiring coverage, not live debugger certification.
-The live attach-path checkbox in Slice 4 remains open and user-owned.
-The full repository pre-PR lint/build/test results are recorded below.
+## Verification follow-ups
 
-### Kept-feature evidence
+These are verification/integration/conformance tasks, not new Defer
+dispositions. Their labels match the report's findings.
 
-Paths below are relative to `extensions/vscode-azure/src/`, unless prefixed
-with `packages/` or explicitly described as an extension manifest.
-Registration is in `products/registerFunctions.ts`, shared command
-registration in `commands/registerCommands.ts`, and tree composition in
-`tree/registerTrees.ts`.
-
-| ID | Feature | Signed disposition | Outcome | Evidence |
-|---|---|---|---|---|
-| FUNC-002 | Project detection | Reuse | Wired | `functions/functionsDetector.ts`: `functionsDetector`; `utils/workspaceIndex/WorkspaceIndexService.ts` |
-| FUNC-004 | Local workspace gates | Migrate | Landed | Extension `package.json` enablement/menu gates; `functions/FunctionsProjectSelector.ts`: `assertLocal`; `functions/LocalFunctionTarget.ts` |
-| FUNC-008 | Function schema | Migrate | Landed | Extension `package.json`: `jsonValidation` for `function.json` |
-| FUNC-009 | Host schema | Migrate | Landed | Extension `package.json`: `jsonValidation` for `host.json` |
-| FUNC-021 | Core Tools version checks | Reuse | Wired on demand | `tools/ToolService.ts`, `tools/FuncInstaller.ts`; debug preparation requires v5 preview.3 or later |
-| FUNC-030 | Existing-project debug setup | Adapt | Landed through F5 runtime selection | `functions/debug/FunctionsDebugPreparation.ts`; selected runtime persisted through `LocalFunctionSettings` without generated debug/recommendation files |
-| FUNC-031 | Install/update Core Tools | Reuse | Wired | `commands/registerCommands.ts`: `vscode-azure/installFunc` -> `AcquireTool`; `extension.ts`: `FuncInstaller` binding |
-| FUNC-033 | .NET process selection | Adapt | Landed inside owned F5 | `functions/host/LocalFunctionsHostProcess.ts`; `functions/debug/FunctionsDebugProvider.ts` |
-| FUNC-041 | Execute function | Migrate | Landed locally and remotely | `commands/functions/ExecuteFunction.ts`; `functions/LocalFunctionTarget.ts` |
-| FUNC-042 | Copy function URL | Migrate | Landed locally and remotely | `commands/functions/CopyFunctionUrl.ts`; current host/management metadata and access checks |
-| FUNC-043 | Enable function | Migrate | Landed locally and remotely | `commands/functions/SetFunctionState.ts`; registration prefix argument `false` |
-| FUNC-044 | Disable function | Migrate | Landed locally and remotely | `commands/functions/SetFunctionState.ts`; registration prefix argument `true` |
-| FUNC-045 | Delete function | Migrate | Landed remotely | `commands/functions/DeleteFunction.ts`; confirmation, activity, and success-only cache removal |
-| FUNC-055 | GitHub/CI/CD setup | Reuse | Wired through azd | `commands/deploy/ConfigureCicd.ts`; `azd/wizard/AzdPipelineConfigStep.ts` |
-| FUNC-057 | Create Function App | Adapt | Landed through azd+Bicep | `commands/functions/CreateFunctionApp.ts`; `createNew` registration prefix argument |
-| FUNC-059 | Delete Function App | Reuse | Wired | `commands/tree/DeleteAzureResource.ts`; `tree/contextValueHelpers.ts`: `resourceContextValue` |
-| FUNC-060 | Start app | Migrate | Landed as shared Web App action | `commands/webApp/WebAppLifecycle.ts`; registration prefix argument `start` |
-| FUNC-061 | Stop app | Migrate | Landed as shared Web App action | `commands/webApp/WebAppLifecycle.ts`; registration prefix argument `stop` |
-| FUNC-062 | Restart app | Migrate | Landed as shared Web App action | `commands/webApp/WebAppLifecycle.ts`; registration prefix argument `restart` |
-| FUNC-063 | Browse website | Reuse | Wired | `commands/tree/BrowseWebsite.ts`; enriched URL drives `resourceContextValue` |
-| FUNC-064 | View properties | Reuse | Wired | `commands/tree/ViewProperties.ts`; `resourceContextValue` |
-| FUNC-065 | Stream logs | Adapt | Landed as cancellable polling terminal | `commands/functions/StreamFunctionLogs.ts`, `tree/resources/webApp/FunctionAppLogStream.ts`; shared `utils/BufferedPseudoterminal.ts` |
-| FUNC-072 | Add app setting | Reuse | Wired through JSONC editor | `settings/adapters/WebAppSettingsAdapter.ts`; shared `commands/settings/EditSettings.ts` |
-| FUNC-075 | Edit app setting | Reuse | Wired through JSONC editor | `settings/adapters/WebAppSettingsAdapter.ts`; shared `SettingsFileSystemProvider` |
-| FUNC-076 | Rename app setting | Reuse | Wired through JSONC editor | `settings/adapters/WebAppSettingsAdapter.ts`; shared JSONC document read-modify-write |
-| FUNC-077 | Delete app setting | Reuse | Wired through JSONC editor | `settings/adapters/WebAppSettingsAdapter.ts`; shared JSONC document read-modify-write |
-| FUNC-100 | Report Issue | Reuse | Wired through framework errors | `packages/utils/src/base/IActionExecutor.ts`: `ActionExecutor.showErrorToast`; `ExternalError` suppresses the issue action |
-| FUNC-140 | Delve validation | Adapt | Landed without a setting | `functions/debug/FunctionsDebugPreparation.ts`: native worker validation |
-| FUNC-141 | Go validation | Adapt | Landed without a setting | `functions/debug/FunctionsDebugPreparation.ts`: Go version validation |
-| FUNC-166 | Function App node/state/Flex | Migrate | Landed | `tree/resources/webApp/FunctionAppViewProvider.ts`; `FunctionAppDataProvider` enrichment |
-| FUNC-168 | Remote Functions group | Migrate | Landed beside settings | `tree/resources/webApp/FunctionAppDataProvider.ts`, `FunctionAppViewProvider.ts` |
-| FUNC-169 | Remote function leaf | Migrate | Landed | `tree/resources/webApp/FunctionApp.ts`, `FunctionAppViewProvider.ts`; trigger/access/state capabilities |
-| FUNC-170 | Invalid remote function | Migrate | Landed | `tree/resources/webApp/FunctionAppDataProvider.ts`, `FunctionAppViewProvider.ts`; refresh-only errors |
-| FUNC-171 | Reveal attached identity | Adapt | Landed as navigation | `commands/functions/RevealFunctionAppIdentity.ts` -> shared `RevealResource` |
-| FUNC-173 | App settings nodes | Reuse | Wired | `tree/resources/webApp/FunctionAppDataProvider.ts`: `getSettingsNodes`; `products/registerSettings.ts` |
-| FUNC-180 | Invalid Function App | Migrate | Landed | `tree/resources/webApp/FunctionAppDataProvider.ts`: site errors; `FunctionAppViewProvider.ts`: invalid presentation |
-| FUNC-182 | Local project node | Migrate | Landed | `tree/workspace/functions/FunctionsWorkspaceDataProvider.ts`, `FunctionsWorkspaceViewProvider.ts` |
-| FUNC-184 | Local Functions grouping | Adapt | Landed as direct project children | `functions/FunctionsProjectReader.ts`; `FunctionsWorkspaceViewProvider.getChildren` |
-| FUNC-185 | Local function leaf | Migrate | Landed | `functions/FunctionsProjectReader.ts`; `FunctionsWorkspaceViewProvider.ts` |
-| FUNC-186 | Invalid local function | Migrate | Landed | `functions/FunctionsProjectReader.ts`; invalid metadata nodes rendered with refresh |
-| FUNC-187 | No-host listing hint | Adapt | Landed | `functions/FunctionsProjectReader.ts`; "Start debugging to list functions..." |
-| FUNC-188 | Host-listing hint | Migrate | Landed | `functions/FunctionsProjectReader.ts`; host-backed runtime metadata |
-| FUNC-191 | Invalid local project | Migrate | Landed | `functions/FunctionsProjectReader.ts`; `FunctionsWorkspaceViewProvider.ts` under `tree/workspace/functions/` |
-| FUNC-195 | Native Go F5 | Adapt | Landed; live VS Code checks pending | `functions/debug/FunctionsDebugPreparation.ts`, `FunctionsDebugProvider.ts`; owned Delve and cleanup |
-| FUNC-198 | Local tree refresh | Migrate | Landed | `FunctionsWorkspaceDataProvider.ts` under `tree/workspace/functions/`; shared index, local settings, host events |
-| FUNC-199 | Resource pickers | Reuse | Wired | `tree/resources/ResourceSelector.ts`: `IResourceSelector`; remote commands inject the shared selector |
-| FUNC-200 | Resource listing/site cache | Reuse | Wired | `tree/resources/AzureResourceDataProvider.ts`; `FunctionAppDataProvider` enrichment and shared data-tree cache |
-| FUNC-210 | Node F5 | Adapt | Landed; live checks pending | `functions/debug/FunctionsDebugPreparation.ts`, `FunctionsDebugProvider.ts`; JS/TS attach |
-| FUNC-211 | Python F5 | Adapt | Landed; live checks pending | `functions/debug/FunctionsDebugPreparation.ts`, `FunctionsDebugProvider.ts`; owning Python/debugpy APIs |
-| FUNC-212 | Java F5 | Adapt | Landed; live checks pending | `functions/debug/FunctionsDebugPreparation.ts`, `FunctionsDebugProvider.ts`; staged Maven output |
-| FUNC-214 | PowerShell F5 | Adapt | Landed; live checks pending | `functions/debug/FunctionsDebugPreparation.ts`, `FunctionsDebugProvider.ts`; worker pipe attach |
-| FUNC-215 | Pre-debug validation | Adapt | Landed as retained subset | `functions/debug/FunctionsDebugPreparation.ts`; trust, runtime, tools, storage configuration, default Azurite endpoint checks |
-| FUNC-216 | Host lifecycle tracking | Adapt | Landed without tasks | `functions/host/LocalFunctionsHostProcess.ts`, `LocalFunctionsHostTracker.ts`; readiness, ports, cancellation, cleanup |
-| FUNC-217 | Core Tools lifecycle | Reuse | Wired on demand | `tools/ToolService.ts`, `tools/FuncInstaller.ts`; shared v5 acquisition for F5 |
-| FUNC-241 | Flex Consumption | Reuse | Wired in provisioning template | Extension `resources/templates/functionApp/main.bicep`: FC1 |
-| FUNC-246 | Storage authentication | Adapt | Landed as managed identity default | Extension `resources/templates/functionApp/main.bicep`; pinned AVM pattern owns identity and roles |
-| FUNC-248 | Flex scale/memory options | Adapt | Landed as Bicep parameters | Extension `resources/templates/functionApp/main.bicep`; no additional wizard prompt |
-| FUNC-249 | Provisioning topology | Adapt | Landed through pinned AVM pattern | Extension `resources/templates/functionApp/main.bicep`: `br/public:avm/ptn/app/function-app:0.1.0` |
-| FUNC-258 | Containerized-app deletion | Reuse | Shared capability available; product integration deferred | `commands/tree/DeleteAzureResource.ts`; containerized Functions nodes remain deferred under FUNC-181/FUNC-250 |
-| FUNC-262 | Web Apps SDK surface | Migrate | Landed and injected | `packages/azutils/src/rest/clients/WebAppClient.ts`; factory binding in `products/registerFunctions.ts` |
-| FUNC-263 | Host admin API | Migrate | Landed and injected | `packages/azutils/src/rest/clients/FunctionsHostClient.ts`; factory binding and local host tracking |
-| FUNC-268 | Python extension launcher | Adapt | Landed | `functions/debug/FunctionsDebugPreparation.ts`; debugger-owned launcher and package resolution |
-| FUNC-269 | Worker process selection | Adapt | Landed through shared process execution | `functions/host/LocalFunctionsHostProcess.ts`; `packages/utils/src/base/IProcessExecutor.ts` |
-| FUNC-271 | Tree refresh command | Reuse | Wired | `commands/tree/RefreshResourcesView.ts`; remote app/group/function/invalid nodes and manifest menus |
-
-### Drop and Defer evidence
-
-The ID lists in the two preceding sections were compared mechanically with
-the current triage: 143 Drop and 64 Defer IDs, each present exactly once in
-its appropriate section. Dropped source behavior is checked at its public
-boundary, not by asserting that an equivalent shared capability is absent.
-For example, internal host startup survives F5 while the source exported
-host-start API is dropped.
-
-- **Source host/API/plumbing contracts:** extension `package.json`,
-  `extension.ts`, and `products/registerFunctions.ts` contain no dependency
-  on Azure Resources or the retiring Functions extension, source exported
-  API, source command IDs, experimentation, global Report Issue suppression,
-  portal URI handler, or activation-time project-fixing/scaffolding flow.
-- **Authoring, settings, templates, and language exclusions:** the manifest
-  contributes only shared `vscode-azure.*` configuration. Product registration
-  contains no source scaffolding commands, legacy template
-  subsystem, encrypt/decrypt/sync commands, Event Grid editor/CodeLens flow,
-  walkthrough, source settings, Ballerina debugger, or legacy runtime wizard.
-- **Kudu, deploy fixups, remote debugging, and creation variants:** the remote
-  data/view providers expose settings and Functions, not Files, Logs,
-  Deployments, identity-management, or slot trees. Command registration and
-  `CreateFunctionApp` implement the approved azd path and
-  single Flex wizard, not Kudu, remote debugging, advanced/existing-resource
-  creation, source zip/publish paths, or source deployment fixups.
-- **Tasks, matchers, and agent deployment:** the manifest contributes no
-  task definitions, problem matchers/patterns, source submenu, or agent
-  metadata. Product activation registers the owned debug provider rather
-  than a task provider; no source `agent.*` deployment commands are wired.
-- **Deferred families:** the Deferred section remains the tracked task
-  surface for every signed Defer ID. Scaffolding is tracked by
-  [#364](https://github.com/microsoft/vscode-azure/issues/364), visual
-  gallery/binding tooling by [#365](https://github.com/microsoft/vscode-azure/issues/365).
-  CLI scaffolding, the gallery panel, native Go provisioning/runtime selection,
-  Durable/DTS, slots, identity management, containerized Functions, MCP
-  integration, host exceptions UI, and expanded emulator/v5 options are not
-  exposed as completed migration features.
-
-### Wiring and documentation evidence
-
-- Product bindings, command aliases/prefix arguments, resource providers,
-  workspace providers, settings adapters, and debug activation are wired.
-  Specific providers precede generic fallbacks; the Functions view precedes
-  the broader Web App view. The retained nodes' command capabilities match
-  manifest word-boundary, case-insensitive regexes; invalid nodes expose
-  refresh only.
-- The Function App icon resolves to
-  `packages/azutils/resources/azureIcons/microsoft.web/sites~functionapp.svg`,
-  matching the logical type. Manifest NLS references resolve, both schemas
-  match the inventory, and no explicit activation event or retiring-extension
-  dependency is added. Core Tools checks and host startup remain on demand.
-- Shared local/remote actions have independent workspace gates. Local
-  targets use `FunctionsProjectSelector.assertLocal` before host access or
-  settings mutation, with a further invocation check after the input prompt.
-  Regression tests cover untrusted/virtual/out-of-workspace targets and
-  preserve remote actions in an untrusted workspace.
-- Product behavior is documented in [Functions](../../products/functions.md).
-  Framework client documentation links to the product host contract.
-  Go/Delve validation is an adapted behavior, not a contributed setting.
-- Repository lint, build, and tests passed across all three workspaces;
-  see the full sweep results below. Live debugger sessions remain separate.
-
-### Full pre-PR sweep -- 2026-10-12
-
-The root commands `pnpm run lint`, `pnpm run build`, and `pnpm run test`
-all exited successfully against source commit `99dc1ece`. No source fixes
-were required.
-
-| Workspace | Lint | Build | Passing tests | Pending tests |
-|---|---|---|---:|---:|
-| `packages/utils` | Passed | Passed | 592 | 12 |
-| `packages/azutils` | Passed | Passed | 423 | 0 |
-| `extensions/vscode-azure` | Passed | Passed | 1364 | 4 |
-| Total | Passed | Passed | 2379 | 16 |
-
-Pending tests are not executed by this sweep. Live language debugger,
-storage/emulator, and cross-platform smoke checks remain user-owned under
-Slice 4; the automated gates do not certify those manual paths.
-
-### Coverage audit validation -- 2026-10-12
-
-Behavioral tests cover host debugger-readiness timeout and failure cleanup, and
-post-deployment endpoint service scoping, empty results, and discovery failures.
-The coverage additions require no production-code changes.
-
-The full root lint, build, and test sweep passed with these tests: utils has
-592 passing and 12 pending; azutils has 423 passing; the extension has 1378
-passing and 4 pending. Total: 2393 passing and 16 pending. Live checks remain
-separate from automated coverage.
+- [ ] **P6-01:** Verify containerized Function App deletion through the shared
+  ARM delete command when its product discovery/tree/creation integration is
+  available. The generic capability alone is not product certification.
+  <- FUNC-258 (integration depends on FUNC-181, FUNC-250)
+- [ ] **P6-02:** Complete the existing
+  [manual checklist](https://github.com/microsoft/vscode-azure/pull/367#issuecomment-6444069751):
+  six-runtime F5/workload startup, storage/Azurite, failed-terminal retention in
+  VS Code, real Azure commands/log queries/provisioning, and macOS/Linux
+  owned-process cleanup. Record evidence without secrets. Pending automated
+  tests are not passes.
+  <- FUNC-030, FUNC-033, FUNC-041, FUNC-042, FUNC-043, FUNC-044, FUNC-045,
+  FUNC-057, FUNC-060, FUNC-061, FUNC-062, FUNC-065, FUNC-195, FUNC-210,
+  FUNC-211, FUNC-212, FUNC-214, FUNC-215, FUNC-216, FUNC-249, FUNC-268, FUNC-269
+- [ ] **P6-03:** Put local-project relative display labels and no-host hint
+  localization in the view layer; retain domain identifiers/state in data
+  nodes. See the report's source locations.
+  <- FUNC-182, FUNC-187, FUNC-188
+- [ ] **P6-04:** Bring remote/local view context-value assertions into the
+  skill's permitted test shapes: test behavior or genuine cross-boundary
+  consistency, not a context string against its source constant.
+  <- FUNC-166, FUNC-169, FUNC-170, FUNC-180, FUNC-185, FUNC-186
+- [ ] **P6-05:** Localize the loopback-reservation address failure through the
+  injected VS Code localization surface.
+  <- FUNC-216
+- [ ] **P6-06:** Confirm owner notification for the signed known external
+  consumers before retiring source APIs/task/settings contracts.
+  <- FUNC-011, FUNC-012, FUNC-013, FUNC-016, FUNC-017, FUNC-032, FUNC-034,
+  FUNC-035, FUNC-102, FUNC-116, FUNC-131, FUNC-133, FUNC-203, FUNC-204
+- [ ] **P6-07:** Confirm the source-behavior differences on retained Migrate
+  rows, or implement source-equivalent behavior: HTTP Execute uses the admin
+  API rather than the HTTP trigger route, Delete lacks package/read-only
+  availability gating, and the no-host hint has no click-to-debug action.
+  Any accepted disposition change requires reviewer sign-off in TRIAGE.md.
+  <- FUNC-041, FUNC-045, FUNC-188
