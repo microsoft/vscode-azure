@@ -479,6 +479,7 @@ export function createMockFunctionsHostClient(): MockFunctionsHostClient {
         listFunctions: mock.fn(() => Promise.resolve([])),
         getStatus: mock.fn(() => Promise.resolve({ state: 'Running' })),
         invoke: mock.fn(() => Promise.resolve()),
+        invokeHttp: mock.fn(() => Promise.resolve()),
     };
 }
 

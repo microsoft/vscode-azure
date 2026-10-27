@@ -197,13 +197,16 @@ Tree contract:  per Slice 1; menu entries in view/item/context with word-boundar
 
 - [x] Start, stop, and restart as shared `Microsoft.Web/sites` commands.
   <- FUNC-060, FUNC-061, FUNC-062
-- [x] Execute a function (remote via the host admin API; request body prompt
-  for non-HTTP triggers). <- FUNC-041
+- [x] Execute a function: HTTP triggers receive a POST at their current route;
+  non-HTTP triggers use the host admin API. Both prompt for raw input without
+  persisting it. <- FUNC-041
 - [x] Copy function URL (with function key when the auth level requires it).
   <- FUNC-042
 - [x] Enable / disable a function through the shared app-settings adapter.
   <- FUNC-043, FUNC-044
-- [x] Delete a remote function, reported in the activity tree. <- FUNC-045
+- [x] Delete a writable remote function, reported in the activity tree.
+  Deployment editability is checked before the operation; package-backed/Flex
+  deployments are read-only. <- FUNC-045
 - [x] Stream logs: shared `BufferedPseudoterminal` polling `LogsQueryClient` for
   the app's Application Insights resource (resolved from
   `APPLICATIONINSIGHTS_CONNECTION_STRING`); closing the terminal stops polling.
@@ -271,7 +274,8 @@ after HTTP readiness and releases it when the host stops.
   [Azure/azure-functions-core-tools#5344](https://github.com/Azure/azure-functions-core-tools/issues/5344).
   <- FUNC-182, FUNC-184, FUNC-185
 - [x] Hint node: "Start debugging to list functions..." while no host is
-  ready. <- FUNC-187, FUNC-188
+  ready; clicking it starts debugging for its project. Presentation belongs
+  to the view provider. <- FUNC-187, FUNC-188
 - [x] Invalid local function and invalid local project nodes. <- FUNC-186, FUNC-191
 - [x] Refresh on local settings changes and host start/stop through the
   workspace index watcher and host tracking events. <- FUNC-198
@@ -635,8 +639,8 @@ merge boundary.
 
 ## Phase 6 verification
 
-The [parity report](PARITY-REPORT.md) accounts for all 271 IDs at implementation
-commit `72ebf165`. It records the artifact/history checks, scoped Drop evidence,
+The [parity report](PARITY-REPORT.md) accounts for all 271 IDs in the committed
+implementation. It records the artifact/history checks, scoped Drop evidence,
 exact Deferred partition, implementation/reuse consumers, conformance findings,
 external sources, and the 2026-10-27 full lint/build/test and Bicep results.
 The inventory and signed dispositions are unchanged.
@@ -659,24 +663,22 @@ dispositions. Their labels match the report's findings.
   <- FUNC-030, FUNC-033, FUNC-041, FUNC-042, FUNC-043, FUNC-044, FUNC-045,
   FUNC-057, FUNC-060, FUNC-061, FUNC-062, FUNC-065, FUNC-195, FUNC-210,
   FUNC-211, FUNC-212, FUNC-214, FUNC-215, FUNC-216, FUNC-249, FUNC-268, FUNC-269
-- [ ] **P6-03:** Put local-project relative display labels and no-host hint
-  localization in the view layer; retain domain identifiers/state in data
-  nodes. See the report's source locations.
+- [x] **P6-03:** The Functions view provider owns project-relative labels and
+  localized hints; data nodes contain domain identifiers/state.
   <- FUNC-182, FUNC-187, FUNC-188
-- [ ] **P6-04:** Bring remote/local view context-value assertions into the
-  skill's permitted test shapes: test behavior or genuine cross-boundary
-  consistency, not a context string against its source constant.
+- [x] **P6-04:** Remote/local view menu checks compare rendered nodes with
+  the manifest's independent menu predicates through `treeMenuMatches`;
+  metadata, command, refresh, and rendering tests exercise behavior.
   <- FUNC-166, FUNC-169, FUNC-170, FUNC-180, FUNC-185, FUNC-186
-- [ ] **P6-05:** Localize the loopback-reservation address failure through the
-  injected VS Code localization surface.
+- [x] **P6-05:** The loopback-reservation address failure uses the injected
+  VS Code localization surface.
   <- FUNC-216
 - [ ] **P6-06:** Confirm owner notification for the signed known external
   consumers before retiring source APIs/task/settings contracts.
   <- FUNC-011, FUNC-012, FUNC-013, FUNC-016, FUNC-017, FUNC-032, FUNC-034,
   FUNC-035, FUNC-102, FUNC-116, FUNC-131, FUNC-133, FUNC-203, FUNC-204
-- [ ] **P6-07:** Confirm the source-behavior differences on retained Migrate
-  rows, or implement source-equivalent behavior: HTTP Execute uses the admin
-  API rather than the HTTP trigger route, Delete lacks package/read-only
-  availability gating, and the no-host hint has no click-to-debug action.
-  Any accepted disposition change requires reviewer sign-off in TRIAGE.md.
+- [x] **P6-07:** HTTP Execute posts to the actual HTTP trigger route (confirmed
+  by the reviewer, 2026-10-27), Delete requires current writable deployment
+  settings, and the no-host hint launches its specific Functions project.
+  Signed dispositions are unchanged.
   <- FUNC-041, FUNC-045, FUNC-188

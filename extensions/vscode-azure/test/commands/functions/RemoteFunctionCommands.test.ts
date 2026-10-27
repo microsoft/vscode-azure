@@ -24,8 +24,8 @@ import { respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { createLocalFunctions } from '../../tree/workspace/functions/mockLocalFunctions';
 
 let localFixtures: ReturnType<typeof createLocalFunctions>[] = [];
-function setup(authLevel: string | undefined = 'function', isTrusted = true) {
-    const fn = makeFunctionAppFunction({ authLevel });
+function setup(authLevel: string | undefined = 'function', isTrusted = true, triggerKind = 'httpTrigger') {
+    const fn = makeFunctionAppFunction({ authLevel, triggerKind });
     const app = fn.azureResource;
     const selection = createTestResourceSelector({ nodes: [app, fn] });
     const code = selection.codeContext.mock.vscode;
@@ -34,7 +34,7 @@ function setup(authLevel: string | undefined = 'function', isTrusted = true) {
         settings: { Existing: 'preserved', [`AzureWebJobs.${fn.functionName}.Disabled`]: 'true' },
         functions: [makeFunctionEnvelope({
             invokeUrlTemplate: 'https://my-functions.azurewebsites.net/api/HttpTrigger?code=stale&Code=other&custom=value',
-            config: { bindings: [{ type: 'httpTrigger', authLevel }] },
+            config: { bindings: [{ type: triggerKind, authLevel }] },
         })],
     });
     const settings = new WebAppSettingsAdapter(code, () => client);
@@ -71,14 +71,15 @@ describe('Remote function commands (unit)', () => {
         const host = createMockFunctionsHostClient();
         const write = s.codeContext.mock.env.clipboard.writeText;
         const prompts = respondToPrompts(s.codeContext.mock, [{ input: 'remote input' }]);
-        await new ExecuteFunction(s.ctx, s.selector, () => s.client, () => host, s.local).execute(s.key);
+        await new ExecuteFunction(s.ctx, s.selector, () => s.client, () => host, s.local, new FunctionUrlResolver(s.code, () => s.client, s.local)).execute(s.key);
         await copyCommand(s).execute(s.key);
         const state = new SetFunctionState(s.code, s.selector, s.settings, s.cache, s.local);
         await state.execute(false, s.key);
         expect(s.client.settings[`AzureWebJobs.${s.fn.functionName}.Disabled`]).to.equal('false');
         await state.execute(true, s.key);
         expect(s.client.settings[`AzureWebJobs.${s.fn.functionName}.Disabled`]).to.equal('true');
-        expect(host.invoke.mock.calls[0].arguments).to.deep.equal([s.fn.functionName, 'remote input']);
+        expect(host.invokeHttp.mock.calls[0].arguments[0].toString()).to.equal('https://my-functions.azurewebsites.net/api/HttpTrigger?custom=value');
+        expect(host.invokeHttp.mock.calls[0].arguments[1]).to.equal('remote input');
         expect(write.mock.calls[0].arguments[0]).to.equal('https://my-functions.azurewebsites.net/api/HttpTrigger?custom=value');
         prompts.assertAllConsumed();
     });
@@ -210,7 +211,7 @@ describe('Remote function commands (unit)', () => {
             if (failed) {
                 s.client.webApps.deleteFunction.mock.mockImplementation(() => Promise.reject(new Error('delete rejected')));
             }
-            const result = new DeleteFunction(s.code, s.selector, () => s.client, s.cache, activities).execute(s.key);
+            const result = new DeleteFunction(s.code, s.selector, () => s.client, s.cache, activities, s.settings).execute(s.key);
             if (failed) {
                 await expect(result).to.be.rejectedWith('delete rejected');
             } else {
@@ -229,17 +230,17 @@ describe('Remote function commands (unit)', () => {
     it('does not delete or create an activity when confirmation is dismissed', async () => {
         const s = setup();
         const activities = new GenericActivityDataProvider();
-        await expect(new DeleteFunction(s.code, s.selector, () => s.client, s.cache, activities).execute(s.key)).to.be.rejectedWith(CancellationError);
+        await expect(new DeleteFunction(s.code, s.selector, () => s.client, s.cache, activities, s.settings).execute(s.key)).to.be.rejectedWith(CancellationError);
         expect(s.client.webApps.deleteFunction.mock.callCount()).to.equal(0);
         expect(await activities.getChildren()).to.be.empty;
         activities.dispose();
     });
 
-    it('submits exact input through the host client and does not persist the payload', async () => {
-        const s = setup();
+    it('submits exact non-HTTP input through the admin host client without persisting the payload', async () => {
+        const s = setup(undefined, true, 'timerTrigger');
         const host = createMockFunctionsHostClient();
         const factory = mock.fn((_target: FunctionsHostTarget) => host);
-        const command = new ExecuteFunction(s.ctx, s.selector, () => s.client, factory, s.local);
+        const command = new ExecuteFunction(s.ctx, s.selector, () => s.client, factory, s.local, new FunctionUrlResolver(s.code, () => s.client, s.local));
         const input = '{"payload":"private"}';
         const responses = respondToPrompts(s.codeContext.mock, [{ input }]);
         await command.execute(s.key);
@@ -260,7 +261,7 @@ describe('Remote function commands (unit)', () => {
     it('does not contact Azure when input is cancelled', async () => {
         const s = setup();
         const host = createMockFunctionsHostClient();
-        const command = new ExecuteFunction(s.ctx, s.selector, () => s.client, () => host, s.local);
+        const command = new ExecuteFunction(s.ctx, s.selector, () => s.client, () => host, s.local, new FunctionUrlResolver(s.code, () => s.client, s.local));
         const responses = respondToPrompts(s.codeContext.mock, ['cancel']);
         await expect(command.execute(s.key)).to.be.rejectedWith(CancellationError);
         responses.assertAllConsumed();
@@ -307,12 +308,89 @@ describe('Remote function commands (unit)', () => {
     });
 
     it('submits empty input without replacing it with a default payload', async () => {
-        const s = setup();
+        const s = setup('anonymous');
         const host = createMockFunctionsHostClient();
         const responses = respondToPrompts(s.codeContext.mock, [{ input: '' }]);
-        await new ExecuteFunction(s.ctx, s.selector, () => s.client, () => host, s.local).execute(s.key);
+        await new ExecuteFunction(s.ctx, s.selector, () => s.client, () => host, s.local, new FunctionUrlResolver(s.code, () => s.client, s.local)).execute(s.key);
         responses.assertAllConsumed();
-        expect(host.invoke.mock.calls[0].arguments).to.deep.equal([s.fn.functionName, '']);
+        expect(host.invokeHttp.mock.calls[0].arguments[1]).to.equal('');
+    });
+
+    it('posts to the live HTTP route with its function key without requesting admin invocation', async () => {
+        const s = setup('function');
+        const host = createMockFunctionsHostClient();
+        s.client.webApps.listFunctionKeys.mock.mockImplementation(() => Promise.resolve({ properties: { default: 'function-secret' } }));
+        const prompts = respondToPrompts(s.codeContext.mock, [{ input: '{"message":"private"}' }]);
+        await new ExecuteFunction(s.ctx, s.selector, () => s.client, () => host, s.local, new FunctionUrlResolver(s.code, () => s.client, s.local)).execute(s.key);
+        prompts.assertAllConsumed();
+        const [url, input] = host.invokeHttp.mock.calls[0].arguments;
+        expect(url.pathname).to.equal('/api/HttpTrigger');
+        expect(url.searchParams.get('custom')).to.equal('value');
+        expect(url.searchParams.get('code')).to.equal('function-secret');
+        expect(input).to.equal('{"message":"private"}');
+        expect(host.invoke.mock.callCount()).to.equal(0);
+        expect(s.client.webApps.listHostKeys.mock.callCount()).to.equal(0);
+        expect(JSON.stringify(s.codeContext.mock.window.showInformationMessage.mock.calls)).not.to.include('function-secret');
+    });
+
+    for (const settings of [
+        { ['WEBSITE_RUN_FROM_PACKAGE']: '1' },
+        { ['website_run_from_zip']: 'https://storage.example/package.zip' },
+    ]) {
+        it('rejects deletion after a package-backed deployment is detected without creating an activity', async () => {
+            const s = setup();
+            s.app.isReadOnly = false;
+            Object.assign(s.client.settings, settings);
+            const activities = new GenericActivityDataProvider();
+            const remove = mock.method(s.cache, 'remove');
+            respondToPrompts(s.codeContext.mock, [{ button: 'Delete' }]);
+            await expect(new DeleteFunction(s.code, s.selector, () => s.client, s.cache, activities, s.settings).execute(s.key))
+                .to.be.rejectedWith('read-only deployment');
+            expect(s.client.webApps.deleteFunction.mock.callCount()).to.equal(0);
+            expect(remove.mock.callCount()).to.equal(0);
+            expect(await activities.getChildren()).to.be.empty;
+            activities.dispose();
+        });
+    }
+
+    it('propagates unreadable deployment settings before deletion and leaves the function cached', async () => {
+        const s = setup();
+        s.client.webApps.listApplicationSettings.mock.mockImplementation(() => Promise.reject(new Error('Settings access denied')));
+        const activities = new GenericActivityDataProvider();
+        respondToPrompts(s.codeContext.mock, [{ button: 'Delete' }]);
+        await expect(new DeleteFunction(s.code, s.selector, () => s.client, s.cache, activities, s.settings).execute(s.key))
+            .to.be.rejectedWith('Settings access denied');
+        expect(s.client.webApps.deleteFunction.mock.callCount()).to.equal(0);
+        expect(s.cache.get(s.key)).to.equal(s.fn);
+        expect(await activities.getChildren()).to.be.empty;
+        activities.dispose();
+    });
+
+    it('rejects deleting a function from a Flex deployment before starting an activity', async () => {
+        const s = setup();
+        s.client.webApps.get.mock.mockImplementation(() => Promise.resolve({ location: 'eastus', functionAppConfig: {} }));
+        const activities = new GenericActivityDataProvider();
+        respondToPrompts(s.codeContext.mock, [{ button: 'Delete' }]);
+        await expect(new DeleteFunction(s.code, s.selector, () => s.client, s.cache, activities, s.settings).execute(s.key))
+            .to.be.rejectedWith('read-only deployment');
+        expect(s.client.webApps.deleteFunction.mock.callCount()).to.equal(0);
+        expect(await activities.getChildren()).to.be.empty;
+        activities.dispose();
+    });
+
+    it('requires confirmation before an admin-authenticated HTTP request', async () => {
+        const s = setup('admin');
+        const host = createMockFunctionsHostClient();
+        const command = new ExecuteFunction(s.ctx, s.selector, () => s.client, () => host, s.local, new FunctionUrlResolver(s.code, () => s.client, s.local));
+        const cancelled = respondToPrompts(s.codeContext.mock, [{ input: 'input' }, 'cancel']);
+        await expect(command.execute(s.key)).to.be.rejectedWith(CancellationError);
+        cancelled.assertAllConsumed();
+        expect(host.invokeHttp.mock.callCount()).to.equal(0);
+        expect(s.client.webApps.listHostKeys.mock.callCount()).to.equal(0);
+        const prompts = respondToPrompts(s.codeContext.mock, [{ input: 'input' }, { button: 'Execute' }]);
+        await command.execute(s.key);
+        prompts.assertAllConsumed();
+        expect(host.invokeHttp.mock.calls[0].arguments[0].searchParams.get('code')).to.equal('mock-master-key');
     });
 
     it('delegates log ownership to the shared service', async () => {

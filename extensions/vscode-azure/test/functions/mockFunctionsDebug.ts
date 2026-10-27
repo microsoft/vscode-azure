@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ActionExecutor } from '@microsoft/vscode-azure-utils';
+import { ActionExecutor, type IVsCode } from '@microsoft/vscode-azure-utils';
 import { addMockExtension, createMockProcessExecutor, MockOutputChannel, NullTelemetryReporter } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
@@ -16,8 +16,8 @@ import type { IToolService } from '../../src/tools/ToolService';
 import { createLocalFunctions } from '../tree/workspace/functions/mockLocalFunctions';
 
 /** Stubs port ownership without binding sockets; real socket behavior has separate coverage. */
-export function createMockFunctionsNetwork() {
-    const network = new LocalFunctionsNetwork();
+export function createMockFunctionsNetwork(code: IVsCode) {
+    const network = new LocalFunctionsNetwork(code);
     let nextPort = 17000;
     const reserve = mock.fn((port?: number) => Promise.resolve({
         port: port ?? nextPort++,
@@ -66,7 +66,7 @@ export function createFunctionsDebugFixture(runtime = 'node', processOptions?: P
     const output = new MockOutputChannel('functions');
     const actions = new ActionExecutor(s.code, new NullTelemetryReporter(), 'test', output);
     const projects = s.projects;
-    const { network } = createMockFunctionsNetwork();
+    const { network } = createMockFunctionsNetwork(s.code);
     const { executor: processes, spawn } = createMockProcessExecutor(s.code, {
         keepAlive: runtime !== 'native',
         stdout: runtime === 'native' ? 'go version go1.24.1 windows/amd64\nDelve Debugger\nVersion: 1.24.0\n' : '',

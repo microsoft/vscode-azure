@@ -14,7 +14,7 @@ import {
 
 describe('WorkspaceNode (unit)', () => {
     describe('isWorkspaceNode', () => {
-        it('should return true for any node with id/type/label', () => {
+        it('recognizes domain nodes across workspace providers', () => {
             expect(isWorkspaceNode(makeAzdProjectNode())).to.be.true;
             expect(isWorkspaceNode(makeAzdServiceNode())).to.be.true;
             expect(isWorkspaceNode(makeFunctionsProjectNode())).to.be.true;

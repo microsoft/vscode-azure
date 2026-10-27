@@ -7,14 +7,24 @@ import {
     FunctionAppLogicalType,
     isGenericResource,
     type FunctionEnvelope,
+    type Site,
     type VirtualResource,
 } from '@microsoft/vscode-azure-azutils';
+import type { ICaselessMapReader } from '@microsoft/vscode-azure-utils';
 import type { WebApp } from './WebApp';
 
 /** Function App resource with the latest management-plane enrichment. */
 export interface FunctionApp extends WebApp {
     /** Failure from the latest site read, cleared after a successful retry. */
     siteError?: string;
+    /** Whether function files are read-only; absent when deployment settings could not be read. */
+    isReadOnly?: boolean;
+}
+
+/** Package-backed and Flex deployments do not support editing individual function files. */
+export function isFunctionAppReadOnly(site: Site, values: ICaselessMapReader<string>): boolean {
+    return !!site.functionAppConfig || ['WEBSITE_RUN_FROM_PACKAGE', 'WEBSITE_RUN_FROM_ZIP']
+        .some(key => !/^(?:false|0)?$/i.test(values.get(key) ?? ''));
 }
 
 /** Stable discriminators for Function App virtual children. */

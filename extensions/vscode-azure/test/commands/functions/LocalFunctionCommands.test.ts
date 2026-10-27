@@ -51,9 +51,11 @@ describe('Local function commands (integration)', () => {
         it(`submits exact ${input ? 'nonempty' : 'empty'} local input without persisting it`, async () => {
             const s = await setup();
             const prompts = respondToPrompts(s.m, [{ input }]);
-            await new ExecuteFunction(s.context.ctx, s.selector, s.remote, s.createHost, s.target).execute(s.fn.id);
+            await new ExecuteFunction(s.context.ctx, s.selector, s.remote, s.createHost, s.target, new FunctionUrlResolver(s.code, s.remote, s.target)).execute(s.fn.id);
             prompts.assertAllConsumed();
-            expect(s.host.invoke.mock.calls[0].arguments).to.deep.equal(['Http', input]);
+            expect(s.host.invokeHttp.mock.calls[0].arguments[0].toString()).to.equal(new URL(s.metadata.invoke_url_template).toString());
+            expect(s.host.invokeHttp.mock.calls[0].arguments[1]).to.equal(input);
+            expect(s.host.invoke.mock.callCount()).to.equal(0);
             const states = [s.context.ctx.extensionContext.workspaceState, s.context.ctx.extensionContext.globalState];
             expect(JSON.stringify(states.flatMap(state => state.keys().map(key => state.get(key))))).not.to.include('private');
             expect(s.remote.mock.callCount()).to.equal(0);
@@ -63,18 +65,20 @@ describe('Local function commands (integration)', () => {
     it('does not invoke a local function when input is cancelled', async () => {
         const s = await setup();
         respondToPrompts(s.m, ['cancel']);
-        await expect(new ExecuteFunction(s.context.ctx, s.selector, s.remote, s.createHost, s.target).execute(s.fn.id))
+        await expect(new ExecuteFunction(s.context.ctx, s.selector, s.remote, s.createHost, s.target, new FunctionUrlResolver(s.code, s.remote, s.target)).execute(s.fn.id))
             .to.be.rejectedWith(CancellationError);
         expect(s.host.invoke.mock.callCount()).to.equal(0);
+        expect(s.host.invokeHttp.mock.callCount()).to.equal(0);
     });
 
     it('rejects offline execution and stale local keys instead of falling through to remote selection', async () => {
         const s = await setup();
-        const command = new ExecuteFunction(s.context.ctx, s.selector, s.remote, s.createHost, s.target);
+        const command = new ExecuteFunction(s.context.ctx, s.selector, s.remote, s.createHost, s.target, new FunctionUrlResolver(s.code, s.remote, s.target));
         s.registration.dispose();
         expect(() => s.target.host(s.fn)).to.throw(/Start debugging/);
         await expect(command.execute(`${s.project.id}/function/Stale`)).to.be.rejectedWith(/Refresh/);
         expect(s.host.invoke.mock.callCount()).to.equal(0);
+        expect(s.host.invokeHttp.mock.callCount()).to.equal(0);
         expect(s.remote.mock.callCount()).to.equal(0);
     });
 
@@ -83,7 +87,7 @@ describe('Local function commands (integration)', () => {
         mock.property(s.m.workspace, 'isTrusted', false);
         const write = mock.method(s.code.workspace.fs, 'writeFile');
         s.host.listFunctions.mock.resetCalls();
-        await expect(new ExecuteFunction(s.context.ctx, s.selector, s.remote, s.createHost, s.target).execute(s.fn.id))
+        await expect(new ExecuteFunction(s.context.ctx, s.selector, s.remote, s.createHost, s.target, new FunctionUrlResolver(s.code, s.remote, s.target)).execute(s.fn.id))
             .to.be.rejectedWith('trusted, non-virtual workspace');
         await expect(copyCommand(s).execute(s.fn.id))
             .to.be.rejectedWith('trusted, non-virtual workspace');
@@ -91,6 +95,7 @@ describe('Local function commands (integration)', () => {
         await expect(state.execute(true, s.fn.id)).to.be.rejectedWith('trusted, non-virtual workspace');
         await expect(state.execute(false, s.fn.id)).to.be.rejectedWith('trusted, non-virtual workspace');
         expect(s.host.invoke.mock.callCount()).to.equal(0);
+        expect(s.host.invokeHttp.mock.callCount()).to.equal(0);
         expect(s.host.listFunctions.mock.callCount()).to.equal(0);
         expect(write.mock.callCount()).to.equal(0);
         expect(s.remote.mock.callCount()).to.equal(0);
@@ -105,10 +110,26 @@ describe('Local function commands (integration)', () => {
             input.onDidAccept(() => { mock.property(s.m.workspace, 'isTrusted', false); });
             return input;
         });
-        await expect(new ExecuteFunction(s.context.ctx, s.selector, s.remote, s.createHost, s.target).execute(s.fn.id))
+        await expect(new ExecuteFunction(s.context.ctx, s.selector, s.remote, s.createHost, s.target, new FunctionUrlResolver(s.code, s.remote, s.target)).execute(s.fn.id))
             .to.be.rejectedWith('trusted, non-virtual workspace');
         prompts.assertAllConsumed();
         expect(s.host.invoke.mock.callCount()).to.equal(0);
+        expect(s.host.invokeHttp.mock.callCount()).to.equal(0);
+    });
+
+    it('submits a non-HTTP local function through the admin endpoint', async () => {
+        const s = await setup();
+        s.host.listFunctions.mock.mockImplementation(() => Promise.resolve([{
+            name: 'Queue', config: { bindings: [{ type: 'queueTrigger' }] },
+        }]));
+        s.tree.invalidate(s.project);
+        const fn = (await s.tree.getChildren(s.project)).find(isLocalFunctionNode);
+        if (!fn) { throw new Error('Expected local queue function'); }
+        const prompts = respondToPrompts(s.m, [{ input: 'queue input' }]);
+        await new ExecuteFunction(s.context.ctx, s.selector, s.remote, s.createHost, s.target, new FunctionUrlResolver(s.code, s.remote, s.target)).execute(fn.id);
+        prompts.assertAllConsumed();
+        expect(s.host.invoke.mock.calls[0].arguments).to.deep.equal(['Queue', 'queue input']);
+        expect(s.host.invokeHttp.mock.callCount()).to.equal(0);
     });
 
     it('restricts direct local host and settings actions to file projects in the open workspace', async () => {

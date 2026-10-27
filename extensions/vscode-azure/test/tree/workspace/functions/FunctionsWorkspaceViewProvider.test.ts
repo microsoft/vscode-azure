@@ -9,6 +9,7 @@ import { FunctionsWorkspaceViewProvider } from '../../../../src/tree/workspace/f
 import type { WorkspaceNode } from '../../../../src/tree/workspace/WorkspaceNode';
 import { makeAzdProjectNode, makeFunctionsProjectNode } from '../mockWorkspaceNode';
 import { LocalFunctionsHostTracker } from '../../../../src/functions/host/LocalFunctionsHostTracker';
+import { treeMenuMatches } from '../../treeMenuMatches';
 
 function createProvider(nodes: WorkspaceNode[], rootChildren: WorkspaceNode[] = nodes) {
     const m = createMockCodeContext();
@@ -36,14 +37,14 @@ describe('FunctionsWorkspaceViewProvider (unit)', () => {
         expect(await provider.getChildren()).to.deep.equal([fn.id]);
     });
 
-    it('getTreeItem renders functionsProject with function app icon and reveal context', () => {
-        const node = makeFunctionsProjectNode({ label: 'my-fn' });
+    it('renders the project directory with its Function App icon and explorer action', () => {
+        const node = makeFunctionsProjectNode();
         const { provider, code } = createProvider([node]);
         const item = provider.getTreeItem(node.id);
-        expect(item.label).to.equal('my-fn');
+        expect(item.label).to.equal('repo');
         expect(item.collapsibleState).to.equal(code.TreeItemCollapsibleState.Collapsed);
         expect((item.iconPath as vscode.Uri).path).to.include('microsoft.web/sites~functionapp.svg');
-        expect((item.contextValue ?? '')).to.include('revealInExplorer');
+        expect(treeMenuMatches('vscode-azure/workspace/revealInExplorer', 'vscode-azure/workspace', item)).to.be.true;
     });
 
     it('getTreeItem throws for unknown keys', () => {

@@ -109,6 +109,12 @@ or values that produce no JSON text reject before authentication or transport.
 Operations accept cancellation and transport options, reject
 non-2xx responses, and validate metadata and status response shapes.
 
+`invokeHttp()` posts raw UTF-8 input to an HTTP trigger on the selected host
+without acquiring its admin master key. The URL must use the selected remote
+origin or registered local loopback port. A function key supplied in `code` is
+sent in the `x-functions-key` header, and redirects are rejected. The caller
+owns route selection and the function-key policy.
+
 ### `ResourceClient` and resource metadata
 
 `ResourceClient` is the one wrapper that does more than pass calls through. As

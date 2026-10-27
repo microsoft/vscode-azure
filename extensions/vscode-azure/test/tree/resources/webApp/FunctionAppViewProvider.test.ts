@@ -7,16 +7,6 @@ import { AppServiceLogicalType, AzureNodeId, FunctionAppLogicalType, type Concre
 import { createMockHierarchicalDataItemTree, createMockWebAppClient } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockCodeContext, createTestActionExecutor, withSettings } from '@microsoft/vscode-azure-utils/testing';
 import { ConfigurationSection } from '../../../../src/constants';
-import { BrowseWebsite } from '../../../../src/commands/tree/BrowseWebsite';
-import { CopyFunctionUrl } from '../../../../src/commands/functions/CopyFunctionUrl';
-import { DeleteFunction } from '../../../../src/commands/functions/DeleteFunction';
-import { ExecuteFunction } from '../../../../src/commands/functions/ExecuteFunction';
-import { RevealFunctionAppIdentity } from '../../../../src/commands/functions/RevealFunctionAppIdentity';
-import { SetFunctionState } from '../../../../src/commands/functions/SetFunctionState';
-import { StreamFunctionLogs } from '../../../../src/commands/functions/StreamFunctionLogs';
-import { WebAppLifecycle } from '../../../../src/commands/webApp/WebAppLifecycle';
-import { RefreshResourcesView } from '../../../../src/commands/tree/RefreshResourcesView';
-import { ViewProperties } from '../../../../src/commands/tree/ViewProperties';
 import { WebAppSettingsAdapter } from '../../../../src/settings/adapters/WebAppSettingsAdapter';
 import { getSettingsNodes } from '../../../../src/tree/resources/settings/SettingsNode';
 import { FunctionAppVirtualTypes, isFunctionAppFunction, type FunctionApp, type FunctionAppInvalidNode } from '../../../../src/tree/resources/webApp/FunctionApp';
@@ -25,9 +15,10 @@ import { setWebsiteUrl } from '../../../../src/tree/resources/websiteUrl';
 import { makeSettingsResource } from '../../../settings/mockSettings';
 import { createTestResourceSelector } from '../testResourceSelector';
 import { makeFunctionAppFunction, makeFunctionAppFunctions } from './mockFunctionApp';
+import { treeMenuMatches } from '../../treeMenuMatches';
 
 describe('FunctionAppViewProvider (unit)', () => {
-    function setup(app: FunctionApp = makeSettingsResource(), invalidKind: FunctionAppInvalidNode['kind'] = 'function') {
+    function setup(app: FunctionApp = { ...makeSettingsResource(), isReadOnly: false }, invalidKind: FunctionAppInvalidNode['kind'] = 'function') {
         const codeContext = createMockCodeContext();
         const { executor } = createTestActionExecutor();
         const adapter = new WebAppSettingsAdapter(codeContext.ctx.code, () => createMockWebAppClient());
@@ -66,28 +57,23 @@ describe('FunctionAppViewProvider (unit)', () => {
         const { provider, app, group, fn, invalid, settings, key } = setup();
         expect(await provider.getChildren(key(app))).to.deep.equal([...settings.map(key), key(group)]);
         expect(await provider.getChildren(key(group))).to.deep.equal([key(fn), key(invalid)]);
-        expect(provider.getTreeItem(key(group))).to.include({ collapsibleState: 1, contextValue: RefreshResourcesView.ContextValue });
+        expect(provider.getTreeItem(key(group)).collapsibleState).to.equal(1);
         expect(provider.getTreeItem(key(fn))).to.include({ collapsibleState: 0 });
         expect(await provider.getChildren(key(fn))).to.deep.equal([]);
     });
 
-    it('reflects state transitions and Flex metadata while retaining shared resource capabilities', () => {
+    it('presents reported state and Flex metadata as the app changes', () => {
         const { provider, app, key } = setup();
-        expect(provider.getTreeItem(key(app)).contextValue).not.to.include(FunctionAppViewProvider.RunningContextValue);
         app.site = { location: 'eastus', state: 'Stopped', functionAppConfig: {} };
         const stopped = provider.getTreeItem(key(app));
         expect(stopped.description).to.equal('Stopped, Flex Consumption');
-        expect(stopped.contextValue).to.include(FunctionAppViewProvider.StoppedContextValue);
-        expect(stopped.contextValue).to.include(FunctionAppViewProvider.FlexContextValue);
 
         app.site = { ...app.site, state: 'RUNNING' };
         setWebsiteUrl(app, 'myfuncapp.azurewebsites.net');
         const running = provider.getTreeItem(key(app));
         expect(running.description).to.equal('Flex Consumption');
-        expect(running.contextValue).to.include(FunctionAppViewProvider.RunningContextValue);
-        expect(running.contextValue).not.to.include(FunctionAppViewProvider.StoppedContextValue);
-        expect(running.contextValue).to.include(BrowseWebsite.ContextValue);
-        expect(running.contextValue).to.include(ViewProperties.ContextValue);
+        expect(treeMenuMatches('vscode-azure/resources/browseWebsite', 'vscode-azure/resources', running)).to.be.true;
+        expect(treeMenuMatches('vscode-azure/resources/viewProperties', 'vscode-azure/resources', running)).to.be.true;
 
         app.site.functionAppConfig = undefined;
         expect(provider.getTreeItem(key(app)).description).to.equal('');
@@ -101,51 +87,62 @@ describe('FunctionAppViewProvider (unit)', () => {
         const item = disabled.provider.getTreeItem(disabled.key(disabled.fn));
         expect(item.description).to.equal('httpTrigger (function), Disabled');
         expect(item.tooltip).to.include('State: Disabled');
-        expect(item.contextValue).to.include(FunctionAppViewProvider.DisabledFunctionContextValue);
-        expect(item.contextValue).not.to.include(ViewProperties.ContextValue);
+        expect(treeMenuMatches('vscode-azure/resources/viewProperties', 'vscode-azure/resources', item)).to.be.false;
     });
 
     it('displays retained error details and restricts invalid nodes to refresh', () => {
         const { provider, app, invalid, key } = setup();
         app.siteError = 'Site access denied.';
         const appItem = provider.getTreeItem(key(app));
-        expect(appItem).to.include({ description: 'Invalid', tooltip: 'Site access denied.', contextValue: RefreshResourcesView.ContextValue });
+        expect(appItem).to.include({ description: 'Invalid', tooltip: 'Site access denied.' });
         const errorItem = provider.getTreeItem(key(invalid));
-        expect(errorItem).to.include({ tooltip: invalid.error, collapsibleState: 0, contextValue: RefreshResourcesView.ContextValue });
+        expect(errorItem).to.include({ tooltip: invalid.error, collapsibleState: 0 });
+        for (const item of [appItem, errorItem]) {
+            expect(treeMenuMatches('vscode-azure/resources/refresh', 'vscode-azure/resources', item)).to.be.true;
+            expect(treeMenuMatches('vscode-azure/resources/delete', 'vscode-azure/resources', item)).to.be.false;
+            expect(treeMenuMatches('vscode-azure/functions/delete', 'vscode-azure/resources', item)).to.be.false;
+        }
     });
 
     it('offers lifecycle and identity actions according to readable site metadata', () => {
         const { app, key, provider } = setup();
-        expect(provider.getTreeItem(key(app)).contextValue).not.to.include(StreamFunctionLogs.ContextValue);
+        const matches = (action: string) => treeMenuMatches(action, 'vscode-azure/resources', provider.getTreeItem(key(app)));
+        expect(matches('vscode-azure/functions/streamLogs')).to.be.false;
         app.site = {
             location: 'eastus', state: 'Running',
             identity: { type: 'UserAssigned', userAssignedIdentities: { '/identity': {} } },
         };
-        const running = provider.getTreeItem(key(app)).contextValue?.split(';');
-        expect(running).to.include(WebAppLifecycle.StopContextValue).and.include(WebAppLifecycle.RestartContextValue);
-        expect(running).to.include(StreamFunctionLogs.ContextValue).and.include(RevealFunctionAppIdentity.ContextValue);
-        expect(running).not.to.include(WebAppLifecycle.StartContextValue);
+        expect(matches('vscode-azure/webApp/stop')).to.be.true;
+        expect(matches('vscode-azure/webApp/restart')).to.be.true;
+        expect(matches('vscode-azure/functions/streamLogs')).to.be.true;
+        expect(matches('vscode-azure/functions/revealIdentity')).to.be.true;
+        expect(matches('vscode-azure/webApp/start')).to.be.false;
         app.site = { location: 'eastus', state: 'STOPPED' };
-        const stopped = provider.getTreeItem(key(app)).contextValue?.split(';');
-        expect(stopped).to.include(WebAppLifecycle.StartContextValue);
-        expect(stopped).not.to.include(WebAppLifecycle.StopContextValue);
-        expect(stopped).not.to.include(RevealFunctionAppIdentity.ContextValue);
+        expect(matches('vscode-azure/webApp/start')).to.be.true;
+        expect(matches('vscode-azure/webApp/stop')).to.be.false;
+        expect(matches('vscode-azure/functions/revealIdentity')).to.be.false;
         app.site = { location: 'eastus', state: 'Starting' };
-        const starting = provider.getTreeItem(key(app)).contextValue?.split(';');
-        expect(starting).not.to.include(WebAppLifecycle.StartContextValue);
-        expect(starting).not.to.include(WebAppLifecycle.RestartContextValue);
+        expect(matches('vscode-azure/webApp/start')).to.be.false;
+        expect(matches('vscode-azure/webApp/restart')).to.be.false;
     });
 
     it('offers function actions according to trigger and reported disabled state', () => {
-        const { fn, key, provider } = setup();
-        const http = provider.getTreeItem(key(fn)).contextValue?.split(';');
-        expect(http).to.include(CopyFunctionUrl.ContextValue).and.include(ExecuteFunction.ContextValue);
-        expect(http).to.include(DeleteFunction.ContextValue).and.include(SetFunctionState.DisableContextValue);
+        const { fn, key, provider, app } = setup();
+        const matches = (action: string) => treeMenuMatches(`vscode-azure/functions/${action}`, 'vscode-azure/resources', provider.getTreeItem(key(fn)));
+        expect(matches('copyUrl')).to.be.true;
+        expect(matches('execute')).to.be.true;
+        expect(matches('delete')).to.be.true;
+        expect(matches('disable')).to.be.true;
         Object.assign(fn, { triggerKind: 'timerTrigger', authLevel: undefined, isDisabled: true });
-        const timer = provider.getTreeItem(key(fn)).contextValue?.split(';');
-        expect(timer).to.include(ExecuteFunction.ContextValue).and.include(SetFunctionState.EnableContextValue);
-        expect(timer).not.to.include(CopyFunctionUrl.ContextValue);
-        expect(timer).not.to.include(SetFunctionState.DisableContextValue);
+        expect(matches('execute')).to.be.true;
+        expect(matches('enable')).to.be.true;
+        expect(matches('copyUrl')).to.be.false;
+        expect(matches('disable')).to.be.false;
+        for (const isReadOnly of [true, undefined]) {
+            app.isReadOnly = isReadOnly;
+            expect(matches('delete')).to.be.false;
+            expect(matches('execute')).to.be.true;
+        }
     });
 
     it('allows the shared selector to resolve app and remote function nodes by their normal tree keys', async () => {

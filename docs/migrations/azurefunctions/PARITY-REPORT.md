@@ -7,17 +7,17 @@ certificate of live debugger or Azure service behavior.
 | | |
 |---|---|
 | Source | `microsoft/vscode-azurefunctions` at `801689c66f96b31bc9d7c79ff6cc8d65e41b6965` (v1.22.1) |
-| Implementation verified | `72ebf165d8ae534d94a2c7529fdc42bd67707e31` |
+| Implementation verified | Source and tests committed alongside this report; prior audit baseline `72ebf165d8ae534d94a2c7529fdc42bd67707e31` |
 | Target base | `25585e883e234fdba29824c701e1fb33da5e5b1a` |
 | Verified | 2026-10-27 |
 | Inventory coverage | 271 unique IDs; no missing or duplicate outcomes |
-| Overall result | Active implementations found, with source-behavior differences to confirm, one conditional reuse integration, open conformance findings, and live verification outstanding |
+| Overall result | Active scope implemented and code conformance checks satisfied; conditional containerized integration, live verification, and retirement communication remain |
 
 ## Summary
 
 | Signed disposition | IDs | Verified outcome |
 |---|---:|---|
-| Migrate | 24 | Implementations wired; FUNC-041/FUNC-045/FUNC-188 have source-behavior differences to confirm under P6-07 |
+| Migrate | 24 | Implemented and wired; HTTP invocation, read-only deletion gating, and clickable project hints have behavioral coverage |
 | Adapt | 21 | Implemented with the recorded target UX; live checks remain separate |
 | Reuse | 19 | 18 wired; FUNC-258 has the generic delete capability but its product integration is conditional on deferred containerized Functions |
 | Drop | 143 | No corresponding source-specific public surface; scoped absence evidence below |
@@ -136,11 +136,11 @@ separate issue, is the tracking surface for the other deferred families.
 | FUNC-038 | Event Grid mock request | Drop | Absent | D2 |
 | FUNC-039 | Open walkthrough | Drop | Absent | D2 |
 | FUNC-040 | Hidden walkthrough | Drop | Absent | D2 |
-| FUNC-041 | Execute function | Migrate | Local/remote admin submission; HTTP-route parity open | `commands/functions/ExecuteFunction.ts`; `LocalFunctionTarget`; `FunctionsHostClient.invoke`; P6-07 |
+| FUNC-041 | Execute function | Migrate | HTTP POST to actual route; non-HTTP admin submission | `commands/functions/ExecuteFunction.ts`; `FunctionUrlResolver`; `FunctionsHostClient.invokeHttp/invoke` |
 | FUNC-042 | Copy function URL | Migrate | Local and remote, fresh metadata | `commands/functions/CopyFunctionUrl.ts`; `functions/FunctionUrlResolver.ts` |
 | FUNC-043 | Enable function | Migrate | Local/remote settings edit | `SetFunctionState` registered with `false`; `LocalFunctionSettings`; `WebAppSettingsAdapter` |
 | FUNC-044 | Disable function | Migrate | Local/remote settings edit | `SetFunctionState` registered with `true`; same writers |
-| FUNC-045 | Delete function | Migrate | Confirmed ARM delete; read-only gating parity open | `commands/functions/DeleteFunction.ts`; success-only tree removal; P6-07 |
+| FUNC-045 | Delete function | Migrate | Confirmed ARM delete, current editability check | `commands/functions/DeleteFunction.ts`; `isFunctionAppReadOnly`; success-only tree removal |
 | FUNC-046 | Deploy to Function App | Drop | Absent | D4; initialized projects use shared azd deployment |
 | FUNC-047 | Deploy workspace project | Drop | Absent | D4 |
 | FUNC-048 | Deploy to slot | Defer | Tracked | F2 |
@@ -296,7 +296,7 @@ implementation has a fixed timeout or performs validation.
 | FUNC-185 | Local function leaf | Migrate | Ready-host metadata | `FunctionsProjectReader.functionNode`; `FunctionsWorkspaceViewProvider` |
 | FUNC-186 | Invalid local function | Migrate | Error siblings preserved | `FunctionsProjectReader.functions`; local view |
 | FUNC-187 | Build/list-update hint | Adapt | No-host debug hint | `FunctionsProjectReader.functions`; only ready-host listing |
-| FUNC-188 | Start-debugging hint | Migrate | Informational hint; click-action parity open | Same reader; no click-to-debug action; P6-07 |
+| FUNC-188 | Start-debugging hint | Migrate | Click starts the owning project's debugger | `FunctionsWorkspaceViewProvider`; `debug.startFromConfig`; provider launch test with multiple projects |
 | FUNC-189 | Local settings tree | Drop | Absent | D7; local settings file still exists |
 | FUNC-190 | Initialization tree action | Drop | Absent | D2/D7; runtime choice belongs to F5 |
 | FUNC-191 | Invalid local project | Migrate | Visible validation failure | `FunctionsProjectReader.project`; local view |
@@ -381,34 +381,34 @@ implementation has a fixed timeout or performs validation.
 | FUNC-270 | Remote connection prompts | Defer | Tracked | F3 |
 | FUNC-271 | Resource refresh | Reuse | Shared global refresh | `RefreshResourcesView` contexts on app/group/function/errors; manifest menus |
 
-## Behavior limits and open findings
+## Verification boundaries and conformance evidence
 
 | Tracking | Finding / boundary | Consequence |
 |---|---|---|
 | P6-01 | FUNC-258 is conditional on FUNC-181/FUNC-250. The generic ARM delete command exists, but containerized Functions discovery/presentation and a product deletion scenario are not verified | Do not count this as a fully integrated nineteenth Reuse feature |
 | P6-02 | Live F5/workload startup for all six runtimes, storage/emulator integration, failed-task terminal retention in actual VS Code UI, real Azure commands/log queries/provisioning, and macOS/Linux ownership cleanup remain manual work | Passing mocks/configuration tests and a Bicep build do not certify these paths |
-| P6-03 | `FunctionsProjectReader.ts:60,102-108` puts a localized hint label into a data-layer node. `FunctionsWorkspaceDataProvider.ts:76` also formats the relative display label | This follows the existing WorkspaceNode.label precedent, but the skill's stricter tree-layering checklist is not clean: presentation belongs in the view layer |
-| P6-04 | `FunctionAppViewProvider.test.ts:69-148` and `LocalFunctionsTree.test.ts:41,84,114,128-151` assert context-value strings/constants without reading the manifest side | These exercise capability changes, but do not meet the skill's explicit ban/exception for context-value assertions. Behavioral tests pass; test-shape conformance is still open |
-| P6-05 | `LocalFunctionsNetwork.ts:34` throws the unlocalized literal `Could not reserve a loopback port.` | The rare reservation-address failure can reach user-facing error handling without `l10n.t`; localization conformance is not complete |
+| P6-03 | Satisfied: Functions domain nodes carry URIs, function names, and validation state; `FunctionsWorkspaceViewProvider` derives labels and localized hints | Typed workspace variants preserve the other products' required fields; nested/multi-root rendering and refresh are covered |
+| P6-04 | Satisfied: `test/tree/treeMenuMatches.ts` reads the real manifest and compares its independent predicates with rendered nodes; remaining tests exercise behavior | Menu drift can fail the cross-boundary checks without pinning a source constant to itself |
+| P6-05 | Satisfied: `LocalFunctionsNetwork` receives `IVsCode` and localizes the reservation-address error | Existing real-loopback integration coverage and build/lint validate the injected service |
 | P6-06 | The signed known-consumer list includes external extensions depending on dropped APIs/tasks/settings | Owner notification is required before source retirement; this audit does not claim that communication has occurred |
-| P6-07 | Three retained Migrate contracts differ from the inventory: HTTP Execute uses the admin endpoint, Delete is not gated by package/read-only state, and the no-host hint is not clickable | Confirm these behavior changes with the reviewer or implement the source-equivalent behavior; this report cannot silently classify them as Adapt |
+| P6-07 | Satisfied: HTTP triggers receive raw POST requests on their actual route; deletion checks current deployment state; hints launch their owning project | Reviewer confirmed HTTP-trigger invocation on 2026-10-27. No disposition changes |
 
-P6-07 details:
+P6-07 contracts:
 
-- FUNC-041 submits through `/admin/functions/<name>` for HTTP and non-HTTP
-  functions. It reports acceptance, not completion, and is not an HTTP request
-  to the function's public route with method/headers/authentication behavior.
-  The plan explicitly selects the admin API; URL copying is a separate action.
-- FUNC-045's source menu requires `Remote;ReadWrite;Function;`, and the
-  inventory describes package-backed apps as read-only. The target view
-  always supplies DeleteFunction's capability on valid remote functions,
-  and neither the provider nor command checks that deployment state.
-  Confirmation/activity/error handling exists, but the availability guard
-  does not. This is not a claim that Azure permits deletion in those modes.
-- FUNC-188 supplies an informational no-host hint, not the source's clickable
-  `workbench.action.debug.start` node. F5 remains the launch entry point.
+- FUNC-041 posts HTTP input as UTF-8 bytes to the validated current route.
+  Function keys travel in a header; master-key use requires confirmation;
+  redirects and other origins are rejected. Non-HTTP admin invocation reports
+  acceptance, while an HTTP success reports request completion.
+- FUNC-045 exposes deletion only when editability is known. Current settings
+  are checked after confirmation, before activity/deletion. Package-backed
+  and Flex deployments are read-only; settings-read failures block the delete
+  without hiding otherwise readable functions.
+- FUNC-188 uses VS Code's built-in `debug.startFromConfig` command with an
+  explicit project path, independently of the selected debug configuration.
+  The provider test consumes the hint's configuration and starts the intended
+  nested project in a multi-project workspace.
 
-These are open parity decisions, not silent re-dispositions. Deferred
+These contracts retain the signed dispositions. Deferred
 toggles/options do not imply that mandatory host cleanup or the approved minimal
 Azurite reachability checks are absent.
 
@@ -417,18 +417,18 @@ Azurite reachability checks are absent.
 | Area | Result and evidence |
 |---|---|
 | Tree ownership/dispatch | Functions data/view providers precede Web App fallbacks in `registerFunctions`; products precede generic providers in `registerProducts`; local providers are in `registerTrees` |
-| Menus and state | All retained product command menus use case-insensitive word-boundary regexes. Local menu entries independently require trust and non-virtual workspaces. Running/stopped, disabled, HTTP, identity, and error branches match current command capabilities; source read-only deletion gating remains P6-07 |
+| Menus and state | All retained product command menus use case-insensitive word-boundary regexes. Local menu entries independently require trust and non-virtual workspaces. Running/stopped, disabled, HTTP, identity, error, and deployment-editability branches match manifest predicates |
 | Invalid nodes | Remote app/function/listing and local project/function failures remain visible; invalid nodes offer refresh, not destructive/resource capabilities |
 | Icons | Existing `packages/azutils/resources/azureIcons/microsoft.web/sites~functionapp.svg` matches the logical type; virtual nodes use ThemeIcons; no SVG is added |
-| Data/view separation | Views do not fetch/mutate the data model. Presentation labels in the local data layer remain P6-03 |
+| Data/view separation | Views do not fetch/mutate the data model. The Functions view derives relative labels, error presentation, and localized clickable hints from domain nodes |
 | DI/commands | Managed commands and shared client-provider wiring are present; action/bool prefix arguments match registrations. CreateFunctionApp fixes `job: 'createNew'` internally because there is only one supported job, not an unused job prefix |
 | Local settings | Shared JSONC parsing/editing, case-insensitive values, queued writes, dirty/encrypted/malformed rejection; only runtime selection and disable flags are written |
 | Ownership boundaries | No Functions code authors/parses azd files or generates project scaffolding/debug/recommendation files. Creation uses shared azd steps. No source extension commands/dependency/settings/API shim |
 | Activation budget | No new explicit activation event, unbounded workspaceContains glob, startup CLI/auth check, or product prompt. Initial/dynamic provider hooks are registered for the approved contributed debug type; host/tool work is on demand |
-| Imports/source hygiene | All 33 added/modified production TypeScript files in the remaining PR diff have headers and ASCII source; no runtime vscode import, direct Azure SDK import, or Node filesystem import. Type checking and lint pass |
-| Errors/logs | Product failures use shared handling and safe operation-level diagnostics; local settings/payloads/keys/log rows are not deliberately copied to the output channel. Host output and selected Insights rows belong in their user-visible terminals. See P6-05 for the localization exception |
+| Imports/source hygiene | All 34 added/modified production TypeScript files in the remaining PR diff have headers and ASCII source; extension code has no runtime vscode import, direct Azure SDK import, or Node filesystem import. Type checking and lint pass |
+| Errors/logs | Product failures use shared handling and localized operation-level diagnostics; local settings/payloads/keys/log rows are not deliberately copied to the output channel. Host output and selected Insights rows belong in their user-visible terminals |
 | Public surface/cancellation | Provider/debug hooks and shared services have external callers; no test-only visibility widening found. User cancellation uses CancellationError; process ownership is limited to launched trees |
-| Tests | Root labels and shared fixtures used for Functions suites; behavioral coverage includes metadata, settings, URL/key policy, readiness, ownership, cancellation, and polling. Context assertion conformance remains P6-04 |
+| Tests | Root labels and shared fixtures used for Functions suites; behavioral coverage includes metadata, settings, raw HTTP requests, URL/key policy, editability, project-hint launches, readiness, ownership, cancellation, and polling. Menu checks read both the manifest and rendered nodes |
 | Docs | Product documentation is in `docs/products/functions.md`; framework edits update existing provider/creation examples rather than add a product section |
 
 ### Shared-primitive re-sweep
@@ -449,6 +449,7 @@ The slice mapping records and the following refinements cover the current helper
 | Streaming | Reused ACA's shared `BufferedPseudoterminal` and cancellable `delay`; query cursor/deduplication/discovery are Insights-specific, not a finite long-running operation |
 | Creation | Reused shared azd hydration/selection/generation/environment/provision steps and existing runtime/version prompts; no hosting/auth/scale wizard duplication |
 | Test fixtures | Reused mock VS Code/code context, real test action executor, Azure entity/client/tree factories, MockHttpClient, MockTerminal, process mocks, timers, async collections, and prompt drivers; product fixtures compose these |
+| Menu compatibility tests | Searched manifest/menu predicate helpers: none exists. Shared `test/tree/treeMenuMatches.ts` compares independent manifest predicates against rendered nodes for both Functions trees; no new manifest inventory or DI-registration test |
 
 ### Provisioning and external facts
 
@@ -482,6 +483,12 @@ from current package names:
   contracts in the [product doc](../../products/functions.md#f5-debugging).
 - Both [function schema](https://json.schemastore.org/function.json) and
   [host schema](https://json.schemastore.org/host.json) URLs resolve to JSON.
+- [Flex package deployments](https://learn.microsoft.com/azure/azure-functions/flex-consumption-plan#deployment)
+  and the source's
+  [deployment editability check](https://github.com/microsoft/vscode-azurefunctions/blob/801689c66f96b31bc9d7c79ff6cc8d65e41b6965/src/tree/ResolvedFunctionAppResource.ts)
+  support the read-only classification. VS Code's
+  [debug command implementation](https://github.com/microsoft/vscode/blob/main/src/vs/workbench/contrib/debug/browser/debugCommands.ts)
+  defines `debug.startFromConfig`.
 - Host invocation/readiness/metadata, Azure Monitor requests/partial errors,
   disable flags, and local-settings contracts are linked in the slice mapping
   records and azutils client documentation. Service-side behavior remains
@@ -489,21 +496,21 @@ from current package names:
 
 ## Build gates
 
-Run on 2026-10-27 against the implementation SHA above:
+Run on 2026-10-27 against the source/tests committed with this report:
 
 | Exact command | Result |
 |---|---|
 | `pnpm run lint` | Passed, exit 0, all three workspaces |
 | `pnpm run build` | Passed, exit 0, all three workspaces |
-| `pnpm run test` | Passed, exit 0: utils 677 passing/12 pending; azutils 464 passing; extension 1,484 passing/4 pending |
-| `bicep build extensions\vscode-azure\resources\templates\functionApp\main.bicep --stdout` | Passed, exit 0; pinned pattern resolved |
+| `pnpm run test` | Passed, exit 0: utils 677 passing/12 pending; azutils 477 passing; extension 1,500 passing/4 pending |
+| `bicep build extensions\vscode-azure\resources\templates\functionApp\main.bicep --stdout` | Passed at the prior audit baseline, exit 0; pinned pattern resolved. Not repeated for the parity fixes because the Bicep consumer/module inputs are unchanged |
 | ID/partition/contribution checks | Passed: complete unique catalog; exact Drop/Defer sets; command registrations, menu gates, NLS keys, schema associations, and icon path |
 
-Total automated tests: **2,625 passing, 16 pending**. Pending tests were not run.
-No install was needed and no dependencies changed. This report and its linked
-plan updates are documentation-only; the source gates apply unchanged.
+Total automated tests: **2,654 passing, 16 pending**. Pending tests were not run.
+No install was needed and no dependencies changed.
 Raw build/test logs remain session artifacts, not repository files.
 
 The [manual checklist](https://github.com/microsoft/vscode-azure/pull/367#issuecomment-6444069751)
-is the existing live-verification surface. This audit neither resets it nor
-marks any manual scenario complete.
+is the existing live-verification surface. Affected hint, HTTP execution, and
+deletion cases require retesting; no manual scenario is marked complete by
+the automated gates.

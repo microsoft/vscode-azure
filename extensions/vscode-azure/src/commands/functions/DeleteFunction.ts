@@ -4,12 +4,13 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { getResourceGroupName, IWebAppClientProvider } from '@microsoft/vscode-azure-azutils';
-import { IVsCode, showMessage } from '@microsoft/vscode-azure-utils';
+import { CaselessMap, ExternalError, IVsCode, showMessage } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzureViewDataTree } from '../../services';
 import { IGenericActivityDataProvider } from '../../tree/activity/GenericActivityDataProvider';
 import { IResourceSelector } from '../../tree/resources/ResourceSelector';
-import { isFunctionAppFunction } from '../../tree/resources/webApp/FunctionApp';
+import { isFunctionAppFunction, isFunctionAppReadOnly } from '../../tree/resources/webApp/FunctionApp';
+import { WebAppSettingsAdapter } from '../../settings/adapters/WebAppSettingsAdapter';
 import type { ManagedCommand } from '../ManagedCommand';
 
 /** Deletes a remote function after confirmation, tracking the ARM operation in the activity tree. */
@@ -24,6 +25,7 @@ export class DeleteFunction implements ManagedCommand {
         @inject(IWebAppClientProvider) private readonly createClient: IWebAppClientProvider,
         @inject(IAzureViewDataTree) private readonly tree: IAzureViewDataTree,
         @inject(IGenericActivityDataProvider) private readonly activities: IGenericActivityDataProvider,
+        @inject(WebAppSettingsAdapter) private readonly settings: WebAppSettingsAdapter,
     ) { }
 
     /** Removes the cached leaf only after Azure confirms deletion; failed operations retain it. */
@@ -32,10 +34,16 @@ export class DeleteFunction implements ManagedCommand {
         await showMessage(this.code, this.code.l10n.t(
             'Delete function \'{0}\'? This cannot be undone.', fn.functionName,
         ), { modal: true, severity: 'warning', stepName: 'confirmFunctionDeletion' }, this.code.l10n.t('Delete'));
-        const activity = this.activities.trackActivity({ title: this.code.l10n.t('Delete function \'{0}\'', fn.functionName) });
         const app = fn.azureResource;
+        const client = this.createClient(app.subscription);
+        const site = await client.webApps.get(getResourceGroupName(app.id), app.name);
+        const { entries } = await this.settings.read(app);
+        if (isFunctionAppReadOnly(site, new CaselessMap(entries.map(entry => [entry.key, entry.value])))) {
+            throw new ExternalError(this.code.l10n.t('This Function App uses a read-only deployment. Remove the function from its source project and redeploy instead.'));
+        }
+        const activity = this.activities.trackActivity({ title: this.code.l10n.t('Delete function \'{0}\'', fn.functionName) });
         try {
-            await this.createClient(app.subscription).webApps.deleteFunction(getResourceGroupName(app.id), app.name, fn.functionName);
+            await client.webApps.deleteFunction(getResourceGroupName(app.id), app.name, fn.functionName);
             activity.update({ status: 'Completed' });
         } catch (error: unknown) {
             activity.update({ status: 'Failed', error });

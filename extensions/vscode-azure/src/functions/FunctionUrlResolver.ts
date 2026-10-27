@@ -108,7 +108,7 @@ export class FunctionUrlResolver {
     }
 
     /** Resolves a deployed function, appending a key when its access level requires one. */
-    public async resolveRemote(fn: FunctionAppFunction): Promise<FunctionUrl> {
+    public async resolveRemote(fn: FunctionAppFunction, action: 'copy' | 'invoke' = 'copy'): Promise<FunctionUrl> {
         const app = fn.azureResource;
         const client = this.createClient(app.subscription);
         const group = getResourceGroupName(app.id);
@@ -120,9 +120,11 @@ export class FunctionUrlResolver {
         const hostNames = new CaselessSet([...(site.hostNames ?? []), ...(site.enabledHostNames ?? []), ...(site.defaultHostName ? [site.defaultHostName] : [])]);
         const url = validateRemoteFunctionUrl(this.code, rawUrl, hostNames);
         const key = await selectFunctionKey(client.webApps, group, app.name, fn.functionName, authLevel, async () => {
-            await showMessage(this.code, this.code.l10n.t(
-                'This URL includes the app-wide master key. Copy it only to a trusted destination.',
-            ), { modal: true, severity: 'warning', stepName: 'confirmCopyFunctionMasterKey' }, this.code.l10n.t('Copy'));
+            await showMessage(this.code, action === 'copy'
+                ? this.code.l10n.t('This URL includes the app-wide master key. Copy it only to a trusted destination.')
+                : this.code.l10n.t('Invoking this HTTP function requires the app-wide master key. Continue only if you trust this Function App.'),
+            { modal: true, severity: 'warning', stepName: 'confirmFunctionMasterKey' },
+            action === 'copy' ? this.code.l10n.t('Copy') : this.code.l10n.t('Execute'));
         });
         if (authLevel !== 'anonymous') {
             if (!key) {

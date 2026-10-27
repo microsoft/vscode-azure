@@ -3,7 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { injectable } from 'inversify';
+import { inject, injectable } from 'inversify';
+import { IVsCode } from '@microsoft/vscode-azure-utils';
 import { createConnection, createServer, type Socket } from 'node:net';
 
 /** A loopback port held exclusively until its process owner is ready to launch. */
@@ -15,6 +16,8 @@ export interface FunctionsPortReservation {
 /** Loopback-only port allocation and bounded connection probes for local Functions development. */
 @injectable()
 export class LocalFunctionsNetwork {
+    public constructor(@inject(IVsCode) private readonly code: IVsCode) { }
+
     public async reserve(port = 0): Promise<FunctionsPortReservation> {
         const sockets = new Set<Socket>();
         const server = createServer(socket => {
@@ -31,7 +34,7 @@ export class LocalFunctionsNetwork {
         const address = server.address();
         if (!address || typeof address === 'string') {
             server.close();
-            throw new Error('Could not reserve a loopback port.');
+            throw new Error(this.code.l10n.t('Could not reserve a loopback port.'));
         }
         let released: Promise<void> | undefined;
         return {

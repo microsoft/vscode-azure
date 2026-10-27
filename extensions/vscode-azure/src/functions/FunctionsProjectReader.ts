@@ -35,9 +35,9 @@ export class FunctionsProjectReader {
     ) { }
 
     /** Validates project metadata while keeping settings values out of the tree model. */
-    public async project(uri: vscode.Uri, label: string): Promise<FunctionsProjectNode> {
+    public async project(uri: vscode.Uri): Promise<FunctionsProjectNode> {
         const project: FunctionsProjectNode = {
-            id: `${FunctionsProjectKeyPrefix}${uri.toString()}`, type: 'functionsProject', label, resourceUri: uri,
+            id: `${FunctionsProjectKeyPrefix}${uri.toString()}`, type: 'functionsProject', resourceUri: uri,
         };
         try {
             await this.hostConfig(uri);
@@ -57,7 +57,7 @@ export class FunctionsProjectReader {
             const { values } = await this.settings.read(folder);
             const host = this.hosts.get(folder);
             if (!host) {
-                return [this.hint(project, 'host', this.code.l10n.t('Start debugging to list functions...'))];
+                return [{ id: `${project.id}/hint/host`, type: 'functionsHint', project }];
             }
             const metadata = await this.createHost({ port: host.port }).listFunctions();
             const allowed = config.functions;
@@ -93,20 +93,16 @@ export class FunctionsProjectReader {
             : setting.toLowerCase() === 'true' || setting === '1';
         return {
             id: `${project.id}/function/${encodeURIComponent(fn.name)}`, type: 'localFunction',
-            label: fn.name, functionName: fn.name, project,
+            functionName: fn.name, project,
             ...metadata,
             isDisabled: disabled,
         };
     }
 
-    private hint(project: FunctionsProjectNode, kind: string, label: string): LocalFunctionsNode {
-        return { id: `${project.id}/hint/${kind}`, type: 'functionsHint', project, label };
-    }
-
-    private invalid(project: FunctionsProjectNode, key: string, error: string, label?: string): LocalFunctionsNode {
+    private invalid(project: FunctionsProjectNode, key: string, error: string, functionName?: string): LocalFunctionsNode {
         return {
             id: `${project.id}/invalid/${key}`, type: 'invalidLocalFunction', project,
-            label: label ?? this.code.l10n.t('Unable to list functions'), error,
+            functionName, error,
         };
     }
 

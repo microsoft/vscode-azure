@@ -5,12 +5,10 @@
 
 import { addWorkspaceFolder, fireFileSystemEvent } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
-import { CopyFunctionUrl } from '../../../../src/commands/functions/CopyFunctionUrl';
-import { ExecuteFunction } from '../../../../src/commands/functions/ExecuteFunction';
-import { SetFunctionState } from '../../../../src/commands/functions/SetFunctionState';
 import { RefreshWorkspaceView } from '../../../../src/commands/tree/RefreshWorkspaceView';
 import { isFunctionsProjectNode, isLocalFunctionNode } from '../../../../src/tree/workspace/WorkspaceNode';
 import { createLocalFunctions } from './mockLocalFunctions';
+import { treeMenuMatches } from '../../treeMenuMatches';
 
 describe('Local Functions tree (integration)', () => {
     let fixtures: ReturnType<typeof createLocalFunctions>[] = [];
@@ -38,7 +36,7 @@ describe('Local Functions tree (integration)', () => {
 
         if (!fn) { throw new Error('Expected a local function'); }
         expect(fn.isDisabled).to.be.true;
-        expect(s.view.getTreeItem(fn.id).contextValue?.split(';')).to.include(SetFunctionState.EnableContextValue);
+        expect(treeMenuMatches('vscode-azure/functions/enable', 'vscode-azure/workspace', s.view.getTreeItem(fn.id))).to.be.true;
     });
 
     it('lists host functions directly beneath their own project with stable parentage', async () => {
@@ -47,9 +45,9 @@ describe('Local Functions tree (integration)', () => {
         s.startHost([{ name: 'Http' }, { name: 'Timer', config: { bindings: [{ type: 'timerTrigger' }] } }]);
         s.m.fs.addFile(s.code.Uri.file('/repo/nested/host.json'), '{"version":"2.0"}');
         const projects = await s.tree.getChildren();
-        expect(projects.map(project => project.label)).to.deep.equal(['repo', 'repo/nested']);
+        expect(projects.map(project => s.view.getTreeItem(project.id).label)).to.deep.equal(['repo', 'repo/nested']);
         const functions = await s.tree.getChildren(projects[0]);
-        expect(functions.map(fn => fn.label)).to.deep.equal(['Http', 'Timer']);
+        expect(functions.map(fn => s.view.getTreeItem(fn.id).label)).to.deep.equal(['Http', 'Timer']);
         expect(functions.every(isLocalFunctionNode)).to.be.true;
         expect((await s.tree.getChildren(projects[1])).map(node => node.type)).to.deep.equal(['functionsHint']);
         expect(await s.view.getChildren(projects[0].id)).to.deep.equal(functions.map(fn => fn.id));
@@ -81,7 +79,8 @@ describe('Local Functions tree (integration)', () => {
         expect(invalid).to.have.lengthOf(5);
         for (const node of invalid) {
             const item = s.view.getTreeItem(node.id);
-            expect(item.contextValue).to.equal(RefreshWorkspaceView.ContextValue);
+            expect(treeMenuMatches('vscode-azure/workspace/refresh', 'vscode-azure/workspace', item)).to.be.true;
+            expect(treeMenuMatches('vscode-azure/functions/execute', 'vscode-azure/workspace', item)).to.be.false;
             expect(item.description).to.equal('Invalid');
         }
     });
@@ -111,7 +110,7 @@ describe('Local Functions tree (integration)', () => {
             const project = (await s.tree.getChildren())[0];
             const nodes = await s.tree.getChildren(project);
             expect(nodes.map(node => node.type)).to.deep.equal(['functionsHint']);
-            expect(s.view.getTreeItem(nodes[0].id).contextValue).to.equal(RefreshWorkspaceView.ContextValue);
+            expect(s.view.getTreeItem(nodes[0].id).label).to.equal('Start debugging to list functions...');
             expect(s.createHost.mock.callCount()).to.equal(0);
         });
     }
@@ -123,10 +122,10 @@ describe('Local Functions tree (integration)', () => {
         expect((await s.tree.getChildren(project))[0].type).to.equal('functionsHint');
         const registration = s.startHost([{ name: 'CodeFirst' }], 8090);
         const functions = await s.tree.getChildren(project);
-        expect(functions.map(fn => fn.label)).to.deep.equal(['CodeFirst']);
+        expect(functions.map(fn => s.view.getTreeItem(fn.id).label)).to.deep.equal(['CodeFirst']);
         expect(s.createHost.mock.calls[0].arguments[0]).to.deep.equal({ port: 8090 });
-        const contexts = s.view.getTreeItem(functions[0].id).contextValue?.split(';');
-        expect(contexts).to.include(ExecuteFunction.ContextValue).and.include(CopyFunctionUrl.ContextValue);
+        expect(treeMenuMatches('vscode-azure/functions/execute', 'vscode-azure/workspace', s.view.getTreeItem(functions[0].id))).to.be.true;
+        expect(treeMenuMatches('vscode-azure/functions/copyUrl', 'vscode-azure/workspace', s.view.getTreeItem(functions[0].id))).to.be.true;
         registration.dispose();
         const offline = await s.tree.getChildren(project);
         expect(offline[0].type).to.equal('functionsHint');
@@ -142,13 +141,15 @@ describe('Local Functions tree (integration)', () => {
         ], 8080);
         const project = (await s.tree.getChildren())[0];
         const nodes = await s.tree.getChildren(project);
-        const http = nodes.find(node => node.label === 'Http');
-        const timer = nodes.find(node => node.label === 'Timer');
+        const http = nodes.find(node => isLocalFunctionNode(node) && node.functionName === 'Http');
+        const timer = nodes.find(node => isLocalFunctionNode(node) && node.functionName === 'Timer');
         if (!http || !timer) {
             throw new Error('Expected HTTP and timer functions');
         }
-        expect(s.view.getTreeItem(http.id).contextValue?.split(';')).to.include(SetFunctionState.DisableContextValue).and.include(CopyFunctionUrl.ContextValue);
-        expect(s.view.getTreeItem(timer.id).contextValue?.split(';')).to.include(ExecuteFunction.ContextValue).and.not.include(CopyFunctionUrl.ContextValue);
+        expect(treeMenuMatches('vscode-azure/functions/disable', 'vscode-azure/workspace', s.view.getTreeItem(http.id))).to.be.true;
+        expect(treeMenuMatches('vscode-azure/functions/copyUrl', 'vscode-azure/workspace', s.view.getTreeItem(http.id))).to.be.true;
+        expect(treeMenuMatches('vscode-azure/functions/execute', 'vscode-azure/workspace', s.view.getTreeItem(timer.id))).to.be.true;
+        expect(treeMenuMatches('vscode-azure/functions/copyUrl', 'vscode-azure/workspace', s.view.getTreeItem(timer.id))).to.be.false;
         registration.dispose();
         other.dispose();
     });
@@ -172,7 +173,7 @@ describe('Local Functions tree (integration)', () => {
         s.addProject();
         s.m.fs.addFile(s.code.Uri.file('/repo/local.settings.json'), '{"Values":{"secret":"never-log-this",');
         const project = (await s.tree.getChildren())[0];
-        expect(s.view.getTreeItem(project.id).contextValue).to.equal(RefreshWorkspaceView.ContextValue);
+        expect(s.view.getTreeItem(project.id).description).to.equal('Invalid');
         expect(s.view.getTreeItem(project.id).tooltip).not.to.include('never-log-this');
         s.addProject('node');
         new RefreshWorkspaceView(s.tree).execute();
@@ -194,7 +195,7 @@ describe('Local Functions tree (integration)', () => {
         s.addProject('node', { version: '2.0', functions: ['Selected'] });
         s.startHost([{ name: 'Selected' }, { name: 'Ignored' }]);
         const project = (await s.tree.getChildren())[0];
-        expect((await s.tree.getChildren(project)).map(node => node.label)).to.deep.equal(['Selected']);
+        expect((await s.tree.getChildren(project)).filter(isLocalFunctionNode).map(node => node.functionName)).to.deep.equal(['Selected']);
     });
 
     it('honors an empty function filter while allowing unrelated host configuration', async () => {
@@ -219,7 +220,7 @@ describe('Local Functions tree (integration)', () => {
         s.addProject();
         new RefreshWorkspaceView(s.tree).execute();
         const [refreshed] = await s.tree.getChildren();
-        expect((await s.tree.getChildren(refreshed)).map(node => node.label)).to.deep.equal(['Http']);
+        expect((await s.tree.getChildren(refreshed)).filter(isLocalFunctionNode).map(node => node.functionName)).to.deep.equal(['Http']);
     });
 
     it('retains replacement host registrations when an old host owner stops', () => {
@@ -236,7 +237,7 @@ describe('Local Functions tree (integration)', () => {
         expect(() => s.hosts.register(s.folder, 0)).to.throw(/port/);
     });
 
-    it('does not advertise a build or debug hint for an authoritative empty host listing', async () => {
+    it('renders an authoritative empty host listing', async () => {
         const s = setup();
         s.addProject();
         const registration = s.startHost([]);
@@ -250,13 +251,13 @@ describe('Local Functions tree (integration)', () => {
         addWorkspaceFolder(s.m, '/other');
         s.m.fs.addFile(s.code.Uri.file('/other/host.json'), '{"version":"2.0"}');
         const projects = await s.tree.getChildren();
-        const own = projects.find(project => project.label === 'repo');
-        const other = projects.find(project => project.label === 'other');
+        const own = projects.find(project => project.resourceUri?.path === '/repo/host.json');
+        const other = projects.find(project => project.resourceUri?.path === '/other/host.json');
         if (!own || !other) {
             throw new Error('Expected both workspace projects');
         }
         const registration = s.startHost([{ name: 'HostOnly', config: { bindings: [{ type: 'timerTrigger' }] } }]);
-        expect((await s.tree.getChildren(own)).map(node => node.label)).to.deep.equal(['HostOnly']);
+        expect((await s.tree.getChildren(own)).filter(isLocalFunctionNode).map(node => node.functionName)).to.deep.equal(['HostOnly']);
         expect((await s.tree.getChildren(other)).map(node => node.type)).to.deep.equal(['functionsHint']);
         registration.dispose();
     });

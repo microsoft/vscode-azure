@@ -5,7 +5,7 @@
 
 import { FunctionAppLogicalType } from '@microsoft/vscode-azure-azutils';
 import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
-import { dirname, IActionExecutor, ICodeContext } from '@microsoft/vscode-azure-utils';
+import { basename, dirname, IActionExecutor, ICodeContext, relativePath } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { RevealInExplorer } from '../../../commands/tree/RevealInExplorer';
 import { RefreshWorkspaceView } from '../../../commands/tree/RefreshWorkspaceView';
@@ -13,6 +13,7 @@ import { CopyFunctionUrl } from '../../../commands/functions/CopyFunctionUrl';
 import { ExecuteFunction } from '../../../commands/functions/ExecuteFunction';
 import { SetFunctionState } from '../../../commands/functions/SetFunctionState';
 import { LocalFunctionsHostTracker } from '../../../functions/host/LocalFunctionsHostTracker';
+import { FunctionsDebugType } from '../../../functions/debug/functionsDebug';
 import { IWorkspaceViewDataTree } from '../../../services';
 import { combineContextValues } from '../../contextValueHelpers';
 import { getResourceTypeIconUri } from '../../iconPath';
@@ -55,7 +56,11 @@ export class FunctionsWorkspaceViewProvider implements ViewProvider<string> {
             throw new Error(this.ctx.code.l10n.t('The Functions workspace item is not available. Refresh the workspace view.'));
         }
         this.executor.setTelProp('nodeType', node.type);
-        const item = new this.ctx.code.TreeItem(node.label, isFunctionsProjectNode(node)
+        const label = isFunctionsProjectNode(node) ? this.projectLabel(node)
+            : isLocalFunctionNode(node) ? node.functionName
+                : node.type === 'functionsHint' ? this.ctx.code.l10n.t('Start debugging to list functions...')
+                    : node.functionName ?? this.ctx.code.l10n.t('Unable to list functions');
+        const item = new this.ctx.code.TreeItem(label, isFunctionsProjectNode(node)
             ? this.ctx.code.TreeItemCollapsibleState.Collapsed : this.ctx.code.TreeItemCollapsibleState.None);
         item.id = node.id;
         item.contextValue = RefreshWorkspaceView.ContextValue;
@@ -67,8 +72,29 @@ export class FunctionsWorkspaceViewProvider implements ViewProvider<string> {
             item.description = node.error ? this.ctx.code.l10n.t('Invalid') : undefined;
             item.tooltip = node.error;
             item.iconPath = new this.ctx.code.ThemeIcon(node.error ? 'warning' : 'info');
+            if (node.type === 'functionsHint') {
+                item.command = {
+                    command: 'debug.startFromConfig',
+                    title: this.ctx.code.l10n.t('Start debugging'),
+                    arguments: [{
+                        type: FunctionsDebugType, request: 'launch',
+                        name: this.ctx.code.l10n.t('Debug Azure Functions'),
+                        projectPath: dirname(node.project.resourceUri).fsPath,
+                    }],
+                };
+            }
         }
         return item;
+    }
+
+    private projectLabel(node: FunctionsProjectNode): string {
+        const project = dirname(node.resourceUri);
+        const folder = this.ctx.code.workspace.getWorkspaceFolder(project);
+        if (!folder) {
+            return basename(project);
+        }
+        const relative = relativePath(folder.uri, project);
+        return relative ? `${folder.name}/${relative}` : folder.name || basename(project);
     }
 
     private configureProjectItem(item: ITreeItem, node: FunctionsProjectNode): void {

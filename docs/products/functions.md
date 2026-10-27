@@ -175,6 +175,9 @@ over the metadata disable flag.
 local host (`/admin/functions`), which is the only source of function metadata;
 language source, `function.json` files, and build output are not read. Until a
 host is ready, the project shows a "Start debugging to list functions..." hint.
+Clicking the hint starts the contributed Functions debugger for that exact
+project through VS Code's
+[`debug.startFromConfig` command](https://github.com/microsoft/vscode/blob/main/src/vs/workbench/contrib/debug/browser/debugCommands.ts).
 `host.json.functions`, when supplied, limits the visible function names.
 Project validation requires the `2.0` host schema and a string-array function
 filter when present, including before a host is running.
@@ -182,7 +185,9 @@ filter when present, including before a host is running.
 Malformed functions remain visible beside readable siblings. Project validation
 shows invalid metadata without putting local settings values in nodes.
 Projects without a configured worker runtime remain available for F5's runtime
-selection. Invalid and hint nodes offer workspace refresh only.
+selection. Invalid nodes offer workspace refresh only. The view provider owns
+project-relative labels and localized hints; data nodes carry project URIs,
+function names, and validation state.
 Local settings changes use the shared index watcher, and host-registration
 events invalidate the affected project subtree. Workspace refresh invalidates the
 complete workspace tree.
@@ -201,8 +206,9 @@ processes: disposal of an older registration cannot remove its replacement.
 this registry for debugging.
 An arbitrary process on the default port is not treated as this project's host.
 
-Local execution submits raw input through `FunctionsHostClient` without Azure
-authentication or recent-input persistence. Copy URL reads current host metadata,
+Local execution sends HTTP triggers a POST to their current invocation URL,
+and submits non-HTTP triggers through the host admin API. Input is sent without
+Azure authentication or recent-input persistence. Copy URL reads current host metadata,
 validates the HTTP trigger, and uses its actual invocation template, preserving
 custom routes. Only HTTP loopback URLs on the registered port, without embedded
 credentials, are accepted. No authentication key is manufactured.
@@ -274,9 +280,15 @@ sites offer Start. Unknown or transitional states have no lifecycle action.
 Successful operations invalidate the selected site's subtree.
 
 Execute Function prompts for raw input without saving it in recent-input
-history. `FunctionsHostClient` submits the input to the host admin API using a
-lazy management-plane master key in the `x-functions-key` header. The notification
-reports acceptance, not completion. See the
+history. HTTP triggers use a POST to the current invocation URL, preserving
+its route and query parameters. The request body is raw UTF-8 input, not a
+JSON-string wrapper. Function-authenticated requests use a function key, with a
+host function key as fallback; admin authentication requires confirmation.
+`FunctionsHostClient` sends the key in `x-functions-key`, not the query string,
+and rejects redirects. A successful response reports that the HTTP request
+completed, without logging its response body.
+Non-HTTP triggers use the host admin API with a lazy management-plane master
+key. That notification reports acceptance, not execution completion. See the
 [host invocation contract](https://github.com/Azure/azure-functions-host/blob/dev/src/WebJobs.Script.WebHost/Controllers/FunctionsController.cs).
 
 Copy Function URL is available for HTTP triggers. `FunctionUrlResolver` reads current
@@ -291,6 +303,14 @@ Enable and Disable preserve other application settings while writing
 [Azure restarts the app when settings change](https://learn.microsoft.com/en-us/azure/azure-functions/disable-function).
 Delete Function requires confirmation, tracks completion or failure in the
 activity tree, and removes the cached function only after a successful ARM delete.
+Individual function deletion is available only when deployment editability is
+known. Flex and package-backed deployments are read-only; change source and
+redeploy instead. The command reads current deployment settings after confirmation,
+so a stale tree capability cannot authorize an unsupported delete. An unreadable
+settings response propagates from the command; tree enrichment logs the failed
+editability check and keeps readable functions visible without Delete.
+See [Flex package deployments](https://learn.microsoft.com/azure/azure-functions/flex-consumption-plan#deployment)
+and the [source editability contract](https://github.com/microsoft/vscode-azurefunctions/blob/801689c66f96b31bc9d7c79ff6cc8d65e41b6965/src/tree/ResolvedFunctionAppResource.ts).
 App deletion, portal navigation, website browsing, properties, and settings
 document editing use the shared commands.
 

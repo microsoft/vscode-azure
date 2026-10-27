@@ -22,6 +22,37 @@ describe('Functions debug provider (unit)', () => {
     }
     afterEach(() => { fixtures.splice(0).forEach(s => { s.dispose(); }); mock.restoreAll(); });
 
+    it('starts the hinted project even when another Functions project is present', async () => {
+        const s = setup();
+        const nested = s.code.Uri.joinPath(s.folder, 'nested');
+        s.m.fs.addFile(s.code.Uri.joinPath(nested, 'host.json'), '{"version":"2.0"}');
+        s.m.fs.addFile(s.code.Uri.joinPath(nested, 'local.settings.json'), JSON.stringify({
+            Values: { ['FUNCTIONS_WORKER_RUNTIME']: 'node', ['AzureWebJobsStorage__accountName']: 'account' },
+        }));
+        const projects = await s.tree.getChildren();
+        const project = projects.find(node => node.resourceUri?.toString() === s.code.Uri.joinPath(nested, 'host.json').toString());
+        if (!project) { throw new Error('Expected nested Functions project'); }
+        const [hint] = await s.tree.getChildren(project);
+        const command = s.view.getTreeItem(hint.id).command;
+        if (!command) { throw new Error('Expected a start-debugging command'); }
+        const start = mock.method(s.owners, 'start', (request: FunctionsHostStart) => {
+            expect(request.project.toString()).to.equal(nested.toString());
+            return Promise.resolve({ id: 'owned', hostPort: 7072, debugPort: 9229, pipe: 'pipe' });
+        });
+        const registration = s.code.commands.registerCommand('debug.startFromConfig', async (config: vscode.DebugConfiguration) =>
+            s.debugProvider.resolveDebugConfigurationWithSubstitutedVariables(undefined, config));
+        try {
+            const execute = s.m.registeredCommands.get(command.command);
+            if (!execute) { throw new Error('Expected the VS Code debugger command'); }
+            const result = await execute(...command.arguments ?? []);
+            expect(result).to.have.property('type', 'pwa-node');
+            expect(start.mock.callCount()).to.equal(1);
+            expect(s.m.quickPicks).to.be.empty;
+        } finally {
+            registration.dispose();
+        }
+    });
+
     it('prompts during F5 when local settings are absent and uses the selected runtime in host startup', async () => {
         const s = setup();
         const uri = s.code.Uri.joinPath(s.folder, 'local.settings.json');

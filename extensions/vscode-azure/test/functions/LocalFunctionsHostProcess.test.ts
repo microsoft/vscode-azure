@@ -33,7 +33,7 @@ describe('Local Functions host ownership (unit)', () => {
         const client = createMockFunctionsHostClient();
         client.getStatus.mock.mockImplementation(() => Promise.resolve({ state: 'Running' }));
         const tracker = new LocalFunctionsHostTracker();
-        const { network, reserve } = createMockFunctionsNetwork();
+        const { network, reserve } = createMockFunctionsNetwork(m.vscode);
         const output = new MockOutputChannel('functions');
         const written = mock.fn<(text: string) => void>();
         const finished = mock.fn<(code: number) => void>();
@@ -445,7 +445,7 @@ describe('Functions worker PID (unit)', () => {
 
 describe('Functions loopback ports (integration)', () => {
     it('holds a unique loopback port and releases it idempotently', async () => {
-        const network = new LocalFunctionsNetwork();
+        const network = new LocalFunctionsNetwork(createMockVsCode().vscode);
         const port = await network.reserve();
         try {
             expect(await network.listening(port.port)).to.be.true;

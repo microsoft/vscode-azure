@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    basename, dirname, Disposable, EventEmitter, IActionExecutor, IVsCode, relativePath, Roots,
+    dirname, Disposable, EventEmitter, IActionExecutor, IVsCode, Roots,
     type DataProvider, type DataProviderChangeEvent,
 } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
@@ -67,14 +67,10 @@ export class FunctionsWorkspaceDataProvider implements DataProvider<WorkspaceNod
         const index = await this.indexService.getIndex();
         const projects: FunctionsProjectNode[] = [];
         for (const uri of index.withTag(FunctionsHostFileTag)) {
-            const folder = this.code.workspace.getWorkspaceFolder(uri);
-            if (!folder) {
+            if (!this.code.workspace.getWorkspaceFolder(uri)) {
                 continue;
             }
-            const projectFolder = dirname(uri);
-            const relative = relativePath(folder.uri, projectFolder);
-            const label = relative ? `${folder.name}/${relative}` : folder.name;
-            projects.push(await this.reader.project(uri, label || basename(projectFolder)));
+            projects.push(await this.reader.project(uri));
         }
 
         this.executor.output.debug(`[data] functions workspace: discovered=${projects.length}`);

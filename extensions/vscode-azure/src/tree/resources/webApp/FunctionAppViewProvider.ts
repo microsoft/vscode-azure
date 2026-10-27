@@ -165,7 +165,7 @@ export class FunctionAppViewProvider implements ViewProvider<string> {
                     node.isDisabled ? FunctionAppViewProvider.DisabledFunctionContextValue : FunctionAppViewProvider.EnabledFunctionContextValue,
                     node.isDisabled ? SetFunctionState.EnableContextValue : SetFunctionState.DisableContextValue,
                     ExecuteFunction.ContextValue,
-                    DeleteFunction.ContextValue,
+                    node.azureResource.isReadOnly === false ? DeleteFunction.ContextValue : '',
                     node.triggerKind.toLowerCase() === 'httptrigger' ? CopyFunctionUrl.ContextValue : '',
                 );
                 break;

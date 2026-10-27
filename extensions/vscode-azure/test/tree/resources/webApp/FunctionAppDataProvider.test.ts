@@ -3,21 +3,17 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AppServiceLogicalType, AzureListingCache, AzureNodeId, IWebAppClientProvider, LogicAppLogicalType, type ConcreteAzureNode, type FunctionEnvelope, type Site } from '@microsoft/vscode-azure-azutils';
+import { AppServiceLogicalType, AzureListingCache, AzureNodeId, LogicAppLogicalType, type ConcreteAzureNode, type FunctionEnvelope, type Site } from '@microsoft/vscode-azure-azutils';
 import { createMockAzureListingFetcher, createMockWebAppClient, makeFunctionEnvelope, type MockWebAppClientOptions } from '@microsoft/vscode-azure-azutils/testing';
-import { collectPages, DataItemTree, IActionExecutor, IVsCode, type DataProvider, type Page } from '@microsoft/vscode-azure-utils';
+import { collectPages, DataItemTree, type Page } from '@microsoft/vscode-azure-utils';
 import { createTestActionExecutor, pagesOf, rejectingAsyncIterable } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
-import { Container } from 'inversify';
 import { RefreshResourcesView } from '../../../../src/commands/tree/RefreshResourcesView';
 import type { ManagedCommand } from '../../../../src/commands/ManagedCommand';
 import { WebAppSettingsAdapter } from '../../../../src/settings/adapters/WebAppSettingsAdapter';
 import { isSettingsNode } from '../../../../src/tree/resources/settings/SettingsNode';
 import { FunctionAppVirtualTypes, isFunctionAppFunction, type FunctionApp, type FunctionAppInvalidNode } from '../../../../src/tree/resources/webApp/FunctionApp';
 import { FunctionAppDataProvider } from '../../../../src/tree/resources/webApp/FunctionAppDataProvider';
-import { registerFunctions } from '../../../../src/products/registerFunctions';
-import { ProductRegistrar } from '../../../../src/registration/ProductRegistrar';
-import { bindProviders } from '../../../../src/services';
 import { getWebsiteUrl } from '../../../../src/tree/resources/websiteUrl';
 import { makeSettingsResource } from '../../../settings/mockSettings';
 import { makeFunctionAppFunctions } from './mockFunctionApp';
@@ -90,6 +86,38 @@ describe('FunctionAppDataProvider (unit)', () => {
         expect(getWebsiteUrl(app)).to.equal('https://myfuncapp.azurewebsites.net');
         expect(AzureNodeId.from(app).toString()).to.equal(key);
         expect(client.webApps.get.mock.calls[0].arguments).to.deep.equal(['MyRG', 'MyFuncApp']);
+    });
+
+    for (const [value, expected] of [['1', true], ['https://storage.example/package.zip', true], ['false', false], ['FALSE', false], ['0', false], ['', false]] as const) {
+        it(`reads package-backed function editability from deployment setting ${JSON.stringify(value)}`, async () => {
+            const s = setup({ settings: { ['website_run_from_package']: value } });
+            const app: FunctionApp = makeSettingsResource();
+            await s.provider.enrich(app);
+            expect(app.isReadOnly).to.equal(expected);
+        });
+    }
+
+    it('marks Flex function files read-only even without a package setting', async () => {
+        const s = setup({ site: { functionAppConfig: {} } });
+        const app: FunctionApp = makeSettingsResource();
+        await s.provider.enrich(app);
+        expect(app.isReadOnly).to.be.true;
+    });
+
+    it('keeps functions readable when deployment settings cannot be read and recovers editability on refresh', async () => {
+        const s = setup({ functions: [makeFunctionEnvelope()] });
+        const app: FunctionApp = makeSettingsResource();
+        app.isReadOnly = false;
+        const warning = mock.method(s.output, 'warn');
+        s.client.webApps.listApplicationSettings.mock.mockImplementationOnce(() => Promise.reject(new Error('Settings access denied')));
+        await s.provider.enrich(app);
+        expect(app.isReadOnly).to.be.undefined;
+        expect(app.siteError).to.be.undefined;
+        const [page] = await collectPages(await s.provider.getChildren(makeFunctionAppFunctions(app)));
+        expect(page.items.filter(isFunctionAppFunction)).to.have.lengthOf(1);
+        expect(warning.mock.callCount()).to.equal(1);
+        await s.provider.enrich(app);
+        expect(app.isReadOnly).to.be.false;
     });
 
     it('normalizes qualified names, triggers, authentication and disabled state without exposing settings', async () => {
@@ -177,18 +205,7 @@ describe('FunctionAppDataProvider (unit)', () => {
         const get = mock.method(client.webApps, 'get', (): Promise<Site> => Promise.reject(new Error('Access denied')));
         const tree = new DataItemTree<ConcreteAzureNode>(code, 'functions-test', executor, node => AzureNodeId.from(node).toString(), 60_000);
         tree.registerProvider({ isRoot: true, canHandle: (_node: unknown): _node is ConcreteAzureNode => false, getChildren: () => [app] });
-        const registrar = new ProductRegistrar();
-        registerFunctions(registrar);
-        const container = new Container();
-        container.bind(IActionExecutor).toConstantValue(executor);
-        container.bind(IVsCode).toConstantValue(code);
-        container.bind(IWebAppClientProvider).toConstantValue(() => client);
-        container.bind(WebAppSettingsAdapter).toConstantValue(adapter);
-        const providers = Symbol('resourceDataProviders');
-        bindProviders(container, providers, registrar.getResourceDataProviders());
-        for (const provider of container.getAll<DataProvider<ConcreteAzureNode>>(providers)) {
-            tree.registerProvider(provider);
-        }
+        tree.registerProvider(new FunctionAppDataProvider(executor, () => client, adapter, code));
         const changed = mock.fn();
         tree.onDidChange(changed);
         try {

@@ -66,7 +66,6 @@ describe('FunctionsWorkspaceDataProvider (unit)', () => {
 
             expect(children).to.have.length(1);
             expect(isFunctionsProjectNode(children[0])).to.be.true;
-            expect(children[0].label).to.equal('repo');
             expect(children[0].resourceUri?.path).to.equal('/repo/host.json');
         });
 
@@ -78,7 +77,6 @@ describe('FunctionsWorkspaceDataProvider (unit)', () => {
 
             expect(children).to.have.length(1);
             expect(children[0].resourceUri?.path).to.equal('/repo/api/host.json');
-            expect(children[0].label).to.equal('repo/api');
         });
 
         it('ignores a host.json inside an excluded directory', async () => {
