@@ -177,10 +177,12 @@ matters. Resolve that entry exactly like blank; do not write it as a disposition
 
 The reviewed data becomes the **committed source of truth** only through `TRIAGE.md`. The moment the human
 signs off, write it to `TRIAGE.md` in the migration's **tracked artifacts folder** in the target repo —
-`docs/migrations/<service>/`, the same folder as the committed `INVENTORY.md`. Then **commit it as its own
-change**, separate from any feature code. Treat it like a decision record (ADR): it is read-only to every
+`docs/migrations/<service>/`, the same folder as the committed `INVENTORY.md`. Then **commit it separately
+or with the mapped plan**, before any feature code. Treat it like a decision record (ADR): it is read-only to every
 later phase, and the only way to change a disposition is to edit `TRIAGE.md` and re-confirm with the human —
-never silently in-flight while implementing.
+never silently in-flight while implementing. The committed inventory precedes triage; signed triage
+and plan precede feature code, without a required first-commit layout. Changes to approved scope or
+behavioral adaptations also require explicit human approval and an updated record.
 
 `TRIAGE.md` contract:
 

@@ -2,6 +2,19 @@
 
 Order the mapped features so each slice compiles on top of the last, then emit `MIGRATION-PLAN.md`.
 
+## Shared foundations and review boundaries
+
+Before product implementation, identify shared changes independently reviewable from the feature
+(for example process lifecycle, task execution, or a framework extension point). Record their
+consumers/responsibility, dependency order, and proposed PR boundaries in the plan. Propose separate
+PRs where that reduces coupled review, but obtain approval before creating additional PRs; a
+separate PR is not mandatory for every helper.
+
+Reuse existing shared primitives and adapt fixtures additively. New extraction needs an existing
+second consumer or a genuinely framework-owned responsibility, not a hypothetical future product.
+Keep product-specific orchestration local without that evidence. Plan this separation early rather
+than treating broad generalization as a prerequisite to finishing each slice.
+
 ## Dependency order
 
 Build bottom-up. A feature can't be wired before the things it depends on exist:
@@ -11,16 +24,17 @@ Build bottom-up. A feature can't be wired before the things it depends on exist:
 2. Client wrappers        packages/azutils/src/rest/clients/<Product>Client.ts (+ re-export + factory)
 3. Data providers         <Product>DataProvider (getChildren + virtual nodes + enrich)
 4. View providers         <Product>ViewProvider (getTreeItem, icons, contextValue)
-5. Tree registration      registerTrees.ts (specific before generic)
-6. Commands               ManagedCommand classes + static ContextValue + registerCommands.ts
+5. Tree registration      product resource providers (specific before generic); workspace/activity arrays
+6. Commands               ManagedCommand classes + static ContextValue + product registerCommand
 7. Wizards                AVM search/selection + Bicep consumer (or two-file fallback) + azd steps per AzdJob
 8. Manifest               package.json contributions + package.nls.json strings (+ new icon in azutils only if none matches)
-9. Reuse wiring           SettingsAdapter / auth / generic commands hooked up in extension.ts
+9. Reuse wiring           SettingsAdapter / auth / generic commands through product registration
 10. Tests                 unit (+ integration where the precedent has them)
 ```
 
-Rationale: commands reference `ContextValue`s that view providers render; view providers read data
-providers; data providers use client wrappers; everything resolves through DI set up in `extension.ts`.
+Rationale: view providers reference the commands' `ContextValue`s and read data resources;
+data providers use client wrappers. Product bindings and resource providers come through
+`ProductRegistrar`; `registerTrees.ts` composes trees and workspace/activity entries.
 The manifest `when` clauses must match the assembled `contextValue`s, so contribute the manifest after the
 view layer exists.
 
@@ -47,6 +61,9 @@ Source: <repo> @ <commit-sha>   Inventory: <path>   Triage: <path (signed, commi
 Target: extensions/vscode-azure (+ packages/azutils)   Precedent: <product>
 Monorepo phase: <n>
 
+## Shared foundations and review boundaries
+- <shared change; actual consumers/framework owner; dependencies; proposed PR or same-PR slice>
+
 ## Slice 0 — Foundations
 - [ ] Add resource type + guards `tree/resources/<product>/<ResourceModel>.ts`  <- SWA-0xx (tree nodes)
 - [ ] Add `<Product>Client` wrapper + re-export + factory binding               <- SWA-0xx (SDK usage)
@@ -55,7 +72,7 @@ Monorepo phase: <n>
 ## Slice 1 — Resource node in the tree
 - [ ] `<Product>DataProvider.getChildren` (resource + virtual categories) <- SWA-0xx (tree hierarchy)
 - [ ] `<Product>ViewProvider.getTreeItem` (icon, contextValue)            <- SWA-0xx (node contextValues)
-- [ ] Register both in `registerTrees.ts`                                 <- —
+- [ ] Register resource providers through the product registrar          <- —
 - [ ] Icon: reuse existing `azureIcons/<logicalType>.svg`; add to azutils only if missing  <- SWA-0xx (node icons)
 - [ ] Reuse open-in-portal command on the node                           <- SWA-0xx (browse/openInPortal)
 
@@ -65,7 +82,7 @@ Monorepo phase: <n>
 
 ## Slice 3 — Create / Deploy (azd + Bicep)   [Adapt]
 - [ ] Record provisioning topology and AVM search evidence; select a pinned resource/pattern module, or justify fallback  <- SWA-0xx (create wizard)
-- [ ] Add the AVM-backed consumer, or the AVM-shaped local module + consumer fallback; update the generation abstraction as needed  <- SWA-0xx (create wizard)
+- [ ] Bundle the AVM-backed consumer, or local module + consumer fallback; select the template directory through the Bicep step factory  <- SWA-0xx (create wizard)
 - [ ] Resource-specific PromptSteps `commands/<product>/steps/`                          <- SWA-0xx (wizard steps)
 - [ ] Register Create<Product> per AzdJob (createNew / deploy)                           <- SWA-0xx (create/deploy cmds)
 
@@ -90,9 +107,11 @@ Rules:
   **Drop** is listed for the record. **Reuse** appears as a wiring task. Nothing from `TRIAGE.md` is
   silently absent — every ID appears somewhere, which is what makes verification possible.
 - Tag each task with its `TRIAGE.md` ID (`<- SWA-0xx`) so Phase 6 can trace it back to a signed disposition.
-- Save `MIGRATION-PLAN.md` in the tracked `docs/migrations/<service>/` folder alongside the signed
-  `TRIAGE.md`, and **commit both before any feature code**. They are the migration PR's first commit; a PR
-  with feature code but no plan/triage/inventory is incomplete. Print both paths.
+- Carry the mapping's behavioral contracts and approval references into each slice's acceptance
+  criteria, including conditional Reuse and remaining live scenarios; tests are part of each slice.
+- Save `MIGRATION-PLAN.md` beside the signed `TRIAGE.md` and **commit both before feature code**.
+  The committed inventory precedes triage. Separate artifact commits or artifacts already on the
+  base branch are valid; no first-commit layout is required. Print the paths.
 
 ## Branch drift protocol (long-lived migrations)
 

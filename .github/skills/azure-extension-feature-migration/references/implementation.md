@@ -30,8 +30,9 @@ Rules:
 - If the concept exists, **use it** — even if adapting your slice costs more than hand-rolling.
 - If it exists but is not general enough, **extend it additively** in the shared package (optional parameter,
   optional override, thin wrapper beside it). Do not fork a product-local copy.
-- If it genuinely does not exist and a second product would want it, put the new symbol in the **shared**
-  package, not in the product folder.
+- Extract a new shared symbol only for an existing second consumer or a genuinely framework-owned
+  responsibility. Record that evidence; potential reuse alone is not enough. Keep product-specific
+  orchestration local.
 - Process termination, shell task creation, workspace scanning, URL-opening commands, workspace file/folder
   pickers, and "browse the resource's website" are all shared concerns by default — never product-local.
 
@@ -40,23 +41,22 @@ Rules:
 1. **Open the precedent.** Read the matching precedent file(s) from [target-patterns.md](target-patterns.md)
    (e.g. `AcrDataProvider.ts` for a data provider). You are mirroring structure, DI wiring, and idioms —
    not copying logic from the source extension.
-2. **Write the file(s)** for the slice, in dependency order. Every file gets:
-   - the Microsoft copyright header;
-   - `import type` for type-only imports; DI interfaces (`IVsCode`, `IOutputChannel`, ...) instead of raw `vscode`;
-   - `@injectable()` on classes that are DI-constructed; `@inject(<token>)` constructor params;
-   - `this.code.l10n.t(...)` for user-facing strings; bracketed `IOutputChannel` logs for developer output;
-   - `stringifyError()` in catch clauses; `void`-prefixed fire-and-forget promises;
-   - case-insensitive-vs-constant comparisons for ARM `type`/`logicalType`;
-   - the **minimum public surface**: members are `private` unless something outside the class calls them.
+2. **Write the file(s)** in dependency order against the mapping's verified ownership and behavioral
+   contract. Apply `docs/conventions.md`, `docs/dependency-injection.md`, and `docs/testing.md` at this
+   slice boundary, including localization, data/view separation, fixture reuse, and valuable tests.
+   Use the shared `command()` / `IProcessExecutor` process path, including probes/builds
+   (`docs/conventions.md`, Process Creation). Keep the minimum public surface.
 3. **Wire it up:**
-   - Commands -> `registerManagedCommand(container, 'vscode-azure/<product>/<name>', Cmd[, ...prefixArgs])`.
-   - Providers -> add to the correct `dataProviders`/`viewProviders` array in `registerTrees.ts`, **before**
-     the generic fallback.
-   - Client wrappers -> re-export from `packages/azutils/src/index.ts`; bind the factory in `extension.ts`.
+   - Product commands -> `registrar.registerCommand('vscode-azure/<product>/<name>', Cmd, ...prefixArgs)`.
+   - Resource providers -> product `registerResourceDataProvider` / `registerResourceViewProvider`;
+     order products **before** the generic fallback in `registerProducts.ts`. Workspace/activity
+     providers -> the corresponding arrays in `registerTrees.ts`.
+   - Client wrappers -> re-export from `packages/azutils/src/index.ts`; use product
+     `registrar.registerAzureClientProvider(...)` (see [target-patterns.md](target-patterns.md)).
    - Wizard steps -> resolved from the container in the command; implement the provisioning choice recorded
-     during mapping. For an AVM module, add the consumer template descriptor and pinned registry reference.
-     For the two-file fallback, extend the generation abstraction to copy both the consumer and AVM-shaped
-     local module with their relative paths intact. See [avm-provisioning.md](avm-provisioning.md).
+     during mapping. For an AVM module, add the consumer with its pinned registry reference.
+     The Bicep step copies a complete template directory, preserving a fallback module's relative paths; select it through
+     `IGenerateBicepStepFactory`. See [avm-provisioning.md](avm-provisioning.md).
 4. **Contribute to the manifest:** add commands/menus/settings/debuggers to `package.json`, strings to
    `package.nls.json` (`%key%`). Every new `activationEvents` entry must clear the **activation budget** below.
    For the node icon, **reuse the matching SVG already in
@@ -69,8 +69,11 @@ Rules:
    - `pnpm --filter <package> run test` for the touched package.
    - Escalate to repo-wide `pnpm run lint|build|test` only when a slice touches shared surfaces or targeted
      runs pass but you need a final green.
-6. **Tick the checkbox** in `MIGRATION-PLAN.md` and move to the next slice. Keep the plan honest — if a
-   slice reveals new work, add a task rather than silently expanding an existing one.
+6. **Review the behavioral contract** using
+   [per-slice verification](verification.md#behavioral-contract-check-per-slice), not symbol presence.
+   Update `PARITY-REPORT.md` with inspected/automated/live evidence and unresolved scenarios before
+   ticking the slice's checkbox. Do not mark an unverified contract satisfied. New scope or
+   adaptations require explicit human approval and an updated `TRIAGE.md`/plan before coding.
 
 > Migrations are long-lived branches. After every rebase or merge from `main`, run the
 > [drift protocol](sequencing.md#branch-drift-protocol-long-lived-migrations) — the shared primitive you

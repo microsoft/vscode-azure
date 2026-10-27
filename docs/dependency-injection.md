@@ -33,7 +33,9 @@ container.bind(IActionExecutor)
     .onActivation(pushDisposable);
 ```
 
-Nearly every service follows the second form, so `.inSingletonScope().onActivation(pushDisposable)` is the default shape for a new binding.
+Extension-lifetime services commonly use `.inSingletonScope().onActivation(pushDisposable)`.
+Choose scope and disposal according to ownership; per-operation objects must not become
+singletons merely because they use injected services.
 
 ## Product Registration
 
@@ -153,7 +155,37 @@ The helper is generic in the subscription argument, constrained to `AzureSubscri
 
 Data-plane clients bind through the same call. They address a service's own endpoint rather than ARM, so their identifier declares whatever extra per-call arguments name that endpoint, and `create` receives them after the subscription. The subscription is still passed because it carries the cloud the endpoint lives in, and because the credential has to be scoped to the account and tenant that can reach it.
 
-The same pattern handles any class that needs **both** injected services and caller-supplied arguments — for example `GenerateBicepStep`, which needs an injected `ICodeContext` plus a per-command template name and parameter keys. `IGenerateBicepStepFactory` is bound with `.toFactory()`; it captures `ICodeContext` and returns a function taking the config, so the step is fully constructed in one call and its config fields stay `readonly`.
+### Per-operation objects and ownership
+
+Separate stable service dependencies from invocation inputs such as a launch target,
+workspace folder, runtime choice, or template configuration. A command-scoped injectable
+class can receive services through its constructor and invocation inputs through
+`execute(...)`. An owned session/step that needs both at construction can use a typed
+factory: the DI binding resolves services, and the caller supplies only operation inputs.
+
+The existing
+[`IGenerateBicepStepFactory`](../extensions/vscode-azure/src/azd/wizard/GenerateBicepStep.ts)
+captures `ICodeContext` and takes a template name plus parameter keys. Its binding in
+[`extension.ts`](../extensions/vscode-azure/src/extension.ts) uses
+`.toFactory(context => createGenerateBicepStepFactory(context.get(ICodeContext)))`.
+The helper constructs a fresh step with readonly configuration. Product-owned factories
+belong in `registrar.registerBinding(...)`; Azure clients use
+`registerAzureClientProvider(...)` rather than duplicating its credential wiring.
+
+Choose the simplest lifecycle that fits the existing API:
+
+- Constructor/factory construction suits an object whose services and inputs are available
+  together. Do not pass a service bundle from each caller merely to avoid a DI factory.
+- A method that accepts launch inputs suits a service that coordinates multiple operations.
+  Async initialization is appropriate when startup performs I/O; define readiness, reject
+  invalid/repeated starts where applicable, and clean up partially acquired resources on failure.
+  It is not a reason to create a partially configured object with public mutable fields.
+
+Document who owns each instance and its processes, listeners, cancellation sources, and
+disposables, including cleanup on success, failure, cancellation, and extension shutdown.
+A factory-created object is not automatically registered with `pushDisposable`. The caller
+or an explicit coordinating service must own cleanup; objects that outlive a command must
+not retain that command's `IActionContext` or execution container.
 
 ## Multi-Binding with Dual Registration
 

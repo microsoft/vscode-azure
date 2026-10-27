@@ -56,6 +56,33 @@ must produce a user-actionable error. Both helpers default to `unknown` and acce
 an optional type parameter, which asserts rather than validates the document's
 shape. Both propagate other filesystem failures.
 
+## Process Creation
+
+Build process argument vectors with `command()` and execute them through the injected
+`IProcessExecutor` from `@microsoft/vscode-azure-utils`. This includes CLI/version probes,
+builds, and foreground tasks, not just long-running processes. Reuse an existing CLI service
+when it already owns the operation; do not introduce product-local spawn/exec wrappers.
+
+```typescript
+const result = await this.processExecutor.spawn({
+    execution: 'background',
+    command: command(executablePath).arg('--version'),
+}, cancellationToken);
+```
+
+`command()` returns the argument array itself: the executable is element zero, with no
+`.build()` call. Use `.arg()` / `.namedArg()` for argv tokens; background execution does
+not parse a shell command string. For foreground tasks, use `.quotedArg()` or the
+`namedArg` quoting option where shell-quoting metadata is needed. See
+[`CommandLineBuilder`](../packages/utils/src/base/CommandLineBuilder.ts) and
+[`IProcessExecutor`](../packages/utils/src/base/IProcessExecutor.ts) for the actual options,
+execution modes, cancellation, and output-consumption contracts.
+
+A string serialized into another tool's environment variable or configuration is **not**
+an argv vector. Follow that receiving tool's documented serialization/escaping contract;
+do not join an argument array and assume it becomes a valid command string. If that tool
+launches a nested command, distinguish its string syntax from the outer `command()` call.
+
 ## Localization
 
 User-facing strings **must** use `IVsCode.l10n.t()`:

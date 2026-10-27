@@ -11,8 +11,9 @@ This skill is driven by an `INVENTORY.md` produced by the `azure-extension-featu
   pasted into chat does not satisfy this. Those evaporate, and the migration is then unverifiable.
 - If none exists, **run the inventory skill first and commit its output**. Do not attempt to migrate directly
   from the source extension's code — the inventory is what the migration is verified against.
-- `TRIAGE.md` (Phase 2) and `MIGRATION-PLAN.md` (Phase 4) land in that same folder and are the migration PR's
-  first commit, before any feature code.
+- Commit the inventory before triage. The signed `TRIAGE.md` (Phase 2) and `MIGRATION-PLAN.md`
+  (Phase 4) must be committed in that same folder before feature code; they may be separate commits
+  or already tracked on the base branch. `PARITY-REPORT.md` is the verification deliverable there.
 - Record the source repo + **exact commit SHA** the inventory was taken from. The migration is pinned to
   that snapshot; if the source has moved on, note it.
 
@@ -33,7 +34,7 @@ From the inventory, extract the working set:
 Read these before mapping anything. They are the contract every migrated feature must satisfy:
 
 - `docs/commands.md` — `ManagedCommand`, `registerManagedCommand`, `prefixArgs`, static `ContextValue`.
-- `docs/tree-views.md` — data layer (`DataItemTree` / `DataProvider`) vs view layer (`ViewItemTree` / `ViewProvider`), `registerTrees.ts` dispatch order, virtual nodes, selectors.
+- `docs/tree-views.md` — data/view layers, product resource registration and workspace/activity arrays, dispatch order, virtual nodes, selectors.
 - `docs/wizard.md` — `PromptStep` / `ExecuteStep`, back-nav, dynamic steps, reusable Azure pick steps.
 - `docs/resource-creation.md` — `AzdJob` (`createNew` vs `deploy`), azd+Bicep step sequence, scenario matrix, "Adding a New Resource Type".
 - `docs/dependency-injection.md` — service identifiers (`I`-prefix), container composition, factory bindings, multi-binding for providers.
