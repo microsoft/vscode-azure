@@ -73,7 +73,7 @@ export function createFunctionsDebugFixture(runtime = 'node', processOptions?: P
         ...processOptions,
     });
     const tools = { acquire: mock.fn<IToolService['acquire']>(() => Promise.resolve({ executablePath: 'func' })), getResolvedPath: mock.fn(() => 'func') };
-    const preparation = new FunctionsDebugPreparation(s.code, processes, tools, s.settings, projects, network);
+    const preparation = new FunctionsDebugPreparation(s.context.ctx, processes, tools, s.settings, projects, network);
     const owners = new LocalFunctionsHostProcess(s.code, () => new OwnedFunctionsHostSession(s.code, processes, s.createHost, s.hosts, network, output), network, output);
     const provider = new FunctionsDebugProvider(s.code, actions, s.index, projects, preparation, owners);
     return {

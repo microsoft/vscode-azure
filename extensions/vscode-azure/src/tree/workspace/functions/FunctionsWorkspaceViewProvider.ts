@@ -10,7 +10,6 @@ import { inject, injectable } from 'inversify';
 import { RevealInExplorer } from '../../../commands/tree/RevealInExplorer';
 import { RefreshWorkspaceView } from '../../../commands/tree/RefreshWorkspaceView';
 import { CopyFunctionUrl } from '../../../commands/functions/CopyFunctionUrl';
-import { InitializeFunctionsProject } from '../../../commands/functions/InitializeFunctionsProject';
 import { ExecuteFunction } from '../../../commands/functions/ExecuteFunction';
 import { SetFunctionState } from '../../../commands/functions/SetFunctionState';
 import { LocalFunctionsHostTracker } from '../../../functions/host/LocalFunctionsHostTracker';
@@ -79,14 +78,11 @@ export class FunctionsWorkspaceViewProvider implements ViewProvider<string> {
             item.iconPath = new this.ctx.code.ThemeIcon('warning');
             return;
         }
-        item.description = node.initialized === false
-            ? this.ctx.code.l10n.t('Worker runtime not configured')
-            : this.ctx.code.l10n.t('Azure Functions');
+        item.description = this.ctx.code.l10n.t('Azure Functions');
         item.iconPath = getResourceTypeIconUri(this.ctx, FunctionAppLogicalType);
         item.contextValue = combineContextValues(
             RevealInExplorer.ContextValue,
             RefreshWorkspaceView.ContextValue,
-            InitializeFunctionsProject.ContextValue,
         );
     }
 

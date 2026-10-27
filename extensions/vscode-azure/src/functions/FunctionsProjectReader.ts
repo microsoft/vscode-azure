@@ -41,9 +41,8 @@ export class FunctionsProjectReader {
         };
         try {
             await this.hostConfig(uri);
-            const values = (await this.settings.read(dirname(uri))).values;
-            const runtime = values.get('FUNCTIONS_WORKER_RUNTIME')?.trim().toLowerCase();
-            return { ...project, runtime, initialized: !!runtime };
+            await this.settings.read(dirname(uri));
+            return project;
         } catch (error: unknown) {
             this.executor.output.error(this.code.l10n.t('[data] Could not read local Functions project metadata.'));
             return { ...project, error: stringifyError(error) };

@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { CancellationError, CaselessMap, command, dirname, ExternalError, fileExists, IProcessExecutor, IVsCode, type ICaselessMapReader } from '@microsoft/vscode-azure-utils';
+import { CancellationError, CaselessMap, command, dirname, ExternalError, fileExists, ICodeContext, IProcessExecutor, showSmartQuickPick, throwIfCancelled, type ICaselessMapReader, type IVsCode, type QuickPickItemWithData } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { delimiter } from 'node:path';
 import type * as vscode from 'vscode';
@@ -59,14 +59,18 @@ export type FunctionsDebugLaunch = {
 /** Validates local projects and prepares workers; Core Tools owns ordinary builds and dependency restoration. */
 @injectable()
 export class FunctionsDebugPreparation {
+    private readonly code: IVsCode;
+
     public constructor(
-        @inject(IVsCode) private readonly code: IVsCode,
+        @inject(ICodeContext) private readonly ctx: ICodeContext,
         @inject(IProcessExecutor) private readonly processes: IProcessExecutor,
         @inject(IToolService) private readonly tools: IToolService,
         @inject(LocalFunctionSettings) private readonly settings: LocalFunctionSettings,
         @inject(FunctionsProjectSelector) private readonly projects: FunctionsProjectSelector,
         @inject(LocalFunctionsNetwork) private readonly network: LocalFunctionsNetwork,
-    ) { }
+    ) {
+        this.code = ctx.code;
+    }
 
     /** Captures validated settings, launch overrides, and the selected Python environment or Go tools. */
     public async prepare(project: vscode.Uri, env: Readonly<Record<string, string>>, token?: vscode.CancellationToken): Promise<FunctionsDebugLaunch> {
@@ -77,10 +81,9 @@ export class FunctionsDebugPreparation {
         }
         const values = new CaselessMap((await this.settings.read(project)).values);
         applyEnvironmentOverrides(values, env);
-        const runtime = values.get('FUNCTIONS_WORKER_RUNTIME')?.trim().toLowerCase();
-        if (!isFunctionsDebugRuntime(runtime)) {
-            throw new ExternalError(this.code.l10n.t('Set FUNCTIONS_WORKER_RUNTIME to node, python, java, powershell, dotnet-isolated, or native (Go) in local.settings.json before debugging.'));
-        }
+        const runtime = await this.selectRuntime(values.get('FUNCTIONS_WORKER_RUNTIME')?.trim().toLowerCase(), token);
+        this.projects.assertLocal(project);
+        applyEnvironmentOverrides(values, { ['FUNCTIONS_WORKER_RUNTIME']: runtime });
         const version = values.get('FUNCTIONS_EXTENSION_VERSION');
         if (version && !/^~?4(?:\.|$)/.test(version)) {
             throw new ExternalError(this.code.l10n.t('Local debugging supports Functions runtime v4 only.'));
@@ -94,6 +97,30 @@ export class FunctionsDebugPreparation {
             return { ...snapshot, runtime, tools: await this.validateGo(project, snapshot.environment, token) };
         }
         return { ...snapshot, runtime };
+    }
+
+    private async selectRuntime(runtime: string | undefined, token?: vscode.CancellationToken): Promise<FunctionsDebugRuntime> {
+        throwIfCancelled(token);
+        if (runtime) {
+            if (!isFunctionsDebugRuntime(runtime)) {
+                throw new ExternalError(this.code.l10n.t('Set FUNCTIONS_WORKER_RUNTIME to node, python, java, powershell, dotnet-isolated, or native (Go) in local.settings.json before debugging.'));
+            }
+            return runtime;
+        }
+        const items: QuickPickItemWithData<FunctionsDebugRuntime>[] = [
+            { label: this.code.l10n.t('Node.js / TypeScript'), data: 'node' },
+            { label: this.code.l10n.t('Python'), data: 'python' },
+            { label: this.code.l10n.t('.NET isolated'), data: 'dotnet-isolated' },
+            { label: this.code.l10n.t('Java'), data: 'java' },
+            { label: this.code.l10n.t('PowerShell'), data: 'powershell' },
+            { label: this.code.l10n.t('Go (native worker)'), data: 'native' },
+        ];
+        const selected = await showSmartQuickPick(this.ctx, items, {
+            title: this.code.l10n.t('Select the Functions runtime to debug'),
+            placeHolder: this.code.l10n.t('Used for this debug launch; project files are not changed.'),
+        });
+        throwIfCancelled(token);
+        return selected.data;
     }
 
     private async validateStorage(values: ICaselessMapReader<string>): Promise<void> {

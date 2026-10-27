@@ -3,7 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { addMockExtension, getMockTaskExecution, MockCancellationToken, MockShellExecution, waitFor } from '@microsoft/vscode-azure-utils/testing';
+import { CancellationError, readText } from '@microsoft/vscode-azure-utils';
+import { addMockExtension, getMockTaskExecution, MockCancellationToken, MockShellExecution, respondToPrompts, waitFor } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import { createFunctionsDebugFixture, selectPythonEnvironment } from './mockFunctionsDebug';
 
@@ -15,6 +16,55 @@ describe('Functions debug preparation (unit)', () => {
         return s;
     }
     afterEach(() => { fixtures.splice(0).forEach(s => { s.dispose(); }); mock.restoreAll(); });
+
+    for (const [runtime, label] of [
+        ['node', 'Node.js / TypeScript'], ['python', 'Python'], ['dotnet-isolated', '.NET isolated'],
+        ['java', 'Java'], ['powershell', 'PowerShell'], ['native', 'Go (native worker)'],
+    ]) {
+        it(`selects ${runtime} for a launch with no configured runtime without editing settings`, async () => {
+            const s = setup(runtime);
+            const uri = s.code.Uri.joinPath(s.folder, 'local.settings.json');
+            const settings = '{"Values":{"AzureWebJobsStorage":"UseDevelopmentStorage=true"}}';
+            s.m.fs.addFile(uri, settings);
+            const prompts = respondToPrompts(s.m, [{ pick: label }]);
+            const launch = await s.preparation.prepare(s.folder, {});
+            prompts.assertAllConsumed();
+            expect(launch.runtime).to.equal(runtime);
+            expect(launch.environment.FUNCTIONS_WORKER_RUNTIME).to.equal(runtime);
+            expect(await readText(s.code, uri)).to.equal(settings);
+            expect(s.m.fs.writeFile.mock.callCount()).to.equal(0);
+        });
+    }
+
+    it('rechecks cancellation after runtime selection before continuing preparation', async () => {
+        const s = setup('');
+        const token = new MockCancellationToken();
+        const preparing = s.preparation.prepare(s.folder, {}, token);
+        const rejected = expect(preparing).to.be.rejectedWith(CancellationError);
+        await waitFor(() => s.m.quickPicks.some(pick => pick.show.mock.callCount() > 0));
+        const picker = s.m.quickPicks[0];
+        token.cancel();
+        picker.activeItems = [picker.items[0]];
+        picker.accept();
+        await rejected;
+        expect(s.spawn.mock.callCount()).to.equal(0);
+        expect(s.tools.acquire.mock.callCount()).to.equal(0);
+        expect(s.m.fs.writeFile.mock.callCount()).to.equal(0);
+    });
+
+    it('rechecks workspace trust after runtime selection', async () => {
+        const s = setup('');
+        const preparing = s.preparation.prepare(s.folder, {});
+        const rejected = expect(preparing).to.be.rejectedWith('trusted, non-virtual workspace');
+        await waitFor(() => s.m.quickPicks.some(pick => pick.show.mock.callCount() > 0));
+        const picker = s.m.quickPicks[0];
+        mock.property(s.m.workspace, 'isTrusted', false);
+        picker.activeItems = [picker.items[0]];
+        picker.accept();
+        await rejected;
+        expect(s.spawn.mock.callCount()).to.equal(0);
+        expect(s.tools.acquire.mock.callCount()).to.equal(0);
+    });
 
     it('validates mixed-case local setting names and gives launch overrides case-insensitive precedence', async () => {
         const s = setup();
@@ -31,6 +81,7 @@ describe('Functions debug preparation (unit)', () => {
         })).runtime).to.equal('node');
         await expect(s.preparation.prepare(s.folder, { ['FUNCTIONS_WORKER_RUNTIME']: 'node' }))
             .to.be.rejectedWith('runtime v4 only');
+        expect(s.m.quickPicks).to.be.empty;
     });
 
     it('builds native Go with optimizations and inlining disabled using the resource-scoped Go executable', async () => {

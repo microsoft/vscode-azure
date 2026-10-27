@@ -27,13 +27,17 @@ official v5 preview scripts. Tool acquisition remains user-action driven.
 Owned hosts consume both output generators concurrently and opt into
 [shared process-tree cancellation](../architecture.md#process-output-and-lifetime).
 
-## F5 and project initialization
+## F5 debugging
 
 The `azure-functions` debugger supports Node.js, Python, Java, PowerShell,
 .NET isolated, and native Go projects in trusted, non-virtual workspace folders. Initial and
 dynamic configuration providers discover indexed `host.json` projects, including
 nested projects. F5 requires neither `tasks.json` nor `launch.json`. Multiple
 projects prompt for a selection, remembering the last choice per workspace.
+When `FUNCTIONS_WORKER_RUNTIME` is absent or blank in local settings and launch
+overrides, F5 asks which supported runtime to debug. The choice configures only
+that launch's environment; project files are not changed. An existing supported
+runtime bypasses the picker, and an unsupported configured value is an error.
 Its type identifier and supported-runtime guard live in
 `functions/debug/functionsDebug.ts`, independently of debugger preparation and registration.
 
@@ -102,8 +106,10 @@ existing Delve servers. Native Go scaffolding and provisioning/runtime selection
 are separate migration work; code deployment uses the shared azd route with an
 azd version supporting Go Functions. Custom handlers are not debugged.
 
-Pre-debug validation requires runtime v4 settings, storage configuration, and
-saved local settings. `UseDevelopmentStorage=true` requires Azurite on its three
+Pre-debug validation requires a supported selected/configured worker runtime,
+runtime v4 compatibility, storage configuration, and saved local settings.
+A missing `local.settings.json` is allowed when launch overrides provide the
+required storage configuration. `UseDevelopmentStorage=true` requires Azurite on its three
 default loopback ports; automatic emulator startup and custom proxy validation
 are outside this flow. Identity-based storage settings are accepted. Core Tools
 starts with `--no-azurite` to leave emulator management to the user. Host startup
@@ -142,16 +148,6 @@ code after the process-tree shutdown attempt completes.
 Concurrent stop requests await the same owned process completion. Finalization
 releases subscriptions and ownership and closes or finishes the task once.
 
-Initialize Project for VS Code selects a missing worker runtime and appends
-workspace extension recommendations; debugging is started with F5 and needs no
-launch configuration. JSONC comments, existing entries, and unrelated properties
-are preserved; malformed, duplicate-property, and dirty files are rejected.
-Initialization refreshes the selected project without evicting unrelated
-projects. Recommendation IDs are matched case-insensitively while
-preserving the existing file's spelling.
-Initialization and local settings share JSONC-object validation and path editing
-in `utils/jsonc.ts`; file-specific validation remains with their respective callers.
-
 The debugger schema and snippets expose `projectPath`, `hostArgs`, `env`,
 `hostPort`, `debugPort`, and `skipBuild`; standard `preLaunchTask` and
 `postDebugTask` options also apply. Existing project tasks/configurations are
@@ -179,8 +175,9 @@ Project validation requires the `2.0` host schema and a string-array function
 filter when present, including before a host is running.
 
 Malformed functions remain visible beside readable siblings. Project validation
-shows invalid metadata or a missing worker runtime without putting local settings
-values in nodes. Invalid and hint nodes offer workspace refresh only.
+shows invalid metadata without putting local settings values in nodes.
+Projects without a configured worker runtime remain available for F5's runtime
+selection. Invalid and hint nodes offer workspace refresh only.
 Local settings changes use the shared index watcher, and host-registration
 events invalidate the affected project subtree. Workspace refresh invalidates the
 complete workspace tree.
@@ -218,9 +215,8 @@ displayed in a local settings tree. See the
 [local settings contract](https://learn.microsoft.com/en-us/azure/azure-functions/functions-develop-local#local-settings-file)
 and [disable-function setting](https://learn.microsoft.com/en-us/azure/azure-functions/disable-function).
 
-The project tree offers initialization when its worker runtime is missing and
-debugging for supported runtimes. Project/function creation is deferred in Slice 5;
-initialization configures existing projects, not new source/template generation.
+Project/function creation is deferred in Slice 5. Existing projects are debugged
+with F5; no tasks, launch configuration, or workspace recommendations are generated.
 
 ## Remote resources tree
 

@@ -25,7 +25,7 @@ describe('Local Functions tree (integration)', () => {
         mock.restoreAll();
     });
 
-    it('reads runtime and disabled state from mixed-case local setting names', async () => {
+    it('reads disabled state from mixed-case local setting names', async () => {
         const s = setup();
         s.addProject();
         s.startHost([{ name: 'Http' }]);
@@ -36,8 +36,6 @@ describe('Local Functions tree (integration)', () => {
         const project = (await s.tree.getChildren())[0];
         const fn = (await s.tree.getChildren(project)).find(isLocalFunctionNode);
 
-        expect(isFunctionsProjectNode(project) && project.runtime).to.equal('node');
-        expect(isFunctionsProjectNode(project) && project.initialized).to.be.true;
         if (!fn) { throw new Error('Expected a local function'); }
         expect(fn.isDisabled).to.be.true;
         expect(s.view.getTreeItem(fn.id).contextValue?.split(';')).to.include(SetFunctionState.EnableContextValue);
@@ -183,11 +181,12 @@ describe('Local Functions tree (integration)', () => {
         expect(s.view.getTreeItem(recovered.id).description).not.to.equal('Invalid');
     });
 
-    it('shows missing worker runtime without exposing an unimplemented initialization command', async () => {
+    it('discovers a project with an unconfigured runtime for F5 selection', async () => {
         const s = setup();
         s.addProject('');
         const project = (await s.tree.getChildren())[0];
-        expect(s.view.getTreeItem(project.id).description).to.equal('Worker runtime not configured');
+        expect(isFunctionsProjectNode(project)).to.be.true;
+        expect(s.view.getTreeItem(project.id).description).to.equal('Azure Functions');
     });
 
     it('filters function names through host.json without adding a local grouping node', async () => {

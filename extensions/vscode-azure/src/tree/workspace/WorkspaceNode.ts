@@ -82,10 +82,6 @@ export interface FunctionsProjectNode extends WorkspaceNode {
     readonly type: 'functionsProject';
     /** URI of the `host.json` file itself. */
     readonly resourceUri: vscode.Uri;
-    /** Worker runtime from local settings, when configured. */
-    readonly runtime?: string;
-    /** Whether the project has a worker runtime configured. */
-    readonly initialized?: boolean;
     /** Safe, user-actionable error from project validation. */
     readonly error?: string;
 }

@@ -48,7 +48,7 @@ export function createLocalFunctions() {
         m.fs.addFile(code.Uri.joinPath(folder, 'local.settings.json'), JSON.stringify({
             Values: { ['FUNCTIONS_WORKER_RUNTIME']: runtime }, IsEncrypted: false,
         }));
-        return makeFunctionsProjectNode({ resourceUri: hostUri, runtime, initialized: !!runtime });
+        return makeFunctionsProjectNode({ resourceUri: hostUri });
     };
     /** Makes the host report `functions` and registers it as ready for the project folder. */
     const startHost = (functions: readonly HostFunction[], port = 8090) => {

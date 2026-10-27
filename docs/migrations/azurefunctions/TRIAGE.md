@@ -17,6 +17,7 @@ by editing this file and reconfirming with the reviewer.
 | **Signed off by** | Brandon Waterloo (@bwateratmsft) |
 | **Date** | 2026-09-24 |
 | **Review** | Excel review workbook; 37 rows overridden, 234 accepted as recommended (blank decision = agreement). |
+| **Runtime-selection review** | 2026-10-27: runtime selection is inline in F5 and affects only the launch environment (FUNC-030: Adapt); the standalone initialization/tree action is dropped (FUNC-190: Drop). |
 | **Last confirmed** | 2026-10-22; reviewer dropped the Functions-specific deploy command and its follow-ons (FUNC-046, FUNC-047, FUNC-202, FUNC-247, FUNC-255, FUNC-256: Drop), removed the optional `launch.json` entry from initialization, and made the running host the only source of local function metadata (FUNC-187: Adapt). Earlier, 2026-10-12; reviewer dropped source agent metadata (FUNC-007: Drop), consistent with the dropped agent discovery/wizard/benchmark handlers. MCP support remains independently deferred. Reviewer deferred CLI scaffolding (`func init`, `func new`, `func quickstart`) and its dependent language/welcome/template flows (FUNC-026, FUNC-028, FUNC-192, FUNC-218 through FUNC-221, FUNC-223 through FUNC-225, FUNC-235, FUNC-236: Defer). CLI v5 ownership remains the direction for future scaffolding. Native Go debugging and Go/Delve validation remain Adapt (FUNC-140, FUNC-141, FUNC-195); Go scaffolding and provisioning/runtime selection remain deferred. Go code deployment uses the shared azd route. Earlier, 2026-09-29: PR review moved FUNC-055 to Reuse (`azd pipeline config`) and FUNC-168 back to Migrate (remote Functions group node), added optional `launch.json` generation to FUNC-030, and clarified that `local.settings.json` stays. Earlier, 2026-09-24: F5 design review moved FUNC-203 through FUNC-207 to Drop. |
 
 ## Granularity
@@ -26,8 +27,8 @@ by editing this file and reconfirming with the reviewer.
 The reviewer directed: "I want to defer that scaffolding `func init` / `func new` / `func quickstart` for now."
 Project/function creation, gallery-backed quickstarts, language-specific
 scaffolding, template requirements/post-create flows, and the create-project
-welcome action are deferred. Initialization of existing projects for VS Code
-and F5 (FUNC-030, FUNC-190), shared Core Tools support (FUNC-021, FUNC-031,
+welcome action are deferred. F5 runtime selection for existing projects
+(FUNC-030), shared Core Tools support (FUNC-021, FUNC-031,
 FUNC-217), and Azure provisioning/deployment remain in scope.
 
 For future scaffolding, the approved ownership direction is CLI v5:
@@ -66,9 +67,9 @@ problem matcher and pattern; per manifest-level contract; per orphan.
 | Disposition | Count | Meaning in this record |
 |---|---:|---|
 | Migrate | 24 | Preserve the source capability using monorepo patterns |
-| Adapt | 22 | Preserve the user goal with intentionally different behavior or UX |
+| Adapt | 21 | Preserve the user goal with intentionally different behavior or UX |
 | Reuse | 19 | Satisfy the feature by wiring an existing monorepo capability |
-| Drop | 142 | Do not carry the source capability forward |
+| Drop | 143 | Do not carry the source capability forward |
 | Defer | 64 | Retain the goal for later tracked work |
 | **Total** | **271** | |
 
@@ -105,7 +106,8 @@ problem matcher and pattern; per manifest-level contract; per orphan.
   language debugger's attach configuration. F5 needs no `launch.json`, and none
   is generated. No `tasks.json` is generated, and no task type, problem matcher, or
   process-pick command is contributed. Existing projects' source-generated
-  `tasks.json` / `launch.json` are left untouched; users delete them or re-initialize.
+  `tasks.json` / `launch.json` are left untouched; users delete them or select the
+  `azure-functions` debugger explicitly.
 - **No exported API or agent contract.** The source's exported API,
   `agentMetadata`, and `agent.*` commands have no monorepo consumer. External
   consumers exist (see [Known external consumers](#known-external-consumers)); they are dropped
@@ -163,7 +165,7 @@ Judgment-call groups (`JC-*`) mark rows the reviewer was asked to weigh as a set
 | FUNC-027 | 1.1 Local project | `azureFunctions.createNewProjectWithDockerfile` | **Defer** | Cancel-dominant; tied to the containerized-hosting decision. |  | JC-CONTAINER |
 | FUNC-028 | 1.1 Local project | `azureFunctions.createFunction` | **Defer** | Add-function through CLI v5 `func new` is deferred for all languages, including Java. | Deferred by reviewer, 2026-10-12. | JC-SCAFFOLD |
 | FUNC-029 | 1.1 Local project | `azureFunctions.addBinding` | **Drop** | Only `function.json` projects; near-zero successes per telemetry. |  |  |
-| FUNC-030 | 1.1 Local project | `azureFunctions.initProjectForVSCode` | **Adapt** | Debugging needs no generated `tasks.json` / `launch.json`. Init selects a missing worker runtime and writes only non-debug workspace files (`.vscode/extensions.json` recommendations), never project configuration in VS Code settings. | Adapt, but to the greatest extent possible, make debugging work without a tasks.json/launch.json needed. | JC-SCAFFOLD |
+| FUNC-030 | 1.1 Local project | `azureFunctions.initProjectForVSCode` | **Adapt** | F5 selects a missing worker runtime for the current launch without generating tasks, launch files, recommendations, or local settings. | Runtime selection inline in F5, 2026-10-27. | JC-SCAFFOLD |
 | FUNC-031 | 1.1 Local project | `azureFunctions.installOrUpdateFuncCoreTools` | **Reuse** | `vscode-azure/installFunc` + FuncInstaller already exist; source failure rate is a reliability lesson. |  |  |
 | FUNC-032 | 1.1 Local project | `azureFunctions.uninstallFuncCoreTools` | **Drop** | Incidental; mostly fails; SWA precedent dropped CLI uninstall. Known external consumer: Logic Apps Standard. |  |  |
 | FUNC-033 | 1.1 Local project | `azureFunctions.pickProcess` | **Adapt** | High usage; .NET attach depends on it. Rebuild on shared process/task services. |  | JC-LOCALDEV |
@@ -323,7 +325,7 @@ Judgment-call groups (`JC-*`) mark rows the reviewer was asked to weigh as a set
 | FUNC-187 | 3 Tree | "Run build task to update this list..." hint | **Adapt** | Project nodes show "Start debugging to list functions..." until a host is ready; there is no build-output listing. | Override (recommended Migrate), 2026-10-22. |  |
 | FUNC-188 | 3 Tree | "Start debugging to update this list..." hint | **Migrate** | Host-listed projects when the host is not running. |  |  |
 | FUNC-189 | 3 Tree | Local Settings node + items (`local.settings.json`) | **Drop** | Settings upload/download are dropped (FUNC-073, FUNC-074), so there is no local.settings.json node. | Override (recommended Defer). | JC-SETTINGSSYNC |
-| FUNC-190 | 3 Tree | Init project node + "Initialize project..." child | **Adapt** | Follows initProjectForVSCode (FUNC-030). |  | JC-SCAFFOLD |
+| FUNC-190 | 3 Tree | Init project node + "Initialize project..." child | **Drop** | F5 owns runtime selection; no standalone initialization action is needed. | User-directed removal, 2026-10-27. | JC-SCAFFOLD |
 | FUNC-191 | 3 Tree | Invalid local project node | **Migrate** | Preserve the error state. |  |  |
 | FUNC-192 | 3 Tree | "Create Function Project..." hint (empty workspace) | **Defer** | Depends on the deferred create-project command (FUNC-026). | Deferred by reviewer, 2026-10-12. | JC-SCAFFOLD |
 | FUNC-193 | 3 Tree | DTS scheduler + task hub nodes | **Defer** | DTS as a unit (azutils already has a DTS task-hub logical type). |  | JC-DTS |

@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ExternalError } from '@microsoft/vscode-azure-utils';
-import { addMockExtension, addWorkspaceFolder, MockCancellationToken, waitFor } from '@microsoft/vscode-azure-utils/testing';
+import { addMockExtension, addWorkspaceFolder, MockCancellationToken, respondToPrompts, waitFor } from '@microsoft/vscode-azure-utils/testing';
 import { delimiter } from 'node:path';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
@@ -21,6 +21,40 @@ describe('Functions debug provider (unit)', () => {
         return { ...s, config };
     }
     afterEach(() => { fixtures.splice(0).forEach(s => { s.dispose(); }); mock.restoreAll(); });
+
+    it('prompts during F5 when local settings are absent and uses the selected runtime in host startup', async () => {
+        const s = setup();
+        const uri = s.code.Uri.joinPath(s.folder, 'local.settings.json');
+        await s.code.workspace.fs.delete(uri);
+        const prompts = respondToPrompts(s.m, [{ pick: 'Node.js / TypeScript' }]);
+        const start = mock.method(s.owners, 'start', async (request: FunctionsHostStart) => {
+            expect(request.runtime).to.equal('node');
+            const environment = await request.prepare(9229, 'pipe');
+            expect(environment.FUNCTIONS_WORKER_RUNTIME).to.equal('node');
+            expect(environment.AzureWebJobsStorage__accountName).to.equal('account');
+            expect(environment.languageWorkers__node__arguments).to.equal('--inspect-brk=127.0.0.1:9229');
+            return { id: 'owned', hostPort: 7072, debugPort: 9229, pipe: 'pipe' };
+        });
+        const config = await s.debugProvider.resolveDebugConfigurationWithSubstitutedVariables(undefined, {
+            ...s.config, env: { ['AzureWebJobsStorage__accountName']: 'account' },
+        });
+        prompts.assertAllConsumed();
+        expect(config?.type).to.equal('pwa-node');
+        expect(start.mock.callCount()).to.equal(1);
+        expect(s.m.fs.writeFile.mock.callCount()).to.equal(0);
+        await expect(s.code.workspace.fs.stat(uri)).to.be.rejectedWith('File not found');
+    });
+
+    it('dismisses runtime selection without acquiring tools or starting a host', async () => {
+        const s = setup('');
+        const prompts = respondToPrompts(s.m, ['cancel']);
+        expect(await s.debugProvider.resolveDebugConfigurationWithSubstitutedVariables(undefined, s.config)).to.be.undefined;
+        prompts.assertAllConsumed();
+        expect(s.tools.acquire.mock.callCount()).to.equal(0);
+        expect(s.spawn.mock.callCount()).to.equal(0);
+        expect(s.m.tasks.executeTask.mock.callCount()).to.equal(0);
+        expect(s.m.fs.writeFile.mock.callCount()).to.equal(0);
+    });
 
     it('applies launch and owned worker settings without duplicating mixed-case local keys', async () => {
         const s = setup();

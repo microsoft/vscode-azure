@@ -255,9 +255,9 @@ Tree contract:  Local project node: revealInExplorer, refreshWorkspace (invalid:
                 Hint and invalid nodes: no actions except refresh.
 ```
 
-**Action dependencies approved by the reviewer:** Slice 4 owns initialization
-and debugging; creation/welcome actions are deferred with Slice 5.
-Missing-runtime state offers initialization. The process owner populates the ready-host registration
+**Action dependencies approved by the reviewer:** Slice 4 owns debugging and
+launch-time runtime selection; creation/welcome actions are deferred with Slice 5.
+The process owner populates the ready-host registration
 after HTTP readiness and releases it when the host stops.
 
 - [x] List functions directly under the project node (no group node) from the
@@ -269,8 +269,6 @@ after HTTP readiness and releases it when the host stops.
 - [x] Hint node: "Start debugging to list functions..." while no host is
   ready. <- FUNC-187, FUNC-188
 - [x] Invalid local function and invalid local project nodes. <- FUNC-186, FUNC-191
-- [x] Missing-worker-runtime project state; initialization action is tracked
-  in Slice 4. <- FUNC-190 (presentation)
 - [x] Refresh on local settings changes and host start/stop through the
   workspace index watcher and host tracking events. <- FUNC-198
 - [x] Local execute / copy URL / enable / disable reuse the Slice 2 commands
@@ -352,11 +350,8 @@ Resolution flow for one session:
   runtimes) and register its provider for initial and dynamic configurations,
   so projects appear in the Run and Debug dropdown with no `launch.json`.
   <- FUNC-030
-- [x] `initProjectForVSCode` writes no `tasks.json` and no project
-  configuration in VS Code settings; it writes non-debug workspace files such
-  as `.vscode/extensions.json` recommendations. <- FUNC-030
-- [x] Wire the local project initialization action and its initialization
-  state to the implemented initialization flow. <- FUNC-190
+- [x] F5 selects a missing worker runtime for the current launch without writing
+  project settings, tasks, launch configurations, or recommendations. <- FUNC-030
 - [x] Attach configurations for Node, Python (via the Python extension's
   launcher), Java, and PowerShell, with free debug ports.
   <- FUNC-210, FUNC-211, FUNC-212, FUNC-214, FUNC-268
@@ -368,22 +363,22 @@ Resolution flow for one session:
   with `-gcflags=all=-N -l`, and start the native worker under headless Delve.
   Reuse worker executable/argument overrides, loopback debugger transport,
   and owned-host readiness/process-tree cleanup. Return a Go remote DAP attach config;
-  custom handlers are excluded. Wire Go recommendations, native-runtime
-  initialization, and debugger language contribution.
+  custom handlers are excluded. Include native Go in F5 runtime selection and
+  the debugger language contribution.
   <- FUNC-140, FUNC-141, FUNC-195
 - [x] Go behavioral coverage: prerequisites/build errors, paths with spaces,
   skipped builds, loopback attach, readiness failure/cancellation/cleanup, and
-  initialization. Live Go attach smoke check remains part
+  runtime selection. Live Go attach smoke check remains part
   of Slice 7. <- FUNC-140, FUNC-141, FUNC-195
 - [x] Host process and tracking: build steps, start, readiness, port, terminal
   errors, stop on session end, and start/stop events for local listing and
   execute. <- FUNC-216
-- [x] Pre-debug validation: Core Tools present, `FUNCTIONS_WORKER_RUNTIME`,
+- [x] Pre-debug validation: Core Tools present, selected/configured worker runtime,
   `AzureWebJobsStorage` / emulator reachable. <- FUNC-215
 - [x] Wire shared Core Tools install/update and version checks; no
   activation-time prompts. <- FUNC-021, FUNC-031, FUNC-217
 - [x] Unit tests for configuration resolution, build preparation, host tracking,
-  cancellation, and readiness failures; initialization integration tests against
+  cancellation, and readiness failures; runtime-selection integration tests against
   the real index/tree; shared integration test terminating a real parent/worker
   process tree.
 - [ ] Live language attach-path smoke checks during Slice 7. The automated tests
@@ -395,7 +390,7 @@ storage/emulator integration, and Linux/macOS smoke checks remain in Slice 7.
 Existing projects' source-generated `tasks.json` / `launch.json` (task type
 `func`, `$func-watch`, `${command:azureFunctions.pickProcess}`) are left
 untouched: no compatibility registrations and no rewrite prompt. Users delete
-them or re-initialize.
+them or select the `azure-functions` debugger explicitly.
 
 ## Slice 5 -- Project and function scaffolding (deferred)
 
@@ -413,8 +408,8 @@ validation, generated files, dependencies, and project configuration; the
 extension owns folder selection, editor integration, cancellation/errors, and
 preserving user-owned files. Scaffolding workload capabilities require
 verification independently of the Core Tools v5 F5 contract. Shared tool support
-(FUNC-021, FUNC-031, FUNC-217), local-only gates (FUNC-004), and initialization
-of existing projects (FUNC-030, FUNC-190) remain in scope.
+(FUNC-021, FUNC-031, FUNC-217), local-only gates (FUNC-004), and F5 runtime
+selection for existing projects (FUNC-030) remain in scope.
 
 Before future implementation, verify distributed CLI v5/workload versions,
 language support, machine-readable discovery, noninteractive prompts, result
@@ -595,7 +590,7 @@ External facts: `https://json.schemastore.org/function.json` and `https://json.s
   FUNC-143, FUNC-145, FUNC-146, FUNC-147, FUNC-148, FUNC-149, FUNC-150,
   FUNC-151, FUNC-152, FUNC-153, FUNC-154, FUNC-155, FUNC-156, FUNC-157,
   FUNC-161, FUNC-162, FUNC-163, FUNC-165.
-- Tree and manifest leftovers: FUNC-167, FUNC-197, FUNC-201.
+- Tree and manifest leftovers: FUNC-167, FUNC-190, FUNC-197, FUNC-201.
 - Open from portal: FUNC-209.
 - Languages, programming models, and runtimes out of scope (v4 only):
   FUNC-158, FUNC-159, FUNC-213, FUNC-222, FUNC-227, FUNC-229, FUNC-230,
@@ -622,9 +617,9 @@ families are covered by that catalog.
 | Signed disposition | IDs | Audited outcome |
 |---|---:|---|
 | Migrate | 24 | Landed and wired |
-| Adapt | 22 | Landed with the approved target behavior |
+| Adapt | 21 | Landed with the approved target behavior |
 | Reuse | 19 | 18 wired; one conditional shared capability (`FUNC-258`) |
-| Drop | 142 | Source-specific feature absent; exact ID partition recorded under Dropped |
+| Drop | 143 | Source-specific feature absent; exact ID partition recorded under Dropped |
 | Defer | 64 | Exact ID partition tracked under Deferred |
 | Total | 271 | No missing or duplicate IDs |
 
@@ -647,7 +642,7 @@ registration in `commands/registerCommands.ts`, and tree composition in
 | FUNC-008 | Function schema | Migrate | Landed | Extension `package.json`: `jsonValidation` for `function.json` |
 | FUNC-009 | Host schema | Migrate | Landed | Extension `package.json`: `jsonValidation` for `host.json` |
 | FUNC-021 | Core Tools version checks | Reuse | Wired on demand | `tools/ToolService.ts`, `tools/FuncInstaller.ts`; debug preparation requires v5 preview.3 or later |
-| FUNC-030 | Existing-project initialization | Adapt | Landed without generated tasks | `commands/functions/InitializeFunctionsProject.ts`; worker-runtime selection and extension recommendations |
+| FUNC-030 | Existing-project debug setup | Adapt | Landed through F5 runtime selection | `functions/debug/FunctionsDebugPreparation.ts`; launch-only runtime selection without generated workspace files |
 | FUNC-031 | Install/update Core Tools | Reuse | Wired | `commands/registerCommands.ts`: `vscode-azure/installFunc` -> `AcquireTool`; `extension.ts`: `FuncInstaller` binding |
 | FUNC-033 | .NET process selection | Adapt | Landed inside owned F5 | `functions/host/LocalFunctionsHostProcess.ts`; `functions/debug/FunctionsDebugProvider.ts` |
 | FUNC-041 | Execute function | Migrate | Landed locally and remotely | `commands/functions/ExecuteFunction.ts`; `functions/LocalFunctionTarget.ts` |
@@ -684,7 +679,6 @@ registration in `commands/registerCommands.ts`, and tree composition in
 | FUNC-186 | Invalid local function | Migrate | Landed | `functions/FunctionsProjectReader.ts`; invalid metadata nodes rendered with refresh |
 | FUNC-187 | No-host listing hint | Adapt | Landed | `functions/FunctionsProjectReader.ts`; "Start debugging to list functions..." |
 | FUNC-188 | Host-listing hint | Migrate | Landed | `functions/FunctionsProjectReader.ts`; host-backed runtime metadata |
-| FUNC-190 | Initialize-project offer | Adapt | Landed as project action | `FunctionsWorkspaceViewProvider.ts` under `tree/workspace/functions/`; `InitializeFunctionsProject.ts` under `commands/functions/` |
 | FUNC-191 | Invalid local project | Migrate | Landed | `functions/FunctionsProjectReader.ts`; `FunctionsWorkspaceViewProvider.ts` under `tree/workspace/functions/` |
 | FUNC-195 | Native Go F5 | Adapt | Landed; live VS Code checks pending | `functions/debug/FunctionsDebugPreparation.ts`, `FunctionsDebugProvider.ts`; owned Delve and cleanup |
 | FUNC-198 | Local tree refresh | Migrate | Landed | `FunctionsWorkspaceDataProvider.ts` under `tree/workspace/functions/`; shared index, local settings, host events |
@@ -711,7 +705,7 @@ registration in `commands/registerCommands.ts`, and tree composition in
 ### Drop and Defer evidence
 
 The ID lists in the two preceding sections were compared mechanically with
-the current triage: 142 Drop and 64 Defer IDs, each present exactly once in
+the current triage: 143 Drop and 64 Defer IDs, each present exactly once in
 its appropriate section. Dropped source behavior is checked at its public
 boundary, not by asserting that an equivalent shared capability is absent.
 For example, internal host startup survives F5 while the source exported
@@ -724,7 +718,7 @@ host-start API is dropped.
   portal URI handler, or activation-time project-fixing/scaffolding flow.
 - **Authoring, settings, templates, and language exclusions:** the manifest
   contributes only shared `vscode-azure.*` configuration. Product registration
-  and initialization contain no source scaffolding commands, legacy template
+  contains no source scaffolding commands, legacy template
   subsystem, encrypt/decrypt/sync commands, Event Grid editor/CodeLens flow,
   walkthrough, source settings, Ballerina debugger, or legacy runtime wizard.
 - **Kudu, deploy fixups, remote debugging, and creation variants:** the remote
