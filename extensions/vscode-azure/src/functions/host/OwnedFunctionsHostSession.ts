@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { IFunctionsHostClientProvider } from '@microsoft/vscode-azure-azutils';
-import { CancellationError, delay, type Disposable, ExternalError, IOutputChannel, IProcessExecutor, IVsCode } from '@microsoft/vscode-azure-utils';
+import { CancellationError, delay, type Disposable, ExternalError, IOutputChannel, IProcessExecutor, IVsCode, throwIfCancelled } from '@microsoft/vscode-azure-utils';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
 import type * as vscode from 'vscode';
 import { BufferedPseudoterminal } from '../../utils/BufferedPseudoterminal';
@@ -91,9 +91,7 @@ export class OwnedFunctionsHostSession {
 
     /** Ends the session when the token is cancelled. */
     public observe(token: vscode.CancellationToken | undefined): void {
-        if (token?.isCancellationRequested) {
-            throw new CancellationError();
-        }
+        throwIfCancelled(token);
         if (token) {
             this.subscriptions.push(token.onCancellationRequested(() => { this.abort.abort(); }));
         }
