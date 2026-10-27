@@ -52,6 +52,9 @@ export function createFunctionsDebugFixture(runtime = 'node', processOptions?: P
     s.m.fs.addFile(s.code.Uri.joinPath(s.folder, 'local.settings.json'), JSON.stringify({
         IsEncrypted: false, Values: { ['FUNCTIONS_WORKER_RUNTIME']: runtime, ['AzureWebJobsStorage']: 'UseDevelopmentStorage=true' },
     }));
+    if (runtime === 'node') {
+        addMockExtension(s.m, 'ms-vscode.js-debug', {});
+    }
     if (runtime === 'native') {
         s.m.fs.addFile(s.code.Uri.joinPath(s.folder, 'go.mod'), 'module app\n\ngo 1.24\n');
         addMockExtension(s.m, 'golang.Go', {
@@ -73,11 +76,13 @@ export function createFunctionsDebugFixture(runtime = 'node', processOptions?: P
         ...processOptions,
     });
     const tools = { acquire: mock.fn<IToolService['acquire']>(() => Promise.resolve({ executablePath: 'func' })), getResolvedPath: mock.fn(() => 'func') };
-    const preparation = new FunctionsDebugPreparation(s.context.ctx, processes, tools, s.settings, projects, network);
+    const preparation = new FunctionsDebugPreparation(s.context.ctx, processes, tools, s.settings, projects);
+    // The mock host process never exits, so the real workload check would wait forever; its tests restore it.
+    const ensureWorkloads = mock.method(preparation, 'ensureWorkloads', () => Promise.resolve());
     const owners = new LocalFunctionsHostProcess(s.code, () => new OwnedFunctionsHostSession(s.code, processes, s.createHost, s.hosts, network, output), network, output);
     const provider = new FunctionsDebugProvider(s.code, actions, s.index, projects, preparation, owners);
     return {
-        ...s, projects, network, processes, spawn, tools, preparation, owners, debugProvider: provider,
+        ...s, projects, network, processes, spawn, tools, preparation, ensureWorkloads, owners, debugProvider: provider,
         dispose: () => { provider.dispose(); owners.dispose(); s.dispose(); },
     };
 }

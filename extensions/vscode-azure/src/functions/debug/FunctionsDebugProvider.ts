@@ -17,7 +17,7 @@ import { FunctionsDebugType, type FunctionsDebugRuntime } from './functionsDebug
 const ProtectedHostOptions = new Set([
     '-p', '-t', '-v', '--port', '--address', '--usehttps', '--enableauth', '--enable-auth',
     '--language-worker', '--runtime', '--host-version', '--profile', '--dotnet-isolated-debug',
-    '--enable-json-output', '--json-output-file', '--no-build', '--no-azurite', '--output', '--no-tui',
+    '--enable-json-output', '--json-output-file', '--no-build', '--output', '--no-tui',
 ]);
 
 /** Resolves the product debugger to a language attach configuration after VS Code runs preLaunchTask and substitutes variables. */
@@ -37,7 +37,13 @@ export class FunctionsDebugProvider implements vscode.DebugConfigurationProvider
     /** Registers only provider/adapter lifecycle hooks; activation never acquires tools or starts a host. */
     public register(): void {
         const { Initial, Dynamic } = this.code.DebugConfigurationProviderTriggerKind;
-        this.subscriptions.push(this.code.debug.registerDebugConfigurationProvider(FunctionsDebugType, this, Initial));
+        // The resolve hooks are registered without provideDebugConfigurations so a generated launch.json keeps only the
+        // portable static configuration; per-project configurations are offered by the dynamic registration below.
+        this.subscriptions.push(this.code.debug.registerDebugConfigurationProvider(FunctionsDebugType, {
+            resolveDebugConfiguration: (folder, config) => this.resolveDebugConfiguration(folder, config),
+            resolveDebugConfigurationWithSubstitutedVariables: (folder, config, token) =>
+                this.resolveDebugConfigurationWithSubstitutedVariables(folder, config, token),
+        }, Initial));
         // VS Code runs resolve hooks for every registration, so the dynamic one only supplies configurations.
         this.subscriptions.push(this.code.debug.registerDebugConfigurationProvider(FunctionsDebugType, {
             provideDebugConfigurations: folder => this.provideDebugConfigurations(folder),
@@ -88,6 +94,7 @@ export class FunctionsDebugProvider implements vscode.DebugConfigurationProvider
             const debugPort = parseOption(PortSchema, config.debugPort, portMessage);
             const launch = await this.preparation.prepare(project, env, token);
             const executable = await this.preparation.executable(project, token);
+            await this.preparation.ensureWorkloads(project, executable, token);
             const skipBuild = config.skipBuild === true || !!config.preLaunchTask;
             if (launch.runtime === 'native' && !skipBuild) {
                 await this.preparation.buildGo(launch, token);
@@ -116,7 +123,10 @@ function attachConfiguration(config: vscode.DebugConfiguration, runtime: Functio
     };
     switch (runtime) {
         case 'node':
-            return { ...common, type: 'pwa-node', address: '127.0.0.1', port: host.debugPort, localRoot: project.fsPath };
+            // js-debug's own config resolver never runs for this synthesized configuration, so its defaults are
+            // missing: without a concrete cwd TypeScript sources stay unmapped, and without continueOnAttach the
+            // worker stays paused on the --inspect-brk entry line.
+            return { ...common, type: 'pwa-node', address: '127.0.0.1', port: host.debugPort, cwd: project.fsPath, continueOnAttach: true };
         case 'python':
             return { ...common, type: 'debugpy', connect: { host: '127.0.0.1', port: host.debugPort }, justMyCode: true };
         case 'java':

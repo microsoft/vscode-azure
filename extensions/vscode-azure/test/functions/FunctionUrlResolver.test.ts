@@ -17,7 +17,11 @@ describe('FunctionUrlResolver (unit)', () => {
             expect(validateLocalFunctionUrl(code, 'http://localhost:7071/api/a?x=1', 7071).toString()).to.equal('http://localhost:7071/api/a?x=1');
         });
 
-        for (const rawUrl of ['https://localhost:7071/api/a', 'http://example.com:7071/api/a', 'http://localhost:7072/api/a', 'http://user:pw@localhost:7071/api/a', undefined, 'not a url']) {
+        it('serves a loopback https-reported URL over http because the owned host has no TLS', () => {
+            expect(validateLocalFunctionUrl(code, 'https://localhost:7071/api/a?x=1', 7071).toString()).to.equal('http://localhost:7071/api/a?x=1');
+        });
+
+        for (const rawUrl of ['https://localhost:7072/api/a', 'ftp://localhost:7071/api/a', 'http://example.com:7071/api/a', 'http://localhost:7072/api/a', 'http://user:pw@localhost:7071/api/a', undefined, 'not a url']) {
             it(`rejects ${String(rawUrl)}`, () => {
                 expect(() => validateLocalFunctionUrl(code, rawUrl, 7071)).to.throw();
             });

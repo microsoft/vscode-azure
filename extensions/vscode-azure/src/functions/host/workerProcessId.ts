@@ -20,7 +20,7 @@ const LogEntrySchema = z.object({
     category: z.optional(z.string()),
 });
 
-/** Reads the .NET worker startup event or tooling-category PID message from Core Tools output. */
+/** Reads the .NET worker startup event or tooling-category PID message from Azure Functions CLI output. */
 export function workerProcessId(line: string): number | undefined {
     let value: unknown;
     try {

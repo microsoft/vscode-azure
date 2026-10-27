@@ -152,9 +152,16 @@ describe('Local function commands (integration)', () => {
         expect(s.remote.mock.callCount()).to.equal(0);
     });
 
+    it('copies an https-reported local URL over http', async () => {
+        const s = await setup();
+        s.host.listFunctions.mock.mockImplementation(() => Promise.resolve([{ ...s.metadata, ['invoke_url_template']: 'https://localhost:8090/api/Http' }]));
+        await copyCommand(s).execute(s.fn.id);
+        expect(s.writeClipboard.mock.calls[0].arguments[0]).to.equal('http://localhost:8090/api/Http');
+    });
+
     for (const url of [
         'http://example.com:8090/api/Http', 'http://localhost:7071/api/Http',
-        'https://localhost:8090/api/Http', 'http://user:password@localhost:8090/api/Http',
+        'https://localhost:7071/api/Http', 'http://user:password@localhost:8090/api/Http',
     ]) {
         it(`rejects a host invocation URL outside the registered loopback origin (${url.split('@').at(-1)})`, async () => {
             const s = await setup();

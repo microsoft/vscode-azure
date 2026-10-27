@@ -291,7 +291,7 @@ plus a matching pair of providers. There is **no shared mega-provider**
 |----------|-------|-------------|
 | `AzdWorkspaceDataProvider` | Yes | Discovers azd projects from the shared workspace index (`IWorkspaceIndexService`), which tags every `azure.yaml`. Enumerates services via `IAzdService.show` (which shells out to `azd show --output json`). Caching is handled by the surrounding `DataItemTree` TTL. |
 | `FunctionsWorkspaceDataProvider` | Yes | Detects Azure Functions projects from the shared workspace index (`IWorkspaceIndexService`), which tags every `host.json`. |
-| `EmulatorsWorkspaceDataProvider` | Yes | Surfaces a fixed "Emulators" group with stubbed entries for Azurite and Functions Core Tools. |
+| `EmulatorsWorkspaceDataProvider` | Yes | Surfaces a fixed "Emulators" group with stubbed entries for Azurite and the Azure Functions CLI. |
 
 All three are `isRoot: true`, so they each contribute their detected
 items to the root in registration order (azd, functions, emulators).

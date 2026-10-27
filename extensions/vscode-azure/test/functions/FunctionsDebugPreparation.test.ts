@@ -139,6 +139,35 @@ describe('Functions debug preparation (unit)', () => {
         await rejected;
     });
 
+    describe('workload setup', () => {
+        const setupArgs = (folder: { readonly fsPath: string }) => ['setup', folder.fsPath, '--install-policy', 'if-needed', '--yes'];
+
+        it('only checks the workloads when they are already installed', async () => {
+            const s = setup('node', { keepAlive: false });
+            s.ensureWorkloads.mock.restore();
+            await s.preparation.ensureWorkloads(s.folder, 'func');
+            expect(s.spawn.mock.calls.map(call => call.arguments[1])).to.deep.equal([[...setupArgs(s.folder), '--check', '--non-interactive']]);
+            expect(s.m.tasks.executeTask.mock.callCount()).to.equal(0);
+        });
+
+        for (const [exitCode, outcome] of [[0, 'completes'], [1, 'is reported when it fails']] as const) {
+            it(`runs a visible setup task when the check finds missing workloads and ${outcome}`, async () => {
+                const s = setup('node', { keepAlive: false, exitCode: 1 });
+                s.ensureWorkloads.mock.restore();
+                const setting = s.preparation.ensureWorkloads(s.folder, 'func');
+                const execution = await getMockTaskExecution(s.m);
+                if (!(execution.task.execution instanceof MockShellExecution)) { throw new Error('Expected a shell task.'); }
+                expect(execution.task.execution.args?.map(arg => typeof arg === 'string' ? arg : arg.value)).to.deep.equal(setupArgs(s.folder));
+                s.m.taskProcessEndEmitter.fire({ execution, exitCode });
+                if (exitCode === 0) {
+                    await setting;
+                } else {
+                    await expect(setting).to.be.rejectedWith('Could not set up the Azure Functions CLI workloads');
+                }
+            });
+        }
+    });
+
     it('uses the validated Go tools and merged environment for build and startup while resolving each launch independently', async () => {
         const s = setup('native');
         const command = mock.fn((tool: string, _resource?: unknown) => ({ binPath: s.code.Uri.file(`/Selected Tools/${tool}`).fsPath }));
@@ -210,7 +239,7 @@ describe('Functions debug preparation (unit)', () => {
         await expect(malformed.preparation.prepare(malformed.folder, {})).to.be.rejectedWith('Delve did not report a valid version');
     });
 
-    it('cancels a Go tool probe without acquiring Core Tools or starting a host', async () => {
+    it('cancels a Go tool probe without acquiring the Azure Functions CLI or starting a host', async () => {
         const s = setup('native', { keepAlive: true });
         const token = new MockCancellationToken();
         const resolved = s.debugProvider.resolveDebugConfigurationWithSubstitutedVariables(

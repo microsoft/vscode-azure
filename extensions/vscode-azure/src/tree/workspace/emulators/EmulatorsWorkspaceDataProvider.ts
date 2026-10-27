@@ -61,7 +61,7 @@ export class EmulatorsWorkspaceDataProvider implements DataProvider<EmulatorsGro
             {
                 id: `${EmulatorKeyPrefix}functions`,
                 type: 'emulator',
-                label: this.code.l10n.t('Azure Functions Core Tools'),
+                label: this.code.l10n.t('Azure Functions CLI'),
                 description: this.code.l10n.t('Not detected'),
             },
         ];

@@ -190,7 +190,6 @@ export class OwnedFunctionsHostSession {
             .arg('run', request.project.fsPath, ...request.hostArgs)
             .namedArg('--port', String(hostPort))
             .flagArg('--no-build', request.skipBuild)
-            .arg('--no-azurite')
             .namedArg('--output', dotnetIsolated ? 'json' : 'plain')
             .flagArg('--dotnet-isolated-debug', dotnetIsolated)
             .flagArg('--enable-json-output', dotnetIsolated);
@@ -198,6 +197,7 @@ export class OwnedFunctionsHostSession {
             const process = await this.processes.spawn({
                 execution: 'background', command: hostCommand, cwd: request.project, env: this.env,
                 killTreeOnCancel: true, streamOutput: true,
+                onCommandLine: commandLine => { this.terminal.write(`> ${commandLine}\n\n`); },
             }, this.abort.signal);
             try {
                 await Promise.all([this.consumeOutput(process.stdout), this.consumeOutput(process.stderr)]);
@@ -221,7 +221,7 @@ export class OwnedFunctionsHostSession {
             }
             if (!this.abort.signal.aborted && !CancellationError.test(error)) {
                 this.error = new ExternalError(request.runtime === 'native'
-                    ? this.code.l10n.t('The Functions host failed. Native Go requires the Core Tools v5 Go worker workload. See its terminal for details.')
+                    ? this.code.l10n.t('The Functions host failed. Native Go requires the Azure Functions CLI v5 Go worker workload. See its terminal for details.')
                     : this.code.l10n.t('The Functions host failed. See its terminal for details.'));
                 this.terminal.write(`${this.error.message}\n`);
                 this.output.warn(this.code.l10n.t('[functions] Owned host process failed.'));

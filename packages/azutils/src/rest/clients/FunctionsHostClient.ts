@@ -14,7 +14,7 @@ export type { ClientOptions as FunctionsHostClientOptions };
 export type { OperationOptions as FunctionsHostRequestOptions };
 
 /**
- * A local Core Tools host, or a remote app whose master key is obtained lazily
+ * A local Azure Functions CLI host, or a remote app whose master key is obtained lazily
  * from the management-plane host-keys operation. Remote endpoints must use HTTPS.
  */
 export type FunctionsHostTarget =

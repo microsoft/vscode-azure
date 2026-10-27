@@ -115,7 +115,7 @@ export interface EmulatorsGroupNode extends WorkspaceNodeBase {
 export interface EmulatorNode extends WorkspaceNodeBase {
     readonly type: 'emulator';
     readonly label: string;
-    /** Short description (e.g. "Storage", "Functions Core Tools"). */
+    /** Short description (e.g. "Storage", "Azure Functions CLI"). */
     readonly description?: string;
 }
 

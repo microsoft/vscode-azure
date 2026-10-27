@@ -269,7 +269,7 @@ after HTTP readiness and releases it when the host stops.
 
 - [x] List functions directly under the project node (no group node) from the
   running host's `/admin/functions`. Closes
-  [#178](https://github.com/microsoft/vscode-azure/issues/178). A Core Tools
+  [#178](https://github.com/microsoft/vscode-azure/issues/178).     An Azure Functions CLI
   function-list command has been requested in
   [Azure/azure-functions-core-tools#5344](https://github.com/Azure/azure-functions-core-tools/issues/5344).
   <- FUNC-182, FUNC-184, FUNC-185
@@ -302,7 +302,7 @@ Verified external contracts:
 
 A contributed debug type resolves to the language debugger's attach
 configuration after the extension has validated the project and started an owned
-Core Tools host. Core Tools owns ordinary builds and dependency restoration;
+Azure Functions CLI host. The CLI owns ordinary builds and dependency restoration;
 the extension owns Go's debug build. Resolving to a different debug type is proven in the Container Tools
 extension. Debugging works with no `tasks.json` or `launch.json`, and neither
 is generated. No task type, problem matcher, or process-pick
@@ -313,8 +313,8 @@ Pattern:        contributed `azure-functions` debugger (launch request, no adapt
                 (Initial + Dynamic) validates, starts the host, and returns a config of the language's debug type
 Target files:   extensions/vscode-azure/src/functions/debug/* (debug configuration provider, per-language attach configs)
                 extensions/vscode-azure/src/functions/host/* (host process, host tracking, pre-debug validation)
-Precedent:      Container Tools debug providers (resolve to another debug type); tools/FuncInstaller + ToolService (Core
-                Tools discovery). SWA debugging builds on this (#339).
+Precedent:      Container Tools debug providers (resolve to another debug type); tools/FuncInstaller + ToolService (Azure
+                Functions CLI discovery). SWA debugging builds on this (#339).
 Sweep:          reused IProcessExecutor (packages/utils), createShellTask (packages/utils), ToolService/FuncInstaller,
                 IWorkspaceIndexService, LocalFunctionSettings, JsoncSettingsFormat, ExternalError,
                 createMockCodeContext/createMockVsCode, respondToPrompts, and the shared Functions index/tree fixtures.
@@ -326,10 +326,10 @@ Sweep:          reused IProcessExecutor (packages/utils), createShellTask (packa
 Activation:     only the implicit events VS Code generates for a contributed `debuggers` entry; justify any explicit
                 onDebug* entry in this record before adding it.
 External facts: verified VS Code provider ordering against 7f1c8a96ce99bcffba134a7db3ef9b1f57d30ca0;
-                Core Tools v5 host arguments/PID output against preview.3 (f8f54ba328758b2165d835930e391af23e60f090);
+                Azure Functions CLI v5 host arguments/PID output against preview.3 (f8f54ba328758b2165d835930e391af23e60f090);
                 Python environment public API and selected virtual environment via VIRTUAL_ENV;
                 Python Debugger launcher/path public API against 061023c85cf721731569c2d0d670c129fc1f45c4.
-                Native Go uses the Go extension's public tool API, Core Tools v5 Go worker workload
+                Native Go uses the Go extension's public tool API, Azure Functions CLI v5 Go worker workload
                 and GoFunctionsProject, and headless Delve's remote DAP protocol.
                 Source links and per-language prerequisites are in docs/products/functions.md.
 ```
@@ -340,15 +340,17 @@ Resolution flow for one session:
    and runs any configured `preLaunchTask`. The substituted-variable hook picks
    the Functions project from the workspace index (remembered per workspace
    when a folder has several).
-2. Pre-debug validation; failures are `ExternalError`s.
+2. Pre-debug validation; failures are `ExternalError`s. Ensure the project's Azure
+   Functions CLI workloads with `func setup --check`, running a visible `func setup` task
+   only when workloads are missing.
 3. Build Go with optimizations and inlining disabled in a visible task, unless
    `skipBuild` or a replacement `preLaunchTask` applies.
-4. Start `func run <project> --no-azurite` in an in-code
+4. Start `func run <project>` in an in-code
    pseudoterminal task with the worker debug arguments in its environment and
    a free debug port. Use JSON output for .NET isolated PID discovery and plain
-   output for other workers. Core Tools owns ordinary builds and dependency
+   output for other workers. The Azure Functions CLI owns ordinary builds and dependency
    restoration; pass `--no-build` for Go or when a build override applies.
-5. Wait for worker attach coordinates, bounded to five minutes when Core Tools
+5. Wait for worker attach coordinates, bounded to five minutes when the Azure Functions CLI
    owns the build and two minutes when compilation is skipped. Paused workers
    attach before full HTTP readiness; poll HTTP independently and register the
    owned host only after its status is Running.
@@ -383,9 +385,9 @@ Resolution flow for one session:
 - [x] Host process and tracking: build steps, start, readiness, port, terminal
   errors, stop on session end, and start/stop events for local listing and
   execute. <- FUNC-216
-- [x] Pre-debug validation: Core Tools present, selected/configured worker runtime,
+- [x] Pre-debug validation: Azure Functions CLI present, selected/configured worker runtime,
   `AzureWebJobsStorage` / emulator reachable. <- FUNC-215
-- [x] Wire shared Core Tools install/update and version checks; no
+- [x] Wire shared Azure Functions CLI install/update and version checks; no
   activation-time prompts. <- FUNC-021, FUNC-031, FUNC-217
 - [x] Unit tests for configuration resolution, build preparation, host tracking,
   cancellation, and readiness failures; runtime-selection integration tests against
@@ -396,7 +398,7 @@ Resolution flow for one session:
   cover all six configuration/API paths, not live language debugger sessions.
   <- FUNC-033, FUNC-195, FUNC-210, FUNC-211, FUNC-212, FUNC-214
 
-Live Core Tools v5 workload startup, language debugger sessions,
+Live Azure Functions CLI v5 workload startup, language debugger sessions,
 storage/emulator integration, and Linux/macOS smoke checks remain in Slice 7.
 
 Existing projects' source-generated `tasks.json` / `launch.json` (task type
@@ -419,7 +421,7 @@ Future integration uses thin `ManagedCommand` entry points and shared
 validation, generated files, dependencies, and project configuration; the
 extension owns folder selection, editor integration, cancellation/errors, and
 preserving user-owned files. Scaffolding workload capabilities require
-verification independently of the Core Tools v5 F5 contract. Shared tool support
+verification independently of the Azure Functions CLI v5 F5 contract. Shared tool support
 (FUNC-021, FUNC-031, FUNC-217), local-only gates (FUNC-004), and F5 runtime
 selection for existing projects (FUNC-030) remain in scope.
 
@@ -511,7 +513,7 @@ External facts: `https://json.schemastore.org/function.json` and `https://json.s
   local/remote function commands.
   <- FUNC-004
 - [x] Project detection stays on `functionsDetector`; no
-  `workspaceContains` activation. Core Tools v5 may make `host.json` optional;
+  `workspaceContains` activation. Azure Functions CLI v5 may make `host.json` optional;
   a machine-readable project-info command has been requested in
   [Azure/azure-functions-core-tools#5344](https://github.com/Azure/azure-functions-core-tools/issues/5344).
   <- FUNC-002
@@ -558,7 +560,7 @@ External facts: `https://json.schemastore.org/function.json` and `https://json.s
   <- FUNC-101, FUNC-228, FUNC-254
 - [ ] Host exceptions debugger view and its commands. <- FUNC-095, FUNC-096,
   FUNC-097, FUNC-098, FUNC-099, FUNC-196
-- [ ] Revisit with Core Tools v5: stop host after debug, emulator validation,
+- [ ] Revisit with Azure Functions CLI v5: stop host after debug, emulator validation,
   host start timeout. <- FUNC-137, FUNC-142, FUNC-144
 - [ ] Storage emulator: storage connection prompts, Azurite settings and
   integration. <- FUNC-164, FUNC-176, FUNC-267

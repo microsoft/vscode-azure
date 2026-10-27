@@ -18,21 +18,26 @@ bindings, including [PowerShell](https://learn.microsoft.com/azure/azure-functio
 [Node.js v3](https://learn.microsoft.com/azure/azure-functions/functions-reference-node#programming-model),
 and [Python v1](https://learn.microsoft.com/azure/azure-functions/functions-reference-python#programming-model).
 Node.js v4 and Python v2 define bindings in code instead. Programming-model
-versions are distinct from the Functions runtime and Core Tools CLI versions.
+versions are distinct from the Functions runtime and Azure Functions CLI versions.
 
 ## Local development tools
 
-F5 requires Core Tools `>=5.0.0-preview.3`, acquired through the shared installer's
+F5 requires the Azure Functions CLI `>=5.0.0-preview.3`, acquired through the shared installer's
 official v5 preview scripts. Tool acquisition remains user-action driven.
+The Windows bootstrap parses the downloaded text as a script block and invokes
+it with its install switches. The script is unsigned, but execution policy applies
+to script files rather than this in-memory block, so no policy override is used.
+The foreground task displays the URL and readable PowerShell command.
 Owned hosts consume both output generators concurrently and opt into
 [shared process-tree cancellation](../architecture.md#process-output-and-lifetime).
 
 ## F5 debugging
 
 The `azure-functions` debugger supports Node.js, Python, Java, PowerShell,
-.NET isolated, and native Go projects in trusted, non-virtual workspace folders. Initial and
-dynamic configuration providers discover indexed `host.json` projects, including
-nested projects. F5 requires neither `tasks.json` nor `launch.json`. Multiple
+.NET isolated, and native Go projects in trusted, non-virtual workspace folders. The
+dynamic configuration provider offers one configuration per indexed `host.json`
+project, including nested projects, while the generated `launch.json` contains a single
+portable configuration that selects the project at launch. F5 requires neither `tasks.json` nor `launch.json`. Multiple
 projects prompt for a selection, remembering the last choice per workspace.
 When `FUNCTIONS_WORKER_RUNTIME` is absent or blank in local settings and launch
 overrides, F5 asks which supported runtime to debug and saves the choice as
@@ -49,24 +54,24 @@ variables and runs a configured `preLaunchTask` before the substituted-variable
 hook selects, validates, and starts the project. Each launch captures local settings,
 launch environment overrides, and the selected Python environment or Go tool paths
 once. Validation, Go compilation, and worker startup consume that launch snapshot;
-subsequent launches resolve their own settings and tools. Core Tools builds ordinary
+subsequent launches resolve their own settings and tools. The Azure Functions CLI builds ordinary
 projects and restores their dependencies. `preLaunchTask` replaces compilation;
-`skipBuild: true` also suppresses compilation, but Core Tools can still restore
+`skipBuild: true` also suppresses compilation, but the Azure Functions CLI can still restore
 dependencies. Go uses an extension-owned debug build.
 
 | Runtime | Preparation | Debugger prerequisite |
 |---|---|---|
-| Node.js | Core Tools installs missing dependencies with `npm install` and runs the package's build script when present | Built-in JavaScript debugger (`pwa-node`) |
-| Python | Core Tools installs `requirements.txt` into the selected virtual environment | Python and Python Debugger extensions; selected virtual environment |
-| Java | Core Tools runs `mvn clean package`, preferring the project's Maven wrapper, and locates the staged app | Maven or its project wrapper and a matching JDK; Java debugger extension |
+| Node.js | The Azure Functions CLI installs missing dependencies with `npm install` and runs the package's build script when present | Built-in JavaScript debugger (`pwa-node`) |
+| Python | The Azure Functions CLI installs `requirements.txt` into the selected virtual environment | Python and Python Debugger extensions; selected virtual environment |
+| Java | The Azure Functions CLI runs `mvn clean package`, preferring the project's Maven wrapper, and locates the staged app | Maven or its project wrapper and a matching JDK; Java debugger extension |
 | PowerShell | Start the worker with a session-specific pipe | PowerShell extension |
-| .NET isolated | Core Tools builds the project and resolves its output through MSBuild | Matching .NET SDK; C# extension (`coreclr`) |
+| .NET isolated | The Azure Functions CLI builds the project and resolves its output through MSBuild | Matching .NET SDK; C# extension (`coreclr`) |
 | Native Go (preview) | `go build -gcflags="all=-N -l" -o bin/app .` (`app.exe` on Windows) | Go 1.24+; Go extension (`golang.Go`); Delve (`dlv`) |
 
-Core Tools compilation and restoration output appears in the owned host task.
+Azure Functions CLI compilation and restoration output appears in the owned host task.
 Go's debug build runs as a separate visible task. Java's CLI startup selects the
 most recently written staged app when multiple outputs exist.
-The stack preparation contracts are implemented by Core Tools'
+The stack preparation contracts are implemented by the Azure Functions CLI's
 [Node](https://github.com/Azure/azure-functions-core-tools/blob/f8f54ba328758b2165d835930e391af23e60f090/src/Workloads/Stacks/Node/NodeFunctionsProject.cs),
 [Python](https://github.com/Azure/azure-functions-core-tools/blob/f8f54ba328758b2165d835930e391af23e60f090/src/Workloads/Stacks/Python/PythonFunctionsProject.cs),
 [Java](https://github.com/Azure/azure-functions-core-tools/blob/f8f54ba328758b2165d835930e391af23e60f090/src/Workloads/Stacks/Java/JavaFunctionsProject.cs),
@@ -77,8 +82,8 @@ Python uses the owning extensions' public
 and [debugpy launcher API](https://github.com/microsoft/vscode-python-debugger/blob/061023c85cf721731569c2d0d670c129fc1f45c4/src/extension/api.ts),
 including the selected executable rather than a guessed `python` command.
 The selected environment must have `pyvenv.cfg`. Its root is passed as
-`VIRTUAL_ENV` so Core Tools uses that environment even when it is outside the
-project. Core Tools' Python workload also restores `requirements.txt` at startup.
+`VIRTUAL_ENV` so the Azure Functions CLI uses that environment even when it is outside the
+project. The CLI's Python workload also restores `requirements.txt` at startup.
 Project settings and launch environment overrides take precedence over Python
 environment defaults; the owned debugger arguments, interpreter, and virtual environment take precedence
 over those overrides. The selected interpreter's directory leads `PATH`, with
@@ -91,7 +96,7 @@ Go and Delve paths come from the Go extension's resource-scoped public
 including workspace-specific tool paths. Both tools are checked before host
 acquisition. The built-in build disables optimizations and inlining; a
 replacement `preLaunchTask` or `skipBuild` must leave a debug-friendly
-`bin/app` (`bin/app.exe` on Windows). Core Tools starts with `--no-build` so
+`bin/app` (`bin/app.exe` on Windows). The Azure Functions CLI starts with `--no-build` so
 it cannot overwrite that binary with an optimized build.
 
 The native worker executable is headless
@@ -114,15 +119,20 @@ runtime v4 compatibility, storage configuration, and saved local settings.
 A missing `local.settings.json` is allowed when launch overrides provide the
 required storage configuration; a runtime chosen in the picker is persisted even
 if a later prerequisite check prevents startup.
-`UseDevelopmentStorage=true` requires Azurite on its three
-default loopback ports; automatic emulator startup and custom proxy validation
-are outside this flow. Identity-based storage settings are accepted. Core Tools
-starts with `--no-azurite` to leave emulator management to the user. Host startup
+`UseDevelopmentStorage=true` is served by the Azure Functions CLI's managed Azurite, which reuses a
+running emulator, otherwise starts a local `azurite` install or a Docker container and
+fails with installation guidance when neither is available. The CLI never installs
+Azurite itself. A user can opt out with `--no-azurite` in `hostArgs`, which leaves
+emulator management and any storage failure to them. Identity-based storage settings
+are accepted. Before the host starts, `func setup --check` verifies that the project's
+stack workloads are installed; when any are missing, a visible `func setup` task
+installs them (`--install-policy if-needed`, so installed workloads are never
+upgraded). Host startup
 uses the released v5
 [run contract](https://github.com/Azure/azure-functions-core-tools/blob/f8f54ba328758b2165d835930e391af23e60f090/src/Func/Commands/Start/StartCommand.cs).
 Native Go compilation/output and `--no-build` behavior follow
 [GoFunctionsProject](https://github.com/Azure/azure-functions-core-tools/blob/f8f54ba328758b2165d835930e391af23e60f090/src/Workloads/Stacks/Go/GoFunctionsProject.cs).
-Go requires the Core Tools Go worker workload, installed with
+Go requires the Azure Functions CLI Go worker workload, installed with
 `func workload install go-worker --prerelease`.
 
 `LocalFunctionsHostProcess` manages project-level ownership and delegates each launch to an
@@ -140,7 +150,7 @@ host. Protected transport, output, build, runtime, worker-debugger, and process-
 overridden through `hostArgs` or `env`.
 
 Paused workers expose their debugger before the host can finish initialization.
-Attach readiness has a five-minute bound when Core Tools owns the build and a
+Attach readiness has a five-minute bound when the Azure Functions CLI owns the build and a
 two-minute bound when compilation is skipped. HTTP readiness is polled
 independently and can remain pending while startup code is paused at a breakpoint. Only an
 owned host reporting HTTP state `Running` enters `LocalFunctionsHostTracker`.
@@ -202,7 +212,7 @@ input prompt.
 Execute and HTTP URL copying require a ready host registered for the exact
 project URI and port. `LocalFunctionsHostTracker` owns registrations, not host
 processes: disposal of an older registration cannot remove its replacement.
-`LocalFunctionsHostProcess` starts Core Tools, waits for readiness, and populates
+`LocalFunctionsHostProcess` starts the Azure Functions CLI, waits for readiness, and populates
 this registry for debugging.
 An arbitrary process on the default port is not treated as this project's host.
 
@@ -210,8 +220,10 @@ Local execution sends HTTP triggers a POST to their current invocation URL,
 and submits non-HTTP triggers through the host admin API. Input is sent without
 Azure authentication or recent-input persistence. Copy URL reads current host metadata,
 validates the HTTP trigger, and uses its actual invocation template, preserving
-custom routes. Only HTTP loopback URLs on the registered port, without embedded
-credentials, are accepted. No authentication key is manufactured.
+custom routes. Only loopback URLs on the registered port, without embedded
+credentials, are accepted. The owned host serves plain HTTP but can report
+`https:` templates, so the URL is always used with `http:`. No authentication
+key is manufactured.
 
 Enable and Disable edit only `Values["AzureWebJobs.<FunctionName>.Disabled"]` in
 `local.settings.json`. `LocalFunctionSettings` uses the shared `JsoncSettingsFormat`

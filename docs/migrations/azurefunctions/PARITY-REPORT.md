@@ -82,7 +82,7 @@ Deferred evidence codes refer to the exact unchecked task in the plan's
 | F5 | Containerized Function Apps |
 | F6 | MCP projects and deployed integration; [#361](https://github.com/microsoft/vscode-azure/issues/361) |
 | F7 | Host exceptions debugger view |
-| F8 | Revisit Core Tools v5 host/emulator/timeout options |
+| F8 | Revisit Azure Functions CLI v5 host/emulator/timeout options |
 | F9 | Storage emulator configuration and integration |
 | F10 | Go scaffolding [#364](https://github.com/microsoft/vscode-azure/issues/364); native provisioning blocker [#366](https://github.com/microsoft/vscode-azure/issues/366) |
 | F11 | Gallery/binding tooling and SDKs; [#365](https://github.com/microsoft/vscode-azure/issues/365) |
@@ -472,7 +472,7 @@ External contracts were checked against linked sources rather than inferred
 from current package names:
 
 - The pinned [v5 run command](https://github.com/Azure/azure-functions-core-tools/blob/f8f54ba328758b2165d835930e391af23e60f090/src/Func/Commands/Start/StartCommand.cs)
-  supplies `run`, `--port`, `--no-build`, `--no-azurite`, and output modes.
+  supplies `run`, `--port`, `--no-build`, `--no-azurite` (user-supplied only), and output modes.
   `>=5.0.0-preview.3` is the approved supported v5 floor, not a claim that every
   debugger capability first appeared in that release.
 - The pinned [.NET output interceptor](https://github.com/Azure/azure-functions-core-tools/blob/f8f54ba328758b2165d835930e391af23e60f090/src/Workloads/Stacks/DotNet/DotNetHostOutputInterceptor.cs)

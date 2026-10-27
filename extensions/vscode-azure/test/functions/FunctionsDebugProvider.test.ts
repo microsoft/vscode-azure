@@ -77,6 +77,13 @@ describe('Functions debug provider (unit)', () => {
         expect((await s.settings.read(s.folder)).values.get('AzureWebJobsStorage__accountName')).to.be.undefined;
     });
 
+    it('anchors the Node attach configuration at the project and runs past the inspector entry pause', async () => {
+        const s = setup();
+        mock.method(s.owners, 'start', () => Promise.resolve({ id: 'owned', hostPort: 7072, debugPort: 9229, pipe: 'pipe' }));
+        const config = await s.debugProvider.resolveDebugConfigurationWithSubstitutedVariables(undefined, s.config);
+        expect(config).to.include({ type: 'pwa-node', request: 'attach', port: 9229, cwd: s.folder.fsPath, continueOnAttach: true });
+    });
+
     it('dismisses runtime selection without acquiring tools or starting a host', async () => {
         const s = setup('');
         const prompts = respondToPrompts(s.m, ['cancel']);
@@ -182,6 +189,7 @@ describe('Functions debug provider (unit)', () => {
         expect(python.resolveEnvironment.mock.callCount()).to.equal(1);
         expect(python.getEnvironmentVariables.mock.callCount()).to.equal(1);
 
+        addMockExtension(s.m, 'ms-vscode.js-debug', {});
         const second = await s.debugProvider.resolveDebugConfigurationWithSubstitutedVariables(undefined, s.config);
         expect(second?.type).to.equal('pwa-node');
         const nextEnvironment = await worker.mock.calls[1].result;
@@ -291,6 +299,23 @@ describe('Functions debug provider (unit)', () => {
         expect((await s.preparation.workerEnvironment(node, 9001, 'pipe')).languageWorkers__node__arguments).to.equal('--inspect-brk=127.0.0.1:9001');
         expect((await s.preparation.workerEnvironment(java, 9002, 'pipe')).languageWorkers__java__arguments).to.include('address=127.0.0.1:9002');
         expect((await s.preparation.workerEnvironment(powershell, 9003, 'owned-pipe')).PSWorkerCustomPipeName).to.equal('owned-pipe');
+    });
+
+    it('activates the JavaScript debugger before attaching because the resolved debug type bypasses its activation event', async () => {
+        const s = setup();
+        const jsDebug = s.m.installedExtensions.get('ms-vscode.js-debug');
+        if (!jsDebug) { throw new Error('The fixture did not register the JavaScript debugger.'); }
+        const activate = mock.method(jsDebug, 'activate');
+        const launch = await s.preparation.prepare(s.folder, {});
+        await s.preparation.workerEnvironment(launch, 9001, 'pipe');
+        expect(activate.mock.callCount()).to.equal(1);
+    });
+
+    it('reports a missing JavaScript debugger before starting a Node host', async () => {
+        const s = setup();
+        s.m.installedExtensions.delete('ms-vscode.js-debug');
+        const launch = await s.preparation.prepare(s.folder, {});
+        await expect(s.preparation.workerEnvironment(launch, 9001, 'pipe')).to.be.rejectedWith('ms-vscode.js-debug');
     });
 
     it('starts Go with the owned Delve executable, loopback port, and worker argument separator', async () => {
@@ -416,7 +441,7 @@ describe('Functions debug provider (unit)', () => {
         mock.property(s.m.workspace, 'isTrusted', false);
         expect(await s.debugProvider.resolveDebugConfigurationWithSubstitutedVariables(undefined, s.config)).to.be.undefined;
         const trusted = setup();
-        for (const flag of ['--port=7000', '-p', '--output=json', '--no-tui', '--no-azurite=false',
+        for (const flag of ['--port=7000', '-p', '--output=json', '--no-tui',
             '--host-version=4.1049.0', '-v', '--profile=other', '--enable-auth', '--no-build=false',
             '--dotnet-isolated-debug', '--enable-json-output', '--json-output-file=worker.json',
             '--PORT=7000', '--useHttps', '--enableAuth', '--language-worker=other']) {
@@ -433,13 +458,25 @@ describe('Functions debug provider (unit)', () => {
         expect(trusted.tools.acquire.mock.callCount()).to.equal(0);
     });
 
-    it('requires storage configuration and a running development emulator', async () => {
+    it('requires storage configuration but leaves a development emulator to the host', async () => {
         const s = setup();
         mock.method(s.network, 'listening', () => Promise.resolve(false));
-        await expect(s.preparation.prepare(s.folder, {})).to.be.rejectedWith('Start Azurite');
+        expect((await s.preparation.prepare(s.folder, {})).runtime).to.equal('node');
         s.m.fs.addFile(s.code.Uri.joinPath(s.folder, 'local.settings.json'), '{"Values":{"FUNCTIONS_WORKER_RUNTIME":"node"}}');
         await expect(s.preparation.prepare(s.folder, {})).to.be.rejectedWith('Configure AzureWebJobsStorage');
         expect((await s.preparation.prepare(s.folder, { ['AzureWebJobsStorage__accountName']: 'account' })).runtime).to.equal('node');
+    });
+
+    it('passes a user-supplied --no-azurite host argument through and checks workloads before starting the host', async () => {
+        const s = setup();
+        const start = mock.method(s.owners, 'start', async (request: FunctionsHostStart) => {
+            expect(s.ensureWorkloads.mock.callCount()).to.equal(1);
+            expect(request.hostArgs).to.deep.equal(['--no-azurite']);
+            await request.prepare(9229, 'pipe');
+            return { id: 'owned', hostPort: 7072, debugPort: 9229, pipe: 'pipe' };
+        });
+        await s.debugProvider.resolveDebugConfigurationWithSubstitutedVariables(undefined, { ...s.config, hostArgs: ['--no-azurite'] });
+        expect(start.mock.callCount()).to.equal(1);
     });
 
     it('does not acquire tools or start a host after cancellation', async () => {
@@ -459,6 +496,7 @@ describe('Functions debug provider (unit)', () => {
         expect(calls).to.have.length(2);
         expect(withResolve).to.have.length(1);
         expect(calls.find(call => !withResolve.includes(call))?.arguments[1]).to.have.property('provideDebugConfigurations');
+        expect(withResolve[0].arguments[1]).to.not.have.property('provideDebugConfigurations');
     });
 
     it('selects the canonical indexed project for a path with a trailing separator', async () => {

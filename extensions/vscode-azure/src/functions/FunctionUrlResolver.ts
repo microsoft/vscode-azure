@@ -19,16 +19,23 @@ export interface FunctionUrl {
 
 const LoopbackHosts = new CaselessSet(['localhost', '127.0.0.1', '[::1]']);
 
-/** Requires an http URL on the registered loopback host and port, without embedded credentials. */
+/**
+ * Requires a URL on the registered loopback host and port, without embedded credentials.
+ *
+ * The owned host only serves plain HTTP but can report its invocation URLs with an `https:`
+ * scheme, so either scheme is accepted and the result always uses `http:`.
+ */
 export function validateLocalFunctionUrl(code: IVsCode, rawUrl: string | null | undefined, port: number): URL {
     if (!rawUrl || !URL.canParse(rawUrl)) {
         throw new ExternalError(code.l10n.t('The running host does not report an HTTP invocation URL for this function.'));
     }
     const url = new URL(rawUrl);
-    if (url.protocol !== 'http:' || !LoopbackHosts.has(url.hostname)
-        || Number(url.port || '80') !== port || url.username || url.password) {
+    const defaultPort = url.protocol === 'https:' ? 443 : 80;
+    if ((url.protocol !== 'http:' && url.protocol !== 'https:') || !LoopbackHosts.has(url.hostname)
+        || Number(url.port || defaultPort) !== port || url.username || url.password) {
         throw new ExternalError(code.l10n.t('The local function URL must belong to the registered loopback host.'));
     }
+    url.protocol = 'http:';
     return url;
 }
 

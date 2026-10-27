@@ -250,6 +250,22 @@ describe('ProcessExecutor (unit)', () => {
             expect((outcome as Error).message).to.include('EACCES');
         });
 
+        it('reports the display-formatted command line before spawning', async () => {
+            const { vscode: code } = createMockVsCode();
+            const spawnFn = createMockSpawn({ stdout: 'ok' });
+            const executor = new ProcessExecutor(code, spawnFn);
+            const onCommandLine = mock.fn((_line: string) => { expect(spawnFn.mock.callCount()).to.equal(0); });
+
+            await executor.spawn({
+                execution: 'background',
+                command: command('test-cmd').arg('C:\\My Project', 'say "hi"').namedArg('--name', 'value'),
+                onCommandLine,
+            });
+
+            expect(onCommandLine.mock.calls.map(call => call.arguments[0]))
+                .to.deep.equal(['test-cmd "C:\\My Project" "say \\"hi\\"" --name value']);
+        });
+
         it('should pass the command and args from a CommandLineBuilder', async () => {
             const { vscode: code } = createMockVsCode();
             const spawnFn = createMockSpawn({ stdout: 'ok' });

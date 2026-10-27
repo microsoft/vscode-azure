@@ -11,7 +11,6 @@ import { ExtensionId } from '../../constants';
 import { IToolService } from '../../tools/ToolService';
 import { FunctionsProjectSelector } from '../FunctionsProjectSelector';
 import { LocalFunctionSettings } from '../LocalFunctionSettings';
-import { LocalFunctionsNetwork } from '../host/LocalFunctionsNetwork';
 import { isFunctionsDebugRuntime, type FunctionsDebugRuntime } from './functionsDebug';
 
 interface GoApi {
@@ -56,7 +55,7 @@ export type FunctionsDebugLaunch = {
     | { readonly runtime: Exclude<FunctionsDebugRuntime, 'python' | 'native'> }
 );
 
-/** Validates local projects and prepares workers; Core Tools owns ordinary builds and dependency restoration. */
+/** Validates local projects and prepares workers; the Azure Functions CLI owns ordinary builds and dependency restoration. */
 @injectable()
 export class FunctionsDebugPreparation {
     private readonly code: IVsCode;
@@ -67,7 +66,6 @@ export class FunctionsDebugPreparation {
         @inject(IToolService) private readonly tools: IToolService,
         @inject(LocalFunctionSettings) private readonly settings: LocalFunctionSettings,
         @inject(FunctionsProjectSelector) private readonly projects: FunctionsProjectSelector,
-        @inject(LocalFunctionsNetwork) private readonly network: LocalFunctionsNetwork,
     ) {
         this.code = ctx.code;
     }
@@ -92,7 +90,7 @@ export class FunctionsDebugPreparation {
         if (version && !/^~?4(?:\.|$)/.test(version)) {
             throw new ExternalError(this.code.l10n.t('Local debugging supports Functions runtime v4 only.'));
         }
-        await this.validateStorage(values);
+        this.validateStorage(values);
         const snapshot = { project, environment: Object.fromEntries(values) };
         if (runtime === 'python') {
             return { ...snapshot, runtime, python: await this.selectedPython(project) };
@@ -127,20 +125,9 @@ export class FunctionsDebugPreparation {
         return selected.data;
     }
 
-    private async validateStorage(values: ICaselessMapReader<string>): Promise<void> {
-        const storage = values.get('AzureWebJobsStorage');
-        if (!storage && !values.get('AzureWebJobsStorage__accountName') && !values.get('AzureWebJobsStorage__blobServiceUri')) {
+    private validateStorage(values: ICaselessMapReader<string>): void {
+        if (!values.get('AzureWebJobsStorage') && !values.get('AzureWebJobsStorage__accountName') && !values.get('AzureWebJobsStorage__blobServiceUri')) {
             throw new ExternalError(this.code.l10n.t('Configure AzureWebJobsStorage or its identity-based settings in local.settings.json before debugging.'));
-        }
-        if (storage && /(?:^|;)\s*UseDevelopmentStorage\s*=\s*true\s*(?:;|$)/i.test(storage)) {
-            if (/DevelopmentStorageProxyUri/i.test(storage)) {
-                throw new ExternalError(this.code.l10n.t('DevelopmentStorageProxyUri is not supported by the local emulator check. Configure explicit storage endpoints instead.'));
-            }
-            for (const port of [10000, 10001, 10002]) {
-                if (!await this.network.listening(port)) {
-                    throw new ExternalError(this.code.l10n.t('Start Azurite on its default loopback ports before debugging, or configure an Azure storage account.'));
-                }
-            }
         }
     }
 
@@ -174,6 +161,33 @@ export class FunctionsDebugPreparation {
         })).executablePath;
     }
 
+    /**
+     * Installs the Azure Functions CLI workloads (stack worker, templates, extension bundle) the project needs.
+     *
+     * A quick `func setup --check` runs first and does nothing when everything is installed. Only when workloads are
+     * missing does the visible `func setup` task run, because installing may download packages.
+     */
+    public async ensureWorkloads(project: vscode.Uri, executable: string, token?: vscode.CancellationToken): Promise<void> {
+        this.projects.assertLocal(project);
+        const setup = () => command(executable).arg('setup', project.fsPath).namedArg('--install-policy', 'if-needed').flagArg('--yes');
+        try {
+            await this.processes.spawn({ execution: 'background', command: setup().flagArg('--check').flagArg('--non-interactive'), cwd: project }, token);
+            return;
+        } catch (error: unknown) {
+            if (CancellationError.test(error)) { throw error; }
+        }
+        try {
+            await this.processes.spawn({
+                execution: 'foreground', command: setup(), cwd: project,
+                name: this.code.l10n.t('Set Up Azure Functions'), source: 'Azure Functions', alwaysRunNew: true,
+                workspaceFolder: this.code.workspace.getWorkspaceFolder(project),
+            }, token);
+        } catch (error: unknown) {
+            if (CancellationError.test(error)) { throw error; }
+            throw new ExternalError(this.code.l10n.t('Could not set up the Azure Functions CLI workloads for this project. See the \'Set Up Azure Functions\' terminal for details.'));
+        }
+    }
+
     /** Builds Go with optimizations and inlining disabled so Delve can attach reliably. */
     public async buildGo(launch: Extract<FunctionsDebugLaunch, { readonly runtime: 'native' }>, token?: vscode.CancellationToken): Promise<void> {
         const { project, tools, environment: env } = launch;
@@ -203,7 +217,10 @@ export class FunctionsDebugPreparation {
     }
 
     private async workerOverrides(launch: FunctionsDebugLaunch, port: number, pipe: string): Promise<Readonly<Record<string, string>>> {
+        // The attach configuration changes the debug type after VS Code has resolved ours, so the language debugger's
+        // own debug-resolve activation never fires; activate it explicitly.
         const debuggerExtensions: Partial<Record<FunctionsDebugRuntime, string>> = {
+            node: 'ms-vscode.js-debug',
             java: 'vscjava.vscode-java-debug',
             powershell: 'ms-vscode.PowerShell',
             ['dotnet-isolated']: 'ms-dotnettools.csharp',
@@ -325,7 +342,7 @@ export class FunctionsDebugPreparation {
         }
         const virtualEnvironment = dirname(dirname(this.code.Uri.file(python)));
         if (!await fileExists(this.code, this.code.Uri.joinPath(virtualEnvironment, 'pyvenv.cfg'))) {
-            throw new ExternalError(this.code.l10n.t('Select a Python virtual environment for this project before debugging with Core Tools v5.'));
+            throw new ExternalError(this.code.l10n.t('Select a Python virtual environment for this project before debugging with the Azure Functions CLI v5.'));
         }
         const variables = await api.environments.getEnvironmentVariables(project);
         return {

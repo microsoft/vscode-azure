@@ -66,7 +66,7 @@ export class LocalFunctionSettings {
         const root = parseJsoncObject(this.code, text, 'local.settings.json');
         const encrypted = findNodeAtLocation(root, ['IsEncrypted']);
         if (encrypted && (encrypted.type !== 'boolean' || getNodeValue(encrypted) !== false)) {
-            throw new ExternalError(this.code.l10n.t('Decrypt local.settings.json with Core Tools before reading or editing function settings.'));
+            throw new ExternalError(this.code.l10n.t('Decrypt local.settings.json with the Azure Functions CLI before reading or editing function settings.'));
         }
         const values = findNodeAtLocation(root, ['Values']);
         const entries = values

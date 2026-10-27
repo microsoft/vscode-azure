@@ -60,8 +60,10 @@ describe('Local Functions host ownership (unit)', () => {
         expect(s.tracker.get(s.request.project)?.port).to.equal(host.hostPort);
         const args = s.spawn.mock.calls[0].arguments[1];
         expect(args).to.deep.equal([
-            'run', s.request.project.fsPath, '--port', String(host.hostPort), '--no-build', '--no-azurite', '--output', 'plain',
+            'run', s.request.project.fsPath, '--port', String(host.hostPort), '--no-build', '--output', 'plain',
         ]);
+        expect(s.written.mock.calls.map(call => call.arguments[0]).join(''))
+            .to.include(`> func run ${s.request.project.fsPath} --port ${host.hostPort} --no-build --output plain`);
         await s.owner.stop(host.id);
         expect(s.tracker.get(s.request.project)).to.be.undefined;
         await s.owner.stop(host.id);
@@ -144,7 +146,7 @@ describe('Local Functions host ownership (unit)', () => {
 
     for (const attached of [false, true]) {
         it(`retains failed readiness output and awaits process-tree shutdown ${attached ? 'after' : 'before'} debugger attachment`, async () => {
-            const s = setup({ stdout: 'Core Tools startup diagnostics\n' });
+            const s = setup({ stdout: 'CLI startup diagnostics\n' });
             const status = Promise.withResolvers<Awaited<ReturnType<typeof s.client.getStatus>>>();
             s.client.getStatus.mock.mockImplementation(() => status.promise);
             mock.method(s.network, 'listening', () => Promise.resolve(attached));
@@ -162,7 +164,7 @@ describe('Local Functions host ownership (unit)', () => {
             expect(s.tracker.get(s.request.project)).to.be.undefined;
             expect(s.finished.mock.calls.map(call => call.arguments[0])).to.deep.equal([1]);
             expect(s.written.mock.calls.map(call => call.arguments[0]).join(''))
-                .to.include('Core Tools startup diagnostics\r\n')
+                .to.include('CLI startup diagnostics\r\n')
                 .and.include('host rejected its readiness request');
         });
     }
@@ -218,15 +220,15 @@ describe('Local Functions host ownership (unit)', () => {
         });
     }
 
-    it('runs from the project root and delegates compilation to Core Tools when requested', async () => {
+    it('runs from the project root and delegates compilation to the Azure Functions CLI when requested', async () => {
         const s = setup();
         const project = s.m.vscode.Uri.joinPath(s.request.project, 'Project With Spaces');
-        const executable = s.m.vscode.Uri.file('/Core Tools/func.exe').fsPath;
+        const executable = s.m.vscode.Uri.file('/Azure Functions CLI/func.exe').fsPath;
         const hostArgs = ['--cors', 'https://example.test', '--functions', 'HttpTrigger', 'TimerTrigger'];
         const host = await s.owner.start({ ...s.request, project, executable, hostArgs, skipBuild: false });
         expect(s.spawn.mock.calls[0].arguments[0]).to.equal(executable);
         expect(s.spawn.mock.calls[0].arguments[1]).to.deep.equal([
-            'run', project.fsPath, ...hostArgs, '--port', String(host.hostPort), '--no-azurite', '--output', 'plain',
+            'run', project.fsPath, ...hostArgs, '--port', String(host.hostPort), '--output', 'plain',
         ]);
         expect(s.spawn.mock.calls[0].arguments[2]?.cwd).to.equal(project.fsPath);
         await s.owner.stop(host.id);
@@ -309,7 +311,7 @@ describe('Local Functions host ownership (unit)', () => {
             expect(host.workerPid).to.equal(1234);
             expect(s.tracker.get(s.request.project)).to.be.undefined;
             expect(s.spawn.mock.calls[0].arguments[1]).to.deep.equal([
-                'run', s.request.project.fsPath, '--port', String(host.hostPort), '--no-build', '--no-azurite',
+                'run', s.request.project.fsPath, '--port', String(host.hostPort), '--no-build',
                 '--output', 'json', '--dotnet-isolated-debug', '--enable-json-output',
             ]);
             await s.owner.stop(host.id);

@@ -5,9 +5,23 @@
 
 import { FuncInstaller } from '../../src/tools/FuncInstaller';
 import { createInstallerHarness, installOptions, installedWith, usePlatform } from './installerTestHelpers';
+import { execFile } from 'node:child_process';
+import { createServer } from 'node:http';
+import { join } from 'node:path';
+import { mock } from 'node:test';
+import { promisify } from 'node:util';
 
 function createInstaller(onPath: readonly string[] = [], versionOutput = '5.0.0-preview.1') {
     return createInstallerHarness(FuncInstaller, onPath, { stdout: versionOutput, stderr: '' });
+}
+
+function windowsScript(spawn: Parameters<typeof installedWith>[0]): string {
+    const line = installedWith(spawn);
+    const index = line.indexOf('-Command');
+    if (index < 0 || !line[index + 1]) {
+        throw new Error('Expected a PowerShell bootstrap command.');
+    }
+    return line[index + 1];
 }
 
 describe('FuncInstaller (unit)', () => {
@@ -86,28 +100,11 @@ describe('FuncInstaller (unit)', () => {
 
             await installer.install(installOptions());
 
-            const line = installedWith(spawn).join(' ');
-            expect(line).to.include('powershell');
-            expect(line).to.include('https://aka.ms/func-cli/install.ps1');
-            expect(line).to.include('-Prerelease');
-            expect(line).to.not.include('-Force');
-        });
-
-        it('should build a PowerShell command that runs the script rather than echoing it', async () => {
-            setPlatform('win32');
-            const { installer, spawn } = createInstaller();
-
-            await installer.install(installOptions());
-
-            // Two things this pins, both of which produce a task that exits 0
-            // while installing nothing:
-            //  - the script must be wrapped in a scriptblock, or the switches
-            //    have nowhere to bind against its `param` block;
-            //  - no double quotes, which the task's shell strips, leaving a
-            //    syntax error.
-            const line = installedWith(spawn).join(' ');
-            expect(line).to.include('& { ');
-            expect(line).to.not.include('"');
+            const script = windowsScript(spawn);
+            expect(installedWith(spawn)[0]).to.equal('powershell');
+            expect(script).to.include('https://aka.ms/func-cli/install.ps1');
+            expect(script).to.include('-Prerelease');
+            expect(script).to.not.include('-Force');
         });
 
         it('should add -Force on Windows when upgrading an existing install', async () => {
@@ -118,7 +115,72 @@ describe('FuncInstaller (unit)', () => {
                 current: { executablePath: '/tools/func', version: '4.6.0' },
             }));
 
-            expect(installedWith(spawn).join(' ')).to.include('-Force');
+            expect(windowsScript(spawn)).to.include('-Force');
+        });
+
+        describe('FuncInstaller PowerShell bootstrap (integration)', () => {
+            const exec = promisify(execFile);
+            for (const outerShell of ['powershell', 'pwsh']) {
+                for (const upgrade of [false, true]) {
+                    it(`binds the installer switches through ${outerShell} for ${upgrade ? 'upgrade' : 'installation'}`, async function () {
+                        this.timeout(20_000);
+                        if (process.platform !== 'win32') {
+                            this.skip();
+                        }
+                        const { installer, spawn } = createInstaller();
+                        await installer.install(installOptions(upgrade
+                            ? { current: { executablePath: '/tools/func', version: '4.6.0' } }
+                            : {}));
+                        const requested = mock.fn<(url: string | undefined) => void>();
+                        const server = createServer((request, response) => {
+                            requested(request.url);
+                            response.setHeader('Content-Type', 'text/plain');
+                            response.end('param([switch]$Prerelease, [switch]$Force)\n@{ prerelease = $Prerelease.IsPresent; force = $Force.IsPresent } | ConvertTo-Json -Compress');
+                        });
+                        await new Promise<void>((resolve, reject) => {
+                            server.once('error', reject);
+                            server.listen(0, '127.0.0.1', resolve);
+                        });
+                        try {
+                            const address = server.address();
+                            if (!address || typeof address === 'string') {
+                                throw new Error('Expected a loopback installer endpoint.');
+                            }
+                            const script = windowsScript(spawn);
+                            expect(script.match(/https?:\/\/[^\s)]+/g)).to.deep.equal(['https://aka.ms/func-cli/install.ps1']);
+                            const args = installedWith(spawn).slice(1);
+                            expect(args).to.not.include('-ExecutionPolicy');
+                            args[args.indexOf('-Command') + 1] = script.replace(
+                                'https://aka.ms/func-cli/install.ps1',
+                                `http://127.0.0.1:${address.port}/install.ps1`,
+                            );
+                            const inner = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+                            // VS Code surrounds strongly quoted task arguments without escaping their contents.
+                            const line = `& '${inner}' ${args.map(value => `'${value}'`).join(' ')}`;
+                            const shell = outerShell === 'powershell' ? inner : outerShell;
+                            // AllSigned rejects any unsigned script file, so this proves no policy override is needed.
+                            const { stdout } = await exec(shell, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'AllSigned', '-Command', line], {
+                                timeout: 15_000,
+                                windowsHide: true,
+                            });
+                            const flags: unknown = JSON.parse(stdout);
+                            expect(flags).to.deep.equal({ prerelease: true, force: upgrade });
+                            expect(requested.mock.calls.map(call => call.arguments[0])).to.deep.equal(['/install.ps1']);
+                        } finally {
+                            server.closeAllConnections();
+                            await new Promise<void>((resolve, reject) => {
+                                server.close(error => {
+                                    if (error) {
+                                        reject(error);
+                                    } else {
+                                        resolve();
+                                    }
+                                });
+                            });
+                        }
+                    });
+                }
+            }
         });
 
         it('should run the prerelease install script elsewhere', async () => {

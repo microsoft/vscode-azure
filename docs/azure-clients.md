@@ -96,7 +96,7 @@ tenant set streams into the tree lazily instead of being buffered.
 
 ### `FunctionsHostClient` and host admin operations
 
-`FunctionsHostClient` accepts a local Core Tools port or a remote HTTPS origin with
+`FunctionsHostClient` accepts a local Azure Functions CLI port or a remote HTTPS origin with
 an asynchronous `getMasterKey` callback. Creation does not start a host or fetch
 keys. Local requests use `127.0.0.1`; remote requests obtain the master key lazily
 and send it in the `x-functions-key` header. Redirects are disabled.
