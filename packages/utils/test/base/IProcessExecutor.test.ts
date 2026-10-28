@@ -12,7 +12,7 @@ import type * as vscode from 'vscode';
 import { URI as Uri } from 'vscode-uri';
 import { command, type CommandLineArgs } from '../../src/base/CommandLineBuilder';
 import { delay } from '../../src/base/delay';
-import { ProcessExecutor, type ResolveExecutableFn } from '../../src/base/IProcessExecutor';
+import { ProcessExecutor, WindowsLauncherExitGraceMs, type ResolveExecutableFn } from '../../src/base/IProcessExecutor';
 import { CancellationError } from '../../src/vscode/CancellationError';
 import { EventEmitter } from '../../src/vscode/EventEmitter';
 import { createMockVsCode, getMockTaskExecution } from '../vscode/MockVsCode';
@@ -449,7 +449,7 @@ describe('ProcessExecutor (unit)', () => {
     });
 
     describe('owned process-tree cancellation', () => {
-        afterEach(() => { mock.restoreAll(); });
+        afterEach(() => { mock.timers.reset(); mock.restoreAll(); });
 
         for (const platform of ['win32', 'linux', 'darwin'] as const) {
             for (const owned of [true, false]) {
@@ -506,8 +506,9 @@ describe('ProcessExecutor (unit)', () => {
         });
 
         for (const exitedBy of ['exitCode', 'signalCode'] as const) {
-            it(`rejects Windows cancellation and releases waiting output after the launcher exits by ${exitedBy}`, async () => {
+            it(`rejects Windows cancellation and releases waiting output when pipes stay open after the launcher exits by ${exitedBy}`, async () => {
                 mock.property(process, 'platform', 'win32');
+                mock.timers.enable({ apis: ['setTimeout'] });
                 const s = createMockProcessExecutor(createMockVsCode().vscode, { keepAlive: true, keepStreamsOpen: true });
                 const abort = new AbortController();
                 const running = await s.executor.spawn({
@@ -520,6 +521,7 @@ describe('ProcessExecutor (unit)', () => {
                 mock.property(child, exitedBy, exitedBy === 'exitCode' ? 0 : 'SIGTERM');
                 child.emit('exit', child.exitCode, child.signalCode);
                 abort.abort();
+                mock.timers.tick(WindowsLauncherExitGraceMs);
                 try {
                     await rejected;
                     expect(await output).to.deep.equal([[], []]);
@@ -531,6 +533,27 @@ describe('ProcessExecutor (unit)', () => {
                 }
             });
         }
+
+        it('treats Windows cancellation as clean when the exiting launcher closes within the grace period', async () => {
+            mock.property(process, 'platform', 'win32');
+            mock.timers.enable({ apis: ['setTimeout'] });
+            const s = createMockProcessExecutor(createMockVsCode().vscode, { keepAlive: true, keepStreamsOpen: true });
+            const abort = new AbortController();
+            const running = s.executor.spawn({ execution: 'background', command: ['owned'], killTreeOnCancel: true }, abort.signal);
+            const rejected = expect(running).to.be.rejectedWith(CancellationError);
+            const child = s.spawn.mock.calls[0].result;
+            if (!child) { throw new Error('Expected the owned child process.'); }
+            mock.property(child, 'exitCode', 1);
+            child.emit('exit', 1, null);
+            abort.abort();
+            child.stdout?.push(null);
+            child.stderr?.push(null);
+            child.emit('close', 1, null);
+            await rejected;
+            // A grace timer left running would reject after the process is already gone.
+            mock.timers.tick(WindowsLauncherExitGraceMs);
+            expect(s.terminateTree.mock.callCount()).to.equal(0);
+        });
 
         it('ends a waiting output generator when tree termination fails before the child closes', async () => {
             const s = createMockProcessExecutor(createMockVsCode().vscode, { keepAlive: true, keepStreamsOpen: true });
