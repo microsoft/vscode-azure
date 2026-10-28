@@ -104,7 +104,9 @@ it cannot overwrite that binary with an optimized build.
 
 The native worker executable is headless
 [Delve](https://github.com/go-delve/delve/blob/master/Documentation/usage/dlv_exec.md)
-running `dlv exec` for the compiled application. `--continue` lets the worker
+running `dlv exec` for the compiled application. On Windows the host starts the worker
+without a valid stdin handle, so Delve is given `--redirect stdin:NUL`; otherwise the
+program fails to launch with "The handle is invalid". `--continue` lets the worker
 initialize while the Go extension connects with a remote `dlv-dap` attach
 request. Delve listens only on the reserved IPv4 loopback port and belongs to
 the host process tree, so host cleanup also terminates Delve and its target.
@@ -130,15 +132,19 @@ fails with installation guidance when neither is available. The CLI never instal
 Azurite itself. A user can opt out with `--no-azurite` in `hostArgs`, which leaves
 emulator management and any storage failure to them. Identity-based storage settings
 are accepted. Before the host starts, `func setup --check` verifies that the project's
-stack workloads are installed; when any are missing, a visible `func setup` task
-installs them (`--install-policy if-needed`, so installed workloads are never
-upgraded). Host startup
+worker, templates, and extension bundle are installed; when any are missing, a visible
+`func setup` task installs them (`--install-policy if-needed`, so installed workloads are
+never upgraded). `func setup` does not install every runtime's own workloads (Java and
+PowerShell get only their worker, so `func run` cannot recognize the project, and Go gets
+neither its stack nor its worker), so `func workload list --json` is read next. Any missing
+workload for the selected runtime (`node`, `python`, `java`, `powershell`, `dotnet`, or `go` and
+`go-worker`) is installed by a visible `func workload install` task. Host startup
 uses the released v5
 [run contract](https://github.com/Azure/azure-functions-core-tools/blob/f8f54ba328758b2165d835930e391af23e60f090/src/Func/Commands/Start/StartCommand.cs).
 Native Go compilation/output and `--no-build` behavior follow
 [GoFunctionsProject](https://github.com/Azure/azure-functions-core-tools/blob/f8f54ba328758b2165d835930e391af23e60f090/src/Workloads/Stacks/Go/GoFunctionsProject.cs).
-Go requires the Azure Functions CLI Go worker workload, installed with
-`func workload install go-worker --prerelease`.
+Go requires the Azure Functions CLI Go stack and worker workloads, which F5 installs when
+they are missing (`func workload install go` and `go-worker`).
 
 `LocalFunctionsHostProcess` manages project-level ownership and delegates each launch to an
 `OwnedFunctionsHostSession`, which runs `func run <project>` in an owned custom task with

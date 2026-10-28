@@ -3,10 +3,11 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { CancellationError, CaselessMap, command, dirname, ExternalError, fileExists, ICodeContext, IProcessExecutor, showSmartQuickPick, throwIfCancelled, type ICaselessMapReader, type IVsCode, type QuickPickItemWithData } from '@microsoft/vscode-azure-utils';
+import { argsToStrings, CancellationError, CaselessMap, command, dirname, ExternalError, fileExists, ICodeContext, IProcessExecutor, showSmartQuickPick, throwIfCancelled, type ICaselessMapReader, type IVsCode, type QuickPickItemWithData } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { delimiter } from 'node:path';
 import type * as vscode from 'vscode';
+import * as z from 'zod/mini';
 import { ExtensionId } from '../../constants';
 import { IToolService } from '../../tools/ToolService';
 import { FunctionsProjectSelector } from '../FunctionsProjectSelector';
@@ -162,13 +163,20 @@ export class FunctionsDebugPreparation {
     }
 
     /**
-     * Installs the Azure Functions CLI workloads (stack worker, templates, extension bundle) the project needs.
+     * Installs the Azure Functions CLI workloads the project needs: the worker, templates and extension bundle
+     * through `func setup`, then the runtime's own workloads, which `func setup` does not install for every runtime
+     * (the stack for Java and PowerShell, the stack and worker for Go).
      *
-     * A quick `func setup --check` runs first and does nothing when everything is installed. Only when workloads are
-     * missing does the visible `func setup` task run, because installing may download packages.
+     * Each step checks first and does nothing when its workloads are installed. Only a missing workload runs a visible
+     * task, because installing may download packages.
      */
-    public async ensureWorkloads(project: vscode.Uri, executable: string, token?: vscode.CancellationToken): Promise<void> {
+    public async ensureWorkloads(project: vscode.Uri, runtime: FunctionsDebugRuntime, executable: string, token?: vscode.CancellationToken): Promise<void> {
         this.projects.assertLocal(project);
+        await this.ensureSetup(project, executable, token);
+        await this.ensureRuntimeWorkloads(project, runtime, executable, token);
+    }
+
+    private async ensureSetup(project: vscode.Uri, executable: string, token?: vscode.CancellationToken): Promise<void> {
         const setup = () => command(executable).arg('setup', project.fsPath).namedArg('--install-policy', 'if-needed').flagArg('--yes');
         try {
             await this.processes.spawn({ execution: 'background', command: setup().flagArg('--check').flagArg('--non-interactive'), cwd: project }, token);
@@ -185,6 +193,38 @@ export class FunctionsDebugPreparation {
         } catch (error: unknown) {
             if (CancellationError.test(error)) { throw error; }
             throw new ExternalError(this.code.l10n.t('Could not set up the Azure Functions CLI workloads for this project. See the \'Set Up Azure Functions\' terminal for details.'));
+        }
+    }
+
+    private async ensureRuntimeWorkloads(project: vscode.Uri, runtime: FunctionsDebugRuntime, executable: string, token?: vscode.CancellationToken): Promise<void> {
+        for (const alias of RuntimeWorkloads[runtime]) {
+            if (await this.hasWorkload(project, executable, alias, token)) {
+                continue;
+            }
+            try {
+                await this.processes.spawn({
+                    execution: 'foreground', command: command(executable).arg('workload', 'install', alias), cwd: project,
+                    name: this.code.l10n.t('Install Azure Functions Workload'), source: 'Azure Functions', alwaysRunNew: true,
+                    workspaceFolder: this.code.workspace.getWorkspaceFolder(project),
+                }, token);
+            } catch (error: unknown) {
+                if (CancellationError.test(error)) { throw error; }
+                throw new ExternalError(this.code.l10n.t('Could not install the {0} Azure Functions CLI workload. See the \'Install Azure Functions Workload\' terminal for details.', alias));
+            }
+        }
+    }
+
+    /** Reads the CLI's local workload list, which needs no network; a list that cannot be read counts as not installed. */
+    private async hasWorkload(project: vscode.Uri, executable: string, alias: string, token?: vscode.CancellationToken): Promise<boolean> {
+        try {
+            const { json } = await this.processes.spawn({
+                execution: 'background', command: command(executable).arg('workload', 'list').flagArg('--json'), cwd: project, parseJson: true,
+            }, token);
+            const workloads = InstalledWorkloadsSchema.safeParse(json);
+            return workloads.success && workloads.data.some(workload => workload.aliases.some(installed => installed.toLowerCase() === alias));
+        } catch (error: unknown) {
+            if (CancellationError.test(error)) { throw error; }
+            return false;
         }
     }
 
@@ -259,11 +299,19 @@ export class FunctionsDebugPreparation {
         if (Object.keys(env).some(key => /^languageWorkers(?:__|:)native(?:__|:)(?:arguments(?:(?:__|:).*)?|defaultExecutablePath)$/i.test(key))) {
             throw new ExternalError(this.code.l10n.t('Native worker executable and argument overrides are not supported by the owned Go debugger. Use debugPort to configure its transport.'));
         }
-        const args = [
-            'exec', process.platform === 'win32' ? 'bin\\app.exe' : 'bin/app',
-            '--headless', '--continue', `--listen=127.0.0.1:${port}`,
-            '--api-version=2', '--accept-multiclient', '--',
-        ];
+        // On Windows the host starts the worker without a valid stdin handle, and Delve would pass it to the program,
+        // which then fails to launch with "The handle is invalid".
+        const delve = command(tools.delve)
+            .arg('exec', process.platform === 'win32' ? 'bin\\app.exe' : 'bin/app')
+            .flagArg('--headless')
+            .flagArg('--continue')
+            .namedArg('--listen', `127.0.0.1:${port}`, { assignCharacter: '=' })
+            .namedArg('--api-version', '2', { assignCharacter: '=' })
+            .flagArg('--accept-multiclient')
+            .namedArg('--redirect', process.platform === 'win32' ? 'stdin:NUL' : undefined)
+            .arg('--');
+        // The worker setting holds only the arguments; the executable has its own setting.
+        const args = argsToStrings(delve).slice(1);
         return {
             ['languageWorkers__native__defaultExecutablePath']: tools.delve,
             ['languageWorkers__native__arguments']: args.map(quoteWorkerArgument).join(' '),
@@ -353,6 +401,18 @@ export class FunctionsDebugPreparation {
         };
     }
 }
+
+/** The Azure Functions CLI workload aliases a runtime needs beyond what `func setup` installs for it. */
+const RuntimeWorkloads: Readonly<Record<FunctionsDebugRuntime, readonly string[]>> = {
+    node: ['node'],
+    python: ['python'],
+    java: ['java'],
+    powershell: ['powershell'],
+    ['dotnet-isolated']: ['dotnet'],
+    native: ['go', 'go-worker'],
+};
+
+const InstalledWorkloadsSchema = z.array(z.object({ aliases: z.array(z.string()) }));
 
 function applyEnvironmentOverrides(environment: CaselessMap<string>, overrides: Readonly<Record<string, string>>): void {
     for (const [key, value] of Object.entries(overrides)) {

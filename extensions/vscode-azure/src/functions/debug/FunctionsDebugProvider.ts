@@ -94,7 +94,7 @@ export class FunctionsDebugProvider implements vscode.DebugConfigurationProvider
             const debugPort = parseOption(PortSchema, config.debugPort, portMessage);
             const launch = await this.preparation.prepare(project, env, token);
             const executable = await this.preparation.executable(project, token);
-            await this.preparation.ensureWorkloads(project, executable, token);
+            await this.preparation.ensureWorkloads(project, launch.runtime, executable, token);
             const skipBuild = config.skipBuild === true || !!config.preLaunchTask;
             if (launch.runtime === 'native' && !skipBuild) {
                 await this.preparation.buildGo(launch, token);

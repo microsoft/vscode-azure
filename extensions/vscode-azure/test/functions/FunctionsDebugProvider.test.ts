@@ -348,6 +348,11 @@ describe('Functions debug provider (unit)', () => {
             expect(env.languageWorkers__native__arguments).to.include('"--listen=127.0.0.1:9004"');
             expect(env.languageWorkers__native__arguments).to.include('"--continue"');
             expect(env.languageWorkers__native__arguments).to.match(/ "--"$/);
+            if (process.platform === 'win32') {
+                expect(env.languageWorkers__native__arguments).to.include('"--redirect" "stdin:NUL" "--"');
+            } else {
+                expect(env.languageWorkers__native__arguments).to.not.include('--redirect');
+            }
             expect(env.PATH).to.include(s.code.Uri.file('/Go Tools').fsPath).and.include('project-path');
             return { id: 'go-owned', hostPort: 7072, debugPort: 9004, pipe: 'unused' };
         });

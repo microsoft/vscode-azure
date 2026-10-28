@@ -141,31 +141,82 @@ describe('Functions debug preparation (unit)', () => {
 
     describe('workload setup', () => {
         const setupArgs = (folder: { readonly fsPath: string }) => ['setup', folder.fsPath, '--install-policy', 'if-needed', '--yes'];
+        const installed = (...aliases: string[]) => JSON.stringify(aliases.map(alias => ({ aliases: [alias] })));
+        const taskArgs = (execution: Awaited<ReturnType<typeof getMockTaskExecution>>) => {
+            if (!(execution.task.execution instanceof MockShellExecution)) { throw new Error('Expected a shell task.'); }
+            return execution.task.execution.args?.map(arg => typeof arg === 'string' ? arg : arg.value);
+        };
 
-        it('only checks the workloads when they are already installed', async () => {
-            const s = setup('node', { keepAlive: false });
+        it('only reads the workloads when setup and the runtime stack are already installed', async () => {
+            const s = setup('node', { keepAlive: false, stdout: installed('host', 'node') });
             s.ensureWorkloads.mock.restore();
-            await s.preparation.ensureWorkloads(s.folder, 'func');
-            expect(s.spawn.mock.calls.map(call => call.arguments[1])).to.deep.equal([[...setupArgs(s.folder), '--check', '--non-interactive']]);
+            await s.preparation.ensureWorkloads(s.folder, 'node', 'func');
+            expect(s.spawn.mock.calls.map(call => call.arguments[1])).to.deep.equal([
+                [...setupArgs(s.folder), '--check', '--non-interactive'],
+                ['workload', 'list', '--json'],
+            ]);
             expect(s.m.tasks.executeTask.mock.callCount()).to.equal(0);
         });
 
-        for (const [exitCode, outcome] of [[0, 'completes'], [1, 'is reported when it fails']] as const) {
-            it(`runs a visible setup task when the check finds missing workloads and ${outcome}`, async () => {
-                const s = setup('node', { keepAlive: false, exitCode: 1 });
+        it('runs a visible setup task when the check finds missing workloads, then checks the stack', async () => {
+            const s = setup('node', { keepAlive: false, exitCode: 1 });
+            s.ensureWorkloads.mock.restore();
+            const ensuring = s.preparation.ensureWorkloads(s.folder, 'node', 'func');
+            const setupTask = await getMockTaskExecution(s.m);
+            expect(taskArgs(setupTask)).to.deep.equal(setupArgs(s.folder));
+            s.m.taskProcessEndEmitter.fire({ execution: setupTask, exitCode: 0 });
+            const stackTask = await getMockTaskExecution(s.m, 1);
+            expect(taskArgs(stackTask)).to.deep.equal(['workload', 'install', 'node']);
+            s.m.taskProcessEndEmitter.fire({ execution: stackTask, exitCode: 0 });
+            await ensuring;
+        });
+
+        it('reports a failed setup without installing a stack', async () => {
+            const s = setup('node', { keepAlive: false, exitCode: 1 });
+            s.ensureWorkloads.mock.restore();
+            const ensuring = s.preparation.ensureWorkloads(s.folder, 'node', 'func');
+            const rejected = expect(ensuring).to.be.rejectedWith('Could not set up the Azure Functions CLI workloads');
+            s.m.taskProcessEndEmitter.fire({ execution: await getMockTaskExecution(s.m), exitCode: 1 });
+            await rejected;
+            expect(s.m.tasks.executeTask.mock.callCount()).to.equal(1);
+        });
+
+        for (const [runtime, aliases] of [
+            ['node', ['node']], ['python', ['python']], ['java', ['java']], ['powershell', ['powershell']],
+            ['dotnet-isolated', ['dotnet']], ['native', ['go', 'go-worker']],
+        ] as const) {
+            it(`installs the ${aliases.join(' and ')} workload${aliases.length > 1 ? 's' : ''} missing for the ${runtime} runtime`, async () => {
+                const s = setup(runtime, { keepAlive: false, stdout: installed('host', 'java-worker') });
                 s.ensureWorkloads.mock.restore();
-                const setting = s.preparation.ensureWorkloads(s.folder, 'func');
-                const execution = await getMockTaskExecution(s.m);
-                if (!(execution.task.execution instanceof MockShellExecution)) { throw new Error('Expected a shell task.'); }
-                expect(execution.task.execution.args?.map(arg => typeof arg === 'string' ? arg : arg.value)).to.deep.equal(setupArgs(s.folder));
-                s.m.taskProcessEndEmitter.fire({ execution, exitCode });
-                if (exitCode === 0) {
-                    await setting;
-                } else {
-                    await expect(setting).to.be.rejectedWith('Could not set up the Azure Functions CLI workloads');
+                const ensuring = s.preparation.ensureWorkloads(s.folder, runtime, 'func');
+                for (const [index, alias] of aliases.entries()) {
+                    const execution = await getMockTaskExecution(s.m, index);
+                    expect(taskArgs(execution)).to.deep.equal(['workload', 'install', alias]);
+                    s.m.taskProcessEndEmitter.fire({ execution, exitCode: 0 });
                 }
+                await ensuring;
             });
         }
+
+        it('installs only the workloads that are missing', async () => {
+            const s = setup('native', { keepAlive: false, stdout: installed('host', 'go') });
+            s.ensureWorkloads.mock.restore();
+            const ensuring = s.preparation.ensureWorkloads(s.folder, 'native', 'func');
+            const execution = await getMockTaskExecution(s.m);
+            expect(taskArgs(execution)).to.deep.equal(['workload', 'install', 'go-worker']);
+            s.m.taskProcessEndEmitter.fire({ execution, exitCode: 0 });
+            await ensuring;
+            expect(s.m.tasks.executeTask.mock.callCount()).to.equal(1);
+        });
+
+        it('reports a failed stack installation', async () => {
+            const s = setup('java', { keepAlive: false, stdout: installed('host') });
+            s.ensureWorkloads.mock.restore();
+            const ensuring = s.preparation.ensureWorkloads(s.folder, 'java', 'func');
+            const rejected = expect(ensuring).to.be.rejectedWith('Could not install the java Azure Functions CLI workload');
+            s.m.taskProcessEndEmitter.fire({ execution: await getMockTaskExecution(s.m), exitCode: 1 });
+            await rejected;
+        });
     });
 
     it('uses the validated Go tools and merged environment for build and startup while resolving each launch independently', async () => {

@@ -344,7 +344,9 @@ Resolution flow for one session:
    when a folder has several).
 2. Pre-debug validation; failures are `ExternalError`s. Ensure the project's Azure
    Functions CLI workloads with `func setup --check`, running a visible `func setup` task
-   only when workloads are missing.
+   only when workloads are missing, then ensure the selected runtime's own workloads
+   (`func workload list --json`, installing a missing one with a visible `func workload install`
+   task, because `func setup` omits the stack for Java and PowerShell and both stack and worker for Go).
 3. Build Go with optimizations and inlining disabled in a visible task, unless
    `skipBuild` or a replacement `preLaunchTask` applies.
 4. Start `func run <project>` in an in-code
