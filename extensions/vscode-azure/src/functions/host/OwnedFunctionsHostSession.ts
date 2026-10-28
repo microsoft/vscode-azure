@@ -296,11 +296,6 @@ export class OwnedFunctionsHostSession {
         this.registration?.dispose();
         this.subscriptions.splice(0).forEach(disposable => { disposable.dispose(); });
         this.launch.onEnded();
-        if (this.error || this.stopError) {
-            this.terminal.finish(1);
-        } else {
-            this.execution?.terminate();
-            this.terminal.close();
-        }
+        this.terminal.finish(this.error || this.stopError ? 1 : 0);
     }
 }

@@ -5,7 +5,7 @@
 
 import { inject, injectable } from 'inversify';
 import { IVsCode } from '@microsoft/vscode-azure-utils';
-import { createConnection, createServer, type Socket } from 'node:net';
+import { createServer, type Socket } from 'node:net';
 
 /** A loopback port held exclusively until its process owner is ready to launch. */
 export interface FunctionsPortReservation {
@@ -13,7 +13,7 @@ export interface FunctionsPortReservation {
     release(): Promise<void>;
 }
 
-/** Loopback-only port allocation and bounded connection probes for local Functions development. */
+/** Loopback-only port allocation and non-connecting listener checks for local Functions development. */
 @injectable()
 export class LocalFunctionsNetwork {
     public constructor(@inject(IVsCode) private readonly code: IVsCode) { }
@@ -52,24 +52,22 @@ export class LocalFunctionsNetwork {
         };
     }
 
-    /** Refused or timed-out connections mean not ready; other socket errors propagate. */
+    /**
+     * Reports whether a process is already listening on the loopback port, by trying to bind it instead of
+     * connecting. A connection would be accepted by single-client debug servers such as debugpy, which then treat the
+     * probe as their debugger.
+     */
     public listening(port: number): Promise<boolean> {
         return new Promise<boolean>((resolve, reject) => {
-            const socket = createConnection({ port, host: '127.0.0.1' });
-            const finish = (ready: boolean) => {
-                socket.destroy();
-                resolve(ready);
-            };
-            socket.once('connect', () => { finish(true); });
-            socket.setTimeout(300, () => { finish(false); });
-            socket.once('error', (error: NodeJS.ErrnoException) => {
-                socket.destroy();
-                if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT' || error.code === 'ECONNRESET') {
-                    resolve(false);
+            const server = createServer();
+            server.once('error', (error: NodeJS.ErrnoException) => {
+                if (error.code === 'EADDRINUSE') {
+                    resolve(true);
                 } else {
                     reject(error);
                 }
             });
+            server.listen(port, '127.0.0.1', () => { server.close(() => { resolve(false); }); });
         });
     }
 }

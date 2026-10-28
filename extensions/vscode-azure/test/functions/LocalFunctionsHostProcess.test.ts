@@ -37,9 +37,11 @@ describe('Local Functions host ownership (unit)', () => {
         const output = new MockOutputChannel('functions');
         const written = mock.fn<(text: string) => void>();
         const finished = mock.fn<(code: number) => void>();
+        const terminals: BufferedPseudoterminal[] = [];
         // eslint-disable-next-line @typescript-eslint/unbound-method -- The wrapper supplies the terminal receiver with call().
         const openTerminal = BufferedPseudoterminal.prototype.open;
         mock.method(BufferedPseudoterminal.prototype, 'open', function (this: BufferedPseudoterminal) {
+            terminals.push(this);
             this.onDidWrite(written);
             this.onDidClose(finished);
             openTerminal.call(this);
@@ -47,7 +49,16 @@ describe('Local Functions host ownership (unit)', () => {
         const owner = new LocalFunctionsHostProcess(m.vscode, () => new OwnedFunctionsHostSession(m.vscode, processes, () => client, tracker, network, output), network, output);
         owners.push(owner);
         const request = { project, executable: 'func', runtime: 'node', skipBuild: true, hostArgs: [], prepare: () => Promise.resolve({}) };
-        return { m, owner, request, spawn, client, tracker, network, reserve, terminateTree, output, written, finished };
+        return { m, owner, request, spawn, client, tracker, network, reserve, terminateTree, output, written, finished, terminals };
+    }
+
+    function terminalText(s: ReturnType<typeof setup>): string {
+        return s.written.mock.calls.map(call => call.arguments[0]).join('');
+    }
+
+    function exitHost(s: ReturnType<typeof setup>, code: number): void {
+        const child = s.spawn.mock.calls[0].result;
+        child?.emit('close', code, null);
     }
 
     it('registers the exact owned port only after HTTP Running and removes it on stop', async () => {
@@ -113,11 +124,11 @@ describe('Local Functions host ownership (unit)', () => {
                 }
             }
             expect(changed.mock.callCount()).to.equal(1);
-            expect(s.finished.mock.calls.map(call => call.arguments[0])).to.deep.equal(failed ? [1] : []);
-            expect(terminateTask.mock.callCount()).to.equal(failed ? 0 : 1);
+            expect(s.finished.mock.calls.map(call => call.arguments[0])).to.deep.equal(failed ? [1] : [0]);
+            expect(terminateTask.mock.callCount()).to.equal(0);
             expect(s.terminateTree.mock.callCount()).to.equal(1);
             await s.owner.stop(host.id);
-            expect(terminateTask.mock.callCount()).to.equal(failed ? 0 : 1);
+            expect(terminateTask.mock.callCount()).to.equal(0);
             subscription.dispose();
         });
     }
@@ -131,6 +142,63 @@ describe('Local Functions host ownership (unit)', () => {
             expect(s.finished.mock.calls.map(call => call.arguments[0])).to.deep.equal([1]);
         });
     }
+
+    for (const code of [0, 1]) {
+        it(`keeps the terminal open with its output when the host exits on its own with code ${code} before readiness`, async () => {
+            const s = setup({ keepAlive: false, exitCode: code, stdout: 'Host diagnostics\n' });
+            mock.method(s.network, 'listening', () => Promise.resolve(false));
+            s.client.getStatus.mock.mockImplementation(() => Promise.resolve({ state: 'Starting' }));
+            const starting = s.owner.start(s.request);
+            const rejected = expect(starting).to.be.rejectedWith('Functions host');
+            const execution = await getMockTaskExecution(s.m);
+            const terminateTask = mock.method(execution, 'terminate');
+            await rejected;
+            expect(s.finished.mock.calls.map(call => call.arguments[0])).to.deep.equal([1]);
+            expect(terminateTask.mock.callCount()).to.equal(0);
+            expect(terminalText(s)).to.include('Host diagnostics\r\n').and.include('See its terminal for details.');
+            expect(s.tracker.get(s.request.project)).to.be.undefined;
+        });
+
+        it(`keeps the terminal open with its output when the host exits on its own with code ${code} after readiness`, async () => {
+            const s = setup({ stdout: 'Host diagnostics\n' });
+            const host = await s.owner.start(s.request);
+            await waitFor(() => !!s.tracker.get(s.request.project));
+            const execution = await getMockTaskExecution(s.m);
+            const terminateTask = mock.method(execution, 'terminate');
+            exitHost(s, code);
+            await waitFor(() => s.finished.mock.callCount() === 1);
+            expect(s.finished.mock.calls.map(call => call.arguments[0])).to.deep.equal([1]);
+            expect(terminateTask.mock.callCount()).to.equal(0);
+            expect(terminalText(s)).to.include('Host diagnostics\r\n').and.include('See its terminal for details.');
+            expect(s.tracker.get(s.request.project)).to.be.undefined;
+            await s.owner.stop(host.id);
+            expect(s.finished.mock.callCount()).to.equal(1);
+            expect(terminateTask.mock.callCount()).to.equal(0);
+        });
+    }
+
+    it('keeps the terminal open with the host output after a deliberate stop', async () => {
+        const s = setup({ stdout: 'Host diagnostics\n' });
+        const host = await s.owner.start(s.request);
+        await waitFor(() => !!s.tracker.get(s.request.project));
+        const execution = await getMockTaskExecution(s.m);
+        const terminateTask = mock.method(execution, 'terminate');
+        await s.owner.stop(host.id);
+        expect(s.finished.mock.calls.map(call => call.arguments[0])).to.deep.equal([0]);
+        expect(terminateTask.mock.callCount()).to.equal(0);
+        expect(terminalText(s)).to.include('Host diagnostics\r\n').and.not.include('See its terminal for details.');
+        expect(s.tracker.get(s.request.project)).to.be.undefined;
+    });
+
+    it('stops the host without failure output when the user closes the terminal', async () => {
+        const s = setup();
+        await s.owner.start(s.request);
+        await waitFor(() => !!s.tracker.get(s.request.project));
+        s.terminals[0].close();
+        await waitFor(() => !s.tracker.get(s.request.project));
+        await waitFor(() => s.terminateTree.mock.callCount() === 1);
+        expect(terminalText(s)).to.not.include('See its terminal for details.');
+    });
 
     it('stops the owned process and reports a failed output stream', async () => {
         const s = setup({ keepStreamsOpen: true });

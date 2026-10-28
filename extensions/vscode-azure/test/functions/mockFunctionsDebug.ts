@@ -81,8 +81,21 @@ export function createFunctionsDebugFixture(runtime = 'node', processOptions?: P
     const ensureWorkloads = mock.method(preparation, 'ensureWorkloads', () => Promise.resolve());
     const owners = new LocalFunctionsHostProcess(s.code, () => new OwnedFunctionsHostSession(s.code, processes, s.createHost, s.hosts, network, output), network, output);
     const provider = new FunctionsDebugProvider(s.code, actions, s.index, projects, preparation, owners);
+    // The provider hands the language debugger's attach configuration to startDebugging; resolving here yields that
+    // configuration, or undefined when no debugger session was started.
+    const debugProvider = {
+        register: () => { provider.register(); },
+        provideDebugConfigurations: (folder?: vscode.WorkspaceFolder) => provider.provideDebugConfigurations(folder),
+        resolveDebugConfiguration: (folder: vscode.WorkspaceFolder | undefined, config: vscode.DebugConfiguration) => provider.resolveDebugConfiguration(folder, config),
+        resolveDebugConfigurationWithSubstitutedVariables: async (folder: vscode.WorkspaceFolder | undefined, config: vscode.DebugConfiguration, token?: vscode.CancellationToken) => {
+            const startDebugging = s.m.debug.startDebugging.mock;
+            const before = startDebugging.callCount();
+            await provider.resolveDebugConfigurationWithSubstitutedVariables(folder, config, token);
+            return startDebugging.callCount() > before ? startDebugging.calls[before].arguments[1] as vscode.DebugConfiguration : undefined;
+        },
+    };
     return {
-        ...s, projects, network, processes, spawn, tools, preparation, ensureWorkloads, owners, debugProvider: provider,
+        ...s, projects, network, processes, spawn, tools, preparation, ensureWorkloads, owners, functionsDebugProvider: provider, debugProvider,
         dispose: () => { provider.dispose(); owners.dispose(); s.dispose(); },
     };
 }

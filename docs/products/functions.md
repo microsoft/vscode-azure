@@ -34,7 +34,10 @@ Owned hosts consume both output generators concurrently and opt into
 ## F5 debugging
 
 The `azure-functions` debugger supports Node.js, Python, Java, PowerShell,
-.NET isolated, and native Go projects in trusted, non-virtual workspace folders. The
+.NET isolated, and native Go projects in trusted, non-virtual workspace folders. The extension
+activates for it through the type-scoped `onDebugResolve:azure-functions` and
+`onDebugDynamicConfigurations:azure-functions` events, so F5 works before any Azure view is
+opened. The
 dynamic configuration provider offers one configuration per indexed `host.json`
 project, including nested projects, while the generated `launch.json` contains a single
 portable configuration that selects the project at launch. F5 requires neither `tasks.json` nor `launch.json`. Multiple
@@ -106,7 +109,9 @@ initialize while the Go extension connects with a remote `dlv-dap` attach
 request. Delve listens only on the reserved IPv4 loopback port and belongs to
 the host process tree, so host cleanup also terminates Delve and its target.
 Attach readiness requires that the owned worker output reports Delve listening
-on that exact loopback port, as well as a successful loopback probe.
+on that exact loopback port, as well as a successful loopback listener check. The check binds the
+port instead of connecting to it, because single-client debug servers such as debugpy treat a probe
+connection as their debugger.
 Native worker executable/argument overrides in project settings are rejected;
 use `debugPort` for its transport and `preLaunchTask` for a replacement build.
 The extension neither searches for unrelated Go processes nor adopts/kills
@@ -146,7 +151,12 @@ The PID parser accepts startup events embedded in v5 NDJSON messages and the
 tooling-category worker debug message, following the
 [.NET output contract](https://github.com/Azure/azure-functions-core-tools/blob/f8f54ba328758b2165d835930e391af23e60f090/src/Workloads/Stacks/DotNet/DotNetHostOutputInterceptor.cs).
 Other workers use `--output=plain`. Workers are restricted to one per
-host. Protected transport, output, build, runtime, worker-debugger, and process-count options cannot be
+host. Once the host is ready, the `azure-functions` session starts the language debugger's attach
+configuration (`pwa-node`, `debugpy`, `java`, `PowerShell`, `go`, or `coreclr`) with
+`vscode.debug.startDebugging` and ends itself without a message, so the language debugger resolves
+its own configuration. The attach session carries the host id and any `postDebugTask`; stopping it
+stops the owned host, and a failure to start it stops the host and reports an error.
+Protected transport, output, build, runtime, worker-debugger, and process-count options cannot be
 overridden through `hostArgs` or `env`.
 
 Paused workers expose their debugger before the host can finish initialization.
@@ -159,9 +169,13 @@ service disposal stop the owned process tree and remove its registration.
 Readiness and shutdown failures are surfaced without copying settings or host
 response bodies into the output channel.
 Failed host tasks retain their diagnostic output and end with a nonzero exit
-code after the process-tree shutdown attempt completes.
+code after the process-tree shutdown attempt completes. The task terminal never
+closes itself: whether the host ends on its own (with any exit code), fails
+readiness or debugger attachment, or is stopped by the user, the terminal stays
+open with its full output until the user closes it, and its exit code is nonzero
+only when the end was a failure.
 Concurrent stop requests await the same owned process completion. Finalization
-releases subscriptions and ownership and closes or finishes the task once.
+releases subscriptions and ownership and finishes the task once.
 
 The debugger schema and snippets expose `projectPath`, `hostArgs`, `env`,
 `hostPort`, `debugPort`, and `skipBuild`; standard `preLaunchTask` and

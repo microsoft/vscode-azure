@@ -77,11 +77,32 @@ describe('Functions debug provider (unit)', () => {
         expect((await s.settings.read(s.folder)).values.get('AzureWebJobsStorage__accountName')).to.be.undefined;
     });
 
-    it('anchors the Node attach configuration at the project and runs past the inspector entry pause', async () => {
+    it('runs the Node attach past the inspector entry pause', async () => {
         const s = setup();
         mock.method(s.owners, 'start', () => Promise.resolve({ id: 'owned', hostPort: 7072, debugPort: 9229, pipe: 'pipe' }));
         const config = await s.debugProvider.resolveDebugConfigurationWithSubstitutedVariables(undefined, s.config);
-        expect(config).to.include({ type: 'pwa-node', request: 'attach', port: 9229, cwd: s.folder.fsPath, continueOnAttach: true });
+        expect(config).to.include({ type: 'pwa-node', request: 'attach', port: 9229, continueOnAttach: true });
+    });
+
+    it('starts the language debugger as its own session and ends the Functions session without a configuration', async () => {
+        const s = setup();
+        mock.method(s.owners, 'start', () => Promise.resolve({ id: 'owned', hostPort: 7072, debugPort: 9229, pipe: 'pipe' }));
+        const config = { ...s.config, postDebugTask: 'cleanup' };
+        const resolved = await s.functionsDebugProvider.resolveDebugConfigurationWithSubstitutedVariables(undefined, config);
+        expect(resolved).to.be.undefined;
+        const [[folder, attach]] = s.m.debug.startDebugging.mock.calls.map(call => call.arguments);
+        expect(folder).to.equal(s.code.workspace.getWorkspaceFolder(s.folder));
+        expect(attach).to.include({ type: 'pwa-node', request: 'attach', ['__azureFunctionsHostId']: 'owned', postDebugTask: 'cleanup' });
+    });
+
+    it('stops the host and reports an error when the language debugger session does not start', async () => {
+        const s = setup();
+        mock.method(s.owners, 'start', () => Promise.resolve({ id: 'owned', hostPort: 7072, debugPort: 9229, pipe: 'pipe' }));
+        const stop = mock.method(s.owners, 'stop', () => Promise.resolve());
+        s.m.debug.startDebugging.mock.mockImplementation(() => Promise.resolve(false));
+        expect(await s.functionsDebugProvider.resolveDebugConfigurationWithSubstitutedVariables(undefined, s.config)).to.be.undefined;
+        expect(stop.mock.calls.map(call => call.arguments[0])).to.deep.equal(['owned']);
+        expect(s.m.window.showErrorMessage.mock.calls.at(-1)?.arguments[0]).to.include('Could not start the language debugger');
     });
 
     it('dismisses runtime selection without acquiring tools or starting a host', async () => {

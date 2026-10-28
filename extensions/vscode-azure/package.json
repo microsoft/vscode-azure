@@ -16,6 +16,10 @@
     "license": "MIT",
     "author": "Microsoft Corporation",
     "main": "main.js",
+    "activationEvents": [
+        "onDebugResolve:azure-functions",
+        "onDebugDynamicConfigurations:azure-functions"
+    ],
     "capabilities": {
         "virtualWorkspaces": {
             "supported": "limited",

@@ -56,7 +56,7 @@ export class FunctionsDebugProvider implements vscode.DebugConfigurationProvider
                 });
             }
         };
-        this.subscriptions.push(this.code.debug.onDidTerminateDebugSession(stop));
+        this.subscriptions.push(this.code.debug.onDidTerminateDebugSession(session => { stop(session); }));
         this.subscriptions.push(this.code.debug.registerDebugAdapterTrackerFactory('*', {
             createDebugAdapterTracker: session => typeof session.configuration.__azureFunctionsHostId === 'string'
                 ? { onError: () => { stop(session); }, onExit: () => { stop(session); } } : undefined,
@@ -104,7 +104,23 @@ export class FunctionsDebugProvider implements vscode.DebugConfigurationProvider
                 skipBuild: skipBuild || launch.runtime === 'native',
                 prepare: (port, pipe) => this.preparation.workerEnvironment(launch, port, pipe),
             }, token);
-            return attachConfiguration(config, launch.runtime, project, host);
+            // The language debugger runs as its own session so VS Code resolves its configuration with that
+            // debugger's resolvers. Returning undefined ends this session without a message.
+            let started = false;
+            try {
+                started = await this.code.debug.startDebugging(
+                    this.code.workspace.getWorkspaceFolder(project) ?? folder,
+                    attachConfiguration(config, launch.runtime, project, host),
+                );
+            } finally {
+                if (!started) {
+                    await this.hosts.stop(host.id).catch(() => undefined);
+                }
+            }
+            if (!started) {
+                throw new ExternalError(this.code.l10n.t('Could not start the language debugger for the Functions host.'));
+            }
+            return undefined;
         });
     }
 
@@ -123,10 +139,9 @@ function attachConfiguration(config: vscode.DebugConfiguration, runtime: Functio
     };
     switch (runtime) {
         case 'node':
-            // js-debug's own config resolver never runs for this synthesized configuration, so its defaults are
-            // missing: without a concrete cwd TypeScript sources stay unmapped, and without continueOnAttach the
-            // worker stays paused on the --inspect-brk entry line.
-            return { ...common, type: 'pwa-node', address: '127.0.0.1', port: host.debugPort, cwd: project.fsPath, continueOnAttach: true };
+            // js-debug defaults continueOnAttach to false for attach requests, which would leave the worker
+            // paused on its --inspect-brk entry line.
+            return { ...common, type: 'pwa-node', address: '127.0.0.1', port: host.debugPort, continueOnAttach: true };
         case 'python':
             return { ...common, type: 'debugpy', connect: { host: '127.0.0.1', port: host.debugPort }, justMyCode: true };
         case 'java':

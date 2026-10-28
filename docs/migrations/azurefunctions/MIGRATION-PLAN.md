@@ -323,8 +323,10 @@ Sweep:          reused IProcessExecutor (packages/utils), createShellTask (packa
                 Searched
                 "registerDebugConfigurationProvider", "DebugConfigurationProviderTriggerKind", "onDidTerminateDebugSession",
                 "CustomExecution": none exist -> new product code under functions/debug and functions/host.
-Activation:     only the implicit events VS Code generates for a contributed `debuggers` entry; justify any explicit
-                onDebug* entry in this record before adding it.
+Activation:     two type-scoped events, `onDebugResolve:azure-functions` and `onDebugDynamicConfigurations:azure-functions`
+                (human decision, manual testing): VS Code does not generate activation events for a contributed `debuggers`
+                entry, so without them F5 is ignored until another contribution has activated the extension. Both fire only
+                for this debug type, unlike the source extension's global `onDebugInitialConfigurations`.
 External facts: verified VS Code provider ordering against 7f1c8a96ce99bcffba134a7db3ef9b1f57d30ca0;
                 Azure Functions CLI v5 host arguments/PID output against preview.3 (f8f54ba328758b2165d835930e391af23e60f090);
                 Python environment public API and selected virtual environment via VIRTUAL_ENV;
