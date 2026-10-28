@@ -43,6 +43,8 @@ export interface MockFunctionLogsOptions {
     readonly app?: FunctionApp;
     readonly insightsSubscription?: AzureSubscription;
     readonly connectionString?: string;
+    /** Makes the component workspace-based, as a component linked to a Log Analytics workspace is. */
+    readonly workspaceResourceId?: string;
     readonly openOnShow?: boolean;
 }
 
@@ -56,7 +58,10 @@ export function createFunctionLogs(options?: MockFunctionLogsOptions) {
         type: ApplicationInsightsResourceType,
         logicalType: ApplicationInsightsResourceType,
         subscription,
-        properties: { InstrumentationKey: TestInstrumentationKey },
+        properties: {
+            InstrumentationKey: TestInstrumentationKey,
+            ...(options?.workspaceResourceId ? { WorkspaceResourceId: options.workspaceResourceId } : {}),
+        },
     });
     const codeContext = createMockCodeContext({ openTerminalsOnShow: options?.openOnShow });
     const terminalMock = codeContext.mock;

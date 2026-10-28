@@ -29,6 +29,13 @@ interface LogRecord {
 
 const LookbackMs = 5 * 60_000;
 
+/** Workspace-based components expose the Log Analytics `App*` tables; classic components expose `traces` and `requests`. */
+function isWorkspaceBased(resource: GenericResource): boolean {
+    const properties: unknown = resource.properties;
+    return !!properties && typeof properties === 'object'
+        && Object.entries(properties).some(([key, value]) => key.toLowerCase() === 'workspaceresourceid' && typeof value === 'string' && !!value);
+}
+
 /** Owns one cancellable Application Insights log terminal per Function App. */
 @injectable()
 export class FunctionAppLogStream implements Disposable {
@@ -70,9 +77,10 @@ export class FunctionAppLogStream implements Disposable {
         const signal = stream.abort.signal;
         try {
             const resource = await this.resolveInsights(app, signal);
+            const workspaceBased = isWorkspaceBased(resource);
             const client = this.createLogs(resource.subscription);
             const cursor = Date.now() - LookbackMs;
-            const first = this.records(await client.queryResource(resource.id, this.query(app.name, cursor), { abortSignal: signal, timespan: 'P2D' }));
+            const first = this.records(await client.queryResource(resource.id, this.query(app.name, cursor, workspaceBased), { abortSignal: signal, timespan: 'P2D' }));
             signal.throwIfAborted();
             const pty = new BufferedPseudoterminal({
                 onClose: () => { this.stop(AzureNodeId.from(app).toString(), stream, false); },
@@ -80,7 +88,7 @@ export class FunctionAppLogStream implements Disposable {
             stream.terminal = this.code.window.createTerminal({ name: this.code.l10n.t('Logs: {0}', app.name), pty });
             pty.write(this.code.l10n.t('Application Insights logs. Events can appear after an ingestion delay.\n'));
             stream.terminal.show();
-            void this.poll(app, resource.id, client, stream, pty, cursor, first);
+            void this.poll(app, resource.id, workspaceBased, client, stream, pty, cursor, first);
         } catch (error: unknown) {
             const cancelled = signal.aborted;
             this.stop(AzureNodeId.from(app).toString(), stream, true);
@@ -141,8 +149,13 @@ export class FunctionAppLogStream implements Disposable {
         return undefined;
     }
 
-    private query(role: string, cursor: number): string {
-        return `union isfuzzy=true AppTraces, AppRequests, traces, requests
+    /**
+     * Queries only the tables the component's schema has. A fuzzy union over both schemas makes the service report
+     * a partial error for whichever tables are absent, which this stream must treat as a failure.
+     */
+    private query(role: string, cursor: number, workspaceBased: boolean): string {
+        const tables = workspaceBased ? 'AppTraces, AppRequests' : 'traces, requests';
+        return `union ${tables}
 | extend Timestamp = coalesce(column_ifexists('TimeGenerated', datetime(null)), column_ifexists('timestamp', datetime(null))),
          Role = coalesce(tostring(column_ifexists('AppRoleName', '')), tostring(column_ifexists('cloud_RoleName', ''))),
          Message = coalesce(tostring(column_ifexists('Message', '')), tostring(column_ifexists('message', '')), tostring(column_ifexists('Name', '')), tostring(column_ifexists('name', ''))),
@@ -184,6 +197,7 @@ export class FunctionAppLogStream implements Disposable {
     private async poll(
         app: FunctionApp,
         resourceId: string,
+        workspaceBased: boolean,
         client: ILogsQueryClient,
         stream: Stream,
         pty: BufferedPseudoterminal,
@@ -211,7 +225,7 @@ export class FunctionAppLogStream implements Disposable {
                     }
                 }
                 await delay(10_000, signal);
-                records = this.records(await client.queryResource(resourceId, this.query(app.name, windowStart), { abortSignal: signal, timespan: 'P2D' }));
+                records = this.records(await client.queryResource(resourceId, this.query(app.name, windowStart, workspaceBased), { abortSignal: signal, timespan: 'P2D' }));
             }
         } catch (error: unknown) {
             if (!signal.aborted) {

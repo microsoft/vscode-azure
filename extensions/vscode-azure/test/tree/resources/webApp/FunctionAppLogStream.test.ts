@@ -126,6 +126,26 @@ describe('FunctionAppLogStream (unit)', () => {
         expect(s.queries.queryResource.mock.calls[2].arguments[1]).to.equal(firstQuery);
     });
 
+    it('queries only the tables of a workspace-based component, in the first query and every poll', async () => {
+        const s = setup({ workspaceResourceId: '/subscriptions/s/resourceGroups/rg/providers/Microsoft.OperationalInsights/workspaces/w' });
+        await s.service.start(s.app);
+        await timers.whenScheduled();
+        timers.tick(10_000);
+        await waitFor(() => s.queries.queryResource.mock.callCount() === 2);
+
+        for (const call of s.queries.queryResource.mock.calls) {
+            expect(call.arguments[1]).to.match(/^union AppTraces, AppRequests\n/);
+            expect(call.arguments[1]).not.to.include('isfuzzy');
+        }
+    });
+
+    it('queries the classic tables of a component without a workspace', async () => {
+        const s = setup();
+        await s.service.start(s.app);
+
+        expect(s.queries.queryResource.mock.calls[0].arguments[1]).to.match(/^union traces, requests\n/);
+    });
+
     it('resolves a configured component in another accessible subscription of the same tenant', async () => {
         const subscription = makeSubscription({ subscriptionId: '99999999-0000-0000-0000-000000000000' });
         const s = setup({ insightsSubscription: subscription });

@@ -379,10 +379,14 @@ component's subscription identity and cloud, not the connection string's ingesti
 endpoint. Missing configuration, missing resources, and explicit permission
 failures are surfaced.
 
-The terminal polls every ten seconds. Queries normalize workspace
+The terminal polls every ten seconds. A component linked to a Log Analytics
+workspace (it reports a `WorkspaceResourceId`) is queried through
 [`AppTraces`](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/apptraces)
-and [`AppRequests`](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/apprequests),
-and their classic `traces`/`requests` aliases. Results are filtered by cloud role
+and [`AppRequests`](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/apprequests);
+a classic component is queried through `traces` and `requests`. Only the tables its
+schema has are named, because Azure Monitor reports a partial error for a missing
+table even in a fuzzy union, and an incomplete result is treated as a failure.
+Results are filtered by cloud role
 name matching the Function App name. Telemetry using a different custom role is
 outside this view. Trace messages and request
 names are printed with their event timestamps.
