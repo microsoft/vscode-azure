@@ -18,7 +18,7 @@ import { makeFunctionAppFunction, makeFunctionAppFunctions } from './mockFunctio
 import { treeMenuMatches } from '../../treeMenuMatches';
 
 describe('FunctionAppViewProvider (unit)', () => {
-    function setup(app: FunctionApp = { ...makeSettingsResource(), isReadOnly: false }, invalidKind: FunctionAppInvalidNode['kind'] = 'function') {
+    function setup(app: FunctionApp = makeSettingsResource(), invalidKind: FunctionAppInvalidNode['kind'] = 'function') {
         const codeContext = createMockCodeContext();
         const { executor } = createTestActionExecutor();
         const adapter = new WebAppSettingsAdapter(codeContext.ctx.code, () => createMockWebAppClient());
@@ -100,7 +100,6 @@ describe('FunctionAppViewProvider (unit)', () => {
         for (const item of [appItem, errorItem]) {
             expect(treeMenuMatches('vscode-azure/resources/refresh', 'vscode-azure/resources', item)).to.be.true;
             expect(treeMenuMatches('vscode-azure/resources/delete', 'vscode-azure/resources', item)).to.be.false;
-            expect(treeMenuMatches('vscode-azure/functions/delete', 'vscode-azure/resources', item)).to.be.false;
         }
     });
 
@@ -127,22 +126,16 @@ describe('FunctionAppViewProvider (unit)', () => {
     });
 
     it('offers function actions according to trigger and reported disabled state', () => {
-        const { fn, key, provider, app } = setup();
+        const { fn, key, provider } = setup();
         const matches = (action: string) => treeMenuMatches(`vscode-azure/functions/${action}`, 'vscode-azure/resources', provider.getTreeItem(key(fn)));
         expect(matches('copyUrl')).to.be.true;
         expect(matches('execute')).to.be.true;
-        expect(matches('delete')).to.be.true;
         expect(matches('disable')).to.be.true;
         Object.assign(fn, { triggerKind: 'timerTrigger', authLevel: undefined, isDisabled: true });
         expect(matches('execute')).to.be.true;
         expect(matches('enable')).to.be.true;
         expect(matches('copyUrl')).to.be.false;
         expect(matches('disable')).to.be.false;
-        for (const isReadOnly of [true, undefined]) {
-            app.isReadOnly = isReadOnly;
-            expect(matches('delete')).to.be.false;
-            expect(matches('execute')).to.be.true;
-        }
     });
 
     it('allows the shared selector to resolve app and remote function nodes by their normal tree keys', async () => {

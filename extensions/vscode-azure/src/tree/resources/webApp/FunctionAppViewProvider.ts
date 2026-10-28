@@ -9,7 +9,6 @@ import { inject, injectable } from 'inversify';
 import { RefreshResourcesView } from '../../../commands/tree/RefreshResourcesView';
 import { WebAppLifecycle } from '../../../commands/webApp/WebAppLifecycle';
 import { CopyFunctionUrl } from '../../../commands/functions/CopyFunctionUrl';
-import { DeleteFunction } from '../../../commands/functions/DeleteFunction';
 import { ExecuteFunction } from '../../../commands/functions/ExecuteFunction';
 import { RevealFunctionAppIdentity } from '../../../commands/functions/RevealFunctionAppIdentity';
 import { SetFunctionState } from '../../../commands/functions/SetFunctionState';
@@ -165,7 +164,6 @@ export class FunctionAppViewProvider implements ViewProvider<string> {
                     node.isDisabled ? FunctionAppViewProvider.DisabledFunctionContextValue : FunctionAppViewProvider.EnabledFunctionContextValue,
                     node.isDisabled ? SetFunctionState.EnableContextValue : SetFunctionState.DisableContextValue,
                     ExecuteFunction.ContextValue,
-                    node.azureResource.isReadOnly === false ? DeleteFunction.ContextValue : '',
                     node.triggerKind.toLowerCase() === 'httptrigger' ? CopyFunctionUrl.ContextValue : '',
                 );
                 break;

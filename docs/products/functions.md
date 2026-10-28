@@ -342,16 +342,11 @@ are excluded from notifications and output-channel logging.
 Enable and Disable preserve other application settings while writing
 `AzureWebJobs.<FunctionName>.Disabled` through `WebAppSettingsAdapter`.
 [Azure restarts the app when settings change](https://learn.microsoft.com/en-us/azure/azure-functions/disable-function).
-Delete Function requires confirmation, tracks completion or failure in the
-activity tree, and removes the cached function only after a successful ARM delete.
-Individual function deletion is available only when deployment editability is
-known. Flex and package-backed deployments are read-only; change source and
-redeploy instead. The command reads current deployment settings after confirmation,
-so a stale tree capability cannot authorize an unsupported delete. An unreadable
-settings response propagates from the command; tree enrichment logs the failed
-editability check and keeps readable functions visible without Delete.
-See [Flex package deployments](https://learn.microsoft.com/azure/azure-functions/flex-consumption-plan#deployment)
-and the [source editability contract](https://github.com/microsoft/vscode-azurefunctions/blob/801689c66f96b31bc9d7c79ff6cc8d65e41b6965/src/tree/ResolvedFunctionAppResource.ts).
+There is no command to delete an individual deployed function: deployed functions
+come from the project and its infrastructure, so a function removed in Azure is
+brought back by the next deployment, and functions defined in code (the Node.js v4
+and Python v2 programming models) have no folder to delete. Remove a function from
+its source project and redeploy instead.
 App deletion, portal navigation, website browsing, properties, and settings
 document editing use the shared commands.
 

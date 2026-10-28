@@ -38,7 +38,6 @@
     "commands.vscode-azure/functions/copyUrl": "Copy Function URL",
     "commands.vscode-azure/functions/enable": "Enable Function",
     "commands.vscode-azure/functions/disable": "Disable Function",
-    "commands.vscode-azure/functions/delete": "Delete Function...",
     "commands.vscode-azure/functions/streamLogs": "Open Log Stream...",
     "commands.vscode-azure/functions/revealIdentity": "Go to Managed Identity",
     "commands.vscode-azure/resources/reveal": "Go to Resource",

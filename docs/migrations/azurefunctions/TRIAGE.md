@@ -18,7 +18,7 @@ by editing this file and reconfirming with the reviewer.
 | **Date** | 2026-09-24 |
 | **Review** | Excel review workbook; 37 rows overridden, 234 accepted as recommended (blank decision = agreement). |
 | **Runtime-selection review** | 2026-10-27: runtime selection is inline in F5 and saved in `local.settings.json` for future launches (FUNC-030: Adapt); the standalone initialization/tree action is dropped (FUNC-190: Drop). |
-| **Last confirmed** | 2026-10-28; reviewer restored the Functions deploy command for local projects (FUNC-047, FUNC-202, FUNC-255, FUNC-256: Adapt), reusing the create wizard's `deploy` job and the shared endpoint step; deploying from a Function App node and runtime detection stay dropped (FUNC-046, FUNC-247: Drop). Earlier, 2026-10-22; reviewer removed the optional `launch.json` entry from initialization and made the running host the only source of local function metadata (FUNC-187: Adapt). Earlier, 2026-10-12; reviewer dropped source agent metadata (FUNC-007: Drop), consistent with the dropped agent discovery/wizard/benchmark handlers. MCP support remains independently deferred. Reviewer deferred CLI scaffolding (`func init`, `func new`, `func quickstart`) and its dependent language/welcome/template flows (FUNC-026, FUNC-028, FUNC-192, FUNC-218 through FUNC-221, FUNC-223 through FUNC-225, FUNC-235, FUNC-236: Defer). CLI v5 ownership remains the direction for future scaffolding. Native Go debugging and Go/Delve validation remain Adapt (FUNC-140, FUNC-141, FUNC-195); Go scaffolding and provisioning/runtime selection remain deferred. Go code deployment uses the shared azd route. Earlier, 2026-09-29: PR review moved FUNC-055 to Reuse (`azd pipeline config`) and FUNC-168 back to Migrate (remote Functions group node), added optional `launch.json` generation to FUNC-030, and clarified that `local.settings.json` stays. Earlier, 2026-09-24: F5 design review moved FUNC-203 through FUNC-207 to Drop. |
+| **Last confirmed** | 2026-10-28; reviewer dropped deleting an individual deployed function (FUNC-045: Drop): deployed functions come from the project and its infrastructure, and a function deleted in Azure is brought back by the next deployment. The same day the reviewer restored the Functions deploy command for local projects (FUNC-047, FUNC-202, FUNC-255, FUNC-256: Adapt), reusing the create wizard's `deploy` job and the shared endpoint step; deploying from a Function App node and runtime detection stay dropped (FUNC-046, FUNC-247: Drop). Earlier, 2026-10-22; reviewer removed the optional `launch.json` entry from initialization and made the running host the only source of local function metadata (FUNC-187: Adapt). Earlier, 2026-10-12; reviewer dropped source agent metadata (FUNC-007: Drop), consistent with the dropped agent discovery/wizard/benchmark handlers. MCP support remains independently deferred. Reviewer deferred CLI scaffolding (`func init`, `func new`, `func quickstart`) and its dependent language/welcome/template flows (FUNC-026, FUNC-028, FUNC-192, FUNC-218 through FUNC-221, FUNC-223 through FUNC-225, FUNC-235, FUNC-236: Defer). CLI v5 ownership remains the direction for future scaffolding. Native Go debugging and Go/Delve validation remain Adapt (FUNC-140, FUNC-141, FUNC-195); Go scaffolding and provisioning/runtime selection remain deferred. Go code deployment uses the shared azd route. Earlier, 2026-09-29: PR review moved FUNC-055 to Reuse (`azd pipeline config`) and FUNC-168 back to Migrate (remote Functions group node), added optional `launch.json` generation to FUNC-030, and clarified that `local.settings.json` stays. Earlier, 2026-09-24: F5 design review moved FUNC-203 through FUNC-207 to Drop. |
 
 ## Granularity
 
@@ -66,10 +66,10 @@ problem matcher and pattern; per manifest-level contract; per orphan.
 
 | Disposition | Count | Meaning in this record |
 |---|---:|---|
-| Migrate | 24 | Preserve the source capability using monorepo patterns |
+| Migrate | 23 | Preserve the source capability using monorepo patterns |
 | Adapt | 25 | Preserve the user goal with intentionally different behavior or UX |
 | Reuse | 19 | Satisfy the feature by wiring an existing monorepo capability |
-| Drop | 139 | Do not carry the source capability forward |
+| Drop | 140 | Do not carry the source capability forward |
 | Defer | 64 | Retain the goal for later tracked work |
 | **Total** | **271** | |
 
@@ -183,7 +183,7 @@ Judgment-call groups (`JC-*`) mark rows the reviewer was asked to weigh as a set
 | FUNC-042 | 1.2 Functions | `azureFunctions.copyFunctionUrl` | **Migrate** | High usage. |  |  |
 | FUNC-043 | 1.2 Functions | `azureFunctions.enableFunction` | **Migrate** | Moderate; writes `AzureWebJobs.<name>.Disabled`. v1 branch not needed. |  |  |
 | FUNC-044 | 1.2 Functions | `azureFunctions.disableFunction` | **Migrate** | Pairs with enable. |  |  |
-| FUNC-045 | 1.2 Functions | `azureFunctions.deleteFunction` | **Migrate** | Moderate; remote only. |  |  |
+| FUNC-045 | 1.2 Functions | `azureFunctions.deleteFunction` | **Drop** | Deployed functions come from the project and its infrastructure, so a function deleted in Azure is brought back by the next deployment, and functions defined in code (Node.js v4, Python v2) have no folder to delete. | Override (recommended Migrate), 2026-10-28. |  |
 | FUNC-046 | 1.3 Deploy | `azureFunctions.deploy` (Function App node / explorer folder) | **Drop** | Deploy from a Function App node in the Azure Resources view is not offered; deployment runs from the local project (workspace node, Explorer folder, or Command Palette) through the deploy job. | Override (recommended Adapt), 2026-10-22; scope confirmed 2026-10-28. | JC-DEPLOY |
 | FUNC-047 | 1.3 Deploy | `azureFunctions.deployProject` (workspace) | **Adapt** | High; maps to `vscode-azure/functions/deploy` / azd up from the workspace project node. | Override (restored), 2026-10-28; previously Drop, 2026-10-22. | JC-DEPLOY |
 | FUNC-048 | 1.3 Deploy | `azureFunctions.deploySlot` | **Defer** | Slots decided as a unit; Flex (the default plan) has no slots. |  | JC-SLOTS |

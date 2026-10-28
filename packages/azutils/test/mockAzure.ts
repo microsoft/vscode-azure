@@ -532,7 +532,6 @@ export function createMockWebAppClient(options?: MockWebAppClientOptions): MockW
                 const result = options?.functions?.find(fn => fn.name?.split('/').at(-1) === functionName);
                 return result ? Promise.resolve(result) : Promise.reject(new Error('Function not found.'));
             }),
-            deleteFunction: mock.fn(() => Promise.resolve()),
             listFunctionKeys: mock.fn(() => Promise.resolve({ properties: {} })),
             listHostKeys: mock.fn(() => Promise.resolve({ masterKey: 'mock-master-key' })),
             listFunctionSecrets: mock.fn(() => Promise.resolve({})),

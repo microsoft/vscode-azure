@@ -193,10 +193,6 @@
                 "title": "%commands.vscode-azure/functions/disable%"
             },
             {
-                "command": "vscode-azure/functions/delete",
-                "title": "%commands.vscode-azure/functions/delete%"
-            },
-            {
                 "command": "vscode-azure/functions/streamLogs",
                 "title": "%commands.vscode-azure/functions/streamLogs%"
             },
@@ -467,11 +463,6 @@
                     "command": "vscode-azure/functions/disable",
                     "when": "view == vscode-azure/resources && viewItem =~ /\\bdisableFunction\\b/i",
                     "group": "3_actions@2"
-                },
-                {
-                    "command": "vscode-azure/functions/delete",
-                    "when": "view == vscode-azure/resources && viewItem =~ /\\bdeleteFunction\\b/i",
-                    "group": "3_actions@9"
                 },
                 {
                     "command": "vscode-azure/functions/streamLogs",

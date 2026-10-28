@@ -9,14 +9,12 @@ import { CancellationError } from '@microsoft/vscode-azure-utils';
 import { mock } from 'node:test';
 import { CopyFunctionUrl } from '../../../src/commands/functions/CopyFunctionUrl';
 import { FunctionUrlResolver } from '../../../src/functions/FunctionUrlResolver';
-import { DeleteFunction } from '../../../src/commands/functions/DeleteFunction';
 import { ExecuteFunction } from '../../../src/commands/functions/ExecuteFunction';
 import { RevealFunctionAppIdentity } from '../../../src/commands/functions/RevealFunctionAppIdentity';
 import { RevealResource } from '../../../src/commands/tree/RevealResource';
 import { SetFunctionState } from '../../../src/commands/functions/SetFunctionState';
 import { StreamFunctionLogs } from '../../../src/commands/functions/StreamFunctionLogs';
 import { WebAppSettingsAdapter } from '../../../src/settings/adapters/WebAppSettingsAdapter';
-import { GenericActivityDataProvider } from '../../../src/tree/activity/GenericActivityDataProvider';
 import { createTestResourceSelector } from '../../tree/resources/testResourceSelector';
 import { makeFunctionAppFunction } from '../../tree/resources/webApp/mockFunctionApp';
 import { createFunctionLogs } from '../../tree/resources/webApp/mockFunctionLogs';
@@ -232,40 +230,6 @@ describe('Remote function commands (unit)', () => {
         expect(s.client.settings[`AzureWebJobs.${s.fn.functionName}.Disabled`]).to.equal('true');
     });
 
-    for (const failed of [false, true]) {
-        it(`tracks a ${failed ? 'failed' : 'completed'} function deletion and evicts only after success`, async () => {
-            const s = setup();
-            const activities = new GenericActivityDataProvider();
-            const remove = mock.method(s.cache, 'remove');
-            respondToPrompts(s.codeContext.mock, [{ button: 'Delete' }]);
-            if (failed) {
-                s.client.webApps.deleteFunction.mock.mockImplementation(() => Promise.reject(new Error('delete rejected')));
-            }
-            const result = new DeleteFunction(s.code, s.selector, () => s.client, s.cache, activities, s.settings).execute(s.key);
-            if (failed) {
-                await expect(result).to.be.rejectedWith('delete rejected');
-            } else {
-                await result;
-            }
-            expect(s.client.webApps.deleteFunction.mock.calls[0].arguments).to.deep.equal(['MyRG', s.app.name, s.fn.functionName]);
-            expect(remove.mock.callCount()).to.equal(failed ? 0 : 1);
-            if (!failed) {
-                expect(remove.mock.calls[0].arguments[0]).to.equal(s.fn);
-            }
-            expect((await activities.getChildren())[0].status).to.equal(failed ? 'Failed' : 'Completed');
-            activities.dispose();
-        });
-    }
-
-    it('does not delete or create an activity when confirmation is dismissed', async () => {
-        const s = setup();
-        const activities = new GenericActivityDataProvider();
-        await expect(new DeleteFunction(s.code, s.selector, () => s.client, s.cache, activities, s.settings).execute(s.key)).to.be.rejectedWith(CancellationError);
-        expect(s.client.webApps.deleteFunction.mock.callCount()).to.equal(0);
-        expect(await activities.getChildren()).to.be.empty;
-        activities.dispose();
-    });
-
     it('submits exact non-HTTP input through the admin host client without persisting the payload', async () => {
         const s = setup(undefined, true, 'timerTrigger');
         const host = createMockFunctionsHostClient();
@@ -361,51 +325,6 @@ describe('Remote function commands (unit)', () => {
         expect(host.invoke.mock.callCount()).to.equal(0);
         expect(s.client.webApps.listHostKeys.mock.callCount()).to.equal(0);
         expect(JSON.stringify(s.codeContext.mock.window.showInformationMessage.mock.calls)).not.to.include('function-secret');
-    });
-
-    for (const settings of [
-        { ['WEBSITE_RUN_FROM_PACKAGE']: '1' },
-        { ['website_run_from_zip']: 'https://storage.example/package.zip' },
-    ]) {
-        it('rejects deletion after a package-backed deployment is detected without creating an activity', async () => {
-            const s = setup();
-            s.app.isReadOnly = false;
-            Object.assign(s.client.settings, settings);
-            const activities = new GenericActivityDataProvider();
-            const remove = mock.method(s.cache, 'remove');
-            respondToPrompts(s.codeContext.mock, [{ button: 'Delete' }]);
-            await expect(new DeleteFunction(s.code, s.selector, () => s.client, s.cache, activities, s.settings).execute(s.key))
-                .to.be.rejectedWith('read-only deployment');
-            expect(s.client.webApps.deleteFunction.mock.callCount()).to.equal(0);
-            expect(remove.mock.callCount()).to.equal(0);
-            expect(await activities.getChildren()).to.be.empty;
-            activities.dispose();
-        });
-    }
-
-    it('propagates unreadable deployment settings before deletion and leaves the function cached', async () => {
-        const s = setup();
-        s.client.webApps.listApplicationSettings.mock.mockImplementation(() => Promise.reject(new Error('Settings access denied')));
-        const activities = new GenericActivityDataProvider();
-        respondToPrompts(s.codeContext.mock, [{ button: 'Delete' }]);
-        await expect(new DeleteFunction(s.code, s.selector, () => s.client, s.cache, activities, s.settings).execute(s.key))
-            .to.be.rejectedWith('Settings access denied');
-        expect(s.client.webApps.deleteFunction.mock.callCount()).to.equal(0);
-        expect(s.cache.get(s.key)).to.equal(s.fn);
-        expect(await activities.getChildren()).to.be.empty;
-        activities.dispose();
-    });
-
-    it('rejects deleting a function from a Flex deployment before starting an activity', async () => {
-        const s = setup();
-        s.client.webApps.get.mock.mockImplementation(() => Promise.resolve({ location: 'eastus', functionAppConfig: {} }));
-        const activities = new GenericActivityDataProvider();
-        respondToPrompts(s.codeContext.mock, [{ button: 'Delete' }]);
-        await expect(new DeleteFunction(s.code, s.selector, () => s.client, s.cache, activities, s.settings).execute(s.key))
-            .to.be.rejectedWith('read-only deployment');
-        expect(s.client.webApps.deleteFunction.mock.callCount()).to.equal(0);
-        expect(await activities.getChildren()).to.be.empty;
-        activities.dispose();
     });
 
     it('requires confirmation before an admin-authenticated HTTP request', async () => {

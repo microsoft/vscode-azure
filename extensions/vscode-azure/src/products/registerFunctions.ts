@@ -14,7 +14,6 @@ import { LocalFunctionsHostProcess } from '../functions/host/LocalFunctionsHostP
 import { IOwnedFunctionsHostSessionProvider, OwnedFunctionsHostSession } from '../functions/host/OwnedFunctionsHostSession';
 import { FunctionUrlResolver } from '../functions/FunctionUrlResolver';
 import { CopyFunctionUrl } from '../commands/functions/CopyFunctionUrl';
-import { DeleteFunction } from '../commands/functions/DeleteFunction';
 import { ExecuteFunction } from '../commands/functions/ExecuteFunction';
 import { RevealFunctionAppIdentity } from '../commands/functions/RevealFunctionAppIdentity';
 import { SetFunctionState } from '../commands/functions/SetFunctionState';
@@ -77,7 +76,6 @@ export function registerFunctions(registrar: ProductRegistrar): void {
     registrar.registerCommand('vscode-azure/functions/copyUrl', CopyFunctionUrl);
     registrar.registerCommand('vscode-azure/functions/enable', SetFunctionState, false);
     registrar.registerCommand('vscode-azure/functions/disable', SetFunctionState, true);
-    registrar.registerCommand('vscode-azure/functions/delete', DeleteFunction);
     registrar.registerCommand('vscode-azure/functions/streamLogs', StreamFunctionLogs);
     registrar.registerCommand('vscode-azure/functions/revealIdentity', RevealFunctionAppIdentity);
 

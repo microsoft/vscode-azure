@@ -84,8 +84,8 @@ Client:         re-export every SDK type used in the wrapper APIs from azutils
 - [x] Add a Function App guard (case-insensitive `FunctionAppLogicalType`
   comparison) and a virtual remote-function model carrying name, trigger
   kind, disabled state, and auth level. <- FUNC-169, FUNC-170
-- [x] Extend `IWebAppClient` with start, stop, restart, list/get/delete
-  function, function and host keys, and function secrets (invoke URL), keeping
+- [x] Extend `IWebAppClient` with start, stop, restart, list/get function,
+  function and host keys, and function secrets (invoke URL), keeping
   `toPages` for list operations. <- FUNC-060, FUNC-061, FUNC-062, FUNC-262
 - [x] Add `FunctionsHostClient` for the host admin API: remote (master key
   from `listHostKeys`) and local (`http://localhost:<port>`). Used by execute,
@@ -149,7 +149,7 @@ Tree contract:  Function App node: resourceContextValue plus product, reported r
                   trigger and HTTP access level retained in the model and presentation.
                 Invalid function / invalid app nodes: RefreshResourcesView.ContextValue only, error tooltip.
                 Command capability context values and menus for start/stop/restart, execute/copy URL,
-                  enable/disable/delete, logs, and identity are wired with their commands in Slice 2.
+                  enable/disable, logs, and identity are wired with their commands in Slice 2.
 ```
 
 Source contracts:
@@ -178,11 +178,11 @@ Pattern:        @injectable() ManagedCommand with static ContextValue; shared co
 Target files:   extensions/vscode-azure/src/commands/webApp/WebAppLifecycle.ts (action-prefix aliases shared by all
                   Microsoft.Web/sites kinds; ids vscode-azure/webApp/{start,stop,restart})
                 extensions/vscode-azure/src/commands/functions/{ExecuteFunction,CopyFunctionUrl,SetFunctionState,
-                  DeleteFunction,StreamFunctionLogs,RevealFunctionAppIdentity}.ts (bool-prefix enable/disable aliases)
+                  StreamFunctionLogs,RevealFunctionAppIdentity}.ts (bool-prefix enable/disable aliases)
                 extensions/vscode-azure/src/commands/tree/RevealResource.ts (new shared, id vscode-azure/resources/reveal)
                 extensions/vscode-azure/src/utils/BufferedPseudoterminal.ts (shared ACA/Functions pseudoterminal)
                 extensions/vscode-azure/src/tree/resources/webApp/FunctionAppLogStream.ts (query-session owner)
-Precedent:      DeleteStaticWebAppEnvironment (virtual-node command + activity), BrowseWebsite (shared node capability)
+Precedent:      BrowseWebsite (shared node capability)
 Sweep:          reused DeleteAzureResource, BrowseWebsite, ViewProperties, EditSettings + WebAppSettingsAdapter
                 (enable/disable writes AzureWebJobs.<name>.Disabled through it), OpenInPortal, ExternalError (#350),
                 IActionExecutor, ResourceSelector, AzureNodeId.forRelatedResource, abortable delay, CaselessMap.
@@ -207,9 +207,6 @@ Tree contract:  per Slice 1; menu entries in view/item/context with word-boundar
   <- FUNC-042
 - [x] Enable / disable a function through the shared app-settings adapter.
   <- FUNC-043, FUNC-044
-- [x] Delete a writable remote function, reported in the activity tree.
-  Deployment editability is checked before the operation; package-backed/Flex
-  deployments are read-only. <- FUNC-045
 - [x] Stream logs: shared `BufferedPseudoterminal` polling `LogsQueryClient` for
   the app's Application Insights resource (resolved from
   `APPLICATIONINSIGHTS_CONNECTION_STRING`); closing the terminal stops polling.
@@ -222,10 +219,10 @@ Tree contract:  per Slice 1; menu entries in view/item/context with word-boundar
 - [x] Manifest entries (commands, `view/item/context`) + `package.nls.json`
   strings. The commands are also available from the Command Palette, where
   `ResourceSelector` prompts for the target function or Function App.
-  <- FUNC-041, FUNC-042, FUNC-043, FUNC-044, FUNC-045, FUNC-060, FUNC-061,
+  <- FUNC-041, FUNC-042, FUNC-043, FUNC-044, FUNC-060, FUNC-061,
   FUNC-062, FUNC-065, FUNC-171
 - [x] Unit tests per command with `createMockCodeContext()` and real
-  `ActionExecutor`. <- FUNC-041, FUNC-042, FUNC-043, FUNC-044, FUNC-045,
+  `ActionExecutor`. <- FUNC-041, FUNC-042, FUNC-043, FUNC-044,
   FUNC-060, FUNC-061, FUNC-062, FUNC-065, FUNC-171
 
 Slice 2 external contract sources:
@@ -605,6 +602,9 @@ External facts: `https://json.schemastore.org/function.json` and `https://json.s
   FUNC-260, FUNC-261.
 - Deploy from a Function App node and deploy-time runtime detection (deployment
   runs from the local project): FUNC-046, FUNC-247.
+- Deleting an individual deployed function: FUNC-045. Deployed functions come
+  from the project and its infrastructure; a function deleted in Azure is brought
+  back by the next deployment, and code-defined functions cannot be deleted at all.
 - Kudu, deployment-source, and non-azd deploy paths: FUNC-049, FUNC-050,
   FUNC-051, FUNC-052, FUNC-053, FUNC-054, FUNC-056, FUNC-066, FUNC-102,
   FUNC-174, FUNC-175, FUNC-177, FUNC-251, FUNC-252, FUNC-253, FUNC-257,
@@ -679,7 +679,7 @@ dispositions. Their labels match the report's findings.
   Windows), storage/Azurite, real Azure commands/log queries/provisioning, and macOS/Linux
   owned-process cleanup. Record evidence without secrets. Pending automated
   tests are not passes.
-  <- FUNC-030, FUNC-033, FUNC-041, FUNC-042, FUNC-043, FUNC-044, FUNC-045,
+  <- FUNC-030, FUNC-033, FUNC-041, FUNC-042, FUNC-043, FUNC-044,
   FUNC-057, FUNC-060, FUNC-061, FUNC-062, FUNC-065, FUNC-195, FUNC-210,
   FUNC-211, FUNC-212, FUNC-214, FUNC-215, FUNC-216, FUNC-249, FUNC-268, FUNC-269
 - [x] **P6-03:** The Functions view provider owns project-relative labels and
@@ -697,10 +697,9 @@ dispositions. Their labels match the report's findings.
   <- FUNC-011, FUNC-012, FUNC-013, FUNC-016, FUNC-017, FUNC-032, FUNC-034,
   FUNC-035, FUNC-102, FUNC-116, FUNC-131, FUNC-133, FUNC-203, FUNC-204
 - [x] **P6-07:** HTTP Execute posts to the actual HTTP trigger route (confirmed
-  by the reviewer, 2026-10-27), Delete requires current writable deployment
-  settings, and the no-host hint launches its specific Functions project.
-  Signed dispositions are unchanged.
-  <- FUNC-041, FUNC-045, FUNC-188
+  by the reviewer, 2026-10-27), and the no-host hint launches its specific
+  Functions project. Signed dispositions are unchanged.
+  <- FUNC-041, FUNC-188
 - [x] **P6-08:** Manual F5 testing found and fixed, without changing dispositions: the
   Windows CLI install command (readable script-block, no execution-policy override); the
   built-in JavaScript debugger not activating; a `continueOnAttach` default missing from

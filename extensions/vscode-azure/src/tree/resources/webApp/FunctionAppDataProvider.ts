@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { getNodeType, getResourceGroupName, IWebAppClientProvider, type ConcreteAzureNode, type FunctionEnvelope } from '@microsoft/vscode-azure-azutils';
-import { CaselessMap, IActionExecutor, IVsCode, stringifyError, mapPages, type ChildResult, type DataProvider, type Page } from '@microsoft/vscode-azure-utils';
+import { IActionExecutor, IVsCode, stringifyError, mapPages, type ChildResult, type DataProvider, type Page } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { parseFunctionMetadata } from '../../../functions/functionMetadata';
 import { WebAppSettingsAdapter } from '../../../settings/adapters/WebAppSettingsAdapter';
@@ -14,7 +14,6 @@ import {
     FunctionAppVirtualTypes,
     isFunctionApp,
     isFunctionAppVirtualNode,
-    isFunctionAppReadOnly,
     type FunctionApp,
     type FunctionAppFunction,
     type FunctionAppFunctions,
@@ -58,19 +57,10 @@ export class FunctionAppDataProvider implements DataProvider<ConcreteAzureNode> 
             resource.site = site;
             setWebsiteUrl(resource, site.defaultHostName);
             const wasInvalid = resource.siteError !== undefined;
-            const previousReadOnly = resource.isReadOnly;
             resource.siteError = undefined;
-            resource.isReadOnly = undefined;
-            try {
-                const { entries } = await this.settingsAdapter.read(resource);
-                resource.isReadOnly = isFunctionAppReadOnly(site, new CaselessMap(entries.map(entry => [entry.key, entry.value])));
-            } catch {
-                this.executor.output.warn(this.code.l10n.t('[data] Could not determine whether functions in "{0}" are writable. Function deletion is unavailable.', resource.name));
-            }
-            return wasInvalid || previousReadOnly !== resource.isReadOnly;
+            return wasInvalid;
         } catch (error: unknown) {
             resource.site = undefined;
-            resource.isReadOnly = undefined;
             resource.siteError = stringifyError(error);
             setWebsiteUrl(resource, undefined);
             this.executor.output.error(this.code.l10n.t('[data] Could not read Function App "{0}": {1}', resource.name, resource.siteError));

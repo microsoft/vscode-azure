@@ -88,38 +88,6 @@ describe('FunctionAppDataProvider (unit)', () => {
         expect(client.webApps.get.mock.calls[0].arguments).to.deep.equal(['MyRG', 'MyFuncApp']);
     });
 
-    for (const [value, expected] of [['1', true], ['https://storage.example/package.zip', true], ['false', false], ['FALSE', false], ['0', false], ['', false]] as const) {
-        it(`reads package-backed function editability from deployment setting ${JSON.stringify(value)}`, async () => {
-            const s = setup({ settings: { ['website_run_from_package']: value } });
-            const app: FunctionApp = makeSettingsResource();
-            await s.provider.enrich(app);
-            expect(app.isReadOnly).to.equal(expected);
-        });
-    }
-
-    it('marks Flex function files read-only even without a package setting', async () => {
-        const s = setup({ site: { functionAppConfig: {} } });
-        const app: FunctionApp = makeSettingsResource();
-        await s.provider.enrich(app);
-        expect(app.isReadOnly).to.be.true;
-    });
-
-    it('keeps functions readable when deployment settings cannot be read and recovers editability on refresh', async () => {
-        const s = setup({ functions: [makeFunctionEnvelope()] });
-        const app: FunctionApp = makeSettingsResource();
-        app.isReadOnly = false;
-        const warning = mock.method(s.output, 'warn');
-        s.client.webApps.listApplicationSettings.mock.mockImplementationOnce(() => Promise.reject(new Error('Settings access denied')));
-        await s.provider.enrich(app);
-        expect(app.isReadOnly).to.be.undefined;
-        expect(app.siteError).to.be.undefined;
-        const [page] = await collectPages(await s.provider.getChildren(makeFunctionAppFunctions(app)));
-        expect(page.items.filter(isFunctionAppFunction)).to.have.lengthOf(1);
-        expect(warning.mock.callCount()).to.equal(1);
-        await s.provider.enrich(app);
-        expect(app.isReadOnly).to.be.false;
-    });
-
     it('normalizes qualified names, triggers, authentication and disabled state without exposing settings', async () => {
         const { provider, client } = setup({
             functions: [

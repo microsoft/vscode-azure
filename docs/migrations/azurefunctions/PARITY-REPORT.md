@@ -17,10 +17,10 @@ certificate of live debugger or Azure service behavior.
 
 | Signed disposition | IDs | Verified outcome |
 |---|---:|---|
-| Migrate | 24 | Implemented and wired; HTTP invocation, read-only deletion gating, and clickable project hints have behavioral coverage |
+| Migrate | 23 | Implemented and wired; HTTP invocation and clickable project hints have behavioral coverage |
 | Adapt | 25 | Implemented with the recorded target UX; live checks remain separate |
 | Reuse | 19 | 18 wired; FUNC-258 has the generic delete capability but its product integration is conditional on deferred containerized Functions |
-| Drop | 139 | No corresponding source-specific public surface; scoped absence evidence below |
+| Drop | 140 | No corresponding source-specific public surface; scoped absence evidence below |
 | Defer | 64 | Each appears exactly once in the plan's Deferred section |
 | **Total** | **271** | **All accounted for; not all release verification is complete** |
 
@@ -140,7 +140,7 @@ separate issue, is the tracking surface for the other deferred families.
 | FUNC-042 | Copy function URL | Migrate | Local and remote, fresh metadata | `commands/functions/CopyFunctionUrl.ts`; `functions/FunctionUrlResolver.ts` |
 | FUNC-043 | Enable function | Migrate | Local/remote settings edit | `SetFunctionState` registered with `false`; `LocalFunctionSettings`; `WebAppSettingsAdapter` |
 | FUNC-044 | Disable function | Migrate | Local/remote settings edit | `SetFunctionState` registered with `true`; same writers |
-| FUNC-045 | Delete function | Migrate | Confirmed ARM delete, current editability check | `commands/functions/DeleteFunction.ts`; `isFunctionAppReadOnly`; success-only tree removal |
+| FUNC-045 | Delete function | Drop | Absent | D4; deployed functions come from the project and IaC |
 | FUNC-046 | Deploy to Function App | Drop | Absent | D4; deployment runs from the local project |
 | FUNC-047 | Deploy workspace project | Adapt | Create wizard `deploy` job from the Command Palette or a workspace project node | `commands/functions/CreateFunctionApp.ts`; `vscode-azure/functions/deploy` registration |
 | FUNC-048 | Deploy to slot | Defer | Tracked | F2 |
@@ -391,7 +391,7 @@ implementation has a fixed timeout or performs validation.
 | P6-04 | Satisfied: `test/tree/treeMenuMatches.ts` reads the real manifest and compares its independent predicates with rendered nodes; remaining tests exercise behavior | Menu drift can fail the cross-boundary checks without pinning a source constant to itself |
 | P6-05 | Satisfied: `LocalFunctionsNetwork` receives `IVsCode` and localizes the reservation-address error | Existing real-loopback integration coverage and build/lint validate the injected service |
 | P6-06 | The signed known-consumer list includes external extensions depending on dropped APIs/tasks/settings | Owner notification is required before source retirement; this audit does not claim that communication has occurred |
-| P6-07 | Satisfied: HTTP triggers receive raw POST requests on their actual route; deletion checks current deployment state; hints launch their owning project | Reviewer confirmed HTTP-trigger invocation on 2026-10-27. No disposition changes |
+| P6-07 | Satisfied: HTTP triggers receive raw POST requests on their actual route; hints launch their owning project | Reviewer confirmed HTTP-trigger invocation on 2026-10-27. No disposition changes |
 | P6-08 | Satisfied: manual F5 testing found and fixed host/debugger startup, attach, activation, terminal, workload, and Delve issues (see the plan's P6-08) | Fixes are covered by behavioral tests where they can regress; no disposition changes |
 | P6-09 | Open: language-prerequisite setup ([#391](https://github.com/microsoft/vscode-azure/issues/391)), a debug-toolbar Execute Function button ([#392](https://github.com/microsoft/vscode-azure/issues/392)), and the upstream `func setup` workload gap ([Azure/azure-functions-core-tools#5777](https://github.com/Azure/azure-functions-core-tools/issues/5777)) | Not implemented; the extension works around the workload gap in `ensureWorkloads` |
 
@@ -401,10 +401,6 @@ P6-07 contracts:
   Function keys travel in a header; master-key use requires confirmation;
   redirects and other origins are rejected. Non-HTTP admin invocation reports
   acceptance, while an HTTP success reports request completion.
-- FUNC-045 exposes deletion only when editability is known. Current settings
-  are checked after confirmation, before activity/deletion. Package-backed
-  and Flex deployments are read-only; settings-read failures block the delete
-  without hiding otherwise readable functions.
 - FUNC-188 uses VS Code's built-in `debug.startFromConfig` command with an
   explicit project path, independently of the selected debug configuration.
   The provider test consumes the hint's configuration and starts the intended
@@ -419,7 +415,7 @@ Azurite reachability checks are absent.
 | Area | Result and evidence |
 |---|---|
 | Tree ownership/dispatch | Functions data/view providers precede Web App fallbacks in `registerFunctions`; products precede generic providers in `registerProducts`; local providers are in `registerTrees` |
-| Menus and state | All retained product command menus use case-insensitive word-boundary regexes. Local menu entries independently require trust and non-virtual workspaces. Running/stopped, disabled, HTTP, identity, error, and deployment-editability branches match manifest predicates |
+| Menus and state | All retained product command menus use case-insensitive word-boundary regexes. Local menu entries independently require trust and non-virtual workspaces. Running/stopped, disabled, HTTP, identity, and error branches match manifest predicates |
 | Invalid nodes | Remote app/function/listing and local project/function failures remain visible; invalid nodes offer refresh, not destructive/resource capabilities |
 | Icons | Existing `packages/azutils/resources/azureIcons/microsoft.web/sites~functionapp.svg` matches the logical type; virtual nodes use ThemeIcons; no SVG is added |
 | Data/view separation | Views do not fetch/mutate the data model. The Functions view derives relative labels, error presentation, and localized clickable hints from domain nodes |
@@ -430,7 +426,7 @@ Azurite reachability checks are absent.
 | Imports/source hygiene | All 34 added/modified production TypeScript files in the remaining PR diff have headers and ASCII source; extension code has no runtime vscode import, direct Azure SDK import, or Node filesystem import. Type checking and lint pass |
 | Errors/logs | Product failures use shared handling and localized operation-level diagnostics; local settings/payloads/keys/log rows are not deliberately copied to the output channel. Host output and selected Insights rows belong in their user-visible terminals |
 | Public surface/cancellation | Provider/debug hooks and shared services have external callers; no test-only visibility widening found. User cancellation uses CancellationError; process ownership is limited to launched trees |
-| Tests | Root labels and shared fixtures used for Functions suites; behavioral coverage includes metadata, settings, raw HTTP requests, URL/key policy, editability, project-hint launches, readiness, ownership, cancellation, and polling. Menu checks read both the manifest and rendered nodes |
+| Tests | Root labels and shared fixtures used for Functions suites; behavioral coverage includes metadata, settings, raw HTTP requests, URL/key policy, project-hint launches, readiness, ownership, cancellation, and polling. Menu checks read both the manifest and rendered nodes |
 | Docs | Product documentation is in `docs/products/functions.md`; framework edits update existing provider/creation examples rather than add a product section |
 
 ### Shared-primitive re-sweep
@@ -485,10 +481,7 @@ from current package names:
   contracts in the [product doc](../../products/functions.md#f5-debugging).
 - Both [function schema](https://json.schemastore.org/function.json) and
   [host schema](https://json.schemastore.org/host.json) URLs resolve to JSON.
-- [Flex package deployments](https://learn.microsoft.com/azure/azure-functions/flex-consumption-plan#deployment)
-  and the source's
-  [deployment editability check](https://github.com/microsoft/vscode-azurefunctions/blob/801689c66f96b31bc9d7c79ff6cc8d65e41b6965/src/tree/ResolvedFunctionAppResource.ts)
-  support the read-only classification. VS Code's
+- VS Code's
   [debug command implementation](https://github.com/microsoft/vscode/blob/main/src/vs/workbench/contrib/debug/browser/debugCommands.ts)
   defines `debug.startFromConfig`.
 - Host invocation/readiness/metadata, Azure Monitor requests/partial errors,
