@@ -38,8 +38,11 @@ These were resolved during mapping and are binding for the slices below.
 - **Provisioning module.** Use the published
   `br/public:avm/ptn/app/function-app:0.1.0` pattern module. See
   [Provisioning decision](#provisioning-decision).
-- **Code deployment** has no Functions-specific command; it runs from an
-  initialized azd project through the shared azd workflow.
+- **Deploy** has no Function App node entry. `vscode-azure/functions/deploy` runs
+  the create wizard's `deploy` job from the Command Palette, a Functions project
+  node in the workspace view, or an Explorer folder: it generates the project's
+  azd infrastructure, provisions, runs `azd deploy`, and offers the shared
+  endpoint step. Runtime detection is not carried forward.
 - **Local functions** are listed only from the running host's
   `/admin/functions`; there is no offline discovery.
 - **Log streaming** is a pseudoterminal for every plan that polls the app's
@@ -442,25 +445,23 @@ Source evidence is Azure/azure-functions-core-tools at
 `QuickstartCommand.cs`, `QuickstartManifestOptions.cs`,
 `JavaProjectInitializer.cs`); source support does not prove packaged availability.
 
-## Slice 6 -- Creation (azd + Bicep)
+## Slice 6 -- Creation and deployment (azd + Bicep)
 
 ```
-Pattern:        Wizard + AzdJob (createNew), shared azd steps, GenerateBicepStep
+Pattern:        Wizard + AzdJob (createNew / deploy), shared azd steps, GenerateBicepStep
 Target files:   extensions/vscode-azure/src/commands/functions/CreateFunctionApp.ts + steps/
                 extensions/vscode-azure/resources/templates/functionApp/main.bicep
-Precedent:      existing CreateFunctionApp, SWA creation
+Precedent:      existing CreateFunctionApp, SWA creation, AzdDeployStep, ShowEndpointUrlStep
 Sweep:          reused SelectIacFolderStep, HydrateAzdInfo, HydratableChooseSubscription/Location, ProjectName,
                 PickRuntimeStep, ConfirmProvision, GenerateBicepStep, GenerateAzureYaml, CreateAzdEnv, AzdProvisionStep,
-                activity tree (CodeDeploymentDataProvider), DeleteAzureResource, ExternalError, IWebAppClientProvider,
-                parseAzureResourceId, ISubscriptionResolver, OpenUrl.
+                AzdDeployStep, ShowEndpointUrlStep, activity tree (CodeDeploymentDataProvider), DeleteAzureResource,
+                ExternalError, IWebAppClientProvider, IWorkspaceViewDataTree, OpenUrl.
 Activation:     none
-External facts: azd service lookup by `azd-service-name` tag, verified against the azure.yaml v1.0 schema
-                (`services.*.resourceName` description) on 2026-09-24; pattern-module parameters/outputs per the
-                provisioning decision below. The azd show contract in cli/azd/pkg/contracts/show.go verifies
-                services.*.target.resourceIds.
-Wizard:         SelectIacFolder -> HydrateAzdInfo -> subscription -> location -> ProjectName -> PickRuntime -> ConfirmProvision; execute GenerateBicep -> GenerateAzureYaml ->
-                CreateAzdEnv -> AzdProvision. No hosting-plan,
-                authentication, or Flex sizing prompts: Flex FC1, managed identity, and module defaults answer them.
+External facts: pattern-module parameters/outputs per the provisioning decision below.
+Wizard:         SelectIacFolder -> HydrateAzdInfo -> subscription -> location -> ProjectName -> PickRuntime ->
+                ConfirmProvision; execute GenerateBicep -> GenerateAzureYaml -> CreateAzdEnv -> AzdProvision
+                (+ AzdDeploy -> ShowEndpointUrl for the deploy job). No hosting-plan, authentication, or Flex
+                sizing prompts: Flex FC1, managed identity, and module defaults answer them.
 ```
 
 - [x] Close creation gaps against the source flow; no advanced/existing-
@@ -476,6 +477,12 @@ Wizard:         SelectIacFolder -> HydrateAzdInfo -> subscription -> location ->
   prompts. <- FUNC-248
 - [x] Provisioning topology through the function-app pattern module (see
   below). <- FUNC-249
+- [x] Workspace deploy (`vscode-azure/functions/deploy`): the create wizard's
+  `deploy` job from the Command Palette or a Functions project node. <- FUNC-047
+- [x] `explorer/context` Deploy on a folder routes to the same deploy job.
+  <- FUNC-202
+- [x] Completion reported in the activity log, with the shared
+  `ShowEndpointUrlStep` offering the deployed endpoint. <- FUNC-255, FUNC-256
 - [x] Shared ARM deletion accepts site resources. Containerized Functions
   product integration remains conditional under P6-01. <- FUNC-258
 - [x] Unit tests with `respondToPrompts()`; Bicep build of the consumer.
@@ -596,10 +603,8 @@ External facts: `https://json.schemastore.org/function.json` and `https://json.s
 - Local commands and helpers with no target: FUNC-029, FUNC-032, FUNC-034,
   FUNC-035, FUNC-036, FUNC-037, FUNC-038, FUNC-039, FUNC-040, FUNC-259,
   FUNC-260, FUNC-261.
-- Functions-specific deploy command and its follow-ons (code deployment runs
-  from an initialized azd project through the shared azd workflow), and
-  runtime detection for the removed deploy path: FUNC-046, FUNC-047,
-  FUNC-202, FUNC-247, FUNC-255, FUNC-256.
+- Deploy from a Function App node and deploy-time runtime detection (deployment
+  runs from the local project): FUNC-046, FUNC-247.
 - Kudu, deployment-source, and non-azd deploy paths: FUNC-049, FUNC-050,
   FUNC-051, FUNC-052, FUNC-053, FUNC-054, FUNC-056, FUNC-066, FUNC-102,
   FUNC-174, FUNC-175, FUNC-177, FUNC-251, FUNC-252, FUNC-253, FUNC-257,

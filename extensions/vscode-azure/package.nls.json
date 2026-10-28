@@ -23,6 +23,7 @@
     "commands.vscode-azure/activity/clearAll": "Clear All",
     "commands.vscode-azure/settings/edit": "Edit Settings",
     "commands.vscode-azure/functions/createNew": "Create Empty Function App in Azure...",
+    "commands.vscode-azure/functions/deploy": "Deploy Project as Function App...",
     "debug.functions.label": "Debug Azure Functions",
     "debug.functions.projectPath": "Functions project folder. Omit to select an indexed project.",
     "debug.functions.hostArgs": "Additional Azure Functions CLI host arguments. Transport, runtime, and debugger arguments are managed by the extension.",

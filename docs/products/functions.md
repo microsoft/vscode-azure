@@ -9,8 +9,15 @@ wizard. Provisioning offers Node.js, Python, .NET isolated, Java, and PowerShell
 stacks; custom handlers are not supported by the pinned provisioning module.
 
 Creation emits its infrastructure into a temporary directory and never modifies
-the workspace. Code deployment starts only from an initialized azd project through
-the shared azd deployment workflow; there is no Functions-specific deploy command.
+the workspace. Deploy (`vscode-azure/functions/deploy`) runs the same wizard with
+the `deploy` job: it emits the infrastructure into the project folder, provisions,
+runs `azd deploy`, and offers to open the deployed endpoint through the shared
+endpoint step. It is available from the Command Palette, from a Functions project
+node in the workspace view, and from an Explorer folder, in a trusted,
+non-virtual workspace. A nested project deploys from its own folder. The azd
+wizard hydrates existing infrastructure and environments instead of replacing
+their configuration. Deploying from a Function App node in the Azure Resources
+view is not offered.
 
 `function.json` and `host.json` receive the published SchemaStore schemas.
 The `function.json` association applies to runtime v4 projects with file-based

@@ -67,7 +67,8 @@ export function registerFunctions(registrar: ProductRegistrar): void {
     registrar.registerResourceDataProvider(WebAppDataProvider);
     registrar.registerResourceViewProvider(FunctionAppViewProvider);
     registrar.registerResourceViewProvider(WebAppViewProvider);
-    registrar.registerCommand('vscode-azure/functions/createNew', CreateFunctionApp);
+    registrar.registerCommand('vscode-azure/functions/createNew', CreateFunctionApp, 'createNew');
+    registrar.registerCommand('vscode-azure/functions/deploy', CreateFunctionApp, 'deploy');
     registrar.registerActivation(container => { container.get(FunctionsDebugProvider).register(); });
     registrar.registerCommand('vscode-azure/webApp/start', WebAppLifecycle, 'start');
     registrar.registerCommand('vscode-azure/webApp/stop', WebAppLifecycle, 'stop');

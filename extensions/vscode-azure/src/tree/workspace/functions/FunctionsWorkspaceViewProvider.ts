@@ -10,6 +10,7 @@ import { inject, injectable } from 'inversify';
 import { RevealInExplorer } from '../../../commands/tree/RevealInExplorer';
 import { RefreshWorkspaceView } from '../../../commands/tree/RefreshWorkspaceView';
 import { CopyFunctionUrl } from '../../../commands/functions/CopyFunctionUrl';
+import { CreateFunctionApp } from '../../../commands/functions/CreateFunctionApp';
 import { ExecuteFunction } from '../../../commands/functions/ExecuteFunction';
 import { SetFunctionState } from '../../../commands/functions/SetFunctionState';
 import { LocalFunctionsHostTracker } from '../../../functions/host/LocalFunctionsHostTracker';
@@ -109,6 +110,7 @@ export class FunctionsWorkspaceViewProvider implements ViewProvider<string> {
         item.contextValue = combineContextValues(
             RevealInExplorer.ContextValue,
             RefreshWorkspaceView.ContextValue,
+            CreateFunctionApp.DeployContextValue,
         );
     }
 

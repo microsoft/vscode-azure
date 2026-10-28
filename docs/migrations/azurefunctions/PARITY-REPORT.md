@@ -18,9 +18,9 @@ certificate of live debugger or Azure service behavior.
 | Signed disposition | IDs | Verified outcome |
 |---|---:|---|
 | Migrate | 24 | Implemented and wired; HTTP invocation, read-only deletion gating, and clickable project hints have behavioral coverage |
-| Adapt | 21 | Implemented with the recorded target UX; live checks remain separate |
+| Adapt | 25 | Implemented with the recorded target UX; live checks remain separate |
 | Reuse | 19 | 18 wired; FUNC-258 has the generic delete capability but its product integration is conditional on deferred containerized Functions |
-| Drop | 143 | No corresponding source-specific public surface; scoped absence evidence below |
+| Drop | 139 | No corresponding source-specific public surface; scoped absence evidence below |
 | Defer | 64 | Each appears exactly once in the plan's Deferred section |
 | **Total** | **271** | **All accounted for; not all release verification is complete** |
 
@@ -64,7 +64,7 @@ capability is absent from every unrelated product:
 | D1 | `ext:package.json`, `extension.ts`, `products/registerFunctions.ts`: no source extension dependency, Azure Resources branch contract, exported Functions API, separate output/diagnostic/experimentation service, or global error-handler override |
 | D2 | `ext:package.json`, `products/registerFunctions.ts`, `commands/functions/`, `functions/`: no standalone initialization, source authoring/binding/encryption/storage wizard, walkthrough, Event Grid sample/CodeLens, source template subsystem, or static-content provider |
 | D3 | `ext:package.json` configuration and `functions/`, `commands/functions/`, `tree/resources/webApp/`: no source settings or reads of the retiring extensions' settings/state; no replacement project/deployment VS Code configuration |
-| D4 | `products/registerFunctions.ts`, `commands/functions/CreateFunctionApp.ts`, remote providers: no Functions-specific deploy, zip/publish, Kudu files/logs/deployments, deployment-source controls, source post-deploy fixups, or HTTP-route listing step |
+| D4 | `products/registerFunctions.ts`, `commands/functions/CreateFunctionApp.ts`, remote providers: no deploy from a Function App node, zip/publish, Kudu files/logs/deployments, deployment-source controls, source post-deploy fixups, or Functions-specific HTTP-route listing step; deployment runs through the create wizard's azd `deploy` job |
 | D5 | `ext:package.json`, `FunctionsDebugProvider.register`, `functions/host/`: no source task definition/provider, problem matcher/pattern, process-pick command, remote debugger, or Ballerina adapter. Owned custom tasks are internal execution, not a contributed task contract |
 | D6 | `CreateFunctionApp.ts`, `steps/PickRuntimeStep.ts`, `resources/templates/functionApp/main.bicep`: one create-only Flex flow; no advanced/existing-resource/location/plan/authentication wizard or direct blob-container SDK operation |
 | D7 | Remote/local data and view providers, `WorkspaceNode.ts`: no source slot wrapper, local settings/identity-conversion/init subtree, Kudu subtree, workspace-actions submenu, or proxy SVG |
@@ -141,8 +141,8 @@ separate issue, is the tracking surface for the other deferred families.
 | FUNC-043 | Enable function | Migrate | Local/remote settings edit | `SetFunctionState` registered with `false`; `LocalFunctionSettings`; `WebAppSettingsAdapter` |
 | FUNC-044 | Disable function | Migrate | Local/remote settings edit | `SetFunctionState` registered with `true`; same writers |
 | FUNC-045 | Delete function | Migrate | Confirmed ARM delete, current editability check | `commands/functions/DeleteFunction.ts`; `isFunctionAppReadOnly`; success-only tree removal |
-| FUNC-046 | Deploy to Function App | Drop | Absent | D4; initialized projects use shared azd deployment |
-| FUNC-047 | Deploy workspace project | Drop | Absent | D4 |
+| FUNC-046 | Deploy to Function App | Drop | Absent | D4; deployment runs from the local project |
+| FUNC-047 | Deploy workspace project | Adapt | Create wizard `deploy` job from the Command Palette or a workspace project node | `commands/functions/CreateFunctionApp.ts`; `vscode-azure/functions/deploy` registration |
 | FUNC-048 | Deploy to slot | Defer | Tracked | F2 |
 | FUNC-049 | Programmatic deploy by app ID | Drop | Absent | D4 |
 | FUNC-050 | Redeploy | Drop | Absent | D4 |
@@ -310,7 +310,7 @@ implementation has a fixed timeout or performs validation.
 | FUNC-199 | Resource pickers | Reuse | Shared selector actually consumed | Remote commands inject `IResourceSelector`; local project selector uses shared quick pick/index |
 | FUNC-200 | Resource listing/site cache | Reuse | Shared listing/cache plus enrichment | `AzureResourceDataProvider`; `FunctionAppDataProvider`; `DataItemTree` |
 | FUNC-201 | Workspace-actions submenu | Drop | Absent | D7 |
-| FUNC-202 | Explorer folder deploy action | Drop | Absent | D4 |
+| FUNC-202 | Explorer folder deploy action | Adapt | `explorer/context` entry runs the same deploy job | `package.json` menu; `CreateFunctionApp` |
 | FUNC-203 | Contributed func task definition | Drop | Absent | D5 |
 | FUNC-204 | Func task provider | Drop | Absent | D5 |
 | FUNC-205 | func-watch matcher | Drop | Absent | D5 |
@@ -355,7 +355,7 @@ implementation has a fixed timeout or performs validation.
 | FUNC-244 | Custom location picker | Drop | Absent | D6 |
 | FUNC-245 | Existing supporting-resource picks | Drop | Absent | D6 |
 | FUNC-246 | Storage authentication | Adapt | UAMI/module-managed connections | Pinned AVM pattern in Function App consumer; no auth prompt |
-| FUNC-247 | Deploy-time runtime inference | Drop | Absent | D4; create prompts for runtime |
+| FUNC-247 | Deploy-time runtime inference | Drop | Absent | D4; create and deploy prompt for the runtime |
 | FUNC-248 | Flex memory/max instances | Adapt | AVM parameters/defaults, no prompt | Compiled pinned module exposes both parameters; consumer uses defaults |
 | FUNC-249 | Provisioning topology | Adapt | Pinned AVM pattern | `br/public:avm/ptn/app/function-app:0.1.0`; successful Bicep build |
 | FUNC-250 | Containerized app creation | Defer | Tracked | F5 |
@@ -363,8 +363,8 @@ implementation has a fixed timeout or performs validation.
 | FUNC-252 | Deploy-time runtime fixups | Drop | Absent | D4 |
 | FUNC-253 | Custom-handler func publish | Drop | Absent | D4 |
 | FUNC-254 | Deploy MCP integration | Defer | Tracked | F6 |
-| FUNC-255 | Functions post-deploy notification | Drop | Absent | D4 |
-| FUNC-256 | Functions post-deploy URL listing | Drop | Absent | D4 |
+| FUNC-255 | Functions post-deploy notification | Adapt | Completion in the activity log plus the shared endpoint step | `AzdDeployStep`; `azd/wizard/ShowEndpointUrlStep.ts` |
+| FUNC-256 | Functions post-deploy URL listing | Adapt | Folded into the shared endpoint step | `azd/wizard/ShowEndpointUrlStep.ts` |
 | FUNC-257 | Deploy architecture/Netherite fixups | Drop | Absent | D4 |
 | FUNC-258 | Containerized app deletion | Reuse | Conditional, not product-certified | Generic `DeleteAzureResource` accepts ARM sites; containerized tree/create remain F5; P6-01 |
 | FUNC-259 | Event Grid sample execution | Drop | Absent | D2 |
