@@ -114,25 +114,38 @@ export class FunctionUrlResolver {
         return { url: validateLocalFunctionUrl(this.code, fn.invoke_url_template, port), functionName: node.functionName };
     }
 
-    /** Resolves a deployed function, appending a key when its access level requires one. */
+    /**
+     * Resolves a deployed function, appending a key when its access level requires one.
+     *
+     * The metadata and site reads are independent, so they run together. When the listing already
+     * reports an admin access level, the master-key confirmation is shown at once, alongside those
+     * reads, instead of after them. The current metadata still decides the access level: a function
+     * that turns out to need admin access is confirmed afterwards, and no key is read without consent.
+     */
     public async resolveRemote(fn: FunctionAppFunction, action: 'copy' | 'invoke' = 'copy'): Promise<FunctionUrl> {
         const app = fn.azureResource;
         const client = this.createClient(app.subscription);
         const group = getResourceGroupName(app.id);
-        const metadata = await client.webApps.getFunction(group, app.name, fn.functionName);
-        const { authLevel } = this.httpTrigger(metadata.config);
-        const rawUrl = metadata.invokeUrlTemplate
-            ?? (await client.webApps.listFunctionSecrets(group, app.name, fn.functionName)).triggerUrl;
-        const site = await client.webApps.get(group, app.name);
-        const hostNames = new CaselessSet([...(site.hostNames ?? []), ...(site.enabledHostNames ?? []), ...(site.defaultHostName ? [site.defaultHostName] : [])]);
-        const url = validateRemoteFunctionUrl(this.code, rawUrl, hostNames);
-        const key = await selectFunctionKey(client.webApps, group, app.name, fn.functionName, authLevel, async () => {
+        const confirmMasterKey = async (): Promise<void> => {
             await showMessage(this.code, action === 'copy'
                 ? this.code.l10n.t('This URL includes the app-wide master key. Copy it only to a trusted destination.')
                 : this.code.l10n.t('Invoking this HTTP function requires the app-wide master key. Continue only if you trust this Function App.'),
             { modal: true, severity: 'warning', stepName: 'confirmFunctionMasterKey' },
             action === 'copy' ? this.code.l10n.t('Copy') : this.code.l10n.t('Execute'));
-        });
+        };
+        const earlyConfirmation = fn.authLevel === 'admin' ? confirmMasterKey() : undefined;
+
+        const [metadata, site] = await Promise.all([
+            client.webApps.getFunction(group, app.name, fn.functionName),
+            client.webApps.get(group, app.name),
+            earlyConfirmation,
+        ]);
+        const { authLevel } = this.httpTrigger(metadata.config);
+        const rawUrl = metadata.invokeUrlTemplate
+            ?? (await client.webApps.listFunctionSecrets(group, app.name, fn.functionName)).triggerUrl;
+        const hostNames = new CaselessSet([...(site.hostNames ?? []), ...(site.enabledHostNames ?? []), ...(site.defaultHostName ? [site.defaultHostName] : [])]);
+        const url = validateRemoteFunctionUrl(this.code, rawUrl, hostNames);
+        const key = await selectFunctionKey(client.webApps, group, app.name, fn.functionName, authLevel, () => earlyConfirmation ?? confirmMasterKey());
         if (authLevel !== 'anonymous') {
             if (!key) {
                 throw new ExternalError(this.code.l10n.t('No key is available for the function URL.'));

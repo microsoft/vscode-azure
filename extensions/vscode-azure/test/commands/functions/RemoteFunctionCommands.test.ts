@@ -20,7 +20,7 @@ import { GenericActivityDataProvider } from '../../../src/tree/activity/GenericA
 import { createTestResourceSelector } from '../../tree/resources/testResourceSelector';
 import { makeFunctionAppFunction } from '../../tree/resources/webApp/mockFunctionApp';
 import { createFunctionLogs } from '../../tree/resources/webApp/mockFunctionLogs';
-import { respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
+import { respondToPrompts, waitFor } from '@microsoft/vscode-azure-utils/testing';
 import { createLocalFunctions } from '../../tree/workspace/functions/mockLocalFunctions';
 
 let localFixtures: ReturnType<typeof createLocalFunctions>[] = [];
@@ -121,6 +121,36 @@ describe('Remote function commands (unit)', () => {
         respondToPrompts(s.codeContext.mock, [{ button: 'Copy' }]);
         await command.execute(s.key);
         expect(new URL(write.mock.calls[0].arguments[0]).searchParams.get('code')).to.equal('mock-master-key');
+    });
+
+    it('asks for admin confirmation while the function metadata is still loading, and only once', async () => {
+        const s = setup('admin');
+        const metadata = Promise.withResolvers<ReturnType<typeof makeFunctionEnvelope>>();
+        s.client.webApps.getFunction.mock.mockImplementation(() => metadata.promise);
+        respondToPrompts(s.codeContext.mock, [{ button: 'Copy' }]);
+        const warning = s.codeContext.mock.window.showWarningMessage;
+
+        const copying = copyCommand(s).execute(s.key);
+        await waitFor(() => warning.mock.callCount() === 1);
+        expect(s.codeContext.mock.env.clipboard.writeText.mock.callCount()).to.equal(0);
+
+        metadata.resolve(makeFunctionEnvelope({
+            invokeUrlTemplate: 'https://my-functions.azurewebsites.net/api/HttpTrigger',
+            config: { bindings: [{ type: 'httpTrigger', authLevel: 'admin' }] },
+        }));
+        await copying;
+
+        expect(warning.mock.callCount()).to.equal(1);
+        expect(s.client.webApps.listHostKeys.mock.callCount()).to.equal(1);
+    });
+
+    it('reads no key when the early admin confirmation is declined', async () => {
+        const s = setup('admin');
+
+        await expect(copyCommand(s).execute(s.key)).to.be.rejectedWith(CancellationError);
+
+        expect(s.client.webApps.listHostKeys.mock.callCount()).to.equal(0);
+        expect(s.codeContext.mock.env.clipboard.writeText.mock.callCount()).to.equal(0);
     });
 
     it('uses current access metadata when the cached function access level differs', async () => {
