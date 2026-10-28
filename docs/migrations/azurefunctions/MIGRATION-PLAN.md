@@ -386,7 +386,7 @@ Resolution flow for one session:
   <- FUNC-140, FUNC-141, FUNC-195
 - [x] Go behavioral coverage: prerequisites/build errors, paths with spaces,
   skipped builds, loopback attach, readiness failure/cancellation/cleanup, and
-  runtime selection. Live Go attach smoke check remains part
+  runtime selection. The live macOS/Linux Go smoke check remains part
   of Slice 7. <- FUNC-140, FUNC-141, FUNC-195
 - [x] Host process and tracking: build steps, start, readiness, port, terminal
   errors, stop on session end, and start/stop events for local listing and
@@ -403,11 +403,12 @@ Resolution flow for one session:
   FUNC-211, FUNC-212, FUNC-214, FUNC-215, FUNC-216, FUNC-268, FUNC-269
 - [ ] Live language attach-path smoke checks during Slice 7. The automated tests
   cover all six configuration/API paths. Reviewer manual testing on Windows has attached
-  Node/TypeScript, Python, Java, PowerShell, and .NET isolated sessions; the Go host starts
-  but its Delve attach, and macOS/Linux, are unverified.
+  Node/TypeScript, Python (including startup debugging), Java, PowerShell, .NET isolated,
+  and Go (Delve) sessions, and bound Node/TypeScript breakpoints in a project nested below
+  the workspace folder; macOS/Linux are unverified.
   <- FUNC-033, FUNC-195, FUNC-210, FUNC-211, FUNC-212, FUNC-214
 
-Live Go attach, and Linux/macOS smoke checks, remain in Slice 7.
+Linux/macOS smoke checks, including Go, remain in Slice 7.
 
 Existing projects' source-generated `tasks.json` / `launch.json` (task type
 `func`, `$func-watch`, `${command:azureFunctions.pickProcess}`) are left
@@ -666,7 +667,7 @@ dispositions. Their labels match the report's findings.
   <- FUNC-258 (integration depends on FUNC-181, FUNC-250)
 - [ ] **P6-02:** Complete the existing
   [manual checklist](https://github.com/microsoft/vscode-azure/pull/367#issuecomment-6444069751):
-  Go attach and macOS/Linux F5 (the other five runtimes have attached in reviewer testing on
+  macOS/Linux F5, including Go (all six runtimes have attached in reviewer testing on
   Windows), storage/Azurite, real Azure commands/log queries/provisioning, and macOS/Linux
   owned-process cleanup. Record evidence without secrets. Pending automated
   tests are not passes.

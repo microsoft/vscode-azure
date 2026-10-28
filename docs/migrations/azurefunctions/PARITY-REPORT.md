@@ -303,7 +303,7 @@ implementation has a fixed timeout or performs validation.
 | FUNC-192 | Empty-workspace creation hint | Defer | Tracked | F1 |
 | FUNC-193 | DTS scheduler/task-hub nodes | Defer | Tracked | F3 |
 | FUNC-194 | DTS emulator nodes | Defer | Tracked | F3 |
-| FUNC-195 | Go debugger/toolchain | Adapt | Native worker/Delve F5 wired; Go stack and worker workloads ensured; Delve stdin redirected on Windows | `FunctionsDebugPreparation`; `FunctionsDebugProvider`; owned host; the host starts in reviewer testing, Delve attach and macOS/Linux unverified |
+| FUNC-195 | Go debugger/toolchain | Adapt | Native worker/Delve F5 wired; Go stack and worker workloads ensured; Delve stdin redirected on Windows | `FunctionsDebugPreparation`; `FunctionsDebugProvider`; owned host; Windows Delve attach verified in reviewer testing, macOS/Linux unverified |
 | FUNC-196 | Host Exceptions Debugger view | Defer | Tracked | F7 |
 | FUNC-197 | Orphan proxy icon | Drop | Absent | D7; no new product SVG |
 | FUNC-198 | Local tree refresh | Migrate | Index/settings/host events | `functionsDetector`; `FunctionsWorkspaceDataProvider`; `LocalFunctionsHostTracker` |
@@ -386,7 +386,7 @@ implementation has a fixed timeout or performs validation.
 | Tracking | Finding / boundary | Consequence |
 |---|---|---|
 | P6-01 | FUNC-258 is conditional on FUNC-181/FUNC-250. The generic ARM delete command exists, but containerized Functions discovery/presentation and a product deletion scenario are not verified | Do not count this as a fully integrated nineteenth Reuse feature |
-| P6-02 | Live Go attach, macOS/Linux F5 and ownership cleanup, storage/emulator integration on a clean machine, real Azure commands/log queries/provisioning remain manual work; Node/TypeScript, Python, Java, PowerShell, and .NET isolated attached in reviewer testing on Windows | Passing mocks/configuration tests and a Bicep build do not certify the remaining paths |
+| P6-02 | macOS/Linux F5 (including Go) and ownership cleanup, storage/emulator integration on a clean machine, real Azure commands/log queries/provisioning remain manual work; all six runtimes (Node/TypeScript, Python, Java, PowerShell, .NET isolated, Go) attached in reviewer testing on Windows | Passing mocks/configuration tests and a Bicep build do not certify the remaining paths |
 | P6-03 | Satisfied: Functions domain nodes carry URIs, function names, and validation state; `FunctionsWorkspaceViewProvider` derives labels and localized hints | Typed workspace variants preserve the other products' required fields; nested/multi-root rendering and refresh are covered |
 | P6-04 | Satisfied: `test/tree/treeMenuMatches.ts` reads the real manifest and compares its independent predicates with rendered nodes; remaining tests exercise behavior | Menu drift can fail the cross-boundary checks without pinning a source constant to itself |
 | P6-05 | Satisfied: `LocalFunctionsNetwork` receives `IVsCode` and localizes the reservation-address error | Existing real-loopback integration coverage and build/lint validate the injected service |
