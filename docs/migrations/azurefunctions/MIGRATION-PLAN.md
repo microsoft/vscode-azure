@@ -562,7 +562,9 @@ External facts: `https://json.schemastore.org/function.json` and `https://json.s
 - [ ] User-assigned identity management (assign/unassign, identity nodes);
   revealing the in-use identity ships in Slice 2. <- FUNC-081, FUNC-082, FUNC-172
 - [ ] Containerized (Container Apps-hosted) Function Apps: Dockerfile
-  projects, nodes, creation. Coordinate with the Container Apps migration.
+  projects, nodes, creation, tracked in
+  [#360](https://github.com/microsoft/vscode-azure/issues/360). Coordinate with the
+  Container Apps migration.
   <- FUNC-027, FUNC-181, FUNC-250
 - [ ] MCP project creation, key retrieval, and deployed server integration,
   tracked in [#361](https://github.com/microsoft/vscode-azure/issues/361).
@@ -663,7 +665,8 @@ dispositions. Their labels match the report's findings.
 
 - [ ] **P6-01:** Verify containerized Function App deletion through the shared
   ARM delete command when its product discovery/tree/creation integration is
-  available. The generic capability alone is not product certification.
+  available, which [#360](https://github.com/microsoft/vscode-azure/issues/360) tracks.
+  The generic capability alone is not product certification.
   <- FUNC-258 (integration depends on FUNC-181, FUNC-250)
 - [ ] **P6-02:** Complete the existing
   [manual checklist](https://github.com/microsoft/vscode-azure/pull/367#issuecomment-6444069751):

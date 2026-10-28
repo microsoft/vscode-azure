@@ -79,7 +79,7 @@ Deferred evidence codes refer to the exact unchecked task in the plan's
 | F2 | Deployment slots |
 | F3 | Durable Task Scheduler and durable backends |
 | F4 | User-assigned identity management |
-| F5 | Containerized Function Apps |
+| F5 | Containerized Function Apps; [#360](https://github.com/microsoft/vscode-azure/issues/360) |
 | F6 | MCP projects and deployed integration; [#361](https://github.com/microsoft/vscode-azure/issues/361) |
 | F7 | Host exceptions debugger view |
 | F8 | Revisit Azure Functions CLI v5 host/emulator/timeout options |
