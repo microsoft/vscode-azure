@@ -235,7 +235,10 @@ The local tree reuses Execute Function, Copy Function URL, Enable, and Disable.
 Local actions require a file project in an open, trusted workspace; workspace
 menus are gated independently of the same commands' remote resource actions.
 An untrusted workspace's projects are not listed in the workspace view at all,
-because the shared workspace index is empty until trust is granted.
+because the shared workspace index is empty until trust is granted. The extension
+declares `untrustedWorkspaces: limited` so it stays enabled in Restricted Mode for
+Azure resources; none of its contributed settings are restricted configurations
+because none of them control code execution.
 Programmatic calls validate the project, and invocation rechecks it after the
 input prompt.
 Execute and HTTP URL copying require a ready host registered for the exact

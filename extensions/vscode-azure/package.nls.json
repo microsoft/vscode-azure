@@ -76,5 +76,6 @@
     "settings.vscode-azure.signedInTenants.tenantId.patternError": "Tenant ID must be a GUID (e.g. 00000000-0000-0000-0000-000000000000).",
     "settings.vscode-azure.selectedSubscriptions": "The tenants and subscriptions to show in the Azure resources view, as an array of 'tenantId/subscriptionId' strings. When empty, all subscriptions are shown. Use the 'Azure: Select Subscriptions' command to edit this.",
     "settings.vscode-azure.selectedSubscriptions.patternError": "Each entry must be in the form 'tenantId/subscriptionId', where both are GUIDs (for example '00000000-0000-0000-0000-000000000000/11111111-1111-1111-1111-111111111111').",
-    "capabilities.virtualWorkspaces.description": "Some features are not supported in virtual workspaces."
+    "capabilities.virtualWorkspaces.description": "Some features are not supported in virtual workspaces.",
+    "capabilities.untrustedWorkspaces.description": "In an untrusted workspace, features that run or deploy code from the workspace are disabled. Azure resources are still available."
 }
