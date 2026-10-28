@@ -40,7 +40,6 @@ export class FunctionsProjectSelector {
             throw error;
         }
         project = await this.toIndexedCasing(dirname(host));
-        await this.ctx.extensionContext.workspaceState.update('functions.lastDebugProject', project.toString());
         return project;
     }
 
@@ -86,10 +85,8 @@ export class FunctionsProjectSelector {
         if (projects.length === 1) {
             return projects[0];
         }
-        const remembered = this.ctx.extensionContext.workspaceState.get<string>('functions.lastDebugProject');
         const selected = await showSmartQuickPick(this.ctx, projects.map(data => ({ label: data.fsPath, data })), {
             title: this.ctx.code.l10n.t('Select a Functions project'),
-            isActiveItem: item => item.data.toString() === remembered,
         });
         return selected.data;
     }

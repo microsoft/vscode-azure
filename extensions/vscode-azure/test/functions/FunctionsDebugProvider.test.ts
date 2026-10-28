@@ -416,18 +416,29 @@ describe('Functions debug provider (unit)', () => {
         expect(s.m.window.showErrorMessage.mock.calls.at(-1)?.arguments[0]).to.include('Go compilation failed');
     });
 
-    it('offers project selection with the remembered project active in a multi-project workspace', async () => {
+    it('offers the previously chosen project first and marks it recently selected in a multi-project workspace', async () => {
         const s = setup();
         const nested = s.code.Uri.joinPath(s.folder, 'nested');
         s.m.fs.addFile(s.code.Uri.joinPath(nested, 'host.json'), '{}');
-        await s.context.ctx.extensionContext.workspaceState.update('functions.lastDebugProject', nested.toString());
-        const selecting = s.projects.select();
+
+        const first = s.projects.select();
         await waitFor(() => s.m.quickPicks.some(pick => pick.show.mock.callCount() > 0), 'the project picker');
-        const picker = s.m.quickPicks[0];
-        expect(picker.items.map(item => item.label)).to.have.members([s.folder.fsPath, nested.fsPath]);
-        expect(picker.activeItems.map(item => item.label)).to.deep.equal([nested.fsPath]);
-        picker.accept();
-        expect((await selecting).toString()).to.equal(nested.toString());
+        const firstPicker = s.m.quickPicks[0];
+        expect(firstPicker.items.map(item => item.label)).to.have.members([s.folder.fsPath, nested.fsPath]);
+        const nestedItem = firstPicker.items.find(item => item.label === nested.fsPath);
+        if (!nestedItem) { throw new Error('Expected the nested project to be offered.'); }
+        firstPicker.activeItems = [nestedItem];
+        firstPicker.accept();
+        expect((await first).toString()).to.equal(nested.toString());
+
+        const second = s.projects.select();
+        await waitFor(() => s.m.quickPicks.length > 1 && s.m.quickPicks[1].show.mock.callCount() > 0, 'the second project picker');
+        const secondPicker = s.m.quickPicks[1];
+        expect(secondPicker.items[0].label).to.equal(nested.fsPath);
+        expect(secondPicker.items[0].description).to.include('recently selected');
+        expect(secondPicker.activeItems.map(item => item.label)).to.deep.equal([nested.fsPath]);
+        secondPicker.accept();
+        expect((await second).toString()).to.equal(nested.toString());
     });
 
     it('filters dynamic configurations to their owning workspace folder', async () => {
@@ -447,11 +458,10 @@ describe('Functions debug provider (unit)', () => {
         expect((await s.projects.select(workspace, 'nested\\app')).toString()).to.equal(nested.toString());
     });
 
-    it('explains when an explicit project path has no host.json without remembering the invalid selection', async () => {
+    it('explains when an explicit project path has no host.json', async () => {
         const s = setup();
         const missing = s.code.Uri.joinPath(s.folder, 'missing');
         await expect(s.projects.select(undefined, missing)).to.be.rejectedWith(ExternalError, 'does not contain host.json');
-        expect(s.context.ctx.extensionContext.workspaceState.get('functions.lastDebugProject')).to.be.undefined;
     });
 
     it('propagates filesystem permissions failures when validating an explicit project path', async () => {
@@ -459,7 +469,6 @@ describe('Functions debug provider (unit)', () => {
         const error = s.code.FileSystemError.NoPermissions();
         mock.method(s.code.workspace.fs, 'stat', () => Promise.reject(error));
         await expect(s.projects.select(undefined, s.folder)).to.be.rejectedWith(error);
-        expect(s.context.ctx.extensionContext.workspaceState.get('functions.lastDebugProject')).to.be.undefined;
     });
 
     it('rejects an untrusted workspace, protected flags, and invalid ports before tool acquisition', async () => {
