@@ -62,9 +62,14 @@ export class FunctionAppLogStream implements Disposable {
             throw new CancellationError();
         }
         const key = AzureNodeId.from(app).toString();
+        // Discovery and the first query are network round trips, so progress shows only when they take noticeable time.
+        const progress: vscode.ProgressOptions = {
+            location: this.code.ProgressLocation.Notification,
+            title: this.code.l10n.t('Opening logs for \'{0}\'...', app.name),
+        };
         const existing = this.streams.get(key);
         if (existing) {
-            await this.opening(app, existing.ready);
+            await withDelayedProgress(this.code, progress, existing.ready);
             if (!existing.abort.signal.aborted) {
                 existing.terminal?.show();
             }
@@ -75,15 +80,7 @@ export class FunctionAppLogStream implements Disposable {
             ready: Promise.resolve().then(() => this.open(app, stream)),
         };
         this.streams.set(key, stream);
-        return this.opening(app, stream.ready);
-    }
-
-    /** Shows progress only when opening takes noticeable time: discovery and the first query are network round trips. */
-    private opening(app: FunctionApp, ready: Promise<void>): Promise<void> {
-        return withDelayedProgress(this.code, {
-            location: this.code.ProgressLocation.Notification,
-            title: this.code.l10n.t('Opening logs for \'{0}\'...', app.name),
-        }, ready);
+        return withDelayedProgress(this.code, progress, stream.ready);
     }
 
     private async open(app: FunctionApp, stream: Stream): Promise<void> {

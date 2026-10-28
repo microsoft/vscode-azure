@@ -126,14 +126,14 @@ describe('LogsQueryClient (unit)', () => {
         const error = await client.queryResource(resourceId, 'AppTraces').catch((e: unknown) => e);
 
         expect(error).to.be.instanceOf(Error);
-        expect((error as Error).message).to.equal('The log query was rejected (BadArgumentError, SemanticError, SEM0100).');
+        expect((error as Error).message).to.equal('The service request failed (HTTP 400: BadArgumentError, SemanticError, SEM0100).');
         expect(error).to.have.property('statusCode', 400);
     });
 
     it('should report a rejected query without codes when the body has none', async () => {
         const { client } = createClient(req => makeResponse(req, 400, 'not json'));
 
-        await expect(client.queryResource(resourceId, 'AppTraces')).to.be.rejectedWith('The log query was rejected.');
+        await expect(client.queryResource(resourceId, 'AppTraces')).to.be.rejectedWith('The service request failed (HTTP 400).');
     });
 
     for (const status of [200, 201, 202, 206, 299]) {
