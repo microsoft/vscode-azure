@@ -233,7 +233,7 @@ describe('WorkspaceIndexService (unit)', () => {
 
             let changed = 0;
             service.onDidChangeIndex(() => { changed++; });
-            trusted.mock.mockImplementation(() => true);
+            trusted.mock.mockImplementation(true);
             m.workspaceTrustGrantedEmitter.fire();
 
             expect(changed).to.equal(1);
