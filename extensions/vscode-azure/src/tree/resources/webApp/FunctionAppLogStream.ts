@@ -7,7 +7,7 @@ import {
     ApplicationInsightsResourceType, AzureNodeId, IAzureListingCache, ILogsQueryClientProvider, IResourceClientProvider,
     type AzureListingCache, type AzureSubscription, type GenericResource, type ILogsQueryClient, type LogsQueryResult,
 } from '@microsoft/vscode-azure-azutils';
-import { CancellationError, CaselessMap, delay, ExternalError, IActionExecutor, IVsCode, stringifyError, type Disposable } from '@microsoft/vscode-azure-utils';
+import { CancellationError, CaselessMap, delay, ExternalError, IActionExecutor, IVsCode, stringifyError, withDelayedProgress, type Disposable } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 import { WebAppSettingsAdapter } from '../../../settings/adapters/WebAppSettingsAdapter';
@@ -28,6 +28,11 @@ interface LogRecord {
 }
 
 const LookbackMs = 5 * 60_000;
+
+/** Whether the service rejected the query itself (HTTP 400), as opposed to failing to run it. */
+function isRejectedQuery(error: unknown): boolean {
+    return error instanceof Error && 'statusCode' in error && error.statusCode === 400;
+}
 
 /** Workspace-based components expose the Log Analytics `App*` tables; classic components expose `traces` and `requests`. */
 function isWorkspaceBased(resource: GenericResource): boolean {
@@ -59,7 +64,7 @@ export class FunctionAppLogStream implements Disposable {
         const key = AzureNodeId.from(app).toString();
         const existing = this.streams.get(key);
         if (existing) {
-            await existing.ready;
+            await this.opening(app, existing.ready);
             if (!existing.abort.signal.aborted) {
                 existing.terminal?.show();
             }
@@ -70,17 +75,24 @@ export class FunctionAppLogStream implements Disposable {
             ready: Promise.resolve().then(() => this.open(app, stream)),
         };
         this.streams.set(key, stream);
-        return stream.ready;
+        return this.opening(app, stream.ready);
+    }
+
+    /** Shows progress only when opening takes noticeable time: discovery and the first query are network round trips. */
+    private opening(app: FunctionApp, ready: Promise<void>): Promise<void> {
+        return withDelayedProgress(this.code, {
+            location: this.code.ProgressLocation.Notification,
+            title: this.code.l10n.t('Opening logs for \'{0}\'...', app.name),
+        }, ready);
     }
 
     private async open(app: FunctionApp, stream: Stream): Promise<void> {
         const signal = stream.abort.signal;
         try {
             const resource = await this.resolveInsights(app, signal);
-            const workspaceBased = isWorkspaceBased(resource);
             const client = this.createLogs(resource.subscription);
             const cursor = Date.now() - LookbackMs;
-            const first = this.records(await client.queryResource(resource.id, this.query(app.name, cursor, workspaceBased), { abortSignal: signal, timespan: 'P2D' }));
+            const { workspaceBased, records: first } = await this.initialQuery(client, resource, app.name, cursor, signal);
             signal.throwIfAborted();
             const pty = new BufferedPseudoterminal({
                 onClose: () => { this.stop(AzureNodeId.from(app).toString(), stream, false); },
@@ -97,6 +109,33 @@ export class FunctionAppLogStream implements Disposable {
             }
             throw error;
         }
+    }
+
+    /**
+     * Runs the first query against the schema the component reports. If the service rejects that query,
+     * which happens when the table names do not resolve in the component's query scope, the other schema's
+     * tables are tried once, and the schema that worked is used for every later poll.
+     */
+    private async initialQuery(
+        client: ILogsQueryClient,
+        resource: GenericResource,
+        role: string,
+        cursor: number,
+        signal: AbortSignal,
+    ): Promise<{ readonly workspaceBased: boolean; readonly records: LogRecord[] }> {
+        const preferred = isWorkspaceBased(resource);
+        try {
+            return { workspaceBased: preferred, records: await this.queryRecords(client, resource.id, role, cursor, preferred, signal) };
+        } catch (error: unknown) {
+            if (!isRejectedQuery(error)) {
+                throw error;
+            }
+            return { workspaceBased: !preferred, records: await this.queryRecords(client, resource.id, role, cursor, !preferred, signal) };
+        }
+    }
+
+    private async queryRecords(client: ILogsQueryClient, resourceId: string, role: string, cursor: number, workspaceBased: boolean, signal: AbortSignal): Promise<LogRecord[]> {
+        return this.records(await client.queryResource(resourceId, this.query(role, cursor, workspaceBased), { abortSignal: signal, timespan: 'P2D' }));
     }
 
     private async resolveInsights(app: FunctionApp, signal: AbortSignal): Promise<GenericResource> {
@@ -225,7 +264,7 @@ export class FunctionAppLogStream implements Disposable {
                     }
                 }
                 await delay(10_000, signal);
-                records = this.records(await client.queryResource(resourceId, this.query(app.name, windowStart, workspaceBased), { abortSignal: signal, timespan: 'P2D' }));
+                records = await this.queryRecords(client, resourceId, app.name, windowStart, workspaceBased, signal);
             }
         } catch (error: unknown) {
             if (!signal.aborted) {

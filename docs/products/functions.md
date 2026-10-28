@@ -380,12 +380,16 @@ endpoint. Missing configuration, missing resources, and explicit permission
 failures are surfaced.
 
 The terminal polls every ten seconds. A component linked to a Log Analytics
-workspace (it reports a `WorkspaceResourceId`) is queried through
+workspace (it reports a `WorkspaceResourceId`) is first queried through
 [`AppTraces`](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/apptraces)
 and [`AppRequests`](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/apprequests);
-a classic component is queried through `traces` and `requests`. Only the tables its
-schema has are named, because Azure Monitor reports a partial error for a missing
-table even in a fuzzy union, and an incomplete result is treated as a failure.
+a classic component is first queried through `traces` and `requests`. Only one
+schema's tables are named per query, because Azure Monitor reports a partial error for
+a missing table even in a fuzzy union, and an incomplete result is treated as a failure.
+If the service rejects the first query (HTTP 400), the other schema's tables are
+tried once and the one that worked is used for every poll. A rejected query reports
+only the service's error codes, never its message. Opening shows a progress
+notification when discovery and the first query take noticeable time.
 Results are filtered by cloud role
 name matching the Function App name. Telemetry using a different custom role is
 outside this view. Trace messages and request

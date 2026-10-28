@@ -146,6 +146,30 @@ describe('FunctionAppLogStream (unit)', () => {
         expect(s.queries.queryResource.mock.calls[0].arguments[1]).to.match(/^union traces, requests\n/);
     });
 
+    it('retries the other schema once when the service rejects the first query, and keeps using it', async () => {
+        const s = setup({ workspaceResourceId: '/subscriptions/s/resourceGroups/rg/providers/Microsoft.OperationalInsights/workspaces/w' });
+        const rejected = Object.assign(new Error('The log query was rejected.'), { statusCode: 400 });
+        s.queries.queryResource.mock.mockImplementationOnce(() => Promise.reject(rejected), 0);
+        await s.service.start(s.app);
+        await timers.whenScheduled();
+        timers.tick(10_000);
+        await waitFor(() => s.queries.queryResource.mock.callCount() === 3);
+
+        const queries = s.queries.queryResource.mock.calls.map(call => call.arguments[1]);
+        expect(queries[0]).to.match(/^union AppTraces, AppRequests\n/);
+        expect(queries[1]).to.match(/^union traces, requests\n/);
+        expect(queries[2]).to.match(/^union traces, requests\n/);
+    });
+
+    it('does not retry a first query that fails for another reason', async () => {
+        const s = setup();
+        s.queries.queryResource.mock.mockImplementation(() => Promise.reject(Object.assign(new Error('Service unavailable'), { statusCode: 503 })));
+
+        await expect(s.service.start(s.app)).to.be.rejectedWith('Service unavailable');
+
+        expect(s.queries.queryResource.mock.callCount()).to.equal(1);
+    });
+
     it('resolves a configured component in another accessible subscription of the same tenant', async () => {
         const subscription = makeSubscription({ subscriptionId: '99999999-0000-0000-0000-000000000000' });
         const s = setup({ insightsSubscription: subscription });
@@ -305,6 +329,8 @@ describe('FunctionAppLogStream (unit)', () => {
     it('cancels a scheduled poll when the terminal closes', async () => {
         const s = setup();
         await s.service.start(s.app);
+        // The progress notification's delay timer outlives a fast open.
+        timers.tick(150);
         await timers.whenScheduled();
         s.terminals[0].pty.close();
         await setImmediate();

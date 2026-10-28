@@ -114,6 +114,28 @@ describe('LogsQueryClient (unit)', () => {
         await expect(client.queryWorkspace(workspaceId, 'AppTraces')).to.be.rejectedWith('incomplete results');
     });
 
+    it('should report only the codes of a rejected query, never its message', async () => {
+        const { client } = createClient(req => makeResponse(req, 400, JSON.stringify({
+            error: {
+                code: 'BadArgumentError',
+                message: 'sensitive-response-content',
+                innererror: { code: 'SemanticError', message: 'more sensitive text', innererror: { code: 'SEM0100', message: 'quoted query text' } },
+            },
+        })));
+
+        const error = await client.queryResource(resourceId, 'AppTraces').catch((e: unknown) => e);
+
+        expect(error).to.be.instanceOf(Error);
+        expect((error as Error).message).to.equal('The log query was rejected (BadArgumentError, SemanticError, SEM0100).');
+        expect(error).to.have.property('statusCode', 400);
+    });
+
+    it('should report a rejected query without codes when the body has none', async () => {
+        const { client } = createClient(req => makeResponse(req, 400, 'not json'));
+
+        await expect(client.queryResource(resourceId, 'AppTraces')).to.be.rejectedWith('The log query was rejected.');
+    });
+
     for (const status of [200, 201, 202, 206, 299]) {
         it(`should return valid log query results for HTTP ${status}`, async () => {
             const { client } = createClient(req => makeResponse(req, status, '{"tables":[]}'));

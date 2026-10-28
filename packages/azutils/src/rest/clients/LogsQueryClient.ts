@@ -117,6 +117,12 @@ export class LogsQueryClient implements ILogsQueryClient {
             contentType: 'application/json',
             body: { query, timespan: options?.timespan },
         });
+        if (Number(response.status) === 400) {
+            const codes = errorCodes(response.body);
+            throw new RestError(codes.length
+                ? this.ctx.code.l10n.t('The log query was rejected ({0}).', codes.join(', '))
+                : this.ctx.code.l10n.t('The log query was rejected.'), { statusCode: 400 });
+        }
         assertRestSuccess(this.ctx.code, response);
         const body: unknown = response.body;
         if (body && typeof body === 'object' && 'error' in body) {
@@ -128,6 +134,22 @@ export class LogsQueryClient implements ILogsQueryClient {
         }
         return { tables: body.tables };
     }
+}
+
+/**
+ * Collects the machine-readable codes of a rejected query's nested `error` chain. Messages are
+ * never copied, since they can quote query text; only short identifier-shaped codes are kept.
+ */
+function errorCodes(body: unknown): string[] {
+    const codes: string[] = [];
+    let current: unknown = body && typeof body === 'object' && 'error' in body ? body.error : undefined;
+    while (current && typeof current === 'object' && codes.length < 5) {
+        if ('code' in current && typeof current.code === 'string' && /^[A-Za-z0-9_.-]{1,64}$/.test(current.code)) {
+            codes.push(current.code);
+        }
+        current = 'innererror' in current ? current.innererror : undefined;
+    }
+    return codes;
 }
 
 function isQueryTable(value: unknown): value is LogsQueryTable {
