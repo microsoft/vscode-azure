@@ -300,11 +300,11 @@ Verified external contracts:
 
 ## Slice 4 -- Local development (F5)
 
-A contributed debug type resolves to the language debugger's attach
-configuration after the extension has validated the project and started an owned
-Azure Functions CLI host. The CLI owns ordinary builds and dependency restoration;
-the extension owns Go's debug build. Resolving to a different debug type is proven in the Container Tools
-extension. Debugging works with no `tasks.json` or `launch.json`, and neither
+A contributed debug type validates the project, starts an owned Azure Functions
+CLI host, and then starts the language debugger's attach configuration as its own
+debug session. The CLI owns ordinary builds and dependency restoration;
+the extension owns Go's debug build. Starting the language debugger as its own session means
+VS Code resolves that configuration with the debugger's own resolvers. Debugging works with no `tasks.json` or `launch.json`, and neither
 is generated. No task type, problem matcher, or process-pick
 command is contributed.
 
@@ -358,8 +358,10 @@ Resolution flow for one session:
    owns the build and two minutes when compilation is skipped. Paused workers
    attach before full HTTP readiness; poll HTTP independently and register the
    owned host only after its status is Running.
-6. Return the attach configuration of the language's debug type; stop the host
-   on attach failure, session end, task/terminal closure, or cancellation.
+6. Start the language debugger's attach configuration with `vscode.debug.startDebugging` and
+   end the Functions session without a configuration; stop the host on attach failure,
+   session end, task/terminal closure, or cancellation. The host task terminal stays open
+   with its output when the host ends.
 
 - [x] Contribute the `azure-functions` debugger (languages for the kept
   runtimes) and register its provider for initial and dynamic configurations,
@@ -390,7 +392,8 @@ Resolution flow for one session:
   errors, stop on session end, and start/stop events for local listing and
   execute. <- FUNC-216
 - [x] Pre-debug validation: Azure Functions CLI present, selected/configured worker runtime,
-  `AzureWebJobsStorage` / emulator reachable. <- FUNC-215
+  `AzureWebJobsStorage` configured, runtime workloads ensured, and local emulator startup
+  left to the CLI's managed Azurite (a user may opt out with `--no-azurite`). <- FUNC-215
 - [x] Wire shared Azure Functions CLI install/update and version checks; no
   activation-time prompts. <- FUNC-021, FUNC-031, FUNC-217
 - [x] Unit tests for configuration resolution, build preparation, host tracking,
@@ -399,11 +402,12 @@ Resolution flow for one session:
   process tree. <- FUNC-030, FUNC-033, FUNC-140, FUNC-141, FUNC-195, FUNC-210,
   FUNC-211, FUNC-212, FUNC-214, FUNC-215, FUNC-216, FUNC-268, FUNC-269
 - [ ] Live language attach-path smoke checks during Slice 7. The automated tests
-  cover all six configuration/API paths, not live language debugger sessions.
+  cover all six configuration/API paths. Reviewer manual testing on Windows has attached
+  Node/TypeScript, Python, Java, PowerShell, and .NET isolated sessions; the Go host starts
+  but its Delve attach, and macOS/Linux, are unverified.
   <- FUNC-033, FUNC-195, FUNC-210, FUNC-211, FUNC-212, FUNC-214
 
-Live Azure Functions CLI v5 workload startup, language debugger sessions,
-storage/emulator integration, and Linux/macOS smoke checks remain in Slice 7.
+Live Go attach, and Linux/macOS smoke checks, remain in Slice 7.
 
 Existing projects' source-generated `tasks.json` / `launch.json` (task type
 `func`, `$func-watch`, `${command:azureFunctions.pickProcess}`) are left
@@ -662,8 +666,8 @@ dispositions. Their labels match the report's findings.
   <- FUNC-258 (integration depends on FUNC-181, FUNC-250)
 - [ ] **P6-02:** Complete the existing
   [manual checklist](https://github.com/microsoft/vscode-azure/pull/367#issuecomment-6444069751):
-  six-runtime F5/workload startup, storage/Azurite, failed-terminal retention in
-  VS Code, real Azure commands/log queries/provisioning, and macOS/Linux
+  Go attach and macOS/Linux F5 (the other five runtimes have attached in reviewer testing on
+  Windows), storage/Azurite, real Azure commands/log queries/provisioning, and macOS/Linux
   owned-process cleanup. Record evidence without secrets. Pending automated
   tests are not passes.
   <- FUNC-030, FUNC-033, FUNC-041, FUNC-042, FUNC-043, FUNC-044, FUNC-045,
@@ -688,3 +692,24 @@ dispositions. Their labels match the report's findings.
   settings, and the no-host hint launches its specific Functions project.
   Signed dispositions are unchanged.
   <- FUNC-041, FUNC-045, FUNC-188
+- [x] **P6-08:** Manual F5 testing found and fixed, without changing dispositions: the
+  Windows CLI install command (readable script-block, no execution-policy override); the
+  built-in JavaScript debugger not activating; a `continueOnAttach` default missing from
+  the Node attach configuration; https-reported local invocation URLs; debug
+  configuration resolution (the language debugger is now started as its own session);
+  the debug-port readiness check consuming debugpy's single client connection (now a
+  non-connecting listener check); the host terminal closing on exit (now always open);
+  F5 being ignored before activation (type-scoped debug activation events); the CLI's
+  managed Azurite and `func setup` replacing our emulator preflight; missing runtime
+  stack and worker workloads that `func setup` does not install; and Delve failing to
+  launch the Go worker on Windows (stdin redirect).
+  <- FUNC-210, FUNC-211, FUNC-212, FUNC-214, FUNC-215, FUNC-216, FUNC-217
+- [ ] **P6-09:** Follow-up work outside this migration's scope, tracked as issues:
+  [#391](https://github.com/microsoft/vscode-azure/issues/391) offers to set up language
+  prerequisites (Python virtual environment, debugger extensions, SDKs, Azurite) and
+  [#392](https://github.com/microsoft/vscode-azure/issues/392) adds an Execute Function
+  debug-toolbar button. The `func setup` workload gap is reported upstream in
+  [Azure/azure-functions-core-tools#5777](https://github.com/Azure/azure-functions-core-tools/issues/5777).
+  Neither of the first two changes a signed disposition; both need plan entries
+  before implementation.
+  <- FUNC-215, FUNC-217

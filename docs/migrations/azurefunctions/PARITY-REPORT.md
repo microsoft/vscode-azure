@@ -9,7 +9,7 @@ certificate of live debugger or Azure service behavior.
 | Source | `microsoft/vscode-azurefunctions` at `801689c66f96b31bc9d7c79ff6cc8d65e41b6965` (v1.22.1) |
 | Implementation verified | Source and tests committed alongside this report; prior audit baseline `72ebf165d8ae534d94a2c7529fdc42bd67707e31` |
 | Target base | `25585e883e234fdba29824c701e1fb33da5e5b1a` |
-| Verified | 2026-10-27 |
+| Verified | 2026-10-28 |
 | Inventory coverage | 271 unique IDs; no missing or duplicate outcomes |
 | Overall result | Active scope implemented and code conformance checks satisfied; conditional containerized integration, live verification, and retirement communication remain |
 
@@ -128,7 +128,7 @@ separate issue, is the tracking surface for the other deferred families.
 | FUNC-030 | Existing-project debug setup | Adapt | F5 runtime selection and persistence | `functions/debug/FunctionsDebugPreparation.ts`; `LocalFunctionSettings.setWorkerRuntime` |
 | FUNC-031 | Install/update Core Tools | Reuse | Wired | `vscode-azure/installFunc` -> `AcquireTool`; shared `FuncInstaller` |
 | FUNC-032 | Uninstall Core Tools | Drop | Absent | D2 |
-| FUNC-033 | .NET worker process selection | Adapt | Owned worker PID, no picker | `host/workerProcessId.ts` under `functions/`; `FunctionsDebugProvider` coreclr attach |
+| FUNC-033 | .NET worker process selection | Adapt | Owned worker PID, no picker | `host/workerProcessId.ts` under `functions/`; `FunctionsDebugProvider` coreclr attach; attached in reviewer testing on Windows |
 | FUNC-034 | Encrypt local settings | Drop | Absent | D2 |
 | FUNC-035 | Decrypt local settings | Drop | Absent | D2; encrypted files produce actionable guidance |
 | FUNC-036 | Set storage connection wizard | Drop | Absent | D2; validation does not create connections |
@@ -303,7 +303,7 @@ implementation has a fixed timeout or performs validation.
 | FUNC-192 | Empty-workspace creation hint | Defer | Tracked | F1 |
 | FUNC-193 | DTS scheduler/task-hub nodes | Defer | Tracked | F3 |
 | FUNC-194 | DTS emulator nodes | Defer | Tracked | F3 |
-| FUNC-195 | Go debugger/toolchain | Adapt | Native worker/Delve F5 wired | `FunctionsDebugPreparation`; `FunctionsDebugProvider`; owned host; live checks open |
+| FUNC-195 | Go debugger/toolchain | Adapt | Native worker/Delve F5 wired; Go stack and worker workloads ensured; Delve stdin redirected on Windows | `FunctionsDebugPreparation`; `FunctionsDebugProvider`; owned host; the host starts in reviewer testing, Delve attach and macOS/Linux unverified |
 | FUNC-196 | Host Exceptions Debugger view | Defer | Tracked | F7 |
 | FUNC-197 | Orphan proxy icon | Drop | Absent | D7; no new product SVG |
 | FUNC-198 | Local tree refresh | Migrate | Index/settings/host events | `functionsDetector`; `FunctionsWorkspaceDataProvider`; `LocalFunctionsHostTracker` |
@@ -318,13 +318,13 @@ implementation has a fixed timeout or performs validation.
 | FUNC-207 | func problem pattern | Drop | Absent | D5 |
 | FUNC-208 | Template Gallery panel | Defer | Tracked | F11 |
 | FUNC-209 | Open from portal | Drop | Absent | D8 |
-| FUNC-210 | Node debugger | Adapt | Owned pwa-node attach | `FunctionsDebugPreparation.workerOverrides`; `FunctionsDebugProvider`; live checks open |
-| FUNC-211 | Python debugger | Adapt | Selected venv/debugpy attach | Same preparation/provider; public Python APIs; live checks open |
-| FUNC-212 | Java debugger | Adapt | JDWP attach, CLI-owned build | Same preparation/provider; live checks open |
+| FUNC-210 | Node debugger | Adapt | Owned pwa-node attach, started as its own session | `FunctionsDebugPreparation.workerOverrides`; `FunctionsDebugProvider`; attached in reviewer testing on Windows |
+| FUNC-211 | Python debugger | Adapt | Selected venv/debugpy attach | Same preparation/provider; public Python APIs; attached in reviewer testing on Windows |
+| FUNC-212 | Java debugger | Adapt | JDWP attach, CLI-owned build | Same preparation/provider; attached in reviewer testing on Windows (needs Debugger and Language Support for Java) |
 | FUNC-213 | Ballerina debugger | Drop | Absent | D5/D8 |
-| FUNC-214 | PowerShell debugger | Adapt | Per-session pipe attach | Same preparation/provider; live checks open |
-| FUNC-215 | Pre-debug validation | Adapt | Retained subset wired | `FunctionsDebugPreparation.prepare/validateStorage/executable`; selector trust gates |
-| FUNC-216 | Owned host lifecycle | Adapt | Tasks, ports, readiness, cleanup | `LocalFunctionsHostProcess`; `OwnedFunctionsHostSession`; `LocalFunctionsHostTracker` |
+| FUNC-214 | PowerShell debugger | Adapt | Per-session pipe attach | Same preparation/provider; attached in reviewer testing on Windows |
+| FUNC-215 | Pre-debug validation | Adapt | Retained subset wired; workloads ensured; emulator left to the CLI's managed Azurite | `FunctionsDebugPreparation.prepare/validateStorage/executable/ensureWorkloads`; selector trust gates |
+| FUNC-216 | Owned host lifecycle | Adapt | Tasks, ports, readiness, cleanup; task terminal always stays open | `LocalFunctionsHostProcess`; `OwnedFunctionsHostSession`; `LocalFunctionsHostTracker` |
 | FUNC-217 | Core Tools lifecycle | Reuse | Shared v5 acquisition | `ToolService`; `FuncInstaller`; on-demand `FunctionsDebugPreparation.executable` |
 | FUNC-218 | JavaScript scaffolding | Defer | Tracked | F1; existing-project debugging is FUNC-210 |
 | FUNC-219 | TypeScript scaffolding | Defer | Tracked | F1 |
@@ -386,12 +386,14 @@ implementation has a fixed timeout or performs validation.
 | Tracking | Finding / boundary | Consequence |
 |---|---|---|
 | P6-01 | FUNC-258 is conditional on FUNC-181/FUNC-250. The generic ARM delete command exists, but containerized Functions discovery/presentation and a product deletion scenario are not verified | Do not count this as a fully integrated nineteenth Reuse feature |
-| P6-02 | Live F5/workload startup for all six runtimes, storage/emulator integration, failed-task terminal retention in actual VS Code UI, real Azure commands/log queries/provisioning, and macOS/Linux ownership cleanup remain manual work | Passing mocks/configuration tests and a Bicep build do not certify these paths |
+| P6-02 | Live Go attach, macOS/Linux F5 and ownership cleanup, storage/emulator integration on a clean machine, real Azure commands/log queries/provisioning remain manual work; Node/TypeScript, Python, Java, PowerShell, and .NET isolated attached in reviewer testing on Windows | Passing mocks/configuration tests and a Bicep build do not certify the remaining paths |
 | P6-03 | Satisfied: Functions domain nodes carry URIs, function names, and validation state; `FunctionsWorkspaceViewProvider` derives labels and localized hints | Typed workspace variants preserve the other products' required fields; nested/multi-root rendering and refresh are covered |
 | P6-04 | Satisfied: `test/tree/treeMenuMatches.ts` reads the real manifest and compares its independent predicates with rendered nodes; remaining tests exercise behavior | Menu drift can fail the cross-boundary checks without pinning a source constant to itself |
 | P6-05 | Satisfied: `LocalFunctionsNetwork` receives `IVsCode` and localizes the reservation-address error | Existing real-loopback integration coverage and build/lint validate the injected service |
 | P6-06 | The signed known-consumer list includes external extensions depending on dropped APIs/tasks/settings | Owner notification is required before source retirement; this audit does not claim that communication has occurred |
 | P6-07 | Satisfied: HTTP triggers receive raw POST requests on their actual route; deletion checks current deployment state; hints launch their owning project | Reviewer confirmed HTTP-trigger invocation on 2026-10-27. No disposition changes |
+| P6-08 | Satisfied: manual F5 testing found and fixed host/debugger startup, attach, activation, terminal, workload, and Delve issues (see the plan's P6-08) | Fixes are covered by behavioral tests where they can regress; no disposition changes |
+| P6-09 | Open: language-prerequisite setup ([#391](https://github.com/microsoft/vscode-azure/issues/391)), a debug-toolbar Execute Function button ([#392](https://github.com/microsoft/vscode-azure/issues/392)), and the upstream `func setup` workload gap ([Azure/azure-functions-core-tools#5777](https://github.com/Azure/azure-functions-core-tools/issues/5777)) | Not implemented; the extension works around the workload gap in `ensureWorkloads` |
 
 P6-07 contracts:
 
@@ -496,21 +498,20 @@ from current package names:
 
 ## Build gates
 
-Run on 2026-10-27 against the source/tests committed with this report:
+Run on 2026-10-28 against the source/tests committed with this report:
 
 | Exact command | Result |
 |---|---|
 | `pnpm run lint` | Passed, exit 0, all three workspaces |
 | `pnpm run build` | Passed, exit 0, all three workspaces |
-| `pnpm run test` | Passed, exit 0: utils 677 passing/12 pending; azutils 477 passing; extension 1,500 passing/4 pending |
-| `bicep build extensions\vscode-azure\resources\templates\functionApp\main.bicep --stdout` | Passed at the prior audit baseline, exit 0; pinned pattern resolved. Not repeated for the parity fixes because the Bicep consumer/module inputs are unchanged |
-| ID/partition/contribution checks | Passed: complete unique catalog; exact Drop/Defer sets; command registrations, menu gates, NLS keys, schema associations, and icon path |
+| `pnpm run test` | Passed, exit 0: utils 678 passing/12 pending; azutils 477 passing; extension 1,530 passing/3 pending |
+| `bicep build extensions\vscode-azure\resources\templates\functionApp\main.bicep --stdout` | Passed at the prior audit baseline, exit 0; pinned pattern resolved. Not repeated because the Bicep consumer/module inputs are unchanged |
+| ID/partition/contribution checks | Passed at the prior audit baseline: complete unique catalog; exact Drop/Defer sets; command registrations, menu gates, NLS keys, schema associations, and icon path. Not repeated for the manual-testing fixes, which add two activation events and no commands, menus, or catalog entries |
 
-Total automated tests: **2,654 passing, 16 pending**. Pending tests were not run.
+Total automated tests: **2,685 passing, 15 pending**. Pending tests were not run.
 No install was needed and no dependencies changed.
 Raw build/test logs remain session artifacts, not repository files.
 
 The [manual checklist](https://github.com/microsoft/vscode-azure/pull/367#issuecomment-6444069751)
-is the existing live-verification surface. Affected hint, HTTP execution, and
-deletion cases require retesting; no manual scenario is marked complete by
-the automated gates.
+is the existing live-verification surface and is maintained by the reviewer; no manual scenario
+is marked complete by the automated gates.
