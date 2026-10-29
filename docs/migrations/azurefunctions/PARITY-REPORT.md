@@ -8,7 +8,7 @@ it is not a certificate of live behavior beyond the scenarios recorded there.
 | | |
 |---|---|
 | Source | `microsoft/vscode-azurefunctions` at `801689c66f96b31bc9d7c79ff6cc8d65e41b6965` (v1.22.1) |
-| Implementation verified | Source and tests committed alongside this report; reviewed head `ab4c881c`, prior audit baseline `72ebf165d8ae534d94a2c7529fdc42bd67707e31` |
+| Implementation verified | Source and tests committed alongside this report; reviewed head `1859da10` plus the host-test and installer-test changes, prior audit baseline `72ebf165d8ae534d94a2c7529fdc42bd67707e31` |
 | Target base | `25585e883e234fdba29824c701e1fb33da5e5b1a`; `main` merged through `4fa8f435` |
 | Verified | 2026-10-29 |
 | Inventory coverage | 271 unique IDs; no missing or duplicate outcomes |
@@ -390,7 +390,7 @@ and code inspection does not establish that a scenario was exercised.
 
 | Level | What it establishes here | Record |
 |---|---|---|
-| Inspected code | The implementation and wiring appear to satisfy the contract. This is the **Evidence** column of the ID-by-ID tables and the conformance tables | Code reviewed at `ab4c881c` (the 2026-10-29 merge of `main` at `4fa8f435`); inspection is not execution |
+| Inspected code | The implementation and wiring appear to satisfy the contract. This is the **Evidence** column of the ID-by-ID tables and the conformance tables | Code reviewed at `1859da10` (the 2026-10-29 merge of `main` through `064f66de`); inspection is not execution |
 | Automated behavioral evidence | A scenario ran in a test | See [Build gates](#build-gates) for the exact commands and results. Behavioral suites cover metadata parsing, settings edits, raw HTTP requests, URL/key policy, project-hint launches, host readiness, ownership/cleanup, cancellation, polling, log-query scope fallback, and reveal item resolution. Mock-based suites do not qualify as live |
 | Live verification | The scenario worked in a real VS Code/CLI/Azure environment | The scenarios below, performed by the reviewer on Windows and recorded on the [manual checklist](https://github.com/microsoft/vscode-azure/pull/367#issuecomment-6444069751). That checklist asks for the OS, VS Code version, `func --version`, and tested commit; this report does not restate them |
 
@@ -528,17 +528,19 @@ from current package names:
 
 ## Build gates
 
-Run on 2026-10-29 on Node 24.22.2 against the merged head `7faeb6c4` plus the log-terminal failure-state changes:
+Run on 2026-10-29 on Node 24.22.2 against the merged head `1859da10` plus the host-test and installer-test changes:
 
 | Exact command | Result |
 |---|---|
 | `pnpm run lint` | Passed, exit 0, all three workspaces |
 | `pnpm run build` | Passed, exit 0, all three workspaces |
-| `pnpm run test` | Passed, exit 0: utils 679 passing/12 pending; azutils 479 passing; extension 1,528 passing/3 pending |
+| `pnpm run test` | Passed, exit 0: utils 679 passing/12 pending; azutils 479 passing; extension 1,520 passing/4 pending |
 | `bicep build extensions\vscode-azure\resources\templates\functionApp\main.bicep --stdout` | Passed at the prior audit baseline, exit 0; pinned pattern resolved. Not repeated because the Bicep consumer/module inputs are unchanged |
 | ID/partition/contribution checks | Passed at the prior audit baseline: complete unique catalog; exact Drop/Defer sets; command registrations, menu gates, NLS keys, schema associations, and icon path. Not repeated for the manual-testing fixes, which add two activation events and no commands, menus, or catalog entries |
 
-Total automated tests: **2,686 passing, 15 pending**. Pending tests were not run.
+Total automated tests: **2,678 passing, 16 pending**. Pending tests were not run. One extension pending test is the
+Windows-only PowerShell installer check, registered as long-running: it runs only with `ENABLE_LONG_RUNNING_TESTS=1`
+and passed when run that way on Windows.
 `pnpm install` ran after the merge and left the lockfile unchanged.
 Raw build/test logs remain session artifacts, not repository files.
 
