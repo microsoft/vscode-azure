@@ -447,6 +447,12 @@ export class AzureNodeId {
      * verbatim, which is what keeps the result inside this node's own account
      * and cloud.
      *
+     * Node IDs are compared exactly, but ARM returns the structural keywords
+     * (`subscriptions`, `resourceGroups`, `providers`) in varying case -- for
+     * example `resourcegroups` in the identity ids of a site -- while listings use
+     * the canonical form. They are canonicalized here so a reference resolves to
+     * the same node a listing produced; names are never altered.
+     *
      * @param armResourceId - Absolute ARM resource id of the target, starting
      *   with `/subscriptions/`.
      * @throws if this is an account node, which has no tenant to inherit, or if
@@ -467,7 +473,7 @@ export class AzureNodeId {
             accountId: d.accountId,
             portalHost: d.portalHost,
             tenantId: d.tenantId,
-            armResourceId,
+            armResourceId: canonicalizeArmKeywords(armResourceId),
         });
     }
 
@@ -491,6 +497,18 @@ export class AzureNodeId {
  */
 function portalHost(entity: { readonly environment: EnvironmentLike }): string {
     return new URL(entity.environment.portalUrl).hostname;
+}
+
+/**
+ * Rewrites the structural keywords of an absolute ARM resource id to the casing
+ * listings use (`/subscriptions/{id}/resourceGroups/{rg}/providers/...`).
+ * Subscription ids, resource group names, and resource names are left untouched.
+ */
+function canonicalizeArmKeywords(armResourceId: string): string {
+    return armResourceId
+        .replace(/^\/subscriptions(?=\/)/i, '/subscriptions')
+        .replace(/^(\/subscriptions\/[^/]+)\/resourcegroups(?=\/)/i, '$1/resourceGroups')
+        .replace(/^(\/subscriptions\/[^/]+(?:\/resourceGroups\/[^/]+)?)\/providers(?=\/)/i, '$1/providers');
 }
 
 /** Builds the Azure Portal deep link for an absolute ARM resource id. */

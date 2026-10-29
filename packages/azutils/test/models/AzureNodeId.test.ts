@@ -477,12 +477,27 @@ describe('AzureNodeId (unit)', () => {
                 .to.throw('Not an absolute ARM resource id');
         });
 
-        it('should accept a resource id with differently-cased ARM segments', () => {
-            const resource = makeGenericResource();
-            const differentlyCasedResourceId = '/SUBSCRIPTIONS/test-sub/resourceGroups/rg1/providers/Microsoft.Web/sites/site1';
+        it('should canonicalize differently-cased ARM keywords so the key matches a listed resource', () => {
+            const listed = makeGenericResource({
+                id: '/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uami',
+            });
+            const reference = makeGenericResource({
+                id: '/subscriptions/test-sub/resourceGroups/rg1/providers/Microsoft.Web/sites/site1',
+            });
 
-            expect(AzureNodeId.from(resource).forRelatedResource(differentlyCasedResourceId).toString())
-                .to.contain(differentlyCasedResourceId);
+            const related = AzureNodeId.from(reference)
+                .forRelatedResource('/SUBSCRIPTIONS/test-sub/resourcegroups/rg1/PROVIDERS/Microsoft.ManagedIdentity/userAssignedIdentities/uami');
+
+            expect(related.toString()).to.equal(AzureNodeId.from(listed).toString());
+        });
+
+        it('should keep the casing of subscription ids, resource group names, and resource names', () => {
+            const reference = makeGenericResource();
+
+            const related = AzureNodeId.from(reference)
+                .forRelatedResource('/subscriptions/Test-Sub/resourcegroups/My-RG/providers/Microsoft.Web/sites/MySite');
+
+            expect(related.toString()).to.contain('/subscriptions/Test-Sub/resourceGroups/My-RG/providers/Microsoft.Web/sites/MySite');
         });
 
         it('should reject deriving from an account node, which has no tenant to inherit', () => {

@@ -288,11 +288,13 @@ describe('GenericAzureViewProvider (unit)', () => {
             });
         }
 
-        it('should throw for an unknown key not in cache', () => {
+        it('should render a provisional item with the key as its id for a resource not yet loaded', () => {
             const provider = createProvider();
             const key = 'azr://acc1@portal.azure.com/tenants/t1/subscriptions/sub1/resourceGroups/rg1/providers/Microsoft.Web/sites/unknown';
 
-            expect(() => provider.getTreeItem(key)).to.throw('not found in cache');
+            const item = provider.getTreeItem(key);
+
+            expect(item.id).to.equal(key);
         });
     });
 

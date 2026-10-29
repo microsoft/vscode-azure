@@ -371,6 +371,28 @@ describe('ContainerAppLogStreamService (unit)', () => {
         service.dispose();
     });
 
+    it('keeps the terminal open with the failure until a key is pressed when the stream breaks', async () => {
+        const body = new ReadableStream<Uint8Array>({
+            start(controller) {
+                controller.enqueue(new TextEncoder().encode('before\n'));
+                controller.error(new Error('connection reset'));
+            },
+        });
+        mock.method(globalThis, 'fetch', () => Promise.resolve(new Response(body)));
+        const { service, terminals } = createService();
+        const closed = mock.fn((_code: unknown) => undefined);
+
+        await service.start(makeTarget(makeContainerApp()));
+        terminals[0].pty.onDidClose?.(closed);
+        await waitFor(() => terminals[0].writes.join('').includes('Press any key'));
+
+        expect(terminals[0].writes.join('')).to.include('The log stream ended unexpectedly: connection reset\r\n');
+        expect(closed.mock.callCount()).to.equal(0);
+        terminals[0].pty.handleInput?.('x');
+        expect(closed.mock.calls.map(call => call.arguments[0])).to.deep.equal([0]);
+        service.dispose();
+    });
+
     it('cancels the stream when its terminal closes', async () => {
         const cancel = mock.fn();
         const fetchMock = mock.method(globalThis, 'fetch', () => Promise.resolve(new Response(openBody(cancel), { status: 200 })));

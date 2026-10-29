@@ -273,8 +273,12 @@ export class ContainerAppLogStreamService implements Disposable {
         } catch (error) {
             // An abort is how closing the terminal ends the stream, so it is not a failure.
             if (!stream.abort.signal.aborted) {
-                this.executor.output.error(`[containerApps] log stream failed: ${stringifyError(error)}`);
-                running.pty.write(this.code.l10n.t('The log stream ended unexpectedly: {0}', stringifyError(error)));
+                const reason = stringifyError(error);
+                this.executor.output.error(`[containerApps] log stream failed: ${reason}`);
+                running.pty.endOnKeyPress(
+                    this.code.l10n.t('The log stream ended unexpectedly: {0}', reason),
+                    this.code.l10n.t('Press any key to close this terminal.'),
+                );
             }
         } finally {
             // Only clear the entry if it is still ours; closing the terminal may have already
