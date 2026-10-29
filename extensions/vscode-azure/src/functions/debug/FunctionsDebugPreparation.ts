@@ -421,6 +421,11 @@ function applyEnvironmentOverrides(environment: CaselessMap<string>, overrides: 
     }
 }
 
+/**
+ * Serializes one argument for the host's `languageWorkers__<language>__arguments` setting. This is not an argv
+ * vector: the host splits the setting on whitespace without interpreting quotes, then formats the pieces into the
+ * worker's single command line, so each argument is double-quoted with the command-line backslash rules.
+ */
 function quoteWorkerArgument(value: string): string {
     return `"${value.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\+)$/, '$1$1')}"`;
 }

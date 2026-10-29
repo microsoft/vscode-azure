@@ -1,15 +1,16 @@
 # Azure Functions -- Parity Report
 
 Phase 6 verification against the signed [TRIAGE.md](TRIAGE.md) and source
-[INVENTORY.md](INVENTORY.md). This is an implementation/wiring audit, not a
-certificate of live debugger or Azure service behavior.
+[INVENTORY.md](INVENTORY.md). The report keeps inspected code, automated
+behavioral evidence, and live verification as [separate levels](#evidence-levels);
+it is not a certificate of live behavior beyond the scenarios recorded there.
 
 | | |
 |---|---|
 | Source | `microsoft/vscode-azurefunctions` at `801689c66f96b31bc9d7c79ff6cc8d65e41b6965` (v1.22.1) |
-| Implementation verified | Source and tests committed alongside this report; prior audit baseline `72ebf165d8ae534d94a2c7529fdc42bd67707e31` |
-| Target base | `25585e883e234fdba29824c701e1fb33da5e5b1a` |
-| Verified | 2026-10-28 |
+| Implementation verified | Source and tests committed alongside this report; reviewed head `ab4c881c`, prior audit baseline `72ebf165d8ae534d94a2c7529fdc42bd67707e31` |
+| Target base | `25585e883e234fdba29824c701e1fb33da5e5b1a`; `main` merged through `4fa8f435` |
+| Verified | 2026-10-29 |
 | Inventory coverage | 271 unique IDs; no missing or duplicate outcomes |
 | Overall result | Active scope implemented and code conformance checks satisfied; conditional containerized integration, live verification, and retirement communication remain |
 
@@ -303,7 +304,7 @@ implementation has a fixed timeout or performs validation.
 | FUNC-192 | Empty-workspace creation hint | Defer | Tracked | F1 |
 | FUNC-193 | DTS scheduler/task-hub nodes | Defer | Tracked | F3 |
 | FUNC-194 | DTS emulator nodes | Defer | Tracked | F3 |
-| FUNC-195 | Go debugger/toolchain | Adapt | Native worker/Delve F5 wired; Go stack and worker workloads ensured; Delve stdin redirected on Windows | `FunctionsDebugPreparation`; `FunctionsDebugProvider`; owned host; Windows Delve attach verified in reviewer testing, macOS/Linux unverified |
+| FUNC-195 | Go debugger/toolchain | Adapt | Native worker/Delve F5 wired; Go stack and worker workloads ensured; Delve stdin redirected on Windows | `FunctionsDebugPreparation`; `FunctionsDebugProvider`; owned host; Delve attach verified in reviewer testing on Windows and macOS (macOS stands in for Linux; Linux not run) |
 | FUNC-196 | Host Exceptions Debugger view | Defer | Tracked | F7 |
 | FUNC-197 | Orphan proxy icon | Drop | Absent | D7; no new product SVG |
 | FUNC-198 | Local tree refresh | Migrate | Index/settings/host events | `functionsDetector`; `FunctionsWorkspaceDataProvider`; `LocalFunctionsHostTracker` |
@@ -381,16 +382,51 @@ implementation has a fixed timeout or performs validation.
 | FUNC-270 | Remote connection prompts | Defer | Tracked | F3 |
 | FUNC-271 | Resource refresh | Reuse | Shared global refresh | `RefreshResourcesView` contexts on app/group/function/errors; manifest menus |
 
+## Evidence levels
+
+Verification claims are kept at three separate levels. A higher level is never
+inferred from a lower one: compilation and unit tests do not establish live behavior,
+and code inspection does not establish that a scenario was exercised.
+
+| Level | What it establishes here | Record |
+|---|---|---|
+| Inspected code | The implementation and wiring appear to satisfy the contract. This is the **Evidence** column of the ID-by-ID tables and the conformance tables | Code reviewed at `ab4c881c` (the 2026-10-29 merge of `main` at `4fa8f435`); inspection is not execution |
+| Automated behavioral evidence | A scenario ran in a test | See [Build gates](#build-gates) for the exact commands and results. Behavioral suites cover metadata parsing, settings edits, raw HTTP requests, URL/key policy, project-hint launches, host readiness, ownership/cleanup, cancellation, polling, log-query schema fallback, and reveal item resolution. Mock-based suites do not qualify as live |
+| Live verification | The scenario worked in a real VS Code/CLI/Azure environment | The scenarios below, performed by the reviewer on Windows and recorded on the [manual checklist](https://github.com/microsoft/vscode-azure/pull/367#issuecomment-6444069751). That checklist asks for the OS, VS Code version, `func --version`, and tested commit; this report does not restate them |
+
+### Live scenarios
+
+Scenario IDs map the checklist's sections to feature IDs. Status comes from the
+checklist's checked boxes and is what the reviewer reported; unchecked items are open.
+
+| Scenario | Checklist section | Features | Status | Not yet demonstrated live |
+|---|---|---|---|---|
+| LV-1 | 1. Setup and activation | FUNC-002, FUNC-031, FUNC-217 | Passed on Windows | None recorded |
+| LV-2 | 2. Project discovery and runtime selection | FUNC-002, FUNC-030, FUNC-182, FUNC-188, FUNC-191 | Passed on Windows | None recorded |
+| LV-3 | 3. F5 language matrix | FUNC-033, FUNC-195, FUNC-210, FUNC-211, FUNC-212, FUNC-214, FUNC-215, FUNC-216 | Passed on Windows for Node/TypeScript, Python, .NET isolated, Java, PowerShell, and Go; Go also passed on macOS, which the reviewer accepts in place of Linux | Linux itself; the other five runtimes on macOS/Linux |
+| LV-4 | 4. Launch configuration, isolation, and failures | FUNC-030, FUNC-215, FUNC-216 | Passed on Windows | Owned-process cleanup on POSIX was not separately recorded for the macOS Go run |
+| LV-5 | 5. Local tree and function actions | FUNC-041, FUNC-042, FUNC-043, FUNC-044, FUNC-184, FUNC-185, FUNC-186, FUNC-187, FUNC-198 | Passed on Windows, including the untrusted-workspace behavior | None recorded |
+| LV-6 | 6. Azure tree, management, and invocation | FUNC-041, FUNC-042, FUNC-043, FUNC-044, FUNC-060, FUNC-061, FUNC-062, FUNC-169, FUNC-170, FUNC-171, FUNC-173, FUNC-180, FUNC-200 | Passed against disposable Flex and Windows Consumption apps | None recorded |
+| LV-7 | 7. Creation and shared deployment | FUNC-047, FUNC-057, FUNC-202, FUNC-246, FUNC-255, FUNC-256 | Open | Everything: runtime/version walk, back/cancel, empty-app creation, Deploy Project as Function App from each entry point, and shared Provision & Deploy |
+| LV-8a | 8. Open Log Stream (first item) | FUNC-065 | Passed on a classic Consumption app after the schema-specific query and fallback | Which of the two table schemas the successful query used was not confirmed |
+| LV-8b | 8. Log stream reuse and failures; cross-feature checks | FUNC-065 and the shared App Service, Logic App, Container Apps, and refresh surfaces | Open | Terminal reuse and separation, missing connection string or permissions, interrupted polling, shared-surface smoke test, cross-OS cycle |
+
+Live testing found defects that were fixed with automated coverage where they can
+regress: the Insights query's table schema, the admin-key URL confirmation delay,
+reveal for an identity whose resource group was not yet loaded, and the host and
+debugger issues recorded under P6-08. Those fixes are separate from the passes above:
+a fix is automated evidence, and the live pass is the reviewer's recheck.
+
 ## Verification boundaries and conformance evidence
 
 | Tracking | Finding / boundary | Consequence |
 |---|---|---|
 | P6-01 | FUNC-258 is conditional on FUNC-181/FUNC-250. The generic ARM delete command exists, but containerized Functions discovery/presentation and a product deletion scenario are not verified | Do not count this as a fully integrated nineteenth Reuse feature |
-| P6-02 | macOS/Linux F5 (including Go) and ownership cleanup, storage/emulator integration on a clean machine, real Azure commands/log queries/provisioning remain manual work; all six runtimes (Node/TypeScript, Python, Java, PowerShell, .NET isolated, Go) attached in reviewer testing on Windows | Passing mocks/configuration tests and a Bicep build do not certify the remaining paths |
+| P6-02 | Storage/emulator integration on a clean machine, real Azure creation/deployment and log-query failure paths, and POSIX owned-process cleanup remain manual work. All six runtimes (Node/TypeScript, Python, Java, PowerShell, .NET isolated, Go) attached in reviewer testing on Windows, and Go on macOS | Passing mocks/configuration tests and a Bicep build do not certify the remaining paths |
 | P6-03 | Satisfied: Functions domain nodes carry URIs, function names, and validation state; `FunctionsWorkspaceViewProvider` derives labels and localized hints | Typed workspace variants preserve the other products' required fields; nested/multi-root rendering and refresh are covered |
 | P6-04 | Satisfied: `test/tree/treeMenuMatches.ts` reads the real manifest and compares its independent predicates with rendered nodes; remaining tests exercise behavior | Menu drift can fail the cross-boundary checks without pinning a source constant to itself |
 | P6-05 | Satisfied: `LocalFunctionsNetwork` receives `IVsCode` and localizes the reservation-address error | Existing real-loopback integration coverage and build/lint validate the injected service |
-| P6-06 | The signed known-consumer list includes external extensions depending on dropped APIs/tasks/settings | Owner notification is required before source retirement; this audit does not claim that communication has occurred |
+| P6-06 | The signed known-consumer list includes external extensions depending on dropped APIs/tasks/settings | Owner notification is required before source retirement ([#353](https://github.com/microsoft/vscode-azure/issues/353)); this audit does not claim that communication has occurred |
 | P6-07 | Satisfied: HTTP triggers receive raw POST requests on their actual route; hints launch their owning project | Reviewer confirmed HTTP-trigger invocation on 2026-10-27. No disposition changes |
 | P6-08 | Satisfied: manual F5 testing found and fixed host/debugger startup, attach, activation, terminal, workload, and Delve issues (see the plan's P6-08) | Fixes are covered by behavioral tests where they can regress; no disposition changes |
 | P6-09 | Open: language-prerequisite setup ([#391](https://github.com/microsoft/vscode-azure/issues/391)), a debug-toolbar Execute Function button ([#392](https://github.com/microsoft/vscode-azure/issues/392)), and the upstream `func setup` workload gap ([Azure/azure-functions-core-tools#5777](https://github.com/Azure/azure-functions-core-tools/issues/5777)) | Not implemented; the extension works around the workload gap in `ensureWorkloads` |
@@ -437,7 +473,8 @@ The slice mapping records and the following refinements cover the current helper
 
 | Product concept | Reused shared surface / justified product logic |
 |---|---|
-| CLI creation/output/cleanup | Reused `command`, `IProcessExecutor`, streamed generators and tree cancellation. All four direct Functions spawn sites use the builder. `quoteWorkerArgument` serializes a worker-owned environment string, not an argv/shell command |
+| CLI creation/output/cleanup | Reused `command`, `IProcessExecutor`, streamed generators and tree cancellation. Every Functions process launch (version probes, `func setup` and workload commands, the owned host, Delve) is built with the builder and run through the executor. `quoteWorkerArgument` serializes a worker-owned environment string for the host, which splits it on whitespace without interpreting quotes, not an argv/shell command |
+| Per-operation host objects | An owned host session is a fresh instance from `IOwnedFunctionsHostSessionProvider`, initialized with its launch inputs; `LocalFunctionsHostProcess` owns session stops, cancellation, and disposal on extension shutdown, and a session does not retain a command's action context |
 | Host sessions/ports/PIDs | Searched host ownership, port reservation/probing, and worker PID parsing: no shared equivalent. Functions host status, worker PID events, lifecycle registry, and bounded network helper remain product contracts |
 | File/index/project selection | Reused `IWorkspaceIndexService`, `WorkspaceDetector`, URI/path helpers, quick picks, `readRequiredJson`, `readText`, and `isFileNotFoundError`. Product selector preserves filesystem errors that `fileExists` intentionally suppresses |
 | JSONC/local settings | Reused `JsoncSettingsFormat`, `parseJsoncObject`, `editJsonc`, and caseless readers. Product writer adds only per-file sequencing and Functions keys; no duplicate JSON parser |
@@ -491,20 +528,20 @@ from current package names:
 
 ## Build gates
 
-Run on 2026-10-28 against the source/tests committed with this report:
+Run on 2026-10-29 on Node 24.22.2 against the merged head `ab4c881c` (plus the `quoteWorkerArgument` comment):
 
 | Exact command | Result |
 |---|---|
 | `pnpm run lint` | Passed, exit 0, all three workspaces |
 | `pnpm run build` | Passed, exit 0, all three workspaces |
-| `pnpm run test` | Passed, exit 0: utils 678 passing/12 pending; azutils 477 passing; extension 1,530 passing/3 pending |
+| `pnpm run test` | Passed, exit 0: utils 679 passing/12 pending; azutils 479 passing; extension 1,529 passing/3 pending |
 | `bicep build extensions\vscode-azure\resources\templates\functionApp\main.bicep --stdout` | Passed at the prior audit baseline, exit 0; pinned pattern resolved. Not repeated because the Bicep consumer/module inputs are unchanged |
 | ID/partition/contribution checks | Passed at the prior audit baseline: complete unique catalog; exact Drop/Defer sets; command registrations, menu gates, NLS keys, schema associations, and icon path. Not repeated for the manual-testing fixes, which add two activation events and no commands, menus, or catalog entries |
 
-Total automated tests: **2,685 passing, 15 pending**. Pending tests were not run.
-No install was needed and no dependencies changed.
+Total automated tests: **2,687 passing, 15 pending**. Pending tests were not run.
+`pnpm install` ran after the merge and left the lockfile unchanged.
 Raw build/test logs remain session artifacts, not repository files.
 
 The [manual checklist](https://github.com/microsoft/vscode-azure/pull/367#issuecomment-6444069751)
-is the existing live-verification surface and is maintained by the reviewer; no manual scenario
-is marked complete by the automated gates.
+is the live-verification surface and is maintained by the reviewer. The [live scenarios](#live-scenarios)
+above map its checked and open items to feature IDs; no scenario is marked complete by the automated gates.

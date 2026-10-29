@@ -646,6 +646,7 @@ External facts: `https://json.schemastore.org/function.json` and `https://json.s
 | 2026-10-21 | `45bb4aec` via `37600ea4` | Main merge identified from its second parent. Current re-sweep confirms provider registration order and shared command/settings/index ownership. |
 | 2026-10-26 | `9ba6343f` via `27cfa45f` | Docs-only main delta. Current re-sweep confirms the existing shared consumers without a source adoption delta. |
 | 2026-10-26 | `25585e88` via `cc6e1ba6` | Adopted shared JSONC helpers, required JSON reader, `mapPages`, and generalized `BufferedPseudoterminal`; current re-sweep confirms imports/callers and the terminal closed guard. |
+| 2026-10-29 | `4fa8f435` via `ab4c881c` | Main added process-creation and per-operation DI ownership guidance, the evidence-level verification rules, and a Zod bump. Re-audit: every Functions process launch (version probes, `func setup`/workload commands, the owned host, Delve) is built with `command()` and run through `IProcessExecutor`; the two worker-argument environment strings are serialized for the host, not as argv, and `quoteWorkerArgument` now documents that contract. The owned-host session is a fresh, explicitly initialized instance from `IOwnedFunctionsHostSessionProvider`; `LocalFunctionsHostProcess` owns session stops and disposal. The parity report is restructured into the three evidence levels. |
 
 The additional first-parent merges on 2026-10-15 integrate shared topic
 branches, not main: `43f9c045`, `490b096d`, `538c68cf`, `ce3d1797`,
@@ -675,9 +676,9 @@ dispositions. Their labels match the report's findings.
   <- FUNC-258 (integration depends on FUNC-181, FUNC-250)
 - [ ] **P6-02:** Complete the existing
   [manual checklist](https://github.com/microsoft/vscode-azure/pull/367#issuecomment-6444069751):
-  macOS/Linux F5, including Go (all six runtimes have attached in reviewer testing on
-  Windows), storage/Azurite, real Azure commands/log queries/provisioning, and macOS/Linux
-  owned-process cleanup. Record evidence without secrets. Pending automated
+  storage/Azurite, real Azure creation/deployment and log-query failure paths, and POSIX
+  owned-process cleanup. All six runtimes have attached in reviewer testing on Windows, and
+  Go on macOS (accepted in place of Linux). Record evidence without secrets. Pending automated
   tests are not passes.
   <- FUNC-030, FUNC-033, FUNC-041, FUNC-042, FUNC-043, FUNC-044,
   FUNC-057, FUNC-060, FUNC-061, FUNC-062, FUNC-065, FUNC-195, FUNC-210,
@@ -693,7 +694,8 @@ dispositions. Their labels match the report's findings.
   VS Code localization surface.
   <- FUNC-216
 - [ ] **P6-06:** Confirm owner notification for the signed known external
-  consumers before retiring source APIs/task/settings contracts.
+  consumers before retiring source APIs/task/settings contracts
+  ([#353](https://github.com/microsoft/vscode-azure/issues/353) tracks it).
   <- FUNC-011, FUNC-012, FUNC-013, FUNC-016, FUNC-017, FUNC-032, FUNC-034,
   FUNC-035, FUNC-102, FUNC-116, FUNC-131, FUNC-133, FUNC-203, FUNC-204
 - [x] **P6-07:** HTTP Execute posts to the actual HTTP trigger route (confirmed
