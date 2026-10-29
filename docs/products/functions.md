@@ -234,9 +234,6 @@ complete workspace tree.
 The local tree reuses Execute Function, Copy Function URL, Enable, and Disable.
 Local actions require a file project in an open workspace; workspace
 menus are gated independently of the same commands' remote resource actions.
-The extension does not declare `untrustedWorkspaces`, so VS Code disables it in
-Restricted Mode and none of these actions run for an untrusted workspace; none of the
-local actions check workspace trust themselves.
 Programmatic calls validate the project, and invocation rechecks it after the
 input prompt.
 Execute and HTTP URL copying require a ready host registered for the exact
