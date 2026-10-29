@@ -391,7 +391,7 @@ and code inspection does not establish that a scenario was exercised.
 | Level | What it establishes here | Record |
 |---|---|---|
 | Inspected code | The implementation and wiring appear to satisfy the contract. This is the **Evidence** column of the ID-by-ID tables and the conformance tables | Code reviewed at `ab4c881c` (the 2026-10-29 merge of `main` at `4fa8f435`); inspection is not execution |
-| Automated behavioral evidence | A scenario ran in a test | See [Build gates](#build-gates) for the exact commands and results. Behavioral suites cover metadata parsing, settings edits, raw HTTP requests, URL/key policy, project-hint launches, host readiness, ownership/cleanup, cancellation, polling, log-query schema fallback, and reveal item resolution. Mock-based suites do not qualify as live |
+| Automated behavioral evidence | A scenario ran in a test | See [Build gates](#build-gates) for the exact commands and results. Behavioral suites cover metadata parsing, settings edits, raw HTTP requests, URL/key policy, project-hint launches, host readiness, ownership/cleanup, cancellation, polling, log-query scope fallback, and reveal item resolution. Mock-based suites do not qualify as live |
 | Live verification | The scenario worked in a real VS Code/CLI/Azure environment | The scenarios below, performed by the reviewer on Windows and recorded on the [manual checklist](https://github.com/microsoft/vscode-azure/pull/367#issuecomment-6444069751). That checklist asks for the OS, VS Code version, `func --version`, and tested commit; this report does not restate them |
 
 ### Live scenarios
@@ -408,7 +408,7 @@ checklist's checked boxes and is what the reviewer reported; unchecked items are
 | LV-5 | 5. Local tree and function actions | FUNC-041, FUNC-042, FUNC-043, FUNC-044, FUNC-184, FUNC-185, FUNC-186, FUNC-187, FUNC-198 | Passed on Windows, including the untrusted-workspace behavior | None recorded |
 | LV-6 | 6. Azure tree, management, and invocation | FUNC-041, FUNC-042, FUNC-043, FUNC-044, FUNC-060, FUNC-061, FUNC-062, FUNC-169, FUNC-170, FUNC-171, FUNC-173, FUNC-180, FUNC-200 | Passed against disposable Flex and Windows Consumption apps | None recorded |
 | LV-7 | 7. Creation and shared deployment | FUNC-047, FUNC-057, FUNC-202, FUNC-246, FUNC-255, FUNC-256 | Passed (all checklist items checked by the reviewer) | None recorded |
-| LV-8a | 8. Open Log Stream (first item) | FUNC-065 | Passed on a classic Consumption app after the schema-specific query and fallback | Which of the two table schemas the successful query used was not confirmed |
+| LV-8a | 8. Open Log Stream (first item) | FUNC-065 | Passed on a classic Consumption app, and on a Flex app through its Log Analytics workspace with the `App*` tables | The workspace-refused fallback to the component scope has automated coverage only; it was not run live |
 | LV-8b | 8. Log stream reuse and failures; cross-feature checks | FUNC-065 and the shared App Service, Logic App, Container Apps, and refresh surfaces | Passed (all checklist items checked by the reviewer) | None recorded |
 
 Live testing found defects that were fixed with automated coverage where they can
@@ -534,11 +534,11 @@ Run on 2026-10-29 on Node 24.22.2 against the merged head `7faeb6c4` plus the lo
 |---|---|
 | `pnpm run lint` | Passed, exit 0, all three workspaces |
 | `pnpm run build` | Passed, exit 0, all three workspaces |
-| `pnpm run test` | Passed, exit 0: utils 679 passing/12 pending; azutils 479 passing; extension 1,532 passing/3 pending |
+| `pnpm run test` | Passed, exit 0: utils 679 passing/12 pending; azutils 479 passing; extension 1,535 passing/3 pending |
 | `bicep build extensions\vscode-azure\resources\templates\functionApp\main.bicep --stdout` | Passed at the prior audit baseline, exit 0; pinned pattern resolved. Not repeated because the Bicep consumer/module inputs are unchanged |
 | ID/partition/contribution checks | Passed at the prior audit baseline: complete unique catalog; exact Drop/Defer sets; command registrations, menu gates, NLS keys, schema associations, and icon path. Not repeated for the manual-testing fixes, which add two activation events and no commands, menus, or catalog entries |
 
-Total automated tests: **2,690 passing, 15 pending**. Pending tests were not run.
+Total automated tests: **2,693 passing, 15 pending**. Pending tests were not run.
 `pnpm install` ran after the merge and left the lockfile unchanged.
 Raw build/test logs remain session artifacts, not repository files.
 

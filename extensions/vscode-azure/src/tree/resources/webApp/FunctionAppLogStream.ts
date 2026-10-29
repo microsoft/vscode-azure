@@ -29,16 +29,27 @@ interface LogRecord {
 
 const LookbackMs = 5 * 60_000;
 
-/** Whether the service rejected the query itself (HTTP 400), as opposed to failing to run it. */
-function isRejectedQuery(error: unknown): boolean {
-    return error instanceof Error && 'statusCode' in error && error.statusCode === 400;
+/** Where a stream's queries go and which table names that scope resolves. */
+interface LogSource {
+    readonly scopeId: string;
+    /** `App*` tables when `scopeId` is a Log Analytics workspace; `traces`/`requests` when it is the component. */
+    readonly workspaceTables: boolean;
 }
 
-/** Workspace-based components expose the Log Analytics `App*` tables; classic components expose `traces` and `requests`. */
-function isWorkspaceBased(resource: GenericResource): boolean {
+/** Whether the service refused the query's scope (not found, no access, or rejected), as opposed to failing to run it. */
+function isUnavailableScope(error: unknown): boolean {
+    return error instanceof Error && 'statusCode' in error
+        && (error.statusCode === 400 || error.statusCode === 403 || error.statusCode === 404);
+}
+
+/** The ARM ID of the Log Analytics workspace behind a workspace-based component, if it has one. */
+function getWorkspaceResourceId(resource: GenericResource): string | undefined {
     const properties: unknown = resource.properties;
-    return !!properties && typeof properties === 'object'
-        && Object.entries(properties).some(([key, value]) => key.toLowerCase() === 'workspaceresourceid' && typeof value === 'string' && !!value);
+    if (!properties || typeof properties !== 'object') {
+        return undefined;
+    }
+    const entry = Object.entries(properties).find(([key]) => key.toLowerCase() === 'workspaceresourceid');
+    return typeof entry?.[1] === 'string' && entry[1] ? entry[1] : undefined;
 }
 
 /** Owns one cancellable Application Insights log terminal per Function App. */
@@ -89,7 +100,7 @@ export class FunctionAppLogStream implements Disposable {
             const resource = await this.resolveInsights(app, signal);
             const client = this.createLogs(resource.subscription);
             const cursor = Date.now() - LookbackMs;
-            const { workspaceBased, records: first } = await this.initialQuery(client, resource, app.name, cursor, signal);
+            const { source, records: first } = await this.initialQuery(client, resource, app.name, cursor, signal);
             signal.throwIfAborted();
             const pty = new BufferedPseudoterminal({
                 onClose: () => { this.stop(AzureNodeId.from(app).toString(), stream, false); },
@@ -97,7 +108,7 @@ export class FunctionAppLogStream implements Disposable {
             stream.terminal = this.code.window.createTerminal({ name: this.code.l10n.t('Logs: {0}', app.name), pty });
             pty.write(this.code.l10n.t('Application Insights logs. Events can appear after an ingestion delay.\n'));
             stream.terminal.show();
-            void this.poll(app, resource.id, workspaceBased, client, stream, pty, cursor, first);
+            void this.poll(app, source, client, stream, pty, cursor, first);
         } catch (error: unknown) {
             const cancelled = signal.aborted;
             this.stop(AzureNodeId.from(app).toString(), stream, true);
@@ -109,9 +120,10 @@ export class FunctionAppLogStream implements Disposable {
     }
 
     /**
-     * Runs the first query against the schema the component reports. If the service rejects that query,
-     * which happens when the table names do not resolve in the component's query scope, the other schema's
-     * tables are tried once, and the schema that worked is used for every later poll.
+     * Runs the first query. A workspace-based component's data lives in its Log Analytics workspace, whose
+     * query scope resolves the `App*` tables, so that is tried first. If the service refuses that scope (for
+     * example the user cannot read the workspace), the component's own scope is used with the classic tables.
+     * A component without a workspace only has the second scope. The scope that worked serves every later poll.
      */
     private async initialQuery(
         client: ILogsQueryClient,
@@ -119,20 +131,25 @@ export class FunctionAppLogStream implements Disposable {
         role: string,
         cursor: number,
         signal: AbortSignal,
-    ): Promise<{ readonly workspaceBased: boolean; readonly records: LogRecord[] }> {
-        const preferred = isWorkspaceBased(resource);
-        try {
-            return { workspaceBased: preferred, records: await this.queryRecords(client, resource.id, role, cursor, preferred, signal) };
-        } catch (error: unknown) {
-            if (!isRejectedQuery(error)) {
-                throw error;
+    ): Promise<{ readonly source: LogSource; readonly records: LogRecord[] }> {
+        const component: LogSource = { scopeId: resource.id, workspaceTables: false };
+        const workspaceId = getWorkspaceResourceId(resource);
+        if (workspaceId) {
+            const workspace: LogSource = { scopeId: workspaceId, workspaceTables: true };
+            try {
+                return { source: workspace, records: await this.queryRecords(client, workspace, role, cursor, signal) };
+            } catch (error: unknown) {
+                if (!isUnavailableScope(error)) {
+                    throw error;
+                }
+                this.executor.output.debug(`[data] Function log stream falling back to the component scope for '${role}'`);
             }
-            return { workspaceBased: !preferred, records: await this.queryRecords(client, resource.id, role, cursor, !preferred, signal) };
         }
+        return { source: component, records: await this.queryRecords(client, component, role, cursor, signal) };
     }
 
-    private async queryRecords(client: ILogsQueryClient, resourceId: string, role: string, cursor: number, workspaceBased: boolean, signal: AbortSignal): Promise<LogRecord[]> {
-        return this.records(await client.queryResource(resourceId, this.query(role, cursor, workspaceBased), { abortSignal: signal, timespan: 'P2D' }));
+    private async queryRecords(client: ILogsQueryClient, source: LogSource, role: string, cursor: number, signal: AbortSignal): Promise<LogRecord[]> {
+        return this.records(await client.queryResource(source.scopeId, this.query(role, cursor, source.workspaceTables), { abortSignal: signal, timespan: 'P2D' }));
     }
 
     private async resolveInsights(app: FunctionApp, signal: AbortSignal): Promise<GenericResource> {
@@ -232,8 +249,7 @@ export class FunctionAppLogStream implements Disposable {
 
     private async poll(
         app: FunctionApp,
-        resourceId: string,
-        workspaceBased: boolean,
+        source: LogSource,
         client: ILogsQueryClient,
         stream: Stream,
         pty: BufferedPseudoterminal,
@@ -261,7 +277,7 @@ export class FunctionAppLogStream implements Disposable {
                     }
                 }
                 await delay(10_000, signal);
-                records = await this.queryRecords(client, resourceId, app.name, windowStart, workspaceBased, signal);
+                records = await this.queryRecords(client, source, app.name, windowStart, signal);
             }
         } catch (error: unknown) {
             if (!signal.aborted) {

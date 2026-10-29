@@ -126,48 +126,67 @@ describe('FunctionAppLogStream (unit)', () => {
         expect(s.queries.queryResource.mock.calls[2].arguments[1]).to.equal(firstQuery);
     });
 
-    it('queries only the tables of a workspace-based component, in the first query and every poll', async () => {
-        const s = setup({ workspaceResourceId: '/subscriptions/s/resourceGroups/rg/providers/Microsoft.OperationalInsights/workspaces/w' });
+    const workspaceId = '/subscriptions/s/resourceGroups/rg/providers/Microsoft.OperationalInsights/workspaces/w';
+
+    it('queries the workspace with the App tables for a workspace-based component, in the first query and every poll', async () => {
+        const s = setup({ workspaceResourceId: workspaceId });
         await s.service.start(s.app);
         await timers.whenScheduled();
         timers.tick(10_000);
         await waitFor(() => s.queries.queryResource.mock.callCount() === 2);
 
         for (const call of s.queries.queryResource.mock.calls) {
+            expect(call.arguments[0]).to.equal(workspaceId);
             expect(call.arguments[1]).to.match(/^union AppTraces, AppRequests\n/);
             expect(call.arguments[1]).not.to.include('isfuzzy');
         }
     });
 
-    it('queries the classic tables of a component without a workspace', async () => {
+    it('queries the classic tables through the component when it has no workspace', async () => {
         const s = setup();
         await s.service.start(s.app);
 
+        expect(s.queries.queryResource.mock.calls[0].arguments[0]).to.equal(s.resource.id);
         expect(s.queries.queryResource.mock.calls[0].arguments[1]).to.match(/^union traces, requests\n/);
     });
 
-    it('retries the other schema once when the service rejects the first query, and keeps using it', async () => {
-        const s = setup({ workspaceResourceId: '/subscriptions/s/resourceGroups/rg/providers/Microsoft.OperationalInsights/workspaces/w' });
-        const rejected = Object.assign(new Error('The log query was rejected.'), { statusCode: 400 });
-        s.queries.queryResource.mock.mockImplementationOnce(() => Promise.reject(rejected), 0);
-        await s.service.start(s.app);
-        await timers.whenScheduled();
-        timers.tick(10_000);
-        await waitFor(() => s.queries.queryResource.mock.callCount() === 3);
+    for (const statusCode of [400, 403, 404]) {
+        it(`falls back to the component and its classic tables once when the workspace scope returns ${statusCode}, and keeps using it`, async () => {
+            const s = setup({ workspaceResourceId: workspaceId });
+            const refused = Object.assign(new Error('The workspace cannot be queried.'), { statusCode });
+            s.queries.queryResource.mock.mockImplementationOnce(() => Promise.reject(refused), 0);
+            await s.service.start(s.app);
+            await timers.whenScheduled();
+            timers.tick(10_000);
+            await waitFor(() => s.queries.queryResource.mock.callCount() === 3);
 
-        const queries = s.queries.queryResource.mock.calls.map(call => call.arguments[1]);
-        expect(queries[0]).to.match(/^union AppTraces, AppRequests\n/);
-        expect(queries[1]).to.match(/^union traces, requests\n/);
-        expect(queries[2]).to.match(/^union traces, requests\n/);
-    });
+            const calls = s.queries.queryResource.mock.calls.map(call => call.arguments);
+            expect(calls[0][0]).to.equal(workspaceId);
+            expect(calls[0][1]).to.match(/^union AppTraces, AppRequests\n/);
+            for (const call of calls.slice(1)) {
+                expect(call[0]).to.equal(s.resource.id);
+                expect(call[1]).to.match(/^union traces, requests\n/);
+            }
+        });
+    }
 
-    it('does not retry a first query that fails for another reason', async () => {
-        const s = setup();
+    it('does not fall back from the workspace for a failure that is not about its scope', async () => {
+        const s = setup({ workspaceResourceId: workspaceId });
         s.queries.queryResource.mock.mockImplementation(() => Promise.reject(Object.assign(new Error('Service unavailable'), { statusCode: 503 })));
 
         await expect(s.service.start(s.app)).to.be.rejectedWith('Service unavailable');
 
         expect(s.queries.queryResource.mock.callCount()).to.equal(1);
+    });
+
+    it('reports the component failure when neither scope can be queried', async () => {
+        const s = setup({ workspaceResourceId: workspaceId });
+        s.queries.queryResource.mock.mockImplementation(() => Promise.reject(Object.assign(new Error('Forbidden'), { statusCode: 403 })));
+
+        await expect(s.service.start(s.app)).to.be.rejectedWith('Forbidden');
+
+        expect(s.queries.queryResource.mock.callCount()).to.equal(2);
+        expect(s.terminals).to.be.empty;
     });
 
     it('resolves a configured component in another accessible subscription of the same tenant', async () => {
