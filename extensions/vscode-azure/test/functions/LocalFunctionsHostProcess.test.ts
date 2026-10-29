@@ -5,7 +5,7 @@
 
 import { createMockFunctionsHostClient } from '@microsoft/vscode-azure-azutils/testing';
 import { CancellationError } from '@microsoft/vscode-azure-utils';
-import { addWorkspaceFolder, createMockProcessExecutor, createMockSpawn, createMockVsCode, getMockTaskExecution, MockCancellationToken, MockOutputChannel, waitFor } from '@microsoft/vscode-azure-utils/testing';
+import { addWorkspaceFolder, createMockProcessExecutor, createMockSpawn, createMockVsCode, getMockTaskExecution, ManualTimers, MockCancellationToken, MockOutputChannel, waitFor } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import { LocalFunctionsHostProcess } from '../../src/functions/host/LocalFunctionsHostProcess';
 import { LocalFunctionsHostTracker } from '../../src/functions/host/LocalFunctionsHostTracker';
@@ -24,7 +24,25 @@ function dotnetToolingLog(message: string): string {
 
 describe('Local Functions host ownership (unit)', () => {
     const owners: LocalFunctionsHostProcess[] = [];
-    afterEach(() => { owners.splice(0).forEach(owner => { owner.dispose(); }); mock.restoreAll(); });
+    const timers = new ManualTimers();
+    afterEach(() => { owners.splice(0).forEach(owner => { owner.dispose(); }); timers.reset(); mock.restoreAll(); });
+
+    /** Advances fake time whenever the host is waiting on a poll timer, until `done` reports true. */
+    async function advanceUntil(done: () => boolean): Promise<void> {
+        for (let spins = 0; !done(); spins++) {
+            if (spins > 10_000) { throw new Error('Timed out advancing fake time.'); }
+            await new Promise(resolve => setImmediate(resolve));
+            if (timers.hasPending) { timers.tick(250); }
+        }
+    }
+
+    /** Settles `operation` while advancing the fake poll timers it waits on; rejects as it does. */
+    async function whileAdvancing<T>(operation: Promise<T>): Promise<T> {
+        let settled = false;
+        operation.then(() => { settled = true; }, () => { settled = true; });
+        await advanceUntil(() => settled);
+        return operation;
+    }
 
     function setup(options?: Parameters<typeof createMockSpawn>[0], open = true) {
         const m = createMockVsCode(undefined, { openTaskTerminalsOnExecute: open });
@@ -62,12 +80,13 @@ describe('Local Functions host ownership (unit)', () => {
     }
 
     it('registers the exact owned port only after HTTP Running and removes it on stop', async () => {
+        timers.enable();
         const s = setup();
         s.client.getStatus.mock.mockImplementation(() => Promise.resolve({ state: 'Starting' }));
-        const host = await s.owner.start(s.request);
+        const host = await whileAdvancing(s.owner.start(s.request));
         expect(s.tracker.get(s.request.project)).to.be.undefined;
         s.client.getStatus.mock.mockImplementation(() => Promise.resolve({ state: 'Running' }));
-        await waitFor(() => !!s.tracker.get(s.request.project));
+        await advanceUntil(() => !!s.tracker.get(s.request.project));
         expect(s.tracker.get(s.request.project)?.port).to.equal(host.hostPort);
         const args = s.spawn.mock.calls[0].arguments[1];
         expect(args).to.deep.equal([
@@ -266,6 +285,7 @@ describe('Local Functions host ownership (unit)', () => {
 
     for (const [skipBuild, timeout] of [[true, 120_000], [false, 300_000]] as const) {
         it(`stops the owned process when debugger readiness reaches its ${timeout / 1000}-second deadline`, async () => {
+            timers.enable();
             const s = setup();
             const now = Date.now();
             const clock = mock.method(Date, 'now', () => now + timeout);
@@ -275,7 +295,7 @@ describe('Local Functions host ownership (unit)', () => {
             const ended = mock.fn();
             const subscription = s.m.taskEndEmitter.event(ended);
             s.client.getStatus.mock.mockImplementation(() => Promise.resolve({ state: 'Starting' }));
-            await expect(s.owner.start({ ...s.request, skipBuild })).to.be.rejectedWith('worker did not expose its debugger');
+            await expect(whileAdvancing(s.owner.start({ ...s.request, skipBuild }))).to.be.rejectedWith('worker did not expose its debugger');
             expect(listening.mock.callCount()).to.equal(1);
             expect(s.terminateTree.mock.callCount()).to.equal(1);
             expect(s.tracker.get(s.request.project)).to.be.undefined;
@@ -371,11 +391,12 @@ describe('Local Functions host ownership (unit)', () => {
         ['stderr', 'Azure Functions .NET Worker (PID: 1234) initialized in debug mode.'],
     ] as const) {
         it(`extracts a v5 .NET worker PID from ${channel} before HTTP readiness`, async () => {
+            timers.enable();
             const line = dotnetToolingLog(message);
             const chunks = [line.slice(0, 30), line.slice(30), '\n'];
             const s = setup(channel === 'stdout' ? { stdoutChunks: chunks } : { stderr: `${line}\n` });
             s.client.getStatus.mock.mockImplementation(() => Promise.resolve({ state: 'Starting' }));
-            const host = await s.owner.start({ ...s.request, runtime: 'dotnet-isolated' });
+            const host = await whileAdvancing(s.owner.start({ ...s.request, runtime: 'dotnet-isolated' }));
             expect(host.workerPid).to.equal(1234);
             expect(s.tracker.get(s.request.project)).to.be.undefined;
             expect(s.spawn.mock.calls[0].arguments[1]).to.deep.equal([
@@ -398,17 +419,18 @@ describe('Local Functions host ownership (unit)', () => {
     });
 
     it('preserves the prepared Go binary and stops the owned host/Delve/worker tree on cancellation', async () => {
+        timers.enable();
         const debugPort = 19001;
         const marker = `[host] API server listening at: 127.0.0.1:${debugPort}\n`;
         const s = setup({ stdoutChunks: [marker.slice(0, 12), marker.slice(12)] });
         const token = new MockCancellationToken();
-        const host = await s.owner.start({
+        const host = await whileAdvancing(s.owner.start({
             ...s.request, runtime: 'native', debugPort,
             prepare: port => Promise.resolve({
                 ['languageWorkers__native__defaultExecutablePath']: '/tools/dlv',
                 ['languageWorkers__native__arguments']: `exec bin/app --headless --continue --listen=127.0.0.1:${port} --`,
             }),
-        }, token);
+        }, token));
         const args = s.spawn.mock.calls[0].arguments[1];
         expect(args).to.include('--no-build');
         expect(args).to.not.include('--dotnet-isolated-debug');
