@@ -48,10 +48,10 @@ other callers retain direct-child cancellation. Owned processes start in a dedic
 process group on macOS/Linux; cancellation sends `SIGKILL` to that group. Windows
 processes start normally and cancellation invokes
 `taskkill.exe /PID <host-pid> /T /F`. If the Windows launcher exits while descendants
-hold its output pipes open, cancellation rejects with a termination error and releases
-the output generators; it cannot terminate those surviving descendants through the
-exited launcher's PID. Descendants that leave the POSIX group are outside this cleanup
-boundary.
+hold its output pipes open, cancellation waits a short grace period for the pipes to
+close, then rejects with a termination error and releases the output generators; it
+cannot terminate those surviving descendants through the exited launcher's PID.
+Descendants that leave the POSIX group are outside this cleanup boundary.
 
 `IProcessExecutor.killProcessTree(pid)` exposes the same termination operation
 for callers that own a target PID. On POSIX the PID must identify a dedicated
@@ -82,7 +82,7 @@ The VS Code extension that wires everything together:
   - Workspace (local): `AzdWorkspaceDataProvider`/`ViewProvider`, `FunctionsWorkspaceDataProvider`/`ViewProvider`, `EmulatorsWorkspaceDataProvider`/`ViewProvider`
   - Activity: `ArmDeploymentDataProvider`/`ViewProvider`, `CodeDeploymentDataProvider`, `GenericActivityDataProvider`, `ActivityViewProvider`
 - **Services**: Extension-scoped DI identifiers (`ICredentialFactory`, `IAzureListingFetcher`, `IAzureListingCache`, `ISubscriptionResolver`, `IAzureAccountDataProvider`, `IResourceClientProvider`, `IDeploymentClientProvider`, `IAcrClientProvider`, `IAzureViewDataTree`, `IWorkspaceViewDataTree`, `IActivityViewDataTree`, etc.)
-- **Workspace scanning**: `IWorkspaceIndexService` walks the workspace once, lets registered `WorkspaceDetector`s attach namespaced tags to files and directories, and keeps the resulting index fresh with a single shared watcher. Workspace tree providers query it by tag (`withTag`) rather than searching the workspace themselves. It lives here rather than in `utils` because its consumers are Azure product concerns.
+- **Workspace scanning**: `IWorkspaceIndexService` walks the workspace once, lets registered `WorkspaceDetector`s attach namespaced tags to files and directories, and keeps the resulting index fresh with a single shared watcher. Workspace tree providers query it by tag (`withTag`) rather than searching the workspace themselves. It lives here rather than in `utils` because its consumers are Azure product concerns. In an untrusted workspace the index is empty and nothing is scanned, so no workspace tree offers local tooling for untrusted content; granting trust rebuilds it and notifies consumers.
 - **Tool acquisition**: `IToolService` resolves Azure developer tools (`azd`, `func`, `swa`), installing them through per-tool `ToolInstaller`s when needed, and exposes that to other extensions as a command. See [Tool Acquisition](tool-acquisition.md).
 
 ## Activation Flow

@@ -235,6 +235,13 @@ export interface IProcessExecutor {
 }
 
 /**
+ * How long an owned background process may take to finish closing after its
+ * launcher has exited on Windows before cancellation reports that a descendant
+ * survived.
+ */
+export const WindowsLauncherExitGraceMs = 2000;
+
+/**
  * Default implementation of {@linkcode IProcessExecutor}.
  *
  * @param code - The VS Code API surface for task execution.
@@ -472,6 +479,7 @@ export class ProcessExecutor implements IProcessExecutor {
         let pending = exited;
         let termination: Promise<void> | undefined;
         let onAbort: (() => void) | undefined;
+        let graceTimer: NodeJS.Timeout | undefined;
 
         if (killTreeOnCancel && signal) {
             const terminationFailed = Promise.withResolvers<never>();
@@ -482,9 +490,15 @@ export class ProcessExecutor implements IProcessExecutor {
                     return;
                 }
                 if (process.platform === 'win32' && leaderExited) {
-                    terminationFailed.reject(new Error(this.code.l10n.t(
-                        'Cannot terminate the process tree after its launcher has exited on Windows.',
-                    )));
+                    // taskkill cannot traverse a tree whose root is gone. If the
+                    // launcher is merely finishing its own exit, the pipes close
+                    // within the grace period; only a still-open pipe means a
+                    // descendant survives.
+                    graceTimer = setTimeout(() => {
+                        terminationFailed.reject(new Error(this.code.l10n.t(
+                            'Cannot terminate the process tree after its launcher has exited on Windows.',
+                        )));
+                    }, WindowsLauncherExitGraceMs);
                     return;
                 }
 
@@ -511,6 +525,7 @@ export class ProcessExecutor implements IProcessExecutor {
             outputAbort?.abort();
             throw error;
         } finally {
+            clearTimeout(graceTimer);
             if (onAbort) {
                 signal?.removeEventListener('abort', onAbort);
             }

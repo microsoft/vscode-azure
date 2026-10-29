@@ -121,7 +121,10 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
 
         const resource = this.cache.get(key);
         if (!resource) {
-            throw new Error(`Resource with key ${key} not found in cache`);
+            // `TreeView.reveal()` asks for the target's item before the branch that
+            // holds it has loaded. The real item replaces this one, matched by id,
+            // once VS Code expands the parents it learned from `getParent`.
+            return this.getProvisionalTreeItem(key);
         }
 
         this.executor.setTelProp('nodeType', getNodeType(resource));
@@ -177,6 +180,17 @@ export class GenericAzureViewProvider implements ViewProvider<string>, Disposabl
                 return new this.ctx.code.TreeItem(key);
             }
         }
+    }
+
+    /**
+     * Builds the item for a key whose resource is not loaded. `TreeView.reveal()`
+     * reads only the `id` of this item (to derive the handle it later matches
+     * against the loaded children); the label is required by the `TreeItem` constructor.
+     */
+    private getProvisionalTreeItem(key: string): ITreeItem {
+        const item = new this.ctx.code.TreeItem(key);
+        item.id = key;
+        return item;
     }
 
     /**
