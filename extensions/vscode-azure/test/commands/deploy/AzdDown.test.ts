@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createMockDataItemTree, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
-import { CancellationError, Everything } from '@microsoft/vscode-azure-utils';
+import { CancellationError, Everything, ExternalError } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, MockOutputChannel, MockUri, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
@@ -118,6 +118,19 @@ describe('AzdDown (unit)', () => {
 
         await expect(cmd.execute()).to.be.rejectedWith('workspace folder');
 
+        expect(azd.down.mock.callCount()).to.equal(0);
+    });
+
+    it('should refuse an untrusted workspace before confirming or running azd down', async () => {
+        const { cmd, mockResult, azd } = createCommand();
+        mock.property(mockResult.workspace, 'isTrusted', false);
+
+        for (const fileUri of [undefined, MockUri.file('/workspace/azure.yaml')]) {
+            await expect(cmd.execute(fileUri)).to.be.rejectedWith(ExternalError, 'untrusted workspace');
+        }
+
+        expect(mockResult.window.showWarningMessage.mock.callCount()).to.equal(0);
+        expect(azd.findAzureYaml.mock.callCount()).to.equal(0);
         expect(azd.down.mock.callCount()).to.equal(0);
     });
 

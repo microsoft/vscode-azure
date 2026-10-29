@@ -6,6 +6,7 @@
 import { ExecuteStep, fileExists, IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { SwaCliConfigFileName } from '../../../staticWebApps/SwaCliConfig';
+import { requireWorkspaceTrust } from '../../../utils/workspaceTrust';
 import type { CreateStaticWebAppContext } from '../CreateStaticWebAppContext';
 
 /**
@@ -31,6 +32,8 @@ export class WriteStaticWebAppCliConfigStep extends ExecuteStep<CreateStaticWebA
 
     /** @inheritdoc */
     public async execute(context: Readonly<CreateStaticWebAppContext>): Promise<void> {
+        requireWorkspaceTrust(this.code);
+
         const { iacFolder, swaCliConfig } = context;
         if (!iacFolder || !swaCliConfig) {
             return;

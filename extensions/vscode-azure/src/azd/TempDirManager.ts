@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type Disposable, ICodeContext } from '@microsoft/vscode-azure-utils';
+import { type Disposable, ICodeContext, relativePath } from '@microsoft/vscode-azure-utils';
 import * as crypto from 'crypto';
 import { inject, injectable, type ServiceIdentifier } from 'inversify';
 import type * as vscode from 'vscode';
@@ -16,6 +16,14 @@ export interface ITempDirManager {
      * The directory is tracked for cleanup on dispose.
      */
     createTempDir(): Promise<vscode.Uri>;
+
+    /**
+     * Returns `true` when {@linkcode uri} is the `tmp/` base directory or a
+     * descendant of it, i.e. a location the extension owns rather than
+     * workspace content. The path is normalized first, so `..` segments cannot
+     * escape the base directory.
+     */
+    isTempDir(uri: vscode.Uri): boolean;
 }
 
 /**
@@ -46,6 +54,14 @@ export class TempDirManager implements ITempDirManager, Disposable {
         await this.ctx.code.workspace.fs.createDirectory(dir);
         this.trackedDirs.push(dir);
         return dir;
+    }
+
+    /** @inheritdoc */
+    public isTempDir(uri: vscode.Uri): boolean {
+        const normalized = this.ctx.code.Uri.joinPath(uri, '.');
+        return normalized.scheme === this.baseDir.scheme
+            && normalized.authority === this.baseDir.authority
+            && relativePath(this.baseDir, normalized) !== undefined;
     }
 
     /** @inheritdoc */

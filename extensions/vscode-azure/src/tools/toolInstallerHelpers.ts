@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { CancellationError, command, type CommandLineArgs, type IOutputChannel, type IProcessExecutor, type IVsCode } from '@microsoft/vscode-azure-utils';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import * as semver from 'semver';
 import type * as vscode from 'vscode';
@@ -176,6 +177,11 @@ export async function runInstallMethod(
     await context.processExecutor.spawn({
         execution: 'foreground',
         command: method.command,
+        // A task without a working directory runs in the first workspace folder,
+        // where a project `.npmrc` (or similar per-project tool configuration)
+        // would apply to the install. Installing a tool is not workspace work, so
+        // run from the home directory, whose configuration is the user's own.
+        cwd: context.code.Uri.file(os.homedir()),
         name: context.code.l10n.t('Install {0}', context.displayName),
         source: context.executableName,
         focus: options.reveal,

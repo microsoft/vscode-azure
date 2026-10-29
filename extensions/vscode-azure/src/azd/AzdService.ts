@@ -9,7 +9,10 @@ import * as semver from 'semver';
 import type * as vscode from 'vscode';
 import { parseDocument } from 'yaml';
 import { IToolService } from '../tools/ToolService';
+import { requireWorkspaceTrust } from '../utils/workspaceTrust';
 import { IAzdAuthServer } from './AzdAuthServer';
+import { requireFolderTrust } from './requireFolderTrust';
+import { ITempDirManager } from './TempDirManager';
 
 export const IAzdService: ServiceIdentifier<IAzdService> = Symbol.for('IAzdService');
 
@@ -43,6 +46,12 @@ export interface AzureYamlEditor {
     set(path: readonly [string, ...string[]], value: AzureYamlValue): void;
 }
 
+/**
+ * Every member that takes a `cwd` or `directory`, and `findAzureYaml` without
+ * one, rejects with an `ExternalError` in an untrusted workspace unless the
+ * folder is one of the extension's temp directories. Nothing is scanned, read,
+ * written, or spawned before that check.
+ */
 export interface IAzdService {
     /**
      * Finds `azure.yaml` or `azure.yml` files.
@@ -244,6 +253,13 @@ export async function getAzdVersion(
  * Wraps {@linkcode IProcessExecutor} to provide a typed interface for
  * invoking the Azure Developer CLI (`azd`). Handles the common
  * `ENOENT` error with an actionable install hint.
+ *
+ * Every operation that takes a `cwd` or `directory` (and `findAzureYaml`
+ * without one) rejects with an `ExternalError` in an
+ * untrusted workspace unless the folder is inside the extension's temp directories
+ * (see {@linkcode ITempDirManager.isTempDir}). The rejection is never turned
+ * into a fallback result, including by the methods that otherwise return
+ * `false`, `{}`, or `undefined` on failure.
  */
 @injectable()
 export class AzdService implements IAzdService {
@@ -253,11 +269,13 @@ export class AzdService implements IAzdService {
         @inject(IActionExecutor) private readonly executor: IActionExecutor,
         @inject(IAzdAuthServer) private readonly authServer: IAzdAuthServer,
         @inject(IToolService) private readonly tools: IToolService,
+        @inject(ITempDirManager) private readonly tempDirs: ITempDirManager,
     ) { }
 
     /** @inheritdoc */
     public async findAzureYaml(directory?: vscode.Uri, maxResults: number = 1): Promise<vscode.Uri[]> {
         if (directory) {
+            this.requireFolderTrust(directory);
             for (const name of AzureYamlFileNames) {
                 const fileUri = this.code.Uri.joinPath(directory, name);
                 if (await fileExists(this.code, fileUri)) {
@@ -267,12 +285,14 @@ export class AzdService implements IAzdService {
             return [];
         }
 
-        // Search across all workspace folders via findFiles.
+        // Scanning the open workspace folders is never scratch-directory work.
+        requireWorkspaceTrust(this.code);
         return this.code.workspace.findFiles(AzureYamlGlobPattern, undefined, maxResults);
     }
 
     /** @inheritdoc */
     public async updateAzureYaml(cwd: vscode.Uri, updater: (editor: AzureYamlEditor) => void | Promise<void>): Promise<void> {
+        this.requireFolderTrust(cwd);
         const files = await this.findAzureYaml(cwd);
         if (files.length === 0) {
             throw new Error(this.code.l10n.t('No azure.yaml or azure.yml file was found in "{0}".', cwd.fsPath));
@@ -315,6 +335,7 @@ export class AzdService implements IAzdService {
 
     /** @inheritdoc */
     public async init(cwd: vscode.Uri): Promise<void> {
+        this.requireFolderTrust(cwd);
         try {
             await this.processExecutor.spawn({
                 execution: 'background',
@@ -329,6 +350,7 @@ export class AzdService implements IAzdService {
 
     /** @inheritdoc */
     public async envNew(name: string, location: string, subscriptionId: string, cwd: vscode.Uri): Promise<void> {
+        this.requireFolderTrust(cwd);
         try {
             await this.processExecutor.spawn({
                 execution: 'background',
@@ -345,6 +367,7 @@ export class AzdService implements IAzdService {
 
     /** @inheritdoc */
     public async envList(cwd: vscode.Uri): Promise<AzdEnvironment[]> {
+        this.requireFolderTrust(cwd);
         try {
             const result = await this.processExecutor.spawn<AzdEnvironment[]>({
                 execution: 'background',
@@ -362,6 +385,7 @@ export class AzdService implements IAzdService {
 
     /** @inheritdoc */
     public async envExists(name: string, cwd: vscode.Uri): Promise<boolean> {
+        this.requireFolderTrust(cwd);
         try {
             const envs = await this.envList(cwd);
             return envs.some(e => e.Name === name);
@@ -372,6 +396,7 @@ export class AzdService implements IAzdService {
 
     /** @inheritdoc */
     public async envGetValues(name: string, cwd: vscode.Uri): Promise<Record<string, string>> {
+        this.requireFolderTrust(cwd);
         try {
             const result = await this.processExecutor.spawn<Record<string, string>>({
                 execution: 'background',
@@ -391,6 +416,7 @@ export class AzdService implements IAzdService {
 
     /** @inheritdoc */
     public async show(cwd: vscode.Uri): Promise<AzdShowResult | undefined> {
+        this.requireFolderTrust(cwd);
         try {
             const result = await this.processExecutor.spawn<AzdShowResult>({
                 execution: 'background',
@@ -408,6 +434,7 @@ export class AzdService implements IAzdService {
 
     /** @inheritdoc */
     public async provision(cwd: vscode.Uri, env?: Readonly<Record<string, string>>): Promise<void> {
+        this.requireFolderTrust(cwd);
         const authEnv = await this.authServer.getEnv();
 
         try {
@@ -426,6 +453,7 @@ export class AzdService implements IAzdService {
 
     /** @inheritdoc */
     public async deploy(cwd: vscode.Uri, service?: string): Promise<void> {
+        this.requireFolderTrust(cwd);
         const authEnv = await this.authServer.getEnv();
 
         try {
@@ -444,6 +472,7 @@ export class AzdService implements IAzdService {
 
     /** @inheritdoc */
     public async pipelineConfig(cwd: vscode.Uri, provider?: 'github' | 'azdo', environmentName?: string): Promise<void> {
+        this.requireFolderTrust(cwd);
         const authEnv = await this.authServer.getEnv();
 
         try {
@@ -465,6 +494,7 @@ export class AzdService implements IAzdService {
 
     /** @inheritdoc */
     public async down(cwd: vscode.Uri): Promise<void> {
+        this.requireFolderTrust(cwd);
         const authEnv = await this.authServer.getEnv();
 
         try {
@@ -543,6 +573,18 @@ export class AzdService implements IAzdService {
                 void this.code.commands.executeCommand('vscode-azure/installAzd');
             }
         });
+    }
+
+    /**
+     * Rejects the operation when {@linkcode cwd} is workspace content and the
+     * workspace is untrusted. `azd` runs hooks declared in the project's
+     * `azure.yaml`, so every operation rooted at a folder passes through this
+     * before anything is read, written, or spawned. It is called outside the
+     * `try` blocks that turn failures into fallback results, so the trust error
+     * always reaches the caller.
+     */
+    private requireFolderTrust(cwd: vscode.Uri): void {
+        requireFolderTrust(this.code, this.tempDirs, cwd);
     }
 
     /**

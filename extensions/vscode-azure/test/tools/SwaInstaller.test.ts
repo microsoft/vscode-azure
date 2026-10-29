@@ -3,8 +3,10 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { SwaInstaller } from '../../src/tools/SwaInstaller';
-import { createInstallerHarness, installOptions, installedWith, usePlatform } from './installerTestHelpers';
+import { createInstallerHarness, installOptions, installedWith, usePlatform, type SpawnOpts } from './installerTestHelpers';
 
 function createInstaller(onPath: readonly string[] = [], versionOutput = '2.0.10') {
     return createInstallerHarness(SwaInstaller, onPath, { stdout: versionOutput, stderr: '' });
@@ -72,6 +74,18 @@ describe('SwaInstaller (unit)', () => {
             await installer.install(installOptions({ requireSignature: true }));
 
             expect(installedWith(spawn)[0]).to.equal('brew');
+        });
+
+        it('should run the install from the home directory rather than the workspace', async () => {
+            setPlatform('win32');
+            const { installer, spawn } = createInstaller(['npm']);
+
+            await installer.install(installOptions());
+
+            // Without a working directory the task starts in the first workspace
+            // folder, where a project .npmrc would apply to `npm install -g`.
+            const opts = spawn.mock.calls[0].arguments[0] as SpawnOpts;
+            expect(path.normalize(opts.cwd?.fsPath ?? '')).to.equal(path.normalize(os.homedir()));
         });
 
         it('should throw when npm is not present', async () => {

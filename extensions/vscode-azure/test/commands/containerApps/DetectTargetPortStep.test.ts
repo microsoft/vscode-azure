@@ -3,7 +3,9 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { ExternalError } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, createTestActionExecutor, MockUri } from '@microsoft/vscode-azure-utils/testing';
+import { mock } from 'node:test';
 import { DetectTargetPortStep, parseExposedPort } from '../../../src/commands/containerApps/steps/DetectTargetPortStep';
 
 /** Builds a step over a workspace containing exactly the supplied Containerfiles. */
@@ -130,6 +132,25 @@ describe('DetectTargetPortStep (unit)', () => {
             hydratedServiceProjectPath: '/repo-other',
         })).targetPort).to.equal(80);
         expect(mockResult.fs.readFile.mock.callCount()).to.equal(0);
+    });
+
+    it('does not read workspace files when the workspace is untrusted', async () => {
+        const { step, mockResult } = createStep({ '/project/Dockerfile': 'EXPOSE 3000\n' });
+        mock.property(mockResult.workspace, 'isTrusted', false);
+
+        await expect(step.prompt({ ...baseContext, iacFolder: MockUri.file('/project') })).to.be.rejectedWith(ExternalError, 'untrusted workspace');
+
+        expect(mockResult.fs.readFile.mock.callCount()).to.equal(0);
+        expect(mockResult.fs.stat.mock.callCount()).to.equal(0);
+    });
+
+    it('still uses the quickstart port for a createNew job when the workspace is untrusted', async () => {
+        const { step, mockResult } = createStep({});
+        mock.property(mockResult.workspace, 'isTrusted', false);
+
+        const result = await step.prompt({ ...baseContext, job: 'createNew' });
+
+        expect(result.targetPort).to.equal(80);
     });
 
     it('does not overwrite a port the user already has infrastructure for', () => {

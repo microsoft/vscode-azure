@@ -5,6 +5,7 @@
 
 import { CancellationError, ExternalError } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, MockUri } from '@microsoft/vscode-azure-utils/testing';
+import { mock } from 'node:test';
 import { TempDirManager } from '../../../src/azd/TempDirManager';
 import type { AzdWizardContext } from '../../../src/azd/wizard/AzdWizardContext';
 import { SelectIacFolderStep } from '../../../src/azd/wizard/SelectIacFolderStep';
@@ -86,6 +87,41 @@ describe('SelectIacFolderStep (unit)', () => {
             const step = new SelectIacFolderStep(ctx, new TempDirManager(ctx), createMockAzdService());
 
             await expect(step.prompt({ job: 'deploy' })).to.be.rejectedWith(Error, 'requires resourceDisplayName');
+        });
+
+        describe('in an untrusted workspace', () => {
+            function untrusted() {
+                const { ctx, mock: mockResult } = createMockCodeContext();
+                mockResult.workspaceFolders.push({ uri: MockUri.file('/repo'), name: 'repo', index: 0 });
+                mock.property(mockResult.workspace, 'isTrusted', false);
+                const azd = createMockAzdService();
+                azd.findAzureYaml.mock.mockImplementation(() => Promise.resolve([MockUri.file('/repo/azure.yaml')]));
+                return { step: new SelectIacFolderStep(ctx, new TempDirManager(ctx), azd), mockResult, azd };
+            }
+
+            it('deploy: rejects before showing any prompt', async () => {
+                const { step, mockResult } = untrusted();
+
+                await expect(step.prompt({ job: 'deploy', resourceDisplayName: 'Function App' })).to.be.rejectedWith(ExternalError, 'untrusted workspace');
+
+                expect(mockResult.quickPicks.length).to.equal(0);
+            });
+
+            it('no job: rejects without scanning workspace folders for azure.yaml', async () => {
+                const { step, azd } = untrusted();
+
+                await expect(step.prompt({})).to.be.rejectedWith(ExternalError, 'untrusted workspace');
+
+                expect(azd.findAzureYaml.mock.callCount()).to.equal(0);
+            });
+
+            it('createNew: still allocates a temp dir', async () => {
+                const { step } = untrusted();
+
+                const result = await step.prompt({ job: 'createNew' });
+
+                expect((result.iacFolder!).path).to.include('/tmp/d-');
+            });
         });
     });
 });

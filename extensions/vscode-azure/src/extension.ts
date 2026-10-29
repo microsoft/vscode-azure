@@ -163,7 +163,7 @@ function setUpContainer(extensionContext: IExtensionContext, products: ProductRe
     container.bind(IAzdAuthServer).to(AzdAuthServer).inSingletonScope().onActivation(pushDisposable);
     container.bind(IAzdService).to(AzdService).inSingletonScope().onActivation(pushDisposable);
 
-    container.bind(IGenerateBicepStepFactory).toFactory(context => createGenerateBicepStepFactory(context.get(ICodeContext)));
+    container.bind(IGenerateBicepStepFactory).toFactory(context => createGenerateBicepStepFactory(context.get(ICodeContext), context.get(ITempDirManager)));
 
     products.applyBindings(container);
 

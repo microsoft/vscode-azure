@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createMockCodeContext } from '@microsoft/vscode-azure-utils/testing';
+import { createMockCodeContext, MockUri } from '@microsoft/vscode-azure-utils/testing';
 import { TempDirManager } from '../../src/azd/TempDirManager';
 
 describe('TempDirManager (unit)', () => {
@@ -31,6 +31,38 @@ describe('TempDirManager (unit)', () => {
         const dir2 = await manager.createTempDir();
 
         expect(dir1.path).to.not.equal(dir2.path);
+    });
+
+    describe('isTempDir', () => {
+        it('should accept the base directory and anything beneath it', async () => {
+            const { manager } = createManager();
+
+            const dir = await manager.createTempDir();
+
+            expect(manager.isTempDir(dir)).to.be.true;
+            expect(manager.isTempDir(MockUri.joinPath(dir, 'infra', 'main.bicep'))).to.be.true;
+            expect(manager.isTempDir(MockUri.joinPath(dir, '..'))).to.be.true;
+        });
+
+        it('should reject workspace folders and siblings that only share a name prefix', () => {
+            const { manager } = createManager();
+
+            expect(manager.isTempDir(MockUri.file('/project'))).to.be.false;
+            expect(manager.isTempDir(MockUri.file('/mock/storage'))).to.be.false;
+            expect(manager.isTempDir(MockUri.file('/mock/storage/tmp-other/d-1'))).to.be.false;
+        });
+
+        it('should reject paths that use .. to leave the base directory', () => {
+            const { manager } = createManager();
+
+            expect(manager.isTempDir(MockUri.file('/mock/storage/tmp/d-1/../../../project'))).to.be.false;
+        });
+
+        it('should reject a uri on a different scheme or authority', () => {
+            const { manager } = createManager();
+
+            expect(manager.isTempDir(MockUri.from({ scheme: 'vscode-remote', authority: 'host', path: '/mock/storage/tmp/d-1' }))).to.be.false;
+        });
     });
 
     it('should delete tracked directories on dispose', async () => {

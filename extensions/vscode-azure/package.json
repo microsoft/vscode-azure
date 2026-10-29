@@ -184,6 +184,7 @@
             {
                 "command": "vscode-azure/containerApps/deploy",
                 "category": "%commands.category.azure%",
+                "enablement": "isWorkspaceTrusted",
                 "title": "%commands.vscode-azure/containerApps/deploy%"
             },
             {
@@ -205,7 +206,7 @@
             {
                 "command": "vscode-azure/staticWebApps/createSwaConfigFile",
                 "category": "%commands.category.azureStaticWebApps%",
-                "enablement": "!isWeb",
+                "enablement": "!isWeb && isWorkspaceTrusted",
                 "icon": "$(new-file)",
                 "title": "%commands.vscode-azure/staticWebApps/createSwaConfigFile%"
             },
@@ -224,19 +225,21 @@
             {
                 "command": "vscode-azure/azdUp",
                 "category": "%commands.category.azure%",
+                "enablement": "isWorkspaceTrusted",
                 "icon": "$(rocket)",
                 "title": "%commands.vscode-azure/azdUp%"
             },
             {
                 "command": "vscode-azure/azdDown",
                 "category": "%commands.category.azure%",
+                "enablement": "isWorkspaceTrusted",
                 "icon": "$(trash)",
                 "title": "%commands.vscode-azure/azdDown%"
             },
             {
                 "command": "vscode-azure/configureCicd",
                 "category": "%commands.category.azure%",
-                "enablement": "!virtualWorkspace",
+                "enablement": "!virtualWorkspace && isWorkspaceTrusted",
                 "icon": "$(settings-gear)",
                 "title": "%commands.vscode-azure/configureCicd%"
             },

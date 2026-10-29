@@ -7,6 +7,7 @@ import { PromptStep, fileExists, type AsWritable, IVsCode } from '@microsoft/vsc
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 import { type AzdEnvironment, IAzdService } from '../AzdService';
+import { requireWorkspaceTrust } from '../../utils/workspaceTrust';
 import type { AzdWizardContext } from './AzdWizardContext';
 import { InfraFolderName, MainBicepFileName } from './GenerateBicepStep';
 
@@ -40,7 +41,8 @@ import { InfraFolderName, MainBicepFileName } from './GenerateBicepStep';
  * is left untouched -- the wizard never mutates an existing user env.
  *
  * For the `createNew` job this step is a no-op: the temp `iacFolder` is
- * always empty, so all flags would be `false` anyway.
+ * always empty, so all flags would be `false` anyway. For the `deploy` job it
+ * rejects in an untrusted workspace before reading anything.
  */
 @injectable()
 export class HydrateAzdInfoStep<TContext extends AzdWizardContext> extends PromptStep<TContext> {
@@ -56,6 +58,10 @@ export class HydrateAzdInfoStep<TContext extends AzdWizardContext> extends Promp
     }
 
     public async prompt(context: Readonly<TContext>): Promise<Partial<TContext>> {
+        // The `deploy` job always targets a workspace folder, so every probe below
+        // reads workspace content.
+        requireWorkspaceTrust(this.code);
+
         const iacFolder = context.iacFolder!; // eslint-disable-line @typescript-eslint/no-non-null-assertion
 
         const result = {} as AsWritable<Partial<TContext>>;

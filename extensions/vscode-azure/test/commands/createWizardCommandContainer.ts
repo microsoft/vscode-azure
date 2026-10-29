@@ -55,7 +55,7 @@ export function createWizardCommandContainer(mocks: WizardCommandMocks): Contain
     container.bind(ISubscriptionResolver).toConstantValue(mocks.subscriptionResolver ?? (() => Promise.resolve(undefined)));
     container.bind(ISwaCliService).toConstantValue(mocks.swaCli ?? createMockSwaCliService());
 
-    container.bind(IGenerateBicepStepFactory).toFactory(context => createGenerateBicepStepFactory(context.get(ICodeContext)));
+    container.bind(IGenerateBicepStepFactory).toFactory(context => createGenerateBicepStepFactory(context.get(ICodeContext), context.get(ITempDirManager)));
 
     if (mocks.viewItemTree !== undefined) {
         container.bind(IAzureViewViewItemTree).toConstantValue(mocks.viewItemTree as IAzureViewViewItemTree);

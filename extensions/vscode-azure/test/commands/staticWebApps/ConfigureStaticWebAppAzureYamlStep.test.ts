@@ -7,7 +7,8 @@
    IAzdService.updateAzureYaml, which is deprecated but is the sanctioned azure.yaml
    editing path until azd grows first-class support (Azure/azure-dev#9718). */
 
-import { MockUri } from '@microsoft/vscode-azure-utils/testing';
+import { createMockVsCode, MockUri } from '@microsoft/vscode-azure-utils/testing';
+import { mock } from 'node:test';
 import { ConfigureStaticWebAppAzureYamlStep } from '../../../src/commands/staticWebApps/steps/ConfigureStaticWebAppAzureYamlStep';
 import type { CreateStaticWebAppContext } from '../../../src/commands/staticWebApps/CreateStaticWebAppContext';
 import { createMockAzdService } from '../../azd/MockAzdService';
@@ -18,7 +19,7 @@ describe('ConfigureStaticWebAppAzureYamlStep (unit)', () => {
         const iacFolder = MockUri.file('/workspace');
         const azd = createMockAzdService();
         azd.findAzureYaml.mock.mockImplementation(() => Promise.resolve([yamlUri]));
-        const step = new ConfigureStaticWebAppAzureYamlStep(azd);
+        const step = new ConfigureStaticWebAppAzureYamlStep(azd, createMockVsCode().vscode);
         const context = {
             job: 'deploy',
             iacFolder,
@@ -49,7 +50,7 @@ describe('ConfigureStaticWebAppAzureYamlStep (unit)', () => {
     it('should omit the language when none was detected', async () => {
         const azd = createMockAzdService();
         azd.findAzureYaml.mock.mockImplementation(() => Promise.resolve([MockUri.file('/workspace/azure.yaml')]));
-        const step = new ConfigureStaticWebAppAzureYamlStep(azd);
+        const step = new ConfigureStaticWebAppAzureYamlStep(azd, createMockVsCode().vscode);
 
         await step.execute({
             resourceDisplayName: 'Static Web App',
@@ -69,7 +70,7 @@ describe('ConfigureStaticWebAppAzureYamlStep (unit)', () => {
     it('should run the service from the configuration root when the SWA CLI owns the build', async () => {
         const azd = createMockAzdService();
         azd.findAzureYaml.mock.mockImplementation(() => Promise.resolve([MockUri.file('/workspace/azure.yaml')]));
-        const step = new ConfigureStaticWebAppAzureYamlStep(azd);
+        const step = new ConfigureStaticWebAppAzureYamlStep(azd, createMockVsCode().vscode);
 
         await step.execute({
             resourceDisplayName: 'Static Web App',
@@ -99,7 +100,7 @@ describe('ConfigureStaticWebAppAzureYamlStep (unit)', () => {
     it('should not add an unsupported root output service', async () => {
         const azd = createMockAzdService();
         azd.findAzureYaml.mock.mockImplementation(() => Promise.resolve([MockUri.file('/workspace/azure.yaml')]));
-        const step = new ConfigureStaticWebAppAzureYamlStep(azd);
+        const step = new ConfigureStaticWebAppAzureYamlStep(azd, createMockVsCode().vscode);
 
         expect(await step.shouldExecute({
             resourceDisplayName: 'Static Web App',
@@ -112,9 +113,11 @@ describe('ConfigureStaticWebAppAzureYamlStep (unit)', () => {
     });
 
     it('should not touch azure.yaml for a createNew job', async () => {
+        const { vscode, workspace } = createMockVsCode();
+        mock.property(workspace, 'isTrusted', false);
         const azd = createMockAzdService();
         azd.findAzureYaml.mock.mockImplementation(() => Promise.resolve([MockUri.file('/workspace/azure.yaml')]));
-        const step = new ConfigureStaticWebAppAzureYamlStep(azd);
+        const step = new ConfigureStaticWebAppAzureYamlStep(azd, vscode);
 
         expect(await step.shouldExecute({
             resourceDisplayName: 'Static Web App',
@@ -124,5 +127,27 @@ describe('ConfigureStaticWebAppAzureYamlStep (unit)', () => {
             appLocation: 'app',
             outputLocation: 'dist',
         })).to.be.false;
+        expect(azd.findAzureYaml.mock.callCount()).to.equal(0);
+    });
+
+    it('should refuse an untrusted workspace before scanning for azure.yaml or editing it', async () => {
+        const { vscode, workspace } = createMockVsCode();
+        mock.property(workspace, 'isTrusted', false);
+        const azd = createMockAzdService();
+        const step = new ConfigureStaticWebAppAzureYamlStep(azd, vscode);
+        const context: CreateStaticWebAppContext = {
+            resourceDisplayName: 'Static Web App',
+            job: 'deploy',
+            iacFolder: MockUri.file('/workspace'),
+            azdServiceName: 'web',
+            appLocation: 'app',
+            outputLocation: 'dist',
+        };
+
+        await expect(step.shouldExecute(context)).to.be.rejectedWith(/untrusted workspace/);
+        await expect(step.execute(context)).to.be.rejectedWith(/untrusted workspace/);
+
+        expect(azd.findAzureYaml.mock.callCount()).to.equal(0);
+        expect(azd.updateAzureYaml.mock.callCount()).to.equal(0);
     });
 });

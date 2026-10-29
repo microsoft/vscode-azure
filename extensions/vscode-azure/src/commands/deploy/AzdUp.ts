@@ -13,6 +13,7 @@ import type { AzdWizardContext } from '../../azd/wizard/AzdWizardContext';
 import { SelectIacFolderStep } from '../../azd/wizard/SelectIacFolderStep';
 import { ShowEndpointUrlStep } from '../../azd/wizard/ShowEndpointUrlStep';
 import { IAzureViewDataTree } from '../../services';
+import { requireWorkspaceTrust } from '../../utils/workspaceTrust';
 import type { ManagedCommand } from '../ManagedCommand';
 
 /**
@@ -35,6 +36,8 @@ export class AzdUp implements ManagedCommand {
 
     /** @inheritdoc */
     public async execute(fileUri?: vscode.Uri): Promise<void> {
+        requireWorkspaceTrust(this.ctx.code);
+
         // Pre-seed iacFolder when invoked from a right-click on azure.yaml
         const iacFolder = fileUri ? this.ctx.code.Uri.joinPath(fileUri, '..') : undefined;
 

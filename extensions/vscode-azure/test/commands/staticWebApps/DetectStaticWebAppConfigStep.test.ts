@@ -5,6 +5,7 @@
 
 import { createActionContext } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, MockUri } from '@microsoft/vscode-azure-utils/testing';
+import { mock } from 'node:test';
 import { DetectStaticWebAppConfigStep } from '../../../src/commands/staticWebApps/steps/DetectStaticWebAppConfigStep';
 import type { CreateStaticWebAppContext } from '../../../src/commands/staticWebApps/CreateStaticWebAppContext';
 import { SwaCliConfigFileName, type SWACLIOptions } from '../../../src/staticWebApps/SwaCliConfig';
@@ -50,6 +51,38 @@ describe('DetectStaticWebAppConfigStep (unit)', () => {
         it('should run when a location is still missing', () => {
             const { step } = createStep();
             expect(step.shouldPrompt(createContext())).to.equal(true);
+        });
+    });
+
+    describe('workspace trust', () => {
+        it('should refuse an untrusted workspace before reading the project or running the CLI', async () => {
+            const { step, swa, ctx, codeMock } = createStep();
+            mock.property(ctx.code.workspace, 'isTrusted', false);
+
+            await expect(step.prompt(createContext({ job: 'deploy' }))).to.be.rejectedWith(/untrusted workspace/);
+
+            expect(codeMock.fs.readFile.mock.callCount()).to.equal(0);
+            expect(codeMock.fs.stat.mock.callCount()).to.equal(0);
+            expect(swa.detect.mock.callCount()).to.equal(0);
+        });
+
+        it('should detect in the scratch directory of a createNew job even when untrusted', async () => {
+            const { step, swa, ctx } = createStep({ appLocation: 'src' });
+            mock.property(ctx.code.workspace, 'isTrusted', false);
+
+            const result = await step.prompt(createContext({ job: 'createNew' }));
+
+            expect(swa.detect.mock.callCount()).to.equal(1);
+            expect(swa.detect.mock.calls[0].arguments[1]).to.deep.equal({ scratch: true });
+            expect(result.appLocation).to.equal('src');
+        });
+
+        it('should not mark a deploy detection as scratch', async () => {
+            const { step, swa } = createStep({ appLocation: 'src' });
+
+            await step.prompt(createContext({ job: 'deploy' }));
+
+            expect(swa.detect.mock.calls[0].arguments[1]).to.deep.equal({ scratch: false });
         });
     });
 

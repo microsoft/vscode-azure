@@ -14,6 +14,7 @@ export interface SpawnOpts {
     readonly execution?: string;
     readonly focus?: boolean;
     readonly source?: string;
+    readonly cwd?: { readonly fsPath: string };
 }
 
 /** Any installer built from the three services they all take. */

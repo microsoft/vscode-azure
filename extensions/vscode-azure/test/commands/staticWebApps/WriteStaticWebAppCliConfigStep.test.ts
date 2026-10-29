@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createMockVsCode, MockUri } from '@microsoft/vscode-azure-utils/testing';
+import { mock } from 'node:test';
 import { WriteStaticWebAppCliConfigStep } from '../../../src/commands/staticWebApps/steps/WriteStaticWebAppCliConfigStep';
 import type { CreateStaticWebAppContext } from '../../../src/commands/staticWebApps/CreateStaticWebAppContext';
 import { SwaCliConfigFileName } from '../../../src/staticWebApps/SwaCliConfig';
@@ -52,6 +53,24 @@ describe('WriteStaticWebAppCliConfigStep (unit)', () => {
             swaCliConfig: { configurations: { mine: { appLocation: 'app' } } },
             swaCliConfigNeedsWrite: false,
         })).to.equal(false);
+    });
+
+    it('should refuse an untrusted workspace before reading or writing the project', async () => {
+        const { vscode, fs, workspace } = createMockVsCode();
+        mock.property(workspace, 'isTrusted', false);
+        const step = new WriteStaticWebAppCliConfigStep(vscode);
+
+        await expect(step.execute({
+            resourceDisplayName: 'Static Web App',
+            job: 'deploy',
+            deploy: true,
+            iacFolder: MockUri.file('/workspace'),
+            swaCliConfig: { configurations: { detected: { appLocation: 'app' } } },
+            swaCliConfigNeedsWrite: true,
+        })).to.be.rejectedWith(/untrusted workspace/);
+
+        expect(fs.stat.mock.callCount()).to.equal(0);
+        expect(fs.writeFile.mock.callCount()).to.equal(0);
     });
 
     it('should refuse to replace a configuration created after detection', async () => {

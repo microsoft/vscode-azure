@@ -8,6 +8,7 @@ import { createMockDataItemTree, createMockSubscriptionClientProvider, createMoc
 import { createActionContext } from '@microsoft/vscode-azure-utils';
 import { createMockCodeContext, MockOutputChannel, MockUri, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import type * as vscode from 'vscode';
+import { mock as nodeMock } from 'node:test';
 import { TempDirManager } from '../../../src/azd/TempDirManager';
 import { CreateStaticWebApp } from '../../../src/commands/staticWebApps/CreateStaticWebApp';
 import type { SWACLIOptions } from '../../../src/staticWebApps/SwaCliConfig';
@@ -77,6 +78,40 @@ describe('CreateStaticWebApp (unit)', () => {
         expect(azd.init.mock.callCount()).to.equal(1);
         expect(mock.fs.files.has([...mock.fs.files.keys()].find(path => path.endsWith('/infra/main.parameters.json')) ?? '')).to.be.true;
         expect(mock.fs.copy.mock.calls.some(call => call.arguments[1].path.endsWith('/infra'))).to.be.true;
+    });
+
+    it('should provision into scratch without touching an untrusted workspace', async () => {
+        const { command, mock, azd, actionContext } = createCommand(true);
+        nodeMock.property(mock.workspace, 'isTrusted', false);
+        respondToPrompts(mock, [
+            { pick: 'sub-1' },
+            { pick: 'East US 2' },
+            { input: 'my-swa' },
+            'acceptDefault',
+        ]);
+
+        await command.execute();
+
+        expect(azd.provision.mock.callCount()).to.equal(1);
+        expect(azd.deploy.mock.callCount()).to.equal(0);
+        expect([...mock.fs.files.keys()].some(path => path.startsWith('/workspace/'))).to.be.false;
+        expect(actionContext.telemetry.properties.swaLayoutSource).to.equal('cli');
+    });
+
+    it('should still provision a new app in an untrusted window with no folder open', async () => {
+        const { command, mock, azd } = createCommand(false);
+        nodeMock.property(mock.workspace, 'isTrusted', false);
+        respondToPrompts(mock, [
+            { pick: 'sub-1' },
+            { pick: 'East US 2' },
+            { input: 'my-swa' },
+            'acceptDefault',
+        ]);
+
+        await command.execute();
+
+        expect(azd.provision.mock.callCount()).to.equal(1);
+        expect(azd.deploy.mock.callCount()).to.equal(0);
     });
 
     it('should deploy supported output when a workspace is open', async () => {

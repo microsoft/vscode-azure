@@ -238,6 +238,12 @@ Prefer expressing this in the view provider that owns the node rather than inven
 
 Note that a context value only controls *menu visibility*. The command palette ignores it, so anything that must never happen has to be enforced where the work is actually done (for settings, that is `SettingsAdapter.write`). See [Settings](settings.md).
 
+### Workspace trust
+
+Any command or wizard step that spawns a tool against a workspace folder, or writes into one, must call `requireWorkspaceTrust(this.code)` (from `src/utils/workspaceTrust.ts`) before it prompts or spawns anything, so the user is not walked through a flow that then fails. It throws a localized `ExternalError` when the workspace is untrusted. Commands and steps that touch only Azure or the extension's own temp directories do not call it.
+
+Also set `"enablement": "isWorkspaceTrusted"` (joined with any existing clause using `&&`) on commands that are inherently workspace-backed, so they show greyed out in Restricted Mode. This is additive and not sufficient: `enablement` does not stop programmatic `executeCommand` calls from other extensions, and VS Code does not re-check it for every invocation path, so the code check is the boundary.
+
 ## Commands with Resource Selection
 
 Commands that operate on tree items accept an optional `key` parameter. When invoked from a tree item context menu, the key is provided. When invoked from the command palette, the command either prompts the user to select a resource or reports that a selection is required.

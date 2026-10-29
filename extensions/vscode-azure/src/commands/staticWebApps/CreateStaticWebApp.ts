@@ -45,7 +45,10 @@ export class CreateStaticWebApp implements ManagedCommand {
     /** @inheritdoc */
     public async execute(): Promise<void> {
         const get = this.container.get.bind(this.container);
-        const job: AzdJob = this.ctx.code.workspace.workspaceFolders?.length ? 'deploy' : 'createNew';
+        // An untrusted workspace is never deployed from: the wizard provisions into a
+        // scratch directory instead, which needs nothing from the project.
+        const workspaceOpen = !!this.ctx.code.workspace.workspaceFolders?.length;
+        const job: AzdJob = workspaceOpen && this.ctx.code.workspace.isTrusted ? 'deploy' : 'createNew';
 
         const promptSteps = [
             get(SelectIacFolderStep),

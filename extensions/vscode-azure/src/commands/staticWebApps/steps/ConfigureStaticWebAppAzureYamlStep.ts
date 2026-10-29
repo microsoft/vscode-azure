@@ -3,10 +3,11 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ExecuteStep } from '@microsoft/vscode-azure-utils';
+import { ExecuteStep, IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IAzdService } from '../../../azd/AzdService';
 import { canAzdDeployStaticWebApp } from '../../../staticWebApps/SwaCliConfig';
+import { requireWorkspaceTrust } from '../../../utils/workspaceTrust';
 import type { CreateStaticWebAppContext } from '../CreateStaticWebAppContext';
 
 /**
@@ -27,22 +28,32 @@ import type { CreateStaticWebAppContext } from '../CreateStaticWebAppContext';
 export class ConfigureStaticWebAppAzureYamlStep extends ExecuteStep<CreateStaticWebAppContext> {
     public constructor(
         @inject(IAzdService) private readonly azd: IAzdService,
+        @inject(IVsCode) private readonly code: IVsCode,
     ) {
         super();
     }
 
     public override async shouldExecute(context: Readonly<CreateStaticWebAppContext>): Promise<boolean> {
-        return context.job === 'deploy'
+        const iacFolder = context.iacFolder;
+        const applicable = context.job === 'deploy'
             && !context.hasServices
-            && !!context.iacFolder
+            && !!iacFolder
             && !!context.azdServiceName
             && context.appLocation !== undefined
             && context.outputLocation !== undefined
-            && canAzdDeployStaticWebApp(context.outputLocation)
-            && (await this.azd.findAzureYaml(context.iacFolder)).length > 0;
+            && canAzdDeployStaticWebApp(context.outputLocation);
+        if (!applicable) {
+            return false;
+        }
+
+        // Looking for azure.yaml scans the project, so refuse before the scan.
+        requireWorkspaceTrust(this.code);
+        return (await this.azd.findAzureYaml(iacFolder)).length > 0;
     }
 
     public async execute(context: Readonly<CreateStaticWebAppContext>): Promise<void> {
+        requireWorkspaceTrust(this.code);
+
         const { iacFolder, appLocation, outputLocation, azdServiceName } = context;
         if (!iacFolder || appLocation === undefined || outputLocation === undefined || !azdServiceName) {
             return;

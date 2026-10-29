@@ -38,12 +38,14 @@ function createService(spawnFn?: SpawnMethod, acquiredPath?: string) {
         acquire: mock.fn(),
         getResolvedPath: mock.fn(() => acquiredPath),
     };
+    const createTempDir = mock.fn(() => Promise.resolve(mockResult.vscode.Uri.file(ScratchDir)));
     const tempDirs: ITempDirManager = {
-        createTempDir: mock.fn(() => Promise.resolve(mockResult.vscode.Uri.file(ScratchDir))),
+        createTempDir,
+        isTempDir: mock.fn(() => false),
     };
     const { executor } = createTestActionExecutor();
     const service = new SwaCliService(mockResult.vscode, processExecutor, executor, toolService, tempDirs);
-    return { service, spawnMock: spawnMock as unknown as ReturnType<typeof mock.fn>, code: mockResult.vscode, fs: mockResult.fs, executor };
+    return { service, spawnMock: spawnMock as unknown as ReturnType<typeof mock.fn>, code: mockResult.vscode, fs: mockResult.fs, executor, createTempDir };
 }
 
 /** Seeds the configuration a real `swa init` would have written to `--config`. */
@@ -137,6 +139,38 @@ describe('SwaCliService (unit)', () => {
 
             const opts = spawnMock.mock.calls[0].arguments[0] as SpawnOpts;
             expect(argToString(opts.command[0])).to.equal('/tools/swa');
+        });
+    });
+
+    describe('workspace trust', () => {
+        it('should refuse to detect in an untrusted workspace before creating or spawning anything', async () => {
+            const { service, spawnMock, code, createTempDir } = createService();
+            mock.property(code.workspace, 'isTrusted', false);
+
+            await expect(service.detect(MockUri.file(ProjectDir)))
+                .to.be.rejectedWith(/untrusted workspace/);
+
+            expect(createTempDir.mock.callCount()).to.equal(0);
+            expect(spawnMock.mock.callCount()).to.equal(0);
+        });
+
+        it('should detect in a scratch directory even when the workspace is untrusted', async () => {
+            const { service, spawnMock, code, fs } = createService();
+            mock.property(code.workspace, 'isTrusted', false);
+            seedDetected(fs, code, { appLocation: 'src' });
+
+            const result = await service.detect(MockUri.file(ProjectDir), { scratch: true });
+
+            expect(spawnMock.mock.callCount()).to.equal(1);
+            expect(result.options).to.deep.equal({ appLocation: 'src' });
+        });
+
+        it('should still read the CLI version when the workspace is untrusted', async () => {
+            const spawnFn = mock.fn(() => Promise.resolve({ stdout: MinSwaVersion, stderr: '' }));
+            const { service, code } = createService(spawnFn);
+            mock.property(code.workspace, 'isTrusted', false);
+
+            expect(await service.checkVersion()).to.equal(true);
         });
     });
 

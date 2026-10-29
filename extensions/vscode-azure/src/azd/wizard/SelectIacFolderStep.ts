@@ -8,6 +8,7 @@ import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
 import { IAzdService } from '../AzdService';
 import { ITempDirManager } from '../TempDirManager';
+import { requireWorkspaceTrust } from '../../utils/workspaceTrust';
 import type { AzdWizardContext } from './AzdWizardContext';
 
 /**
@@ -30,6 +31,9 @@ import type { AzdWizardContext } from './AzdWizardContext';
  *
  * Skipped when {@linkcode AzdWizardContext.iacFolder iacFolder} is already
  * set (e.g. when invoked from a right-click on `azure.yaml`).
+ *
+ * The `deploy` and no-job modes reject in an untrusted workspace before
+ * prompting; `createNew` only uses a temp directory and works in any workspace.
  */
 @injectable()
 export class SelectIacFolderStep<TContext extends AzdWizardContext> extends PromptStep<TContext> {
@@ -50,6 +54,10 @@ export class SelectIacFolderStep<TContext extends AzdWizardContext> extends Prom
             const iacFolder = await this.tempManager.createTempDir();
             return { iacFolder } as Partial<TContext>;
         }
+
+        // Both remaining modes read or write a workspace folder, so tell the
+        // user before any picker is shown.
+        requireWorkspaceTrust(this.ctx.code);
 
         if (context.job === 'deploy') {
             return this.promptDeployFolder(context);

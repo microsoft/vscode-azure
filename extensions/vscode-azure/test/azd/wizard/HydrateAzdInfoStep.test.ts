@@ -3,7 +3,9 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { ExternalError } from '@microsoft/vscode-azure-utils';
 import { createMockVsCode, MockUri } from '@microsoft/vscode-azure-utils/testing';
+import { mock } from 'node:test';
 import type { AzdShowResult } from '../../../src/azd/AzdService';
 import type { AzdWizardContext } from '../../../src/azd/wizard/AzdWizardContext';
 import { HydrateAzdInfoStep } from '../../../src/azd/wizard/HydrateAzdInfoStep';
@@ -18,7 +20,8 @@ describe('HydrateAzdInfoStep (unit)', () => {
         readonly envValues?: Record<string, string>;
     } = {}) {
         const folderUri = MockUri.file('/workspace');
-        const { vscode: code, fs } = createMockVsCode();
+        const mockResult = createMockVsCode();
+        const { vscode: code, fs } = mockResult;
 
         if (opts.hasInfra) {
             fs.addFile(MockUri.file('/workspace/infra/main.bicep'));
@@ -41,7 +44,7 @@ describe('HydrateAzdInfoStep (unit)', () => {
             job: 'deploy',
             iacFolder: folderUri,
         };
-        return { step, context, azd };
+        return { step, context, azd, mockResult };
     }
 
     describe('shouldPrompt', () => {
@@ -62,6 +65,16 @@ describe('HydrateAzdInfoStep (unit)', () => {
     });
 
     describe('prompt', () => {
+        it('rejects without reading the folder or running azd when the workspace is untrusted', async () => {
+            const { step, context, azd, mockResult } = makeStep();
+            mock.property(mockResult.workspace, 'isTrusted', false);
+
+            await expect(step.prompt(context)).to.be.rejectedWith(ExternalError, 'untrusted workspace');
+
+            expect(mockResult.fs.stat.mock.callCount()).to.equal(0);
+            expect(azd.show.mock.callCount()).to.equal(0);
+            expect(azd.envList.mock.callCount()).to.equal(0);
+        });
         it('classifies fresh state (nothing detected)', async () => {
             const { step, context } = makeStep();
             const result = await step.prompt(context);

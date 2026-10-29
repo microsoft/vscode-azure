@@ -10,6 +10,7 @@ import type * as vscode from 'vscode';
 import { ITempDirManager } from '../azd/TempDirManager';
 import { IToolService } from '../tools/ToolService';
 import { getVersionFromOutput } from '../tools/toolInstallerHelpers';
+import { requireWorkspaceTrust } from '../utils/workspaceTrust';
 import { SwaCliConfigFileName, tryGetStaticWebAppsCliConfig, type StaticWebAppsCliConfigFile, type SWACLIOptions } from './SwaCliConfig';
 
 export const ISwaCliService: ServiceIdentifier<ISwaCliService> = Symbol.for('ISwaCliService');
@@ -40,6 +41,17 @@ export interface SwaCliDetectionResult {
     readonly options: SWACLIOptions;
 }
 
+/** Options for {@linkcode ISwaCliService.detect}. */
+export interface SwaDetectOptions {
+    /**
+     * The folder is a scratch directory created by this extension rather than
+     * workspace content, so detection does not require a trusted workspace.
+     * Anything else runs the CLI against project files, which the CLI treats as
+     * executable configuration.
+     */
+    readonly scratch?: boolean;
+}
+
 export interface ISwaCliService {
     /**
      * Detects a project's Static Web Apps layout with `swa init --yes`, without
@@ -55,16 +67,19 @@ export interface ISwaCliService {
      *
      * @param projectFolder - Project to detect. Doubles as the CLI's working
      *   directory, so it also scopes the scan.
+     * @param options - Set {@linkcode SwaDetectOptions.scratch scratch} only
+     *   when {@linkcode projectFolder} is a directory this extension created.
      *
      * @returns The full generated configuration and the named options selected
      *   from it. Paths are relative to {@linkcode projectFolder}, except
      *   `outputLocation`, which the CLI reports relative to the detected
      *   `appLocation`.
      *
-     * @throws When the CLI is missing, too old, exits non-zero, or detects
-     *   nothing.
+     * @throws When the workspace is untrusted and the folder is not scratch
+     *   (checked before anything is created or spawned), or when the CLI is
+     *   missing, too old, exits non-zero, or detects nothing.
      */
-    detect(projectFolder: vscode.Uri): Promise<SwaCliDetectionResult>;
+    detect(projectFolder: vscode.Uri, options?: SwaDetectOptions): Promise<SwaCliDetectionResult>;
 
     /**
      * Returns whether the resolved `swa` satisfies {@linkcode minVersion},
@@ -90,7 +105,11 @@ export class SwaCliService implements ISwaCliService {
     ) { }
 
     /** @inheritdoc */
-    public async detect(projectFolder: vscode.Uri): Promise<SwaCliDetectionResult> {
+    public async detect(projectFolder: vscode.Uri, options?: SwaDetectOptions): Promise<SwaCliDetectionResult> {
+        if (!options?.scratch) {
+            requireWorkspaceTrust(this.code);
+        }
+
         const scratchDir = await this.tempDirs.createTempDir();
         const configUri = this.code.Uri.joinPath(scratchDir, SwaCliConfigFileName);
 

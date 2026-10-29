@@ -7,6 +7,7 @@ import { IActionContext, ICodeContext, PromptStep, showMessage } from '@microsof
 import { inject, injectable } from 'inversify';
 import { ISwaCliService } from '../../../staticWebApps/SwaCliService';
 import { canAzdDeployStaticWebApp, tryGetStaticWebAppsCliConfig, type SWACLIOptions } from '../../../staticWebApps/SwaCliConfig';
+import { requireWorkspaceTrust } from '../../../utils/workspaceTrust';
 import type { CreateStaticWebAppContext, StaticWebAppAzdLanguage } from '../CreateStaticWebAppContext';
 
 /** Defaults the Static Web Apps build applies when a path is not stated. */
@@ -52,6 +53,12 @@ export class DetectStaticWebAppConfigStep extends PromptStep<CreateStaticWebAppC
             return {};
         }
 
+        // Reading the declared configuration looks into the project, so an
+        // untrusted workspace is refused here, before the first read.
+        if (context.job !== 'createNew') {
+            requireWorkspaceTrust(this.ctx.code);
+        }
+
         const declaredConfig = await tryGetStaticWebAppsCliConfig(this.ctx.code, iacFolder);
         let options: SWACLIOptions;
         let swaCliConfig = declaredConfig;
@@ -65,7 +72,7 @@ export class DetectStaticWebAppConfigStep extends PromptStep<CreateStaticWebAppC
             options = configurations[configName];
             this.actionContext.telemetry.properties.swaLayoutSource = 'config';
         } else {
-            const detected = await this.swa.detect(iacFolder);
+            const detected = await this.swa.detect(iacFolder, { scratch: context.job === 'createNew' });
             options = detected.options;
             swaCliConfig = detected.config;
             swaCliConfigNeedsWrite = context.job === 'deploy';

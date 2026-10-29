@@ -11,6 +11,7 @@ import { AzdDownStep } from '../../azd/wizard/AzdDownStep';
 import type { AzdWizardContext } from '../../azd/wizard/AzdWizardContext';
 import { SelectIacFolderStep } from '../../azd/wizard/SelectIacFolderStep';
 import { IAzureViewDataTree } from '../../services';
+import { requireWorkspaceTrust } from '../../utils/workspaceTrust';
 import type { ManagedCommand } from '../ManagedCommand';
 
 /**
@@ -51,6 +52,10 @@ export class AzdDown implements ManagedCommand {
 
     /** @inheritdoc */
     public async execute(fileUri?: vscode.Uri, options?: AzdDownOptions): Promise<void> {
+        // Checked before the confirmation so an untrusted workspace is refused
+        // rather than asked to confirm a teardown that cannot run.
+        requireWorkspaceTrust(this.ctx.code);
+
         // Pre-seed iacFolder when invoked from a right-click on azure.yaml
         const iacFolder = fileUri ? this.ctx.code.Uri.joinPath(fileUri, '..') : undefined;
 

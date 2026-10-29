@@ -5,6 +5,7 @@
 
 import { fileExists, getWorkspaceFolder, IVsCode, showMessage } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
+import { requireWorkspaceTrust } from '../../utils/workspaceTrust';
 import type { ManagedCommand } from '../ManagedCommand';
 
 /** Name of the Azure Static Web Apps runtime configuration file. */
@@ -39,6 +40,8 @@ export class CreateSwaConfigFile implements ManagedCommand {
 
     /** @inheritdoc */
     public async execute(): Promise<void> {
+        requireWorkspaceTrust(this.code);
+
         const folder = await getWorkspaceFolder(this.code, {
             placeHolder: this.code.l10n.t('Select a workspace folder for \'{0}\'.', staticWebAppConfigFileName),
             stepName: 'Select workspace folder',

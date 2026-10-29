@@ -3,11 +3,12 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ProcessError, type IProcessExecutor, type ProcessExecutorOptions, argToString, argsToStrings } from '@microsoft/vscode-azure-utils';
-import { MockFileSystem, MockUri, createMockVsCode, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
+import { ExternalError, ProcessError, type IProcessExecutor, type ProcessExecutorOptions, argToString, argsToStrings } from '@microsoft/vscode-azure-utils';
+import { MockFileSystem, MockUri, createMockCodeContext, createTestActionExecutor } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import type { IAzdAuthServer } from '../../src/azd/AzdAuthServer';
 import { AzdCommand, AzdService, MinAzdVersion } from '../../src/azd/AzdService';
+import { TempDirManager } from '../../src/azd/TempDirManager';
 import type { IToolService } from '../../src/tools/ToolService';
 
 /**
@@ -39,20 +40,19 @@ function getFileText(fs: MockFileSystem, uri: { readonly path: string }): string
 }
 
 function createService(spawnFn?: SpawnMethod, acquiredPath?: string) {
-    const mockResult = createMockVsCode();
+    const { ctx, mock: mockResult } = createMockCodeContext();
+    const tempDirs = new TempDirManager(ctx);
     const spawnMock = spawnFn ?? mock.fn(() => Promise.resolve({ stdout: '', stderr: '' }));
     const processExecutor = { spawn: spawnMock } as unknown as IProcessExecutor;
-    const authServer: IAzdAuthServer = {
-        // eslint-disable-next-line @typescript-eslint/naming-convention
-        getEnv: mock.fn(() => Promise.resolve({ AZD_AUTH_ENDPOINT: '', AZD_AUTH_KEY: '' })),
-    };
+    const getEnv = mock.fn(() => Promise.resolve({ AZD_AUTH_ENDPOINT: '', AZD_AUTH_KEY: '' })); // eslint-disable-line @typescript-eslint/naming-convention
+    const authServer: IAzdAuthServer = { getEnv };
     const toolService: IToolService = {
         acquire: mock.fn(),
         getResolvedPath: mock.fn(() => acquiredPath),
     };
     const { executor } = createTestActionExecutor();
-    const service = new AzdService(mockResult.vscode, processExecutor, executor, authServer, toolService);
-    return { service, spawnMock: spawnMock as unknown as ReturnType<typeof mock.fn>, fs: mockResult.fs, executor };
+    const service = new AzdService(ctx.code, processExecutor, executor, authServer, toolService, tempDirs);
+    return { service, spawnMock: spawnMock as unknown as ReturnType<typeof mock.fn>, fs: mockResult.fs, executor, tempDirs, workspace: mockResult.workspace, getEnv };
 }
 
 describe('AzdService (unit)', () => {
@@ -629,7 +629,7 @@ describe('AzdService (unit)', () => {
 
         it('should pass the auth environment to the task', async () => {
             const spawnFn = mock.fn((_opts: unknown) => Promise.resolve());
-            const mockResult = createMockVsCode();
+            const { ctx } = createMockCodeContext();
             const processExecutor = {
                 spawn: spawnFn,
                 isOnPath: mock.fn(() => false),
@@ -640,7 +640,7 @@ describe('AzdService (unit)', () => {
                 getResolvedPath: mock.fn(() => undefined),
             };
             const { executor } = createTestActionExecutor();
-            const service = new AzdService(mockResult.vscode, processExecutor, executor, authServer, toolService);
+            const service = new AzdService(ctx.code, processExecutor, executor, authServer, toolService, new TempDirManager(ctx));
 
             await service.down(MockUri.file('/project'));
 
@@ -723,5 +723,107 @@ describe('AzdService (unit)', () => {
             expect(result).to.be.undefined;
         });
 
+    });
+
+    describe('workspace trust', () => {
+        const workspaceDir = MockUri.file('/project');
+        const scratchDir = MockUri.file('/mock/storage/tmp/d-12345678');
+
+        const operations: readonly (readonly [string, (service: AzdService, cwd: typeof workspaceDir) => Promise<unknown>])[] = [
+            ['init', (s, cwd) => s.init(cwd)],
+            ['envNew', (s, cwd) => s.envNew('dev', 'eastus', 'sub-1', cwd)],
+            ['envList', (s, cwd) => s.envList(cwd)],
+            ['envExists', (s, cwd) => s.envExists('dev', cwd)],
+            ['envGetValues', (s, cwd) => s.envGetValues('dev', cwd)],
+            ['show', (s, cwd) => s.show(cwd)],
+            ['provision', (s, cwd) => s.provision(cwd)],
+            ['deploy', (s, cwd) => s.deploy(cwd)],
+            ['pipelineConfig', (s, cwd) => s.pipelineConfig(cwd, 'github')],
+            ['down', (s, cwd) => s.down(cwd)],
+            ['updateAzureYaml', (s, cwd) => s.updateAzureYaml(cwd, () => { /* no updates */ })], // eslint-disable-line @typescript-eslint/no-deprecated
+            ['findAzureYaml (directory)', (s, cwd) => s.findAzureYaml(cwd)],
+        ];
+
+        for (const [name, run] of operations) {
+            it(`${name} should reject without touching the workspace when it is untrusted`, async () => {
+                const { service, spawnMock, workspace, fs, getEnv } = createService();
+                fs.addFile(MockUri.file('/project/azure.yaml'), 'name: my-app\n');
+                mock.property(workspace, 'isTrusted', false);
+
+                await expect(run(service, workspaceDir)).to.be.rejectedWith(ExternalError, 'untrusted workspace');
+
+                expect(spawnMock.mock.callCount()).to.equal(0);
+                expect(fs.stat.mock.callCount()).to.equal(0);
+                expect(fs.readFile.mock.callCount()).to.equal(0);
+                expect(fs.writeFile.mock.callCount()).to.equal(0);
+                expect(getEnv.mock.callCount()).to.equal(0);
+            });
+        }
+
+        for (const [name, run] of operations.filter(([name]) => name !== 'updateAzureYaml' && name !== 'findAzureYaml (directory)')) {
+            it(`${name} should still run in the extension's temp directory when the workspace is untrusted`, async () => {
+                const { service, spawnMock, workspace } = createService();
+                mock.property(workspace, 'isTrusted', false);
+
+                await run(service, scratchDir);
+
+                expect(spawnMock.mock.calls.map(c => (c.arguments[0] as SpawnOpts).cwd.path)).to.include(scratchDir.path);
+            });
+        }
+
+        it('updateAzureYaml should still edit a file in the temp directory when the workspace is untrusted', async () => {
+            const { service, workspace, fs } = createService();
+            mock.property(workspace, 'isTrusted', false);
+            const azureYaml = MockUri.file(`${scratchDir.path}/azure.yaml`);
+            fs.addFile(azureYaml, 'name: my-app\n');
+
+            await service.updateAzureYaml(scratchDir, editor => { editor.set(['services', 'api'], { host: 'function' }); }); // eslint-disable-line @typescript-eslint/no-deprecated
+
+            expect(getFileText(fs, azureYaml)).to.include('api:');
+        });
+
+        it('findAzureYaml should still check the temp directory when the workspace is untrusted', async () => {
+            const { service, workspace, fs } = createService();
+            mock.property(workspace, 'isTrusted', false);
+            fs.addFile(MockUri.file(`${scratchDir.path}/azure.yaml`));
+
+            const result = await service.findAzureYaml(scratchDir);
+
+            expect(result).to.have.length(1);
+        });
+
+        it('findAzureYaml should not search the open workspace folders when the workspace is untrusted', async () => {
+            const { service, workspace } = createService();
+            mock.property(workspace, 'isTrusted', false);
+
+            await expect(service.findAzureYaml()).to.be.rejectedWith(ExternalError, 'untrusted workspace');
+
+            expect(workspace.findFiles.mock.callCount()).to.equal(0);
+        });
+
+        it('findAzureYaml should search the open workspace folders when the workspace is trusted', async () => {
+            const { service, workspace } = createService();
+
+            await service.findAzureYaml();
+
+            expect(workspace.findFiles.mock.callCount()).to.equal(1);
+        });
+
+        it('should not treat a path that escapes the temp directory as a temp directory', async () => {
+            const { service, spawnMock, workspace } = createService();
+            mock.property(workspace, 'isTrusted', false);
+
+            await expect(service.init(MockUri.joinPath(scratchDir, '..', '..', '..', 'project'))).to.be.rejectedWith(ExternalError);
+
+            expect(spawnMock.mock.callCount()).to.equal(0);
+        });
+
+        it('should run in the workspace when it is trusted', async () => {
+            const { service, spawnMock } = createService();
+
+            await service.init(workspaceDir);
+
+            expect(spawnMock.mock.callCount()).to.equal(1);
+        });
     });
 });

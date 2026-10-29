@@ -6,6 +6,7 @@
 import { dirname, IActionExecutor, isFileNotFoundError, IVsCode, PromptStep, readText, relativePath } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import type * as vscode from 'vscode';
+import { requireWorkspaceTrust } from '../../../utils/workspaceTrust';
 import type { CreateContainerAppContext } from '../CreateContainerAppContext';
 
 /** Port used when the project declares none, matching the Container Apps default. */
@@ -45,6 +46,8 @@ export class DetectTargetPortStep extends PromptStep<CreateContainerAppContext> 
         if (!context.iacFolder) {
             return undefined;
         }
+        requireWorkspaceTrust(this.code);
+
         const root = this.code.Uri.joinPath(context.iacFolder, '.');
         let directory = context.hasServices ? await this.serviceDirectory(context, root) : root;
 

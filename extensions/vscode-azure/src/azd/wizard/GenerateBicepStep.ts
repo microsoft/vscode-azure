@@ -5,6 +5,8 @@
 
 import { ExecuteStep, fileExists, ICodeContext } from '@microsoft/vscode-azure-utils';
 import type { ServiceIdentifier } from 'inversify';
+import { requireFolderTrust } from '../requireFolderTrust';
+import type { ITempDirManager } from '../TempDirManager';
 import type { AzdWizardContext } from './AzdWizardContext';
 
 export const InfraFolderName = 'infra';
@@ -27,11 +29,15 @@ export type BicepTemplateName = 'functionApp' | 'containerApp' | 'staticWebApp';
  *
  * Constructed via {@linkcode IGenerateBicepStepFactory} -- the template name
  * and emitted parameter keys are per-command config supplied by the caller,
- * while {@linkcode ICodeContext} is injected.
+ * while {@linkcode ICodeContext} and {@linkcode ITempDirManager} are injected.
+ *
+ * Writing into, or reading, a folder that is not one of the extension's temp
+ * directories requires a trusted workspace.
  */
 export class GenerateBicepStep<TContext extends AzdWizardContext> extends ExecuteStep<TContext> {
     public constructor(
         private readonly ctx: ICodeContext,
+        private readonly tempDirs: ITempDirManager,
         private readonly templateName: BicepTemplateName,
         private readonly parameterKeys: readonly (keyof TContext & string)[],
     ) {
@@ -42,6 +48,9 @@ export class GenerateBicepStep<TContext extends AzdWizardContext> extends Execut
         if (!context.iacFolder) {
             return false;
         }
+
+        // Checking for an existing `infra` folder reads the target folder.
+        requireFolderTrust(this.ctx.code, this.tempDirs, context.iacFolder);
 
         // Trust the hydration flag when present (set by HydrateAzdInfoStep for
         // the `deploy` job). The `createNew` job skips hydration, so fall
@@ -60,6 +69,8 @@ export class GenerateBicepStep<TContext extends AzdWizardContext> extends Execut
     }
 
     public async execute(context: Readonly<TContext>): Promise<void> {
+        requireFolderTrust(this.ctx.code, this.tempDirs, context.iacFolder!); // eslint-disable-line @typescript-eslint/no-non-null-assertion -- required by shouldExecute
+
         const templateUri = this.ctx.code.Uri.joinPath(this.ctx.extensionContext.extensionUri, 'resources', 'templates', this.templateName);
         const infraFolder = this.ctx.code.Uri.joinPath(context.iacFolder!, InfraFolderName); // eslint-disable-line @typescript-eslint/no-non-null-assertion
 
@@ -114,8 +125,8 @@ export const IGenerateBicepStepFactory: ServiceIdentifier<IGenerateBicepStepFact
  * Factory that creates a {@linkcode GenerateBicepStep} for a wizard context,
  * parameterized with the bicep template to copy and the context keys to emit
  * as bicep parameters (in addition to the always-included `environmentName`
- * and `location` azd placeholders). The step's {@linkcode ICodeContext}
- * dependency is supplied by the factory.
+ * and `location` azd placeholders). The step's {@linkcode ICodeContext} and
+ * {@linkcode ITempDirManager} dependencies are supplied by the factory.
  */
 export type IGenerateBicepStepFactory = <TContext extends AzdWizardContext>(
     templateName: BicepTemplateName,
@@ -124,13 +135,13 @@ export type IGenerateBicepStepFactory = <TContext extends AzdWizardContext>(
 
 /**
  * Builds an {@linkcode IGenerateBicepStepFactory} that captures the injected
- * {@linkcode ICodeContext}. Bind this with `toFactory` so commands can
- * construct configured steps without taking {@linkcode ICodeContext} as a
- * caller argument.
+ * {@linkcode ICodeContext} and {@linkcode ITempDirManager}. Bind this with
+ * `toFactory` so commands can construct configured steps without taking those
+ * services as caller arguments.
  */
-export function createGenerateBicepStepFactory(ctx: ICodeContext): IGenerateBicepStepFactory {
+export function createGenerateBicepStepFactory(ctx: ICodeContext, tempDirs: ITempDirManager): IGenerateBicepStepFactory {
     return <TContext extends AzdWizardContext>(
         templateName: BicepTemplateName,
         parameterKeys: readonly (keyof TContext & string)[],
-    ): GenerateBicepStep<TContext> => new GenerateBicepStep<TContext>(ctx, templateName, parameterKeys);
+    ): GenerateBicepStep<TContext> => new GenerateBicepStep<TContext>(ctx, tempDirs, templateName, parameterKeys);
 }
