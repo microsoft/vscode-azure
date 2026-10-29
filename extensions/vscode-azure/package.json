@@ -24,10 +24,6 @@
         "virtualWorkspaces": {
             "supported": "limited",
             "description": "%capabilities.virtualWorkspaces.description%"
-        },
-        "untrustedWorkspaces": {
-            "supported": "limited",
-            "description": "%capabilities.untrustedWorkspaces.description%"
         }
     },
     "contributes": {
@@ -164,7 +160,7 @@
             },
             {
                 "command": "vscode-azure/functions/deploy",
-                "enablement": "isWorkspaceTrusted && !virtualWorkspace",
+                "enablement": "!virtualWorkspace",
                 "category": "%commands.category.azure%",
                 "title": "%commands.vscode-azure/functions/deploy%"
             },
@@ -575,22 +571,22 @@
                 },
                 {
                     "command": "vscode-azure/functions/execute",
-                    "when": "view == vscode-azure/workspace && viewItem =~ /\\bexecuteFunction\\b/i && isWorkspaceTrusted && !virtualWorkspace",
+                    "when": "view == vscode-azure/workspace && viewItem =~ /\\bexecuteFunction\\b/i && !virtualWorkspace",
                     "group": "3_actions@1"
                 },
                 {
                     "command": "vscode-azure/functions/copyUrl",
-                    "when": "view == vscode-azure/workspace && viewItem =~ /\\bcopyFunctionUrl\\b/i && isWorkspaceTrusted && !virtualWorkspace",
+                    "when": "view == vscode-azure/workspace && viewItem =~ /\\bcopyFunctionUrl\\b/i && !virtualWorkspace",
                     "group": "1_browse@1"
                 },
                 {
                     "command": "vscode-azure/functions/enable",
-                    "when": "view == vscode-azure/workspace && viewItem =~ /\\benableFunction\\b/i && isWorkspaceTrusted && !virtualWorkspace",
+                    "when": "view == vscode-azure/workspace && viewItem =~ /\\benableFunction\\b/i && !virtualWorkspace",
                     "group": "3_actions@2"
                 },
                 {
                     "command": "vscode-azure/functions/disable",
-                    "when": "view == vscode-azure/workspace && viewItem =~ /\\bdisableFunction\\b/i && isWorkspaceTrusted && !virtualWorkspace",
+                    "when": "view == vscode-azure/workspace && viewItem =~ /\\bdisableFunction\\b/i && !virtualWorkspace",
                     "group": "3_actions@2"
                 }
             ],

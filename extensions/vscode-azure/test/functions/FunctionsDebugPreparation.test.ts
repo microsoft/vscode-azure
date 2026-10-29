@@ -61,21 +61,6 @@ describe('Functions debug preparation (unit)', () => {
         expect(s.m.fs.writeFile.mock.callCount()).to.equal(0);
     });
 
-    it('rechecks workspace trust after runtime selection', async () => {
-        const s = setup('');
-        const preparing = s.preparation.prepare(s.folder, {});
-        const rejected = expect(preparing).to.be.rejectedWith('trusted, non-virtual workspace');
-        await waitFor(() => s.m.quickPicks.some(pick => pick.show.mock.callCount() > 0));
-        const picker = s.m.quickPicks[0];
-        mock.property(s.m.workspace, 'isTrusted', false);
-        picker.activeItems = [picker.items[0]];
-        picker.accept();
-        await rejected;
-        expect(s.spawn.mock.callCount()).to.equal(0);
-        expect(s.tools.acquire.mock.callCount()).to.equal(0);
-        expect(s.m.fs.writeFile.mock.callCount()).to.equal(0);
-    });
-
     it('does not persist a runtime over settings made dirty while the picker is open', async () => {
         const s = setup('');
         const preparing = s.preparation.prepare(s.folder, {});

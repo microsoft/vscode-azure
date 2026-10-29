@@ -12,7 +12,7 @@ import { FunctionsHostFileTag } from './functionsDetector';
 import { FunctionsProjectKeyPrefix, isFunctionsProjectNode } from '../tree/workspace/WorkspaceNode';
 import { IWorkspaceIndexService } from '../utils/workspaceIndex/WorkspaceIndexService';
 
-/** Selects an indexed project or an explicit project in a trusted local workspace. */
+/** Selects an indexed project or an explicit project in a local workspace. */
 @injectable()
 export class FunctionsProjectSelector {
     public constructor(
@@ -22,8 +22,8 @@ export class FunctionsProjectSelector {
     ) { }
 
     public assertLocal(project: vscode.Uri): void {
-        if (!this.ctx.code.workspace.isTrusted || project.scheme !== 'file' || !this.ctx.code.workspace.getWorkspaceFolder(project)) {
-            throw new ExternalError(this.ctx.code.l10n.t('Functions development requires a project in a trusted, non-virtual workspace folder.'));
+        if (project.scheme !== 'file' || !this.ctx.code.workspace.getWorkspaceFolder(project)) {
+            throw new ExternalError(this.ctx.code.l10n.t('Functions development requires a project in a non-virtual workspace folder.'));
         }
     }
 

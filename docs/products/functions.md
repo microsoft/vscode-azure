@@ -13,8 +13,8 @@ the workspace. Deploy (`vscode-azure/functions/deploy`) runs the same wizard wit
 the `deploy` job: it emits the infrastructure into the project folder, provisions,
 runs `azd deploy`, and offers to open the deployed endpoint through the shared
 endpoint step. It is available from the Command Palette, from a Functions project
-node in the workspace view, and from an Explorer folder, in a trusted,
-non-virtual workspace. A nested project deploys from its own folder. The azd
+node in the workspace view, and from an Explorer folder, in a non-virtual
+workspace. A nested project deploys from its own folder. The azd
 wizard hydrates existing infrastructure and environments instead of replacing
 their configuration. Deploying from a Function App node in the Azure Resources
 view is not offered.
@@ -41,7 +41,7 @@ Owned hosts consume both output generators concurrently and opt into
 ## F5 debugging
 
 The `azure-functions` debugger supports Node.js, Python, Java, PowerShell,
-.NET isolated, and native Go projects in trusted, non-virtual workspace folders. The extension
+.NET isolated, and native Go projects in non-virtual workspace folders. The extension
 activates for it through the type-scoped `onDebugResolve:azure-functions` and
 `onDebugDynamicConfigurations:azure-functions` events, so F5 works before any Azure view is
 opened. The
@@ -232,13 +232,11 @@ complete workspace tree.
 ## Local actions and host ownership
 
 The local tree reuses Execute Function, Copy Function URL, Enable, and Disable.
-Local actions require a file project in an open, trusted workspace; workspace
+Local actions require a file project in an open workspace; workspace
 menus are gated independently of the same commands' remote resource actions.
-An untrusted workspace's projects are not listed in the workspace view at all,
-because the shared workspace index is empty until trust is granted. The extension
-declares `untrustedWorkspaces: limited` so it stays enabled in Restricted Mode for
-Azure resources; none of its contributed settings are restricted configurations
-because none of them control code execution.
+The extension does not declare `untrustedWorkspaces`, so VS Code disables it in
+Restricted Mode and none of these actions run for an untrusted workspace; none of the
+local actions check workspace trust themselves.
 Programmatic calls validate the project, and invocation rechecks it after the
 input prompt.
 Execute and HTTP URL copying require a ready host registered for the exact

@@ -324,7 +324,7 @@ implementation has a fixed timeout or performs validation.
 | FUNC-212 | Java debugger | Adapt | JDWP attach, CLI-owned build | Same preparation/provider; attached in reviewer testing on Windows (needs Debugger and Language Support for Java) |
 | FUNC-213 | Ballerina debugger | Drop | Absent | D5/D8 |
 | FUNC-214 | PowerShell debugger | Adapt | Per-session pipe attach | Same preparation/provider; attached in reviewer testing on Windows |
-| FUNC-215 | Pre-debug validation | Adapt | Retained subset wired; workloads ensured; emulator left to the CLI's managed Azurite | `FunctionsDebugPreparation.prepare/validateStorage/executable/ensureWorkloads`; selector trust gates |
+| FUNC-215 | Pre-debug validation | Adapt | Retained subset wired; workloads ensured; emulator left to the CLI's managed Azurite | `FunctionsDebugPreparation.prepare/validateStorage/executable/ensureWorkloads`; selector virtual-workspace gates |
 | FUNC-216 | Owned host lifecycle | Adapt | Tasks, ports, readiness, cleanup; task terminal always stays open | `LocalFunctionsHostProcess`; `OwnedFunctionsHostSession`; `LocalFunctionsHostTracker` |
 | FUNC-217 | Core Tools lifecycle | Reuse | Shared v5 acquisition | `ToolService`; `FuncInstaller`; on-demand `FunctionsDebugPreparation.executable` |
 | FUNC-218 | JavaScript scaffolding | Defer | Tracked | F1; existing-project debugging is FUNC-210 |
@@ -405,7 +405,7 @@ checklist's checked boxes and is what the reviewer reported; unchecked items are
 | LV-2 | 2. Project discovery and runtime selection | FUNC-002, FUNC-030, FUNC-182, FUNC-188, FUNC-191 | Passed on Windows | None recorded |
 | LV-3 | 3. F5 language matrix | FUNC-033, FUNC-195, FUNC-210, FUNC-211, FUNC-212, FUNC-214, FUNC-215, FUNC-216 | Passed on Windows for Node/TypeScript, Python, .NET isolated, Java, PowerShell, and Go; Go also passed on macOS, which the reviewer accepts in place of Linux | Linux itself; the other five runtimes on macOS/Linux |
 | LV-4 | 4. Launch configuration, isolation, and failures | FUNC-030, FUNC-215, FUNC-216 | Passed on Windows; owned-process cleanup passed on macOS | Linux itself |
-| LV-5 | 5. Local tree and function actions | FUNC-041, FUNC-042, FUNC-043, FUNC-044, FUNC-184, FUNC-185, FUNC-186, FUNC-187, FUNC-198 | Passed on Windows, including the untrusted-workspace behavior | None recorded |
+| LV-5 | 5. Local tree and function actions | FUNC-041, FUNC-042, FUNC-043, FUNC-044, FUNC-184, FUNC-185, FUNC-186, FUNC-187, FUNC-198 | Passed on Windows | None recorded |
 | LV-6 | 6. Azure tree, management, and invocation | FUNC-041, FUNC-042, FUNC-043, FUNC-044, FUNC-060, FUNC-061, FUNC-062, FUNC-169, FUNC-170, FUNC-171, FUNC-173, FUNC-180, FUNC-200 | Passed against disposable Flex and Windows Consumption apps | None recorded |
 | LV-7 | 7. Creation and shared deployment | FUNC-047, FUNC-057, FUNC-202, FUNC-246, FUNC-255, FUNC-256 | Passed (all checklist items checked by the reviewer) | None recorded |
 | LV-8a | 8. Open Log Stream (first item) | FUNC-065 | Passed on a classic Consumption app, and on a Flex app through its Log Analytics workspace with the `App*` tables | The workspace-refused fallback to the component scope has automated coverage only; it was not run live |
@@ -451,7 +451,7 @@ Azurite reachability checks are absent.
 | Area | Result and evidence |
 |---|---|
 | Tree ownership/dispatch | Functions data/view providers precede Web App fallbacks in `registerFunctions`; products precede generic providers in `registerProducts`; local providers are in `registerTrees` |
-| Menus and state | All retained product command menus use case-insensitive word-boundary regexes. Local menu entries independently require trust and non-virtual workspaces. Running/stopped, disabled, HTTP, identity, and error branches match manifest predicates |
+| Menus and state | All retained product command menus use case-insensitive word-boundary regexes. Local menu entries independently require non-virtual workspaces. Running/stopped, disabled, HTTP, identity, and error branches match manifest predicates |
 | Invalid nodes | Remote app/function/listing and local project/function failures remain visible; invalid nodes offer refresh, not destructive/resource capabilities |
 | Icons | Existing `packages/azutils/resources/azureIcons/microsoft.web/sites~functionapp.svg` matches the logical type; virtual nodes use ThemeIcons; no SVG is added |
 | Data/view separation | Views do not fetch/mutate the data model. The Functions view derives relative labels, error presentation, and localized clickable hints from domain nodes |
@@ -534,11 +534,11 @@ Run on 2026-10-29 on Node 24.22.2 against the merged head `7faeb6c4` plus the lo
 |---|---|
 | `pnpm run lint` | Passed, exit 0, all three workspaces |
 | `pnpm run build` | Passed, exit 0, all three workspaces |
-| `pnpm run test` | Passed, exit 0: utils 679 passing/12 pending; azutils 479 passing; extension 1,535 passing/3 pending |
+| `pnpm run test` | Passed, exit 0: utils 679 passing/12 pending; azutils 479 passing; extension 1,528 passing/3 pending |
 | `bicep build extensions\vscode-azure\resources\templates\functionApp\main.bicep --stdout` | Passed at the prior audit baseline, exit 0; pinned pattern resolved. Not repeated because the Bicep consumer/module inputs are unchanged |
 | ID/partition/contribution checks | Passed at the prior audit baseline: complete unique catalog; exact Drop/Defer sets; command registrations, menu gates, NLS keys, schema associations, and icon path. Not repeated for the manual-testing fixes, which add two activation events and no commands, menus, or catalog entries |
 
-Total automated tests: **2,693 passing, 15 pending**. Pending tests were not run.
+Total automated tests: **2,686 passing, 15 pending**. Pending tests were not run.
 `pnpm install` ran after the merge and left the lockfile unchanged.
 Raw build/test logs remain session artifacts, not repository files.
 

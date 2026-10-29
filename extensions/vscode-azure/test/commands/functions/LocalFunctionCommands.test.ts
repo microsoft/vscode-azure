@@ -82,41 +82,6 @@ describe('Local function commands (integration)', () => {
         expect(s.remote.mock.callCount()).to.equal(0);
     });
 
-    it('requires workspace trust before local invocation, URL reads, or settings writes', async () => {
-        const s = await setup();
-        mock.property(s.m.workspace, 'isTrusted', false);
-        const write = mock.method(s.code.workspace.fs, 'writeFile');
-        s.host.listFunctions.mock.resetCalls();
-        await expect(new ExecuteFunction(s.context.ctx, s.selector, s.remote, s.createHost, s.target, new FunctionUrlResolver(s.code, s.remote, s.target)).execute(s.fn.id))
-            .to.be.rejectedWith('trusted, non-virtual workspace');
-        await expect(copyCommand(s).execute(s.fn.id))
-            .to.be.rejectedWith('trusted, non-virtual workspace');
-        const state = new SetFunctionState(s.code, s.selector, s.remoteSettings, s.resourceCache, s.target);
-        await expect(state.execute(true, s.fn.id)).to.be.rejectedWith('trusted, non-virtual workspace');
-        await expect(state.execute(false, s.fn.id)).to.be.rejectedWith('trusted, non-virtual workspace');
-        expect(s.host.invoke.mock.callCount()).to.equal(0);
-        expect(s.host.invokeHttp.mock.callCount()).to.equal(0);
-        expect(s.host.listFunctions.mock.callCount()).to.equal(0);
-        expect(write.mock.callCount()).to.equal(0);
-        expect(s.remote.mock.callCount()).to.equal(0);
-    });
-
-    it('rechecks workspace trust after the invocation input prompt', async () => {
-        const s = await setup();
-        const prompts = respondToPrompts(s.m, [{ input: 'input' }]);
-        const createInputBox = s.code.window.createInputBox;
-        mock.method(s.code.window, 'createInputBox', () => {
-            const input = createInputBox();
-            input.onDidAccept(() => { mock.property(s.m.workspace, 'isTrusted', false); });
-            return input;
-        });
-        await expect(new ExecuteFunction(s.context.ctx, s.selector, s.remote, s.createHost, s.target, new FunctionUrlResolver(s.code, s.remote, s.target)).execute(s.fn.id))
-            .to.be.rejectedWith('trusted, non-virtual workspace');
-        prompts.assertAllConsumed();
-        expect(s.host.invoke.mock.callCount()).to.equal(0);
-        expect(s.host.invokeHttp.mock.callCount()).to.equal(0);
-    });
-
     it('submits a non-HTTP local function through the admin endpoint', async () => {
         const s = await setup();
         s.host.listFunctions.mock.mockImplementation(() => Promise.resolve([{
@@ -137,8 +102,8 @@ describe('Local function commands (integration)', () => {
         const write = mock.method(s.code.workspace.fs, 'writeFile');
         for (const uri of [s.code.Uri.parse('virtual:/repo/host.json'), s.code.Uri.file('/outside/host.json')]) {
             const fn = { ...s.fn, project: { ...s.fn.project, resourceUri: uri } };
-            expect(() => s.target.host(fn)).to.throw('trusted, non-virtual workspace');
-            await expect(s.target.setDisabled(fn, true)).to.be.rejectedWith('trusted, non-virtual workspace');
+            expect(() => s.target.host(fn)).to.throw('non-virtual workspace');
+            await expect(s.target.setDisabled(fn, true)).to.be.rejectedWith('non-virtual workspace');
         }
         expect(write.mock.callCount()).to.equal(0);
     });

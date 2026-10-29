@@ -182,13 +182,6 @@ describe('CreateFunctionApp (unit)', () => {
         await expect(cmd.execute('deploy', `${project.id}-missing`)).to.be.rejectedWith('Refresh the workspace view');
     });
 
-    it('rejects a deployment in an untrusted workspace before prompting', async () => {
-        const { cmd, mockResult } = createCommand();
-        mock.property(mockResult.workspace, 'isTrusted', false);
-
-        await expect(cmd.execute('deploy')).to.be.rejectedWith('trusted, non-virtual workspace');
-    });
-
     it('should skip provisioning when user picks No on ConfirmProvisionStep', async () => {
         const { cmd, mockResult, azd } = createCommand();
 

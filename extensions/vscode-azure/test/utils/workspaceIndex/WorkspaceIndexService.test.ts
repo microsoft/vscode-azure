@@ -214,34 +214,6 @@ describe('WorkspaceIndexService (unit)', () => {
         service.dispose();
     });
 
-    describe('workspace trust', () => {
-        it('is empty and scans nothing in an untrusted workspace', async () => {
-            const { service, mock: m } = createService();
-            mock.property(m.workspace, 'isTrusted', false);
-
-            const index = await service.getIndex();
-
-            expect(index.withTag(FunctionsHostFileTag)).to.deep.equal([]);
-            expect(m.fs.readDirectory.mock.callCount()).to.equal(0);
-            service.dispose();
-        });
-
-        it('builds and notifies consumers when trust is granted', async () => {
-            const { service, mock: m } = createService();
-            const trusted = mock.property(m.workspace, 'isTrusted', false);
-            await service.getIndex();
-
-            let changed = 0;
-            service.onDidChangeIndex(() => { changed++; });
-            trusted.mock.mockImplementation(true);
-            m.workspaceTrustGrantedEmitter.fire();
-
-            expect(changed).to.equal(1);
-            expect((await service.getIndex()).withTag(FunctionsHostFileTag)).to.have.length(1);
-            service.dispose();
-        });
-    });
-
     it('does not retain a failed build', async () => {
         const { service, mock: m } = createService();
         m.fs.readDirectory.mock.mockImplementationOnce(

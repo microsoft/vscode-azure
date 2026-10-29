@@ -167,9 +167,6 @@ export interface MockVsCodeResult {
      */
     readonly workspaceFoldersChangeEmitter: EventEmitter<vscode.WorkspaceFoldersChangeEvent>;
 
-    /** Fire this emitter to simulate the user granting workspace trust. */
-    readonly workspaceTrustGrantedEmitter: EventEmitter<void>;
-
     /** The mock `tasks` namespace. */
     readonly tasks: MockedNamespace<typeof vscode.tasks>;
     /** Signals custom task completion for host ownership tests. */
@@ -395,7 +392,6 @@ export function createMockVsCode(
     };
     const configChangeEmitter = new EventEmitter<{ affectsConfiguration(section: string): boolean }>();
     const workspaceFoldersChangeEmitter = new EventEmitter<vscode.WorkspaceFoldersChangeEvent>();
-    const workspaceTrustGrantedEmitter = new EventEmitter<void>();
     const taskProcessEndEmitter = new EventEmitter<vscode.TaskProcessEndEvent>();
     const taskEndEmitter = new EventEmitter<vscode.TaskEndEvent>();
     const debugSessionEndEmitter = new EventEmitter<vscode.DebugSession>();
@@ -484,7 +480,6 @@ export function createMockVsCode(
         getWorkspaceFolder,
         onDidChangeConfiguration: configChangeEmitter.event,
         onDidChangeWorkspaceFolders: workspaceFoldersChangeEmitter.event,
-        onDidGrantWorkspaceTrust: workspaceTrustGrantedEmitter.event,
         get workspaceFolders() { return workspaceFolders.length > 0 ? workspaceFolders : undefined; },
         fs,
         registerFileSystemProvider,
@@ -579,7 +574,6 @@ export function createMockVsCode(
         configChangeEmitter,
         sessionsChangeEmitter,
         workspaceFoldersChangeEmitter,
-        workspaceTrustGrantedEmitter,
         tasks,
         taskProcessEndEmitter,
         taskEndEmitter,

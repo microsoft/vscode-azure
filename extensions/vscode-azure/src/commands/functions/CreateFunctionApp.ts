@@ -85,8 +85,8 @@ export class CreateFunctionApp implements ManagedCommand {
             iacFolder = (stat.type & this.code.FileType.Directory) !== 0 ? resolved : dirname(resolved);
         }
 
-        if (job === 'deploy' && (!this.code.workspace.isTrusted || (iacFolder && iacFolder.scheme !== 'file'))) {
-            throw new ExternalError(this.code.l10n.t('Deploying Functions requires a trusted, non-virtual workspace.'));
+        if (job === 'deploy' && iacFolder && iacFolder.scheme !== 'file') {
+            throw new ExternalError(this.code.l10n.t('Deploying Functions requires a non-virtual workspace.'));
         }
 
         const wizard = new Wizard<CreateFunctionAppContext>(

@@ -521,7 +521,7 @@ External facts: `https://json.schemastore.org/function.json` and `https://json.s
 ```
 
 - [x] `jsonValidation` for `function.json` and `host.json`. <- FUNC-008, FUNC-009
-- [x] Trust and `!virtualWorkspace` enablement on dedicated local commands;
+- [x] `!virtualWorkspace` enablement on dedicated local commands;
   workspace-menu gates and programmatic project validation on the shared
   local/remote function commands.
   <- FUNC-004

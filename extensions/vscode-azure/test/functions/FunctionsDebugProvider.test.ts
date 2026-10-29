@@ -471,10 +471,7 @@ describe('Functions debug provider (unit)', () => {
         await expect(s.projects.select(undefined, s.folder)).to.be.rejectedWith(error);
     });
 
-    it('rejects an untrusted workspace, protected flags, and invalid ports before tool acquisition', async () => {
-        const s = setup();
-        mock.property(s.m.workspace, 'isTrusted', false);
-        expect(await s.debugProvider.resolveDebugConfigurationWithSubstitutedVariables(undefined, s.config)).to.be.undefined;
+    it('rejects protected flags and invalid ports before tool acquisition', async () => {
         const trusted = setup();
         for (const flag of ['--port=7000', '-p', '--output=json', '--no-tui',
             '--host-version=4.1049.0', '-v', '--profile=other', '--enable-auth', '--no-build=false',
@@ -489,7 +486,6 @@ describe('Functions debug provider (unit)', () => {
                 ...trusted.config, env: { [key]: 'unowned' },
             })).to.be.undefined;
         }
-        expect(s.tools.acquire.mock.callCount()).to.equal(0);
         expect(trusted.tools.acquire.mock.callCount()).to.equal(0);
     });
 
