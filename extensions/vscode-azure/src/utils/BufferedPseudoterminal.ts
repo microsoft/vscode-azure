@@ -26,6 +26,7 @@ export class BufferedPseudoterminal implements vscode.Pseudoterminal {
     private closed = false;
     private exitCode?: number;
     private lastWasCarriageReturn = false;
+    private endsOnKeyPress = false;
 
     public readonly onDidWrite = this.writeEmitter.event;
     public readonly onDidClose = this.exitEmitter.event;
@@ -58,6 +59,26 @@ export class BufferedPseudoterminal implements vscode.Pseudoterminal {
         if (this.opened) {
             this.exitEmitter.fire(this.exitCode);
             this.close();
+        }
+    }
+
+    /**
+     * Writes `lines` (the failure and a prompt telling the user to press a key), then keeps the terminal
+     * open until the user presses a key and ends it with a zero exit code. Ending a pseudoterminal
+     * disposes it with its text, and a nonzero code would add a notification for a failure the user
+     * has just read.
+     */
+    public endOnKeyPress(...lines: readonly string[]): void {
+        for (const line of lines) {
+            this.write(`${line}\n`);
+        }
+        this.endsOnKeyPress = true;
+    }
+
+    /** @inheritdoc */
+    public handleInput(): void {
+        if (this.endsOnKeyPress) {
+            this.finish(0);
         }
     }
 

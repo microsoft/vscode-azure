@@ -50,6 +50,24 @@ describe('BufferedPseudoterminal (unit)', () => {
         expect(onClose.mock.callCount()).to.equal(1);
     });
 
+    it('writes its lines, ignores input until told to end on a key press, then ends once with a zero exit code', () => {
+        const onClose = mock.fn();
+        const terminal = new BufferedPseudoterminal({ onClose });
+        const written = mock.fn<(text: string) => void>();
+        const finished = mock.fn<(code: number) => void>();
+        terminal.onDidWrite(written);
+        terminal.onDidClose(finished);
+        terminal.open();
+        terminal.handleInput();
+        expect(finished.mock.callCount()).to.equal(0);
+        terminal.endOnKeyPress('It failed.', 'Press any key.');
+        expect(written.mock.calls.map(call => call.arguments[0]).join('')).to.equal('It failed.\r\nPress any key.\r\n');
+        terminal.handleInput();
+        terminal.handleInput();
+        expect(finished.mock.calls.map(call => call.arguments[0])).to.deep.equal([0]);
+        expect(onClose.mock.callCount()).to.equal(1);
+    });
+
     it('does not run onOpen when closed while buffered output is delivered', () => {
         const onOpen = mock.fn();
         const terminal = new BufferedPseudoterminal({ onOpen, onClose: mock.fn() });

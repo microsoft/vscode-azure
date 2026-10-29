@@ -365,9 +365,10 @@ an actionable error.
 by Container Apps. Concurrent starts share initialization, existing sessions are
 focused instead of duplicated, and terminal closure or service disposal cancels
 polling and pending log queries. Discovery and initial-query failures occur
-before terminal creation. Later polling failures finish the terminal with a
-nonzero exit code while retaining its error output; opening the stream again
-starts a fresh active session.
+before terminal creation. A polling failure writes its reason to the terminal and
+waits for a key press, because ending a pseudoterminal disposes it along with the
+text; the reason is also logged and shown in an error notification. Opening the stream
+again starts a fresh active session, and the failed terminal needs no other cleanup.
 
 The service reads the instrumentation GUID from
 `APPLICATIONINSIGHTS_CONNECTION_STRING`, lists Application Insights components,

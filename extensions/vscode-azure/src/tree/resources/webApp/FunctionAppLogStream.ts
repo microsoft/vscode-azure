@@ -265,9 +265,13 @@ export class FunctionAppLogStream implements Disposable {
             }
         } catch (error: unknown) {
             if (!signal.aborted) {
-                pty.write(this.code.l10n.t('Log stream failed: {0}\n', stringifyError(error)));
-                this.executor.output.error(this.code.l10n.t('[data] Function log stream failed for \'{0}\'.', app.name));
-                pty.finish(1);
+                const reason = stringifyError(error);
+                pty.endOnKeyPress(
+                    this.code.l10n.t('Log stream failed: {0}', reason),
+                    this.code.l10n.t('Press any key to close this terminal, then run Open Log Stream again to retry.'),
+                );
+                this.executor.output.error(this.code.l10n.t('[data] Function log stream failed for \'{0}\': {1}', app.name, reason));
+                void this.code.window.showErrorMessage(this.code.l10n.t('The log stream for \'{0}\' failed: {1}', app.name, reason));
             }
         } finally {
             const key = AzureNodeId.from(app).toString();
