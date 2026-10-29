@@ -674,12 +674,11 @@ dispositions. Their labels match the report's findings.
   available, which [#360](https://github.com/microsoft/vscode-azure/issues/360) tracks.
   The generic capability alone is not product certification.
   <- FUNC-258 (integration depends on FUNC-181, FUNC-250)
-- [ ] **P6-02:** Complete the existing
-  [manual checklist](https://github.com/microsoft/vscode-azure/pull/367#issuecomment-6444069751):
-  storage/Azurite, real Azure creation/deployment and log-query failure paths, and POSIX
-  owned-process cleanup. All six runtimes have attached in reviewer testing on Windows, and
-  Go on macOS (accepted in place of Linux). Record evidence without secrets. Pending automated
-  tests are not passes.
+- [x] **P6-02:** The existing
+  [manual checklist](https://github.com/microsoft/vscode-azure/pull/367#issuecomment-6444069751)
+  is fully checked by the reviewer (50 of 50). All six runtimes attached on Windows, and Go
+  with owned-process cleanup on macOS (accepted in place of Linux). Not separately recorded:
+  the other five runtimes on macOS/Linux and a clean-machine storage/Azurite run.
   <- FUNC-030, FUNC-033, FUNC-041, FUNC-042, FUNC-043, FUNC-044,
   FUNC-057, FUNC-060, FUNC-061, FUNC-062, FUNC-065, FUNC-195, FUNC-210,
   FUNC-211, FUNC-212, FUNC-214, FUNC-215, FUNC-216, FUNC-249, FUNC-268, FUNC-269
