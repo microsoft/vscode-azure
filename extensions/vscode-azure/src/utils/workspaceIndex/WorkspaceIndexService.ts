@@ -9,7 +9,7 @@ import type * as vscode from 'vscode';
 import { defaultExcludedDirectories } from './walkWorkspace';
 import { buildWorkspaceIndex, updateWorkspaceIndex } from './buildWorkspaceIndex';
 import { IWorkspaceDetector, type WorkspaceDetector } from './WorkspaceDetector';
-import { MutableWorkspaceIndex, type WorkspaceIndex } from './WorkspaceIndex';
+import type { MutableWorkspaceIndex, WorkspaceIndex } from './WorkspaceIndex';
 
 /** Quiet period before a burst of file events triggers a rebuild. */
 const rebuildDebounceMs = 500;
@@ -46,10 +46,6 @@ export interface IWorkspaceIndexService {
      * The current index, building it on first use and returning the retained
      * result afterwards. It is kept fresh by file watching, so callers should
      * hold the service rather than caching the index.
-     *
-     * An untrusted workspace has an empty index, and nothing is scanned: its
-     * contents must not drive local tooling. {@linkcode onDidChangeIndex} fires
-     * when trust is granted so consumers re-read it.
      */
     getIndex(token?: vscode.CancellationToken): Promise<WorkspaceIndex>;
 
@@ -112,15 +108,11 @@ export class WorkspaceIndexService implements IWorkspaceIndexService, Disposable
             watcher.onDidDelete(handle),
             watcher,
             code.workspace.onDidChangeWorkspaceFolders(() => { this.invalidate(); }),
-            code.workspace.onDidGrantWorkspaceTrust(() => { this.invalidate(); }),
         );
     }
 
     /** @inheritdoc */
     public async getIndex(token?: vscode.CancellationToken): Promise<WorkspaceIndex> {
-        if (!this.code.workspace.isTrusted) {
-            return new MutableWorkspaceIndex();
-        }
         this.indexPromise ??= buildWorkspaceIndex(this.code, this.detectors, token);
         try {
             return await this.indexPromise;

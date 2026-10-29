@@ -20,10 +20,6 @@
         "virtualWorkspaces": {
             "supported": "limited",
             "description": "%capabilities.virtualWorkspaces.description%"
-        },
-        "untrustedWorkspaces": {
-            "supported": "limited",
-            "description": "%capabilities.untrustedWorkspaces.description%"
         }
     },
     "contributes": {
