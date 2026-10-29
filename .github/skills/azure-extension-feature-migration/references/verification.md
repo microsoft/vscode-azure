@@ -1,8 +1,8 @@
 # Verification
 
-Three independent checks: **artifacts** (did the process record survive?), **parity** (did every inventoried
-feature get handled per its signed disposition?) and **conformance** (does the new code meet the monorepo's
-standards?). Report gaps honestly — do not hide an incomplete slice.
+Check **artifacts**, **ID accounting**, **retained behavioral contracts**, and **conformance**.
+Run behavioral checks at each slice boundary, not just at the end. Report gaps honestly:
+accounting for every ID is necessary, but it does not prove that retained behavior works.
 
 ## Artifact check (run this first)
 
@@ -14,11 +14,13 @@ no matter how much code landed.
 - [ ] `docs/migrations/<service>/TRIAGE.md` exists, is tracked, and carries the sign-off header.
 - [ ] `docs/migrations/<service>/MIGRATION-PLAN.md` exists, is tracked, and every task is tagged with a
       `TRIAGE.md` ID.
-- [ ] All three landed **before any feature code** in the PR's commit history.
+- [ ] The committed inventory precedes triage; signed triage and plan are committed before feature code.
+      Artifacts already on the base branch count; no first-commit layout is required.
+- [ ] `docs/migrations/<service>/PARITY-REPORT.md` is tracked and updated with verification evidence.
 - [ ] No process artifact exists only in a session/scratch directory or in chat.
 - [ ] If the branch has rebased or merged from `main`, `MIGRATION-PLAN.md` has a drift-log entry for each one.
 
-## Parity check (against `TRIAGE.md`)
+## ID accounting (against `TRIAGE.md`)
 
 Walk `TRIAGE.md` **by ID**. Every ID must resolve to exactly one outcome:
 
@@ -45,6 +47,46 @@ Build the coverage report (keyed by the stable ID):
 > `commands/swa/CreateStaticWebApp.ts` -> `extensions/vscode-azure/src/commands/swa/CreateStaticWebApp.ts`).
 > See [target-patterns.md](target-patterns.md) for the full-path convention.
 
+## Behavioral contract check (per slice)
+
+For every retained Migrate/Adapt/Reuse row, compare implementation and wiring to the
+[mapping contract](pattern-mapping.md#ux-and-behavioral-contract):
+
+- [ ] Trace entry points and availability guards through execution, not just to a matching symbol.
+      Check node states and direct/palette invocation as applicable.
+- [ ] Verify local/cloud side effects and result semantics, including what the user sees or can click.
+      An admin-endpoint invocation is not interchangeable with an HTTP-route request; informational
+      text is not an actionable hint. Check package-backed/read-only restrictions on deletion.
+- [ ] Exercise success, failure, and cancellation; verify cleanup and whether any writes occur before
+      cancellation/back navigation. For prompts, verify launch-only/persisted behavior and precedence.
+- [ ] For Reuse, confirm actual wiring and all conditions under which the shared feature applies.
+      Record unsupported conditions as gaps rather than claiming unconditional parity.
+- [ ] Each intentional difference is covered by human approval in the decision record. Unresolved
+      adaptation decisions block the affected contract from being reported satisfied.
+- [ ] Apply existing localization, layering, additive fixture reuse, and valuable-test rules to this
+      slice using the conformance/test checks below; do not defer them to final review.
+
+## Review coverage and evidence levels
+
+For a requested **whole-PR review**, enumerate every in-scope changed file at the reviewed head,
+including tests, Markdown, instructions, and contributions/configuration. Account for each in the
+review record; do not silently sample source files or omit documentation/tests. If review is partial,
+name the unreviewed files and do not call it a whole-PR review. Refresh coverage when the head changes.
+
+Keep evidence levels separate in `PARITY-REPORT.md`:
+
+| Evidence level | What it establishes | Record |
+|----------------|---------------------|--------|
+| Inspected code | The traced implementation/wiring appears to satisfy a contract | Reviewed head, files/paths, entry point and conditions; inspection is not execution |
+| Automated behavioral evidence | A scenario was exercised by a test/check | Exact command, result, and scenario/assertion covered; compilation alone is not behavioral evidence |
+| Live verification | The scenario worked in a real VS Code/tool/service environment | Version/environment, scenario, result, and remaining limitations; mocks do not qualify |
+
+Generate a manual checklist from the remaining live scenarios, including availability restrictions,
+failure/cancellation, and UX interactions not demonstrated automatically. Give scenarios stable
+IDs linked to feature IDs. When updating the checklist, preserve checked progress and its evidence;
+reopen an item only when changed behavior/environment invalidates that evidence, explaining why.
+Unperformed live checks remain unchecked, not inferred green from inspection or unit tests.
+
 ## Tree contract check
 
 For each migrated node type:
@@ -52,7 +94,8 @@ For each migrated node type:
       `when` regex that targets it (`viewItem =~ /\b<ctx>\b/i`, word boundaries present).
 - [ ] Status / `invalid*` variants from the inventory are preserved and their `when` clauses still match.
 - [ ] The node's icon resolves — either an existing `azureIcons/<logicalType>.svg` was reused, or (only when none matched) a new SVG was added to the **azutils** package. Its name equals `<logicalType>.toLowerCase()+'.svg'`.
-- [ ] `DataProvider`/`ViewProvider` are registered **before** the generic fallback in `registerTrees.ts`.
+- [ ] Resource providers are registered through `ProductRegistrar`, with products ordered **before**
+      the generic fallback in `registerProducts.ts`; workspace/activity entries use `registerTrees.ts`.
 - [ ] **Layering is clean in both directions:** the view provider does not mutate data. `DataProvider`s
       and data-layer resources carry intrinsic domain data/state (ARM `name`, status, flags, counts), not
       presentation-only fields (formatted display strings, tree-item descriptions/tooltips, icon ids, or
@@ -69,6 +112,8 @@ For each migrated node type:
       scanning, paged mock trees).
 - [ ] Where a shared symbol was close but not general enough, it was **extended additively** rather than
       forked into the product folder.
+- [ ] New extraction has an existing second consumer or a framework-owned responsibility;
+      hypothetical reuse alone has not moved product orchestration into shared infrastructure.
 - [ ] Drift: for each rebase/merge from `main`, already-landed slices were re-swept and any newly-shared
       primitive was adopted.
 
@@ -78,6 +123,10 @@ For each migrated node type:
 - [ ] No `contributes.configuration` setting stores project/deployment configuration (paths, build commands,
       service topology) that belongs in `azure.yaml`.
 - [ ] No scaffolding or build-preset generation that azd already performs.
+- [ ] The mapping verifies supported-version capabilities for VS Code, the owning language extension,
+      product CLI/Core Tools, and azd as relevant, rather than recreating upstream orchestration.
+- [ ] New commands/editors/prompts have documented incremental value over F5, ordinary file editing,
+      and shared deployment.
 - [ ] No call to, dependency on, or compatibility shim for the extension being retired — no `azureFunctions.*`
       / `azure<Service>.*` command invocations, no `extensionDependencies` entry, no reading its settings or
       state, no preserved contribution ids.
@@ -109,16 +158,16 @@ For each migrated node type:
 - [ ] **Prompt budget:** every retained prompt is justified in the mapping record; anything defaultable is a
       Bicep default the user can edit, not a question.
 - [ ] There is **one** create command — no "advanced" variant, mode flag, or basic-vs-advanced branch.
-- [ ] Conditionality lives in `shouldPrompt`/`shouldExecute`, not in conditionally assembled step arrays.
+- [ ] Applicability within a job uses `shouldPrompt`/`shouldExecute`; any job-specific execute-step
+      assembly follows `AzdJob`, not basic/advanced modes.
 - [ ] Mapping records the AVM repository path searched, candidate suitability, pinned registry version,
       and parameter/output mapping.
 - [ ] A resource module is used only for a single-resource topology; any topology with supporting resources
       uses a pattern module.
-- [ ] If no suitable AVM module exists, the generated infrastructure contains exactly one AVM-shaped local
-      module plus one consumer, with the module boundary preserved by the generation step.
-- [ ] The `GenerateBicepStep` template selection mechanism declares everything it must copy: an AVM-backed
-      consumer template containing a pinned `br/public:avm/...:<version>` reference, or both fallback files
-      with source/destination mappings that preserve the local module's relative path.
+- [ ] If no suitable AVM module exists, the selected template directory contains exactly one AVM-shaped
+      local module plus one consumer; `GenerateBicepStep` preserves the module boundary when copying it.
+- [ ] `IGenerateBicepStepFactory` selects the intended directory and parameter keys. Any AVM-backed
+      consumer contains a pinned `br/public:avm/...:<version>` reference; local module paths resolve.
 - [ ] The Bicep consumer builds successfully and resolves its pinned remote module or bundled local module.
 - [ ] Resource-specific steps skip correctly when `hasInfra` (Post-clone / Bootstrapped scenarios).
 
@@ -131,6 +180,10 @@ For each migrated node type:
 - [ ] Azure SDK types re-exported from the azutils wrapper; **no** `@azure/*` imports in the extension.
 - [ ] ARM `type`/`logicalType` compared case-insensitively against constants.
 - [ ] `stringifyError()` in catch clauses; `void`-prefixed fire-and-forget promises.
+- [ ] Processes, including probes/builds, use shared `command()` and `IProcessExecutor`; serialized
+      environment/config strings follow the receiving tool's contract (`docs/conventions.md`).
+- [ ] Per-operation objects separate injected services from launch inputs and have explicit
+      lifetime/cleanup ownership (`docs/dependency-injection.md`).
 - [ ] Migrated classes expose the **minimum surface** — no public field or method without an external caller,
       and nothing widened just to let a test reach it.
 - [ ] User cancellation throws `CancellationError` rather than a bespoke outcome enum or result union.
@@ -167,6 +220,16 @@ For each migrated node type:
 
 ## Final report
 
-Produce a short report containing: the artifact check, the parity coverage table, any gaps/deferrals, and the
-build-gate results. If anything is incomplete, say so explicitly and point to the tracking task — a partial
-migration reported honestly is correct; a partial migration reported as done is not.
+Commit **`docs/migrations/<service>/PARITY-REPORT.md`** containing:
+
+- Artifact chronology and ID accounting (inventory IDs vs. signed outcomes), separately from
+  retained behavioral-contract satisfaction. Include the coverage table above and per-contract
+  satisfied/gap/unverified status; paths/symbols alone cannot establish satisfaction.
+- Conditional Reuse, approved adaptations and unresolved adaptation decisions, deferrals, and gaps,
+  linked to the decision record and tracking task.
+- Review file coverage at the reviewed head, inspected-code evidence, automated behavioral results,
+  build-gate results, and live evidence as distinct claims; list skipped checks and why.
+- The remaining manual checklist, preserving checked progress and evidence on subsequent updates.
+
+If anything is incomplete, say so explicitly. A complete ID count with unverified contracts is
+not full behavioral parity.
