@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
+import { createMockVsCode, withSettings } from '@microsoft/vscode-azure-utils/testing';
 import {
     AzureChinaCloud, AzurePublicCloud, AzureUSGovernment,
     getAuthProviderId, getConfiguredAzureEnv,
@@ -92,6 +92,33 @@ describe('Environment (unit)', () => {
             expect(env.resourceManagerEndpointUrl).to.equal('https://management.mycloud.example');
             expect(env.resourceManagerDefaultScope).to.equal('https://management.mycloud.example/.default');
             expect(env.storageEndpoint('acct')).to.equal('https://acct.blob.core.mycloud.example');
+        });
+
+        it('should normalize custom endpoints with long slash sequences', async () => {
+            const mock = createMockVsCode();
+            const slashes = '/'.repeat(100_000);
+            for (const [endpoint, expected] of [
+                ['', ''],
+                [slashes, ''],
+                [`https://example.test${slashes}`, 'https://example.test'],
+                [`https://example.test${slashes}segment`, `https://example.test${slashes}segment`],
+                [`https://example.test${slashes}segment///`, `https://example.test${slashes}segment`],
+            ]) {
+                await withSettings(mock, {
+                    'microsoft-sovereign-cloud.environment': 'custom',
+                    'microsoft-sovereign-cloud.customEnvironment': {
+                        resourceManagerEndpointUrl: endpoint,
+                        portalUrl: endpoint,
+                        logAnalyticsEndpoint: endpoint,
+                    },
+                }, () => {
+                    const env = getConfiguredAzureEnv(mock.vscode);
+                    expect(env.resourceManagerEndpointUrl).to.equal(expected);
+                    expect(env.resourceManagerDefaultScope).to.equal(`${expected}/.default`);
+                    expect(env.portalUrl).to.equal(expected);
+                    expect(env.logAnalyticsEndpoint).to.equal(expected);
+                });
+            }
         });
 
         it('should fall back to public-cloud defaults and name "Custom" for a bare custom cloud', () => {

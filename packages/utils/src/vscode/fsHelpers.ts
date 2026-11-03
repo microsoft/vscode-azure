@@ -6,6 +6,7 @@
 import type * as vscode from 'vscode';
 import { Utils } from 'vscode-uri';
 import { ExternalError } from '../base/ExternalError';
+import { stripTrailingSlash } from '../base/stripTrailingSlash';
 import type { IVsCode } from './IVsCode';
 
 /**
@@ -48,7 +49,7 @@ export function isFileNotFoundError(error: unknown): boolean {
  * has no relative-path counterpart.
  */
 export function relativePath(base: vscode.Uri, uri: vscode.Uri): string | undefined {
-    const basePath = base.path.replace(/\/+$/, '');
+    const basePath = stripTrailingSlash(base.path);
     if (uri.path === basePath) {
         return '';
     }

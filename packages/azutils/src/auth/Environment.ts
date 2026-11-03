@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { IVsCode } from '@microsoft/vscode-azure-utils';
+import { stripTrailingSlash } from '@microsoft/vscode-azure-utils';
 
 /**
  * Configuration section read by VS Code's built-in Microsoft authentication
@@ -119,11 +120,6 @@ export function createEnvironment(parameters: EnvironmentParametersLike, isCusto
         containerRegistryEndpoint: (registryName: string) => `https://${registryName}.${containerRegistryDnsSuffix}`,
         azureWebSitesEndpoint: (siteName: string) => `https://${siteName}.${azureWebSitesEndpointSuffix}`,
     };
-}
-
-/** Remove one or more trailing slashes from a URL string. */
-function stripTrailingSlash(value: string): string {
-    return value.replace(/\/+$/, '');
 }
 
 /** The endpoint/suffix parameters for the public Azure cloud, also used as the base for custom clouds. */
