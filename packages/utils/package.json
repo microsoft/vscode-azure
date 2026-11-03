@@ -47,7 +47,7 @@
     },
     "dependencies": {
         "@azure/core-process": "^1.0.0",
-        "minimatch": "^10.2.6",
+        "minimatch": "^11.0.1",
         "vscode-uri": "catalog:"
     },
     "devDependencies": {
