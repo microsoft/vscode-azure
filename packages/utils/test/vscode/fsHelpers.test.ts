@@ -42,6 +42,24 @@ describe('fsHelpers (unit)', () => {
             expect(relativePath(base, MockUri.file('/repo/src'))).to.equal('src');
         });
 
+        it('handles long internal and trailing slash sequences', () => {
+            const slashes = '/'.repeat(100_000);
+            for (const path of ['/repo', `/repo${slashes}segment`]) {
+                const uri = MockUri.from({ scheme: 'file', path: `${path}/src` });
+                for (const suffix of ['', slashes]) {
+                    const base = MockUri.from({ scheme: 'file', path: `${path}${suffix}` });
+                    expect(relativePath(base, uri)).to.equal('src');
+                    expect(relativePath(base, MockUri.from({ scheme: 'file', path }))).to.equal('');
+                }
+            }
+        });
+
+        it('resolves children of a slash-only root', () => {
+            const base = MockUri.from({ scheme: 'file', authority: 'server', path: '///' });
+            const uri = MockUri.from({ scheme: 'file', authority: 'server', path: '/src' });
+            expect(relativePath(base, uri)).to.equal('src');
+        });
+
         it('returns undefined when the uri is outside the base', () => {
             expect(relativePath(MockUri.file('/repo'), MockUri.file('/other/app.ts'))).to.be.undefined;
         });
