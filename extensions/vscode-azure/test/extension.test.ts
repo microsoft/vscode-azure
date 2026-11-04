@@ -70,7 +70,7 @@ describe('bundle size guardrail (vscode integration)', () => {
     // upgrade). A PR that touches this number should explain, in its description,
     // *why* the bundle legitimately grew or shrank. If you cannot explain it,
     // investigate before updating the baseline.
-    const VSIX_BASELINE_BYTES = 419_728;
+    const VSIX_BASELINE_BYTES = 420_293;
     const VSIX_TOLERANCE = 0.1;
     const VSIX_WARN_THRESHOLD = 0.05;
 
