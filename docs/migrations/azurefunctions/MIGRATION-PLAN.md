@@ -647,6 +647,7 @@ External facts: `https://json.schemastore.org/function.json` and `https://json.s
 | 2026-10-26 | `9ba6343f` via `27cfa45f` | Docs-only main delta. Current re-sweep confirms the existing shared consumers without a source adoption delta. |
 | 2026-10-26 | `25585e88` via `cc6e1ba6` | Adopted shared JSONC helpers, required JSON reader, `mapPages`, and generalized `BufferedPseudoterminal`; current re-sweep confirms imports/callers and the terminal closed guard. |
 | 2026-10-29 | `4fa8f435` via `ab4c881c` | Main added process-creation and per-operation DI ownership guidance, the evidence-level verification rules, and a Zod bump. Re-audit: every Functions process launch (version probes, `func setup`/workload commands, the owned host, Delve) is built with `command()` and run through `IProcessExecutor`; the two worker-argument environment strings are serialized for the host, not as argv, and `quoteWorkerArgument` now documents that contract. The owned-host session is a fresh, explicitly initialized instance from `IOwnedFunctionsHostSessionProvider`; `LocalFunctionsHostProcess` owns session stops and disposal. The parity report is restructured into the three evidence levels. |
+| 2026-11-06 | `c316d6c4` | Dependency-only main delta: the extension's development dependency `@azure/identity` is 4.14.1. No source or testing-barrel changes, so no new shared primitives or migration wiring changes apply. |
 
 The additional first-parent merges on 2026-10-15 integrate shared topic
 branches, not main: `43f9c045`, `490b096d`, `538c68cf`, `ce3d1797`,
