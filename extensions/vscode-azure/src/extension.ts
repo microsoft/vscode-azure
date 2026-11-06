@@ -29,6 +29,8 @@ import { AzdService, IAzdService } from './azd/AzdService';
 import { ITempDirManager, TempDirManager } from './azd/TempDirManager';
 import { createGenerateBicepStepFactory, IGenerateBicepStepFactory } from './azd/wizard/GenerateBicepStep';
 import { registerCommands } from './commands/registerCommands';
+import { AppInsightsKey } from './constants';
+import { AzuriteEmulator } from './emulators/AzuriteEmulator';
 import { registerProducts } from './products/registerProducts';
 import { ProductRegistrar } from './registration/ProductRegistrar';
 import { pushDisposable } from './services';
@@ -137,7 +139,7 @@ function setUpContainer(extensionContext: IExtensionContext, products: ProductRe
     }).inSingletonScope().onActivation(pushDisposable);
 
     container.bind(ITelemetryReporter).toDynamicValue(context => {
-        return createTelemetryReporter(context.get(ICodeContext), TelemetryReporter);
+        return createTelemetryReporter(context.get(ICodeContext), TelemetryReporter, AppInsightsKey);
     }).inSingletonScope().onActivation(pushDisposable);
 
     container.bind(ICommandRegistry).toDynamicValue(context => {
@@ -159,6 +161,7 @@ function setUpContainer(extensionContext: IExtensionContext, products: ProductRe
     container.bind(IToolService).to(ToolService).inSingletonScope();
 
     container.bind(IWorkspaceIndexService).to(WorkspaceIndexService).inSingletonScope().onActivation(pushDisposable);
+    container.bind(AzuriteEmulator).toSelf().inSingletonScope();
 
     container.bind(IAzdAuthServer).to(AzdAuthServer).inSingletonScope().onActivation(pushDisposable);
     container.bind(IAzdService).to(AzdService).inSingletonScope().onActivation(pushDisposable);

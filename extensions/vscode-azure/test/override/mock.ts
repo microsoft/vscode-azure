@@ -8,8 +8,8 @@
 // This file is compiled as a SEPARATE esbuild entry point (test/mock.bundle.js)
 // so none of this code ends up in the main extension bundle.
 
-import { IAcrClientProvider, IAzureListingFetcher, ICredentialFactory, IDeploymentClientProvider, IResourceClientProvider, ISubscriptionClientProvider, type AzureTenant } from '@microsoft/vscode-azure-azutils';
-import { createMockAzureListingFetcher, createMockCredentialFactory, makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
+import { IAcrClientProvider, IAzureListingFetcher, ICredentialFactory, IDeploymentClientProvider, IResourceClientProvider, ISubscriptionClientProvider, IWebAppClientProvider, type AzureTenant } from '@microsoft/vscode-azure-azutils';
+import { createMockAzureListingFetcher, createMockCredentialFactory, createMockWebAppClient, makeAccount, makeGenericResource, makeResourceGroup, makeSubscription, makeTenant } from '@microsoft/vscode-azure-azutils/testing';
 import type { Container } from 'inversify';
 import { createMockAcrClient } from '../tree/resources/acr/mockAcr';
 import { createMockResourceClient } from '../tree/resources/mockResourceClient';
@@ -192,6 +192,9 @@ export function applyOverrides(container: Container): void {
     );
     container.rebind(IAcrClientProvider).toConstantValue(
         () => createMockAcrClient(registryDetails),
+    );
+    container.rebind(IWebAppClientProvider).toConstantValue(
+        () => createMockWebAppClient({ defaultHostName: 'demo-webapp.azurewebsites.net' }),
     );
 
     container.rebind(IDeploymentClientProvider).toConstantValue(

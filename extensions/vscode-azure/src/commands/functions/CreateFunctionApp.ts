@@ -24,6 +24,8 @@ import { FunctionsProjectKeyPrefix, isFunctionsProjectNode } from '../../tree/wo
 import type { ManagedCommand } from '../ManagedCommand';
 import type { CreateFunctionAppContext } from './CreateFunctionAppContext';
 import { PickRuntimeStep } from './steps/PickRuntimeStep';
+import { ConfigureFunctionAppServiceStep } from './steps/ConfigureFunctionAppServiceStep';
+import { HydrateFunctionsRuntimeStep } from './steps/HydrateFunctionsRuntimeStep';
 
 /**
  * Walks the user through creating an Azure Function App. Supports two
@@ -61,6 +63,7 @@ export class CreateFunctionApp implements ManagedCommand {
             get(HydratableChooseSubscriptionStep),
             get(HydratableChooseLocationStep),
             get(ProjectNameStep),
+            get(HydrateFunctionsRuntimeStep),
             get(PickRuntimeStep),
             get(ConfirmProvisionStep),
         ];
@@ -68,6 +71,7 @@ export class CreateFunctionApp implements ManagedCommand {
         const executeSteps: ExecuteStep<CreateFunctionAppContext>[] = [
             get(IGenerateBicepStepFactory)<CreateFunctionAppContext>('functionApp', ['functionWorkerRuntime', 'runtimeVersion', 'azdServiceName']),
             get(GenerateAzureYamlStep),
+            get(ConfigureFunctionAppServiceStep),
             get(CreateAzdEnvStep),
             get(AzdProvisionStep),
         ];

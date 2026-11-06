@@ -72,6 +72,21 @@
                 "title": "%commands.vscode-azure/workspace/revealInExplorer%"
             },
             {
+                "command": "vscode-azure/emulators/start",
+                "icon": "$(play)",
+                "title": "%commands.vscode-azure/emulators/start%"
+            },
+            {
+                "command": "vscode-azure/emulators/stop",
+                "icon": "$(debug-stop)",
+                "title": "%commands.vscode-azure/emulators/stop%"
+            },
+            {
+                "command": "vscode-azure/emulators/install",
+                "icon": "$(extensions)",
+                "title": "%commands.vscode-azure/emulators/install%"
+            },
+            {
                 "command": "vscode-azure/resources/openInPortal",
                 "icon": "$(link-external)",
                 "title": "%commands.vscode-azure/resources/openInPortal%"
@@ -309,6 +324,9 @@
         ],
         "menus": {
             "commandPalette": [
+                { "command": "vscode-azure/emulators/start", "when": "false" },
+                { "command": "vscode-azure/emulators/stop", "when": "false" },
+                { "command": "vscode-azure/emulators/install", "when": "false" },
                 {
                     "command": "vscode-azure/resources/reveal",
                     "when": "false"
@@ -424,6 +442,21 @@
                 }
             ],
             "view/item/context": [
+                {
+                    "command": "vscode-azure/emulators/start",
+                    "when": "view == vscode-azure/workspace && viewItem =~ /\\bstartEmulator\\b/i",
+                    "group": "inline@1"
+                },
+                {
+                    "command": "vscode-azure/emulators/stop",
+                    "when": "view == vscode-azure/workspace && viewItem =~ /\\bstopEmulator\\b/i",
+                    "group": "inline@2"
+                },
+                {
+                    "command": "vscode-azure/emulators/install",
+                    "when": "view == vscode-azure/workspace && viewItem =~ /\\binstallEmulator\\b/i",
+                    "group": "inline@1"
+                },
                 {
                     "command": "vscode-azure/webApp/start",
                     "when": "view == vscode-azure/resources && viewItem =~ /\\bstartWebApp\\b/i",

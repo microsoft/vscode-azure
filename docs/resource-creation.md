@@ -53,7 +53,8 @@ Using `CreateFunctionApp` as the concrete example:
 | 3 | `HydratableChooseSubscriptionStep` | Unless hydrated | `subscription` |
 | 4 | `HydratableChooseLocationStep` | Unless hydrated | `location` |
 | 5 | `ProjectNameStep` | Unless `environmentName` set | `environmentName`, `azdServiceName` (if not already hydrated) |
-| 6 | `PickRuntimeStep` | Unless `hasInfra` | `functionWorkerRuntime` |
+| 5a | `HydrateFunctionsRuntimeStep` | Never | Reuses the local project's `FUNCTIONS_WORKER_RUNTIME` for deploy jobs without services; derives the service name from the environment if needed |
+| 6 | `PickRuntimeStep` | Unless the runtime is known, or infrastructure and deploy services already exist | `functionWorkerRuntime` |
 | 6a | `PickRuntimeVersionStep` (subprompt of `PickRuntimeStep`) | Unless `hasInfra` or version already set (only shows a pick when the runtime has more than one supported version) | `runtimeVersion` |
 | 7 | `ConfirmProvisionStep` | Only when Bootstrapped | `provision` (may flip to `false`) |
 
@@ -63,6 +64,7 @@ Using `CreateFunctionApp` as the concrete example:
 |---|------|-----------|--------|
 | 1 | `GenerateBicepStep` | No existing `infra/` | Copies bundled `main.bicep` template, writes `main.parameters.json` |
 | 2 | `GenerateAzureYamlStep` | No existing `azure.yaml` | Runs `azd init --minimal --no-prompt` |
+| 2a | `ConfigureFunctionAppServiceStep` | Deploy project without services | Adds a `function` service rooted at the project folder with the selected runtime's azd language |
 | 3 | `CreateAzdEnvStep` | No `existingDefaultEnvName` | Runs `azd env new` |
 | 4 | `AzdProvisionStep` | `provision === true` | Runs `azd provision` as a foreground VS Code task |
 | 5 | `AzdDeployStep` | `deploy === true` | Runs `azd deploy`; tracks progress via `CodeDeploymentHandle` |

@@ -7,6 +7,8 @@ import type { ITreeItem, ViewProvider } from '@microsoft/vscode-azure-utils';
 import { IActionExecutor, IVsCode } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IWorkspaceViewDataTree } from '../../../services';
+import { ControlEmulator } from '../../../commands/emulators/ControlEmulator';
+import { combineContextValues } from '../../contextValueHelpers';
 import { EmulatorKeyPrefix, EmulatorsGroupId, isEmulatorNode, isEmulatorsGroupNode, type EmulatorNode, type EmulatorsGroupNode } from '../WorkspaceNode';
 
 /** View-layer provider for the emulators group and its emulator children. */
@@ -65,6 +67,16 @@ function toEmulatorTreeItem(code: IVsCode, node: EmulatorNode): ITreeItem {
     const item = new code.TreeItem(node.label, code.TreeItemCollapsibleState.None);
     item.id = node.id;
     item.description = node.description;
-    item.iconPath = new code.ThemeIcon('debug-disconnect');
+    item.iconPath = new code.ThemeIcon(node.state === 'running' ? 'debug-start'
+        : node.state === 'partial' ? 'warning' : 'debug-disconnect');
+    item.tooltip = node.resourceUri?.fsPath ?? node.description;
+    item.contextValue = combineContextValues(
+        node.state === 'notInstalled' ? ControlEmulator.InstallContextValue : '',
+        node.state === 'stopped' || node.state === 'partial' ? ControlEmulator.StartContextValue : '',
+        node.state === 'running' || node.state === 'partial' ? ControlEmulator.StopContextValue : '',
+    );
+    if (node.state === 'notInstalled') {
+        item.command = { command: 'vscode-azure/emulators/install', title: code.l10n.t('View Azurite Extension'), arguments: [node.id] };
+    }
     return item;
 }

@@ -336,7 +336,7 @@ describe('ACR Tree Integration (integration)', () => {
             expect((item.iconPath as { id: string }).id).to.equal('warning');
         });
 
-        it('should show description with logicalType after enrichment', async () => {
+        it('should show a friendly resource type after enrichment', async () => {
             const { viewTree, dataTree } = createTestPipeline();
 
             await collectTree(viewTree);
@@ -348,7 +348,7 @@ describe('ACR Tree Integration (integration)', () => {
             await dataTree.whenEnriched(registryNode!);
 
             const item = await viewTree.getTreeItem(registryKey);
-            expect(item.description).to.equal(AcrResourceType);
+            expect(item.description).to.equal('Container Registries');
         });
     });
 

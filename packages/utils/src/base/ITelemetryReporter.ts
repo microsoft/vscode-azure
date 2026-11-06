@@ -22,14 +22,14 @@ export type ITelemetryReporter = Pick<TelemetryReporter, 'sendTelemetryErrorEven
  * - When set to `v` / `verbose`, returns a console-logging debug reporter.
  * - Development and test extension modes return a {@linkcode NullTelemetryReporter}
  *   unless verbose logging is requested.
- * - Otherwise, constructs a real reporter using the `aiKey` from the extension's
- *   `package.json`.
+ * - Otherwise, constructs a real reporter using the supplied Application Insights key.
  *
- * @throws When a real reporter is needed but the extension manifest has no `aiKey`.
+ * @throws When a real reporter is needed but the supplied key is empty.
  */
 export function createTelemetryReporter(
     context: Readonly<ICodeContext>,
     reporterCtor: new (connectionString: string) => ITelemetryReporter,
+    aiKey: string,
 ): ITelemetryReporter {
     const { code, extensionContext } = context;
     const debugTelemetry = process.env.DEBUGTELEMETRY?.toLowerCase() ?? process.env.VSCODE_RUNNING_TESTS?.toLowerCase();
@@ -42,9 +42,7 @@ export function createTelemetryReporter(
         return new NullTelemetryReporter();
     }
 
-    const aiKey = (extensionContext.extension.packageJSON as { aiKey?: string }).aiKey;
-
-    if (!aiKey) {
+    if (!aiKey.trim()) {
         throw new Error('AI key is required for telemetry reporter');
     }
 

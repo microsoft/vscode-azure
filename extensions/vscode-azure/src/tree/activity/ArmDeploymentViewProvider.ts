@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { getResourceTypePresentation } from '@microsoft/vscode-azure-azutils';
 import { type ITreeItem, IVsCode, type ViewProvider } from '@microsoft/vscode-azure-utils';
 import { inject, injectable } from 'inversify';
 import { IActivityViewDataTree } from '../../services';
@@ -78,7 +79,17 @@ export class ArmDeploymentViewProvider implements ViewProvider<string> {
             throw new Error(`Activity with ID ${activityId} not found`);
         }
 
-        return toActivityTreeItem(this.code, activity, activityId);
+        const item = toActivityTreeItem(this.code, activity, activityId);
+        if (activity.type === 'armDeploymentOperation') {
+            const operation = activity as ArmDeploymentOperationActivity;
+            item.description = operation.targetResourceType
+                ? getResourceTypePresentation(this.code, operation.targetResourceType)?.name
+                : undefined;
+            item.tooltip = operation.targetResourceType
+                ? this.code.l10n.t('{0}\nResource type: {1}', activity.title, operation.targetResourceType)
+                : activity.title;
+        }
+        return item;
     }
 
     /**

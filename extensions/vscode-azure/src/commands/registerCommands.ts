@@ -12,6 +12,7 @@ import { AzdDown } from './deploy/AzdDown';
 import { AzdUp } from './deploy/AzdUp';
 import { ConfigureCicd } from './deploy/ConfigureCicd';
 import { ClearActivities } from './deploy/ClearActivities';
+import { ControlEmulator } from './emulators/ControlEmulator';
 import type { ManagedCommand } from './ManagedCommand';
 import { AcquireTool } from './tools/AcquireTool';
 import { LoadMore } from './tree/LoadMore';
@@ -31,6 +32,9 @@ export function registerCommands(
 
     registerManagedCommand(container, 'vscode-azure/workspace/refresh', RefreshWorkspaceView);
     registerManagedCommand(container, 'vscode-azure/workspace/revealInExplorer', RevealInExplorer);
+    registerManagedCommand(container, 'vscode-azure/emulators/start', ControlEmulator, 'start');
+    registerManagedCommand(container, 'vscode-azure/emulators/stop', ControlEmulator, 'stop');
+    registerManagedCommand(container, 'vscode-azure/emulators/install', ControlEmulator, 'install');
 
     registerManagedCommand(container, 'vscode-azure/activity/clearCompleted', ClearActivities, 'completed');
     registerManagedCommand(container, 'vscode-azure/activity/clearSuccessful', ClearActivities, 'successful');

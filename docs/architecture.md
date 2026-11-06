@@ -84,6 +84,11 @@ The VS Code extension that wires everything together:
 - **Services**: Extension-scoped DI identifiers (`ICredentialFactory`, `IAzureListingFetcher`, `IAzureListingCache`, `ISubscriptionResolver`, `IAzureAccountDataProvider`, `IResourceClientProvider`, `IDeploymentClientProvider`, `IAcrClientProvider`, `IAzureViewDataTree`, `IWorkspaceViewDataTree`, `IActivityViewDataTree`, etc.)
 - **Workspace scanning**: `IWorkspaceIndexService` walks the workspace once, lets registered `WorkspaceDetector`s attach namespaced tags to files and directories, and keeps the resulting index fresh with a single shared watcher. Workspace tree providers query it by tag (`withTag`) rather than searching the workspace themselves. It lives here rather than in `utils` because its consumers are Azure product concerns.
 - **Tool acquisition**: `IToolService` resolves Azure developer tools (`azd`, `func`, `swa`), installing them through per-tool `ToolInstaller`s when needed, and exposes that to other extensions as a command. See [Tool Acquisition](tool-acquisition.md).
+- **Local emulators**: the workspace Emulators section reads configured Azurite
+  endpoints and indexed Functions projects. Azurite's extension owns Storage
+  start/stop operations; Functions starts through the product debugger and stops
+  only hosts owned by `LocalFunctionsHostProcess`. Host events and periodic
+  refreshes keep availability current without adopting arbitrary local processes.
 
 ## Activation Flow
 

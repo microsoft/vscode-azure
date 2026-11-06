@@ -11,7 +11,7 @@ import { DisableAcrAdminUser } from '../../../commands/acr/DisableAcrAdminUser';
 import { IAzureViewDataTree } from '../../../services';
 import { resourceContextValue } from '../../contextValueHelpers';
 import { getResourceTypeIconUri } from '../../iconPath';
-import { getGroupedParentKey } from '../GenericAzureViewProvider';
+import { createGenericResourceTreeItem, getGroupedParentKey } from '../GenericAzureViewProvider';
 import { isAcrRegistry } from './AcrRegistry';
 
 /**
@@ -83,14 +83,11 @@ export class AcrViewProvider implements ViewProvider<string> {
         }
 
         // Collapsed since we have children
-        const item = new this.ctx.code.TreeItem(resource.name, this.ctx.code.TreeItemCollapsibleState.Collapsed);
-        item.id = key;
+        const item = createGenericResourceTreeItem(this.ctx, resource, key, this.ctx.code.TreeItemCollapsibleState.Collapsed);
         item.contextValue = resourceContextValue(resource, DisableAcrAdminUser.ContextValue);
         item.iconPath = getResourceTypeIconUri(this.ctx, resource.logicalType);
 
         if (isAcrRegistry(resource)) {
-            item.description = resource.logicalType;
-
             if (resource.adminUserEnabled === true) {
                 item.iconPath = new this.ctx.code.ThemeIcon('warning', new this.ctx.code.ThemeColor('problemsWarningIcon.foreground'));
                 item.tooltip = this.ctx.code.l10n.t('Admin user is enabled. This is a security risk and is not recommended for production registries.');

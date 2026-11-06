@@ -520,6 +520,7 @@ export function createMockVsCode(
     const installedExtensions = new Map<string, vscode.Extension<unknown>>();
     const extensions = {
         getExtension: mock.fn(<T>(id: string) => installedExtensions.get(id) as vscode.Extension<T> | undefined),
+        onDidChange: new EventEmitter<void>().event,
     };
 
     const mockVsCode = {

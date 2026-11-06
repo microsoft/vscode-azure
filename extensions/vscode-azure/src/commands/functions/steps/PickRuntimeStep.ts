@@ -39,7 +39,8 @@ export class PickRuntimeStep extends PromptStep<CreateFunctionAppContext> {
     }
 
     public override shouldPrompt(context: Readonly<CreateFunctionAppContext>): boolean {
-        return !context.functionWorkerRuntime && !context.hasInfra;
+        return !context.functionWorkerRuntime
+            && (!context.hasInfra || (context.job === 'deploy' && !context.hasServices));
     }
 
     public async prompt(): Promise<Partial<CreateFunctionAppContext>> {

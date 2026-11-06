@@ -108,6 +108,20 @@ describe('Local Functions host ownership (unit)', () => {
         await s.owner.stop(host.id);
     });
 
+    it('stops only hosts owned by the selected project', async () => {
+        const s = setup();
+        await s.owner.start(s.request);
+        const other = { ...s.request, project: s.m.vscode.Uri.joinPath(s.request.project, 'other') };
+        const second = await s.owner.start(other);
+        await waitFor(() => !!s.tracker.get(s.request.project) && !!s.tracker.get(other.project));
+
+        await s.owner.stopProject(s.request.project);
+
+        expect(s.tracker.get(s.request.project)).to.be.undefined;
+        expect(s.tracker.get(other.project)?.port).to.equal(second.hostPort);
+        await s.owner.stopProject(other.project);
+    });
+
     for (const failed of [false, true]) {
         it(`shares ${failed ? 'failed' : 'successful'} process-tree completion across concurrent stop requests`, async () => {
             const s = setup({ keepStreamsOpen: true });

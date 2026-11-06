@@ -136,11 +136,12 @@ describe('ArmDeploymentViewProvider (unit)', () => {
 
     describe('getTreeItem', () => {
         it('should return a tree item for a deployment activity', () => {
-            const activity = makeArmDeploymentActivity({ title: 'My Deploy' });
+            const activity = makeArmDeploymentActivity({ title: 'My Deploy', description: 'Running' });
             const provider = createProvider([activity]);
 
             const item = provider.getTreeItem(activity.id);
             expect(item.label).to.equal('My Deploy');
+            expect(item.description).to.equal('Running');
         });
 
         it('should return a tree item for an operation via its parent', () => {
@@ -150,6 +151,26 @@ describe('ArmDeploymentViewProvider (unit)', () => {
 
             const item = provider.getTreeItem(op.id);
             expect(item.label).to.equal('Create storage');
+        });
+
+        it('should present resource types with friendly names and retain ARM details in tooltips', () => {
+            const op = makeOperationActivity({ targetResourceType: 'MICROSOFT.STORAGE/STORAGEACCOUNTS' });
+            const provider = createProvider([makeArmDeploymentActivity({ operations: [op] })]);
+
+            const item = provider.getTreeItem(op.id);
+
+            expect(item.description).to.equal('Storage Accounts');
+            expect(item.tooltip).to.contain('MICROSOFT.STORAGE/STORAGEACCOUNTS');
+        });
+
+        it('should present an unrecognized resource type in the operation tooltip', () => {
+            const op = makeOperationActivity({ targetResourceType: 'Contoso.Custom/widgets' });
+            const provider = createProvider([makeArmDeploymentActivity({ operations: [op] })]);
+
+            const item = provider.getTreeItem(op.id);
+
+            expect(item.description).to.be.undefined;
+            expect(item.tooltip).to.contain('Contoso.Custom/widgets');
         });
 
         it('should throw for an unknown activity ID', () => {

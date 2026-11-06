@@ -56,4 +56,14 @@ describe('EmulatorsWorkspaceViewProvider (unit)', () => {
         const { provider } = createProvider([]);
         expect(() => provider.getTreeItem('azwr://emulator/missing')).to.throw();
     });
+
+    for (const [state, capability] of [
+        ['stopped', 'startEmulator'], ['running', 'stopEmulator'], ['notInstalled', 'installEmulator'],
+    ] as const) {
+        it(`exposes the applicable control for a ${state} emulator`, () => {
+            const node = makeEmulatorNode({ state });
+            const { provider } = createProvider([node]);
+            expect(provider.getTreeItem(node.id).contextValue).to.include(capability);
+        });
+    }
 });

@@ -25,7 +25,8 @@ export function createGenericResourceTreeItem(
 ): ITreeItem {
     const item = new ctx.code.TreeItem(resource.name, collapsibleState);
     item.id = key;
-    item.description = resource.logicalType;
+    item.description = getResourceTypePresentation(ctx.code, resource.logicalType)?.name;
+    item.tooltip = ctx.code.l10n.t('{0}\nResource type: {1}', resource.name, resource.type);
     item.contextValue = resourceContextValue(resource);
     item.iconPath = getResourceTypeIconUri(ctx, resource.logicalType);
     return item;

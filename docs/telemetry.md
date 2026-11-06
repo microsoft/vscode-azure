@@ -2,6 +2,10 @@
 
 Every command execution is automatically wrapped with telemetry collection via `IActionExecutor.callWithTelemetryAndErrorHandling()`.
 
+The extension passes `AppInsightsKey` from `constants.ts` to `createTelemetryReporter`.
+Production activation constructs the real reporter with that key; development and
+test extension modes suppress transmission unless verbose debug logging is requested.
+
 ## `IActionContext`
 
 The per-execution telemetry context, injected into commands via DI:

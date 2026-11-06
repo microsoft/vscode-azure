@@ -4,9 +4,11 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureNodeId } from '@microsoft/vscode-azure-azutils';
+import { readRequiredJson } from '@microsoft/vscode-azure-utils';
 import { createMockDataItemTree, createMockSubscriptionClientProvider, createMockViewItemTree, makeSubscription } from '@microsoft/vscode-azure-azutils/testing';
 import { createMockCodeContext, MockOutputChannel, MockUri, respondToPrompts } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
+import type { AzureYamlEditor } from '../../../src/azd/AzdService';
 import type * as vscode from 'vscode';
 import { TempDirManager } from '../../../src/azd/TempDirManager';
 import { CreateFunctionApp } from '../../../src/commands/functions/CreateFunctionApp';
@@ -49,6 +51,10 @@ describe('CreateFunctionApp (unit)', () => {
         const mockFs = mockResult.fs;
         let yamlInTemp: vscode.Uri | undefined;
         const azd = createMockAzdService();
+        const setService = mock.fn<AzureYamlEditor['set']>();
+        azd.updateAzureYaml.mock.mockImplementation(async (_cwd, updater) => { // eslint-disable-line @typescript-eslint/no-deprecated -- temporary azd compatibility API
+            await updater({ set: setService });
+        });
         azd.findAzureYaml.mock.mockImplementation((dir: vscode.Uri) => {
             const candidate = MockUri.file(`${dir.fsPath}/azure.yaml`);
             return mockFs.files.has(candidate.path)
@@ -78,7 +84,7 @@ describe('CreateFunctionApp (unit)', () => {
         });
         const cmd = container.get(CreateFunctionApp);
 
-        return { cmd, ctx, mockResult, fs: mockResult.fs, azd, dataTree };
+        return { cmd, ctx, mockResult, fs: mockResult.fs, azd, dataTree, setService };
     }
 
     function bootstrapWorkspace(azd: ReturnType<typeof createMockAzdService>, fs: ReturnType<typeof createMockCodeContext>['mock']['fs']): void {
@@ -127,7 +133,7 @@ describe('CreateFunctionApp (unit)', () => {
     });
 
     it('should run the deploy job Fresh flow against the workspace folder', async () => {
-        const { cmd, mockResult, fs, azd } = createCommand();
+        const { cmd, mockResult, fs, azd, setService } = createCommand();
 
         respondToPrompts(mockResult, [
             { pick: 'sub-1' },
@@ -143,6 +149,46 @@ describe('CreateFunctionApp (unit)', () => {
         expect(fs.copy.mock.callCount()).to.be.greaterThanOrEqual(1);
         expect(azd.envNew.mock.callCount()).to.equal(1);
         expect(azd.provision.mock.callCount()).to.equal(1);
+        expect(setService.mock.calls[0].arguments).to.deep.equal([
+            ['services', 'my-app'], { host: 'function', project: '.', language: 'js' },
+        ]);
+        expect(azd.updateAzureYaml.mock.calls[0].arguments[0].path).to.equal('/workspace'); // eslint-disable-line @typescript-eslint/no-deprecated -- temporary azd compatibility API
+        expect(azd.deploy.mock.callCount()).to.equal(1);
+    });
+
+    it('uses the project runtime when adding a service to existing infrastructure', async () => {
+        const { cmd, mockResult, fs, azd, setService } = createCommand();
+        fs.addFile(MockUri.file('/workspace/infra/main.bicep'), '// bicep');
+        fs.addFile(MockUri.file('/workspace/local.settings.json'), JSON.stringify({
+            Values: { ['FUNCTIONS_WORKER_RUNTIME']: 'python' },
+        }));
+        fs.addFile(MockUri.file('/workspace/azure.yaml'), 'name: my-app\n');
+        azd.show.mock.mockImplementation(() => Promise.resolve({ name: 'my-app' }));
+        respondToPrompts(mockResult, [{ pick: 'sub-1' }, { pick: 'East US' }, { input: 'my-app' }]);
+
+        await cmd.execute('deploy');
+
+        expect(setService.mock.calls[0].arguments).to.deep.equal([
+            ['services', 'my-app'], { host: 'function', project: '.', language: 'python' },
+        ]);
+        expect(azd.deploy.mock.callCount()).to.equal(1);
+    });
+
+    it('resolves a runtime version for a fresh project with local runtime settings', async () => {
+        const { cmd, ctx, mockResult, fs, setService } = createCommand();
+        fs.addFile(MockUri.file('/workspace/local.settings.json'), JSON.stringify({
+            Values: { ['FUNCTIONS_WORKER_RUNTIME']: 'node' },
+        }));
+        respondToPrompts(mockResult, [
+            { pick: 'sub-1' }, { pick: 'East US' }, { input: 'my-app' }, { pick: runtimeVersions.node[0] },
+        ]);
+
+        await cmd.execute('deploy');
+
+        const parameters = await readRequiredJson<{ parameters: { runtimeVersion: { value: string } } }>(
+            ctx.code, MockUri.file('/workspace/infra/main.parameters.json'));
+        expect(parameters.parameters.runtimeVersion.value).to.equal(runtimeVersions.node[0]);
+        expect(setService.mock.calls[0].arguments[0]).to.deep.equal(['services', 'my-app']);
     });
 
     it('should skip yaml/bicep/env-new in the deploy job Bootstrapped flow', async () => {

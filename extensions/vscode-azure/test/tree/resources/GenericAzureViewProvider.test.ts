@@ -231,7 +231,8 @@ describe('GenericAzureViewProvider (unit)', () => {
             const item = provider.getTreeItem(key);
 
             expect(item.label).to.equal('site1');
-            expect(item.description).to.equal('Microsoft.Web/sites');
+            expect(item.description).to.equal('App Services');
+            expect(item.tooltip).to.include('Microsoft.Web/sites');
             expect(item.contextValue).to.include(OpenInPortal.ContextValue);
             expect(item.contextValue).to.include(DeleteAzureResource.ResourceContextValue);
             expect(item.contextValue).to.not.include(BrowseWebsite.ContextValue);
@@ -254,8 +255,8 @@ describe('GenericAzureViewProvider (unit)', () => {
 
             const item = provider.getTreeItem(key);
 
-            expect(item.label).to.equal('Microsoft.Web/sites');
-            expect((item.iconPath as { id: string }).id).to.equal('symbol-namespace');
+            expect(item.label).to.equal('App Services');
+            expect((item.iconPath as { path: string }).path).to.include('microsoft.web/sites~app.svg');
         });
 
         for (const [logicalType, label, iconPath] of [

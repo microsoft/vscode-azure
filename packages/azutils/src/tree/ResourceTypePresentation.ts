@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { CaselessMap, type ICaselessMapReader, type IVsCode } from '@microsoft/vscode-azure-utils';
-import { AcrResourceType, AIFoundryProjectLogicalType, AIServicesLogicalType, AppServiceLogicalType, ContainerAppResourceType, CosmosDBLogicalType, CosmosDBMongoLogicalType, DocumentDbResourceType, DurableTaskHubLogicalType, FoundryProjectResourceType, FunctionAppLogicalType, LogicAppLogicalType, ManagedEnvironmentResourceType, StaticWebAppResourceType } from '../rest/clients/ResourceClient';
+import { AcrResourceType, AIFoundryProjectLogicalType, AIServicesLogicalType, AppServiceLogicalType, ContainerAppResourceType, CosmosDBLogicalType, CosmosDBMongoLogicalType, DocumentDbResourceType, DurableTaskHubLogicalType, FoundryProjectResourceType, FunctionAppLogicalType, LogicAppLogicalType, ManagedEnvironmentResourceType, SiteType, StaticWebAppResourceType } from '../rest/clients/ResourceClient';
 
 /** Localized presentation for a supported logical resource type. */
 export interface ResourceTypePresentation {
@@ -80,6 +80,7 @@ const presentationEntries: [string, (code: IVsCode) => string, string?][] = [
     ['Microsoft.Web/kubeEnvironments', code => code.l10n.t('Kubernetes Environments')],
     ['Microsoft.Web/serverFarms', code => code.l10n.t('App Service Plans')],
     [AppServiceLogicalType, code => code.l10n.t('App Services')],
+    [SiteType, code => code.l10n.t('App Services'), AppServiceLogicalType],
     [FunctionAppLogicalType, code => code.l10n.t('Function Apps')],
     [LogicAppLogicalType, code => code.l10n.t('Logic Apps')],
     [StaticWebAppResourceType, code => code.l10n.t('Static Web Apps')],

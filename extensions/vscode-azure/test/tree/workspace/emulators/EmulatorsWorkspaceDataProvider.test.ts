@@ -3,7 +3,9 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createMockVsCode } from '@microsoft/vscode-azure-utils/testing';
+import { mock } from 'node:test';
+import { AzuriteEmulator } from '../../../../src/emulators/AzuriteEmulator';
+import { createLocalFunctions } from '../functions/mockLocalFunctions';
 import {
     EmulatorsWorkspaceDataProvider,
 } from '../../../../src/tree/workspace/emulators/EmulatorsWorkspaceDataProvider';
@@ -11,11 +13,22 @@ import { EmulatorKeyPrefix, EmulatorsGroupId, isEmulatorNode, isEmulatorsGroupNo
 import { makeAzdProjectNode, makeEmulatorNode, makeEmulatorsGroupNode } from '../mockWorkspaceNode';
 
 function createProvider() {
-    const { vscode } = createMockVsCode();
-    return new EmulatorsWorkspaceDataProvider(vscode);
+    const s = createLocalFunctions();
+    const azurite = new AzuriteEmulator(s.code);
+    mock.method(azurite, 'status', () => Promise.resolve({ installed: false, running: 0 }));
+    const provider = new EmulatorsWorkspaceDataProvider(s.code, azurite, s.index, s.hosts);
+    disposables.push({ dispose: () => { provider.dispose(); s.dispose(); } });
+    return provider;
 }
 
+let disposables: { dispose(): void }[] = [];
+
 describe('EmulatorsWorkspaceDataProvider (unit)', () => {
+    afterEach(() => {
+        disposables.forEach(item => { item.dispose(); });
+        disposables = [];
+        mock.restoreAll();
+    });
     describe('canHandle', () => {
         it('returns true for emulatorsGroup and emulator nodes', () => {
             const provider = createProvider();
@@ -32,6 +45,25 @@ describe('EmulatorsWorkspaceDataProvider (unit)', () => {
     });
 
     describe('getChildren', () => {
+        it('discovers project hosts and reflects their actual registered ports', async () => {
+            const s = createLocalFunctions();
+            s.addProject();
+            const azurite = new AzuriteEmulator(s.code);
+            mock.method(azurite, 'status', () => Promise.resolve({ installed: true, running: 2 }));
+            const provider = new EmulatorsWorkspaceDataProvider(s.code, azurite, s.index, s.hosts);
+            disposables.push({ dispose: () => { provider.dispose(); s.dispose(); } });
+
+            const stopped = await provider.getChildren(makeEmulatorsGroupNode());
+            expect(stopped[0]).to.include({ state: 'partial', description: '2/3 services running' });
+            expect(stopped[1]).to.include({ state: 'stopped' });
+            const registration = s.hosts.register(s.folder, 8097);
+            const running = await provider.getChildren(makeEmulatorsGroupNode());
+            expect(running[1]).to.include({ state: 'running', description: 'Running on port 8097' });
+            expect(running[1].resourceUri?.toString()).to.equal(s.folder.toString());
+            registration.dispose();
+            expect((await provider.getChildren(makeEmulatorsGroupNode()))[1]).to.include({ state: 'stopped' });
+        });
+
         it('returns a single group node at root', async () => {
             const provider = createProvider();
             const children = await provider.getChildren();

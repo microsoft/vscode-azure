@@ -95,14 +95,14 @@ describe('AcrViewProvider (unit)', () => {
             expect(item.contextValue).to.include(DisableAcrAdminUser.ContextValue);
         });
 
-        it('should show description with logicalType for enriched registry', () => {
+        it('should show a friendly resource type for an enriched registry', () => {
             const registry = makeAcrRegistry();
             const key = AzureNodeId.from(registry).toString();
             const cache = new Map<string, ConcreteAzureNode>([[key, registry]]);
             const provider = createProvider(cache);
 
             const item = provider.getTreeItem(key);
-            expect(item.description).to.equal(AcrResourceType);
+            expect(item.description).to.equal('Container Registries');
         });
 
         it('should show a warning icon when admin user is enabled', () => {

@@ -20,7 +20,7 @@ import type * as vscode from 'vscode';
  * - `functionsHint` -- a host-start hint beneath a Functions project
  * - `invalidLocalFunction` -- unreadable function metadata or a failed local listing
  * - `emulatorsGroup` -- a virtual grouping node for local emulators
- * - `emulator` -- a single (currently stubbed) local emulator entry
+ * - `emulator` -- an installed Storage emulator or indexed Functions host
  */
 export type WorkspaceNodeType =
     | 'azdProject'
@@ -115,6 +115,8 @@ export interface EmulatorsGroupNode extends WorkspaceNodeBase {
 export interface EmulatorNode extends WorkspaceNodeBase {
     readonly type: 'emulator';
     readonly label: string;
+    readonly emulatorKind: 'azurite' | 'functions';
+    readonly state: 'notInstalled' | 'stopped' | 'running' | 'partial';
     /** Short description (e.g. "Storage", "Azure Functions CLI"). */
     readonly description?: string;
 }

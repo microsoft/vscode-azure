@@ -60,6 +60,8 @@ export function makeEmulatorNode(overrides?: Partial<EmulatorNode>): EmulatorNod
         id: `${EmulatorKeyPrefix}azurite`,
         type: 'emulator',
         label: 'Azurite',
+        emulatorKind: 'azurite',
+        state: 'stopped',
         ...overrides,
     };
 }

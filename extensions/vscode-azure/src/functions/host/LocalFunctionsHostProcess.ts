@@ -117,6 +117,14 @@ export class LocalFunctionsHostProcess implements Disposable {
         await this.hosts.get(id)?.stop();
     }
 
+    /** Stops this project's owned host only; unrelated listeners and projects are untouched. */
+    public async stopProject(project: vscode.Uri): Promise<void> {
+        const key = this.projectKey(project);
+        await Promise.all([...this.hosts.values()]
+            .filter(host => this.projectKey(host.project) === key)
+            .map(host => host.stop()));
+    }
+
     public dispose(): void {
         this.disposed = true;
         for (const id of this.hosts.keys()) {
