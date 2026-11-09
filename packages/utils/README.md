@@ -1,4 +1,4 @@
-# Utils for Azure for Visual Studio Code
+# Utils for Azure Tools for Visual Studio Code
 
 General-purpose utilities shared across the [vscode-azure](https://github.com/microsoft/vscode-azure) repository. None of these are Azure-specific.
 

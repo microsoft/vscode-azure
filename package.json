@@ -2,7 +2,7 @@
     "name": "@microsoft/vscode-azure-monorepo",
     "version": "0.0.0",
     "private": true,
-    "description": "Azure for Visual Studio Code",
+    "description": "Azure Tools for Visual Studio Code - Monorepo",
     "homepage": "https://github.com/microsoft/vscode-azure#readme",
     "bugs": {
         "url": "https://github.com/microsoft/vscode-azure/issues"
