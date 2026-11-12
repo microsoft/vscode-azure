@@ -25,7 +25,7 @@ describe('createTelemetryReporter (unit)', () => {
                     process.env.DEBUGTELEMETRY = debugTelemetry;
                 }
 
-                const reporter = createTelemetryReporter(ctx, NullTelemetryReporter);
+                const reporter = createTelemetryReporter(ctx, NullTelemetryReporter, '');
                 expect(reporter).to.be.instanceOf(NullTelemetryReporter);
             });
         }
@@ -35,7 +35,6 @@ describe('createTelemetryReporter (unit)', () => {
         it(`constructs the production reporter with DEBUGTELEMETRY=${debugTelemetry}`, () => {
             const { ctx } = createMockCodeContext();
             mock.property(ctx.extensionContext, 'extensionMode', ctx.code.ExtensionMode.Production);
-            mock.property(ctx.extensionContext.extension, 'packageJSON', { aiKey: 'test-ai-key' });
             if (debugTelemetry !== undefined) {
                 process.env.DEBUGTELEMETRY = debugTelemetry;
             }
@@ -47,7 +46,7 @@ describe('createTelemetryReporter (unit)', () => {
                 }
             }
 
-            expect(createTelemetryReporter(ctx, Reporter)).to.be.instanceOf(Reporter);
+            expect(createTelemetryReporter(ctx, Reporter, 'test-ai-key')).to.be.instanceOf(Reporter);
             expect(construct.mock.calls[0].arguments).to.deep.equal(['test-ai-key']);
         });
     }
@@ -55,7 +54,7 @@ describe('createTelemetryReporter (unit)', () => {
     it('requires an AI key for production telemetry', () => {
         const { ctx } = createMockCodeContext();
         mock.property(ctx.extensionContext, 'extensionMode', ctx.code.ExtensionMode.Production);
-        expect(() => createTelemetryReporter(ctx, NullTelemetryReporter)).to.throw('AI key is required');
+        expect(() => createTelemetryReporter(ctx, NullTelemetryReporter, '')).to.throw('AI key is required');
     });
 
     for (const variable of ['DEBUGTELEMETRY', 'VSCODE_RUNNING_TESTS']) {
@@ -63,7 +62,7 @@ describe('createTelemetryReporter (unit)', () => {
             const { ctx } = createMockCodeContext();
             mock.property(ctx.extensionContext, 'extensionMode', ctx.code.ExtensionMode.Production);
             process.env[variable] = '1';
-            expect(createTelemetryReporter(ctx, NullTelemetryReporter)).to.be.instanceOf(NullTelemetryReporter);
+            expect(createTelemetryReporter(ctx, NullTelemetryReporter, '')).to.be.instanceOf(NullTelemetryReporter);
         });
     }
 
@@ -75,7 +74,7 @@ describe('createTelemetryReporter (unit)', () => {
                 process.env.DEBUGTELEMETRY = verbose;
                 const log = mock.method(console, 'log', () => { /* noop */ });
 
-                const reporter = createTelemetryReporter(ctx, NullTelemetryReporter);
+                const reporter = createTelemetryReporter(ctx, NullTelemetryReporter, '');
                 reporter.sendTelemetryErrorEvent('test-event', { result: 'Succeeded' });
                 expect(log.mock.calls[0].arguments[0]).to.equal(`DEBUGTEL: ${ctx.extensionContext.extension.id}/test-event`);
             });

@@ -1,4 +1,4 @@
-# Azure Tools for Visual Studio Code
+# Azure Tools for Visual Studio Code (preview)
 
 Browse and manage Azure resources, create and deploy applications, and work with Azure projects in Visual Studio Code. Includes dedicated tools for Azure Container Registry, Container Apps, Functions, and Static Web Apps.
 

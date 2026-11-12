@@ -2,7 +2,7 @@
     "name": "@microsoft/vscode-azure-utils",
     "version": "1.0.0",
     "private": true,
-    "description": "Utils for Azure Tools for Visual Studio Code",
+    "description": "Utils for Azure Tools for Visual Studio Code (preview)",
     "homepage": "https://github.com/microsoft/vscode-azure#readme",
     "bugs": {
         "url": "https://github.com/microsoft/vscode-azure/issues"

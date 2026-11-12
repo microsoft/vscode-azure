@@ -1,6 +1,6 @@
 # Contributing
 
-Thank you for your interest in Azure Tools for Visual Studio Code. Contributions from anyone are welcome -- bug reports, ideas, documentation, bug fixes, and new features.
+Thank you for your interest in Azure Tools for Visual Studio Code (preview). Contributions from anyone are welcome -- bug reports, ideas, documentation, bug fixes, and new features.
 
 ## Ideas, feature requests, and bugs
 

@@ -1,14 +1,14 @@
-# Azure Tools for Visual Studio Code
+# Azure Tools for Visual Studio Code (preview)
 
 ## Overview
 
-Azure Tools for Visual Studio Code lets you browse and manage Azure resources, create and deploy applications, and work with Azure projects without leaving your editor.
+Azure Tools for Visual Studio Code (preview) lets you browse and manage Azure resources, create and deploy applications, and work with Azure projects without leaving your editor.
 
 This monorepo contains the extension and its shared utility packages. See [docs/](docs/) for architecture, patterns, and development guides.
 
 ## Extensions
 
-* [Azure Tools for Visual Studio Code](extensions/vscode-azure/README.md) -- resource browsing and management, with dedicated experiences for Azure Container Registry, Container Apps, Functions, and Static Web Apps.
+* [Azure Tools for Visual Studio Code (preview)](extensions/vscode-azure/README.md) -- resource browsing and management, with dedicated experiences for Azure Container Registry, Container Apps, Functions, and Static Web Apps.
 
 ## Packages
 
