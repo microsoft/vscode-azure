@@ -29,6 +29,7 @@ import { AzdService, IAzdService } from './azd/AzdService';
 import { ITempDirManager, TempDirManager } from './azd/TempDirManager';
 import { createGenerateBicepStepFactory, IGenerateBicepStepFactory } from './azd/wizard/GenerateBicepStep';
 import { registerCommands } from './commands/registerCommands';
+import { ApplicationInsightsKey } from './constants';
 import { registerProducts } from './products/registerProducts';
 import { ProductRegistrar } from './registration/ProductRegistrar';
 import { pushDisposable } from './services';
@@ -137,7 +138,7 @@ function setUpContainer(extensionContext: IExtensionContext, products: ProductRe
     }).inSingletonScope().onActivation(pushDisposable);
 
     container.bind(ITelemetryReporter).toDynamicValue(context => {
-        return createTelemetryReporter(context.get(ICodeContext), TelemetryReporter);
+        return createTelemetryReporter(context.get(ICodeContext), TelemetryReporter, ApplicationInsightsKey);
     }).inSingletonScope().onActivation(pushDisposable);
 
     container.bind(ICommandRegistry).toDynamicValue(context => {

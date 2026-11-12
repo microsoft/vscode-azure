@@ -95,6 +95,10 @@ Providers like `ArmDeploymentDataProvider` that run their own async loops (e.g. 
 A thin wrapper around `@vscode/extension-telemetry`. Development and test extension
 modes use a silent no-op reporter unless verbose logging is requested.
 
+The extension passes `ApplicationInsightsKey` from `src/constants.ts` to
+`createTelemetryReporter`. Production telemetry requires a non-empty Application
+Insights ingestion key or connection string.
+
 In production mode, behavior depends on environment:
 
 | `DEBUGTELEMETRY` env | Behavior |

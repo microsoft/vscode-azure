@@ -1,5 +1,5 @@
 {
-    "extension.description": "Azure for Visual Studio Code",
+    "extension.description": "Azure Tools for Visual Studio Code (preview)",
     "viewContainers.vscode-azure": "Azure",
     "viewContainers.vscode-azure-panel": "Azure",
     "views.vscode-azure/resources": "Resources",
