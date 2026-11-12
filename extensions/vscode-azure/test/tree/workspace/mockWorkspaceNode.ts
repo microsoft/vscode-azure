@@ -41,7 +41,6 @@ export function makeFunctionsProjectNode(overrides?: Partial<FunctionsProjectNod
     return {
         id: `${FunctionsProjectKeyPrefix}${hostJson.toString()}`,
         type: 'functionsProject',
-        label: 'repo',
         resourceUri: hostJson,
         ...overrides,
     };

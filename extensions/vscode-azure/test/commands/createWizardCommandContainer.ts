@@ -3,13 +3,14 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ISubscriptionClientProvider, type AzureSubscription } from '@microsoft/vscode-azure-azutils';
+import { ISubscriptionClientProvider, IWebAppClientProvider, type AzureSubscription } from '@microsoft/vscode-azure-azutils';
+import { createMockWebAppClient } from '@microsoft/vscode-azure-azutils/testing';
 import { createActionContext, IActionContext, ICodeContext, IOutputChannel, IVsCode } from '@microsoft/vscode-azure-utils';
 import { Container } from 'inversify';
 import { IAzdService } from '../../src/azd/AzdService';
 import { ITempDirManager, TempDirManager } from '../../src/azd/TempDirManager';
 import { createGenerateBicepStepFactory, IGenerateBicepStepFactory } from '../../src/azd/wizard/GenerateBicepStep';
-import { IAzureViewDataTree, IAzureViewViewItemTree, ISubscriptionResolver } from '../../src/services';
+import { IAzureViewDataTree, IAzureViewViewItemTree, ISubscriptionResolver, IWorkspaceViewDataTree } from '../../src/services';
 import { IArmDeploymentDataProvider } from '../../src/tree/activity/ArmDeploymentDataProvider';
 import { ICodeDeploymentDataProvider } from '../../src/tree/activity/CodeDeploymentDataProvider';
 import { ISwaCliService } from '../../src/staticWebApps/SwaCliService';
@@ -28,6 +29,8 @@ export interface WizardCommandMocks {
     readonly armProvider?: IArmDeploymentDataProvider;
     readonly codeProvider?: ICodeDeploymentDataProvider;
     readonly swaCli?: ISwaCliService;
+    /** Defaults to a tree with no nodes. */
+    readonly workspaceTree?: Pick<IWorkspaceViewDataTree, 'get'>;
     /** Defaults to a resolver that finds nothing, which is the behavior of a subscription no account can reach. */
     readonly subscriptionResolver?: (subscriptionId: string) => Promise<AzureSubscription | undefined>;
 }
@@ -50,10 +53,12 @@ export function createWizardCommandContainer(mocks: WizardCommandMocks): Contain
     container.bind(IVsCode).toConstantValue(mocks.ctx.code);
     container.bind(IOutputChannel).toConstantValue(mocks.output);
     container.bind(IAzdService).toConstantValue(mocks.azd);
+    container.bind(IWebAppClientProvider).toConstantValue(() => createMockWebAppClient());
     container.bind(ITempDirManager).toConstantValue(mocks.tempManager ?? new TempDirManager(mocks.ctx));
     container.bind(IAzureViewDataTree).toConstantValue(mocks.dataTree);
     container.bind(ISubscriptionResolver).toConstantValue(mocks.subscriptionResolver ?? (() => Promise.resolve(undefined)));
     container.bind(ISwaCliService).toConstantValue(mocks.swaCli ?? createMockSwaCliService());
+    container.bind(IWorkspaceViewDataTree).toConstantValue((mocks.workspaceTree ?? { get: () => undefined }) as IWorkspaceViewDataTree);
 
     container.bind(IGenerateBicepStepFactory).toFactory(context => createGenerateBicepStepFactory(context.get(ICodeContext)));
 

@@ -117,15 +117,19 @@ export class LogsQueryClient implements ILogsQueryClient {
             contentType: 'application/json',
             body: { query, timespan: options?.timespan },
         });
+
         assertRestSuccess(this.ctx.code, response);
+
         const body: unknown = response.body;
         if (body && typeof body === 'object' && 'error' in body) {
             throw new RestError(this.ctx.code.l10n.t('The log query returned incomplete results.'), { code: 'PartialError' });
         }
+
         if (!body || typeof body !== 'object' || !('tables' in body)
             || !Array.isArray(body.tables) || !body.tables.every(isQueryTable)) {
             throw new RestError(this.ctx.code.l10n.t('Azure Monitor returned an invalid log query result.'));
         }
+
         return { tables: body.tables };
     }
 }

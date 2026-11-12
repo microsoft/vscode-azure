@@ -165,8 +165,8 @@ one resource. The settings framework therefore splits along the resource/virtual
 - A product-specific view provider presents the owning resource as expandable. For ordinary ARM
   resources it can delegate shared presentation to `createGenericResourceTreeItem`.
 
-For example, `WebAppDataProvider` owns Function App, App Service, and Logic App resources supported
-by `WebAppSettingsAdapter`, while `WebAppViewProvider` gives those resources a chevron. Other
+For example, `FunctionAppDataProvider` and the fallback `WebAppDataProvider` compose settings
+through `WebAppSettingsAdapter`, while their corresponding view providers give resources a chevron. Other
 capabilities can overlap those products independently without inheritance or provider aggregation.
 
 ## Ownership boundary

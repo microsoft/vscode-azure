@@ -222,3 +222,14 @@ export function argToString(arg: CommandLineArg): string {
 export function argsToStrings(args: readonly CommandLineArg[]): string[] {
     return args.map(argToString);
 }
+
+/**
+ * Renders an argument vector as a single line for display (terminal banners, logs).
+ *
+ * @remarks
+ * Arguments containing whitespace or double quotes are wrapped in double quotes. The result is
+ * not shell-specific and must not be executed; run the argument vector instead.
+ */
+export function formatCommandLine(args: readonly CommandLineArg[]): string {
+    return argsToStrings(args).map(arg => /[\s"]/.test(arg) ? `"${arg.replaceAll('"', '\\"')}"` : arg).join(' ');
+}

@@ -10,6 +10,9 @@ import { mock } from 'node:test';
 import type * as vscode from 'vscode';
 import { TempDirManager } from '../../../src/azd/TempDirManager';
 import { CreateFunctionApp } from '../../../src/commands/functions/CreateFunctionApp';
+import { runtimeVersions } from '../../../src/commands/functions/steps/runtimesAndVersions';
+import type { IWorkspaceViewDataTree } from '../../../src/services';
+import { makeFunctionsProjectNode } from '../../tree/workspace/mockWorkspaceNode';
 import { createMockAzdService } from '../../azd/MockAzdService';
 import { createWizardCommandContainer } from '../createWizardCommandContainer';
 import { createMockArmProvider, createMockCodeProvider } from '../../tree/activity/MockActivityProviders';
@@ -17,8 +20,11 @@ import { createMockArmProvider, createMockCodeProvider } from '../../tree/activi
 describe('CreateFunctionApp (unit)', () => {
     const sub = makeSubscription({ subscriptionId: 'sub-1', displayName: 'Test Sub' });
     const subKey = AzureNodeId.from(sub).toString();
+    const project = makeFunctionsProjectNode({ resourceUri: MockUri.file('/workspace/nested/host.json') });
+    const workspaceTreeOf = (node: typeof project): Pick<IWorkspaceViewDataTree, 'get'> =>
+        ({ get: (key: string) => key === node.id ? node : undefined });
 
-    function createCommand(options: { workspaceFolder?: boolean } = {}) {
+    function createCommand(options: { workspaceFolder?: boolean; workspaceTree?: Pick<IWorkspaceViewDataTree, 'get'> } = {}) {
         const { ctx, mock: mockResult } = createMockCodeContext();
         const output = new MockOutputChannel('test');
 
@@ -68,16 +74,31 @@ describe('CreateFunctionApp (unit)', () => {
             subscriptionClientProvider,
             armProvider,
             codeProvider,
+            workspaceTree: options.workspaceTree,
         });
         const cmd = container.get(CreateFunctionApp);
 
         return { cmd, ctx, mockResult, fs: mockResult.fs, azd, dataTree };
     }
 
-    it('should be constructable with required dependencies', () => {
-        const { cmd } = createCommand();
-        expect(cmd).to.be.instanceOf(CreateFunctionApp);
-    });
+    function bootstrapWorkspace(azd: ReturnType<typeof createMockAzdService>, fs: ReturnType<typeof createMockCodeContext>['mock']['fs']): void {
+        const workspaceYaml = MockUri.file('/workspace/azure.yaml');
+        fs.addFile(workspaceYaml, 'name: my-app\nservices:\n  api:\n    project: ./\n');
+        fs.addFile(MockUri.file('/workspace/infra/main.bicep'), '// bicep');
+        azd.findAzureYaml.mock.mockImplementation(() => Promise.resolve([workspaceYaml]));
+        azd.show.mock.mockImplementation(() => Promise.resolve({
+            name: 'my-app',
+            services: { api: { project: { path: './', language: 'node' } } },
+        }));
+        azd.envList.mock.mockImplementation(() => Promise.resolve([{ Name: 'my-app', IsDefault: true }]));
+        azd.envExists.mock.mockImplementation((name: string) => Promise.resolve(name === 'my-app'));
+        azd.envGetValues.mock.mockImplementation(() => Promise.resolve({
+            /* eslint-disable @typescript-eslint/naming-convention -- azd env keys */
+            AZURE_LOCATION: 'eastus',
+            AZURE_SUBSCRIPTION_ID: 'sub-1',
+            /* eslint-enable @typescript-eslint/naming-convention */
+        }));
+    }
 
     it('should run the createNew flow into the temp directory', async () => {
         const { cmd, mockResult, fs, azd } = createCommand({ workspaceFolder: false });
@@ -87,8 +108,7 @@ describe('CreateFunctionApp (unit)', () => {
             { pick: 'East US' },                // ChooseLocationStep
             { input: 'my-app' },                // ProjectNameStep
             { pick: 'Node.js' },                // PickRuntimeStep
-            { pick: '24' },                     // PickRuntimeVersionStep
-            { pick: 'Flex Consumption' },       // PickHostingPlanStep
+            { pick: runtimeVersions.node[0] },                     // PickRuntimeVersionStep
         ]);
 
         await cmd.execute('createNew');
@@ -114,8 +134,7 @@ describe('CreateFunctionApp (unit)', () => {
             { pick: 'East US' },
             { input: 'my-app' },
             { pick: 'Node.js' },
-            { pick: '24' },
-            { pick: 'Flex Consumption' },
+            { pick: runtimeVersions.node[0] },
         ]);
 
         await cmd.execute('deploy');
@@ -129,27 +148,12 @@ describe('CreateFunctionApp (unit)', () => {
     it('should skip yaml/bicep/env-new in the deploy job Bootstrapped flow', async () => {
         const { cmd, mockResult, fs, azd } = createCommand();
 
-        const workspaceYaml = MockUri.file('/workspace/azure.yaml');
-        mockResult.fs.addFile(workspaceYaml, 'name: my-app\nservices:\n  api:\n    project: ./\n');
-        mockResult.fs.addFile(MockUri.file('/workspace/infra/main.bicep'), '// bicep');
-        azd.findAzureYaml.mock.mockImplementation(() => Promise.resolve([workspaceYaml]));
-        azd.show.mock.mockImplementation(() => Promise.resolve({
-            name: 'my-app',
-            services: { api: { project: { path: './', language: 'node' } } },
-        }));
-        azd.envList.mock.mockImplementation(() => Promise.resolve([{ Name: 'my-app', IsDefault: true }]));
-        azd.envExists.mock.mockImplementation((name: string) => Promise.resolve(name === 'my-app'));
-        azd.envGetValues.mock.mockImplementation(() => Promise.resolve({
-            /* eslint-disable @typescript-eslint/naming-convention -- azd env keys */
-            AZURE_LOCATION: 'eastus',
-            AZURE_SUBSCRIPTION_ID: 'sub-1',
-            /* eslint-enable @typescript-eslint/naming-convention */
-        }));
+        bootstrapWorkspace(azd, mockResult.fs);
 
         respondToPrompts(mockResult, [
             // ProjectNameStep skipped (environmentName hydrated)
             // ChooseSubscription / ChooseLocation skipped (hydrated values)
-            // PickRuntime / PickHostingPlan skipped (hasInfra)
+            // PickRuntime skipped (hasInfra)
             { pick: 'Yes' },                            // ConfirmProvisionStep
         ]);
 
@@ -161,25 +165,27 @@ describe('CreateFunctionApp (unit)', () => {
         expect(azd.provision.mock.callCount()).to.equal(1);
     });
 
+    it('deploys the folder of a Functions workspace project node and reports a missing node', async () => {
+        const { cmd, mockResult, azd, fs } = createCommand({ workspaceTree: workspaceTreeOf(project) });
+        fs.addFile(project.resourceUri, '{}');
+        respondToPrompts(mockResult, [
+            { pick: 'sub-1' },
+            { pick: 'East US' },
+            { input: 'my-app' },
+            { pick: 'Node.js' },
+            { pick: runtimeVersions.node[0] },
+        ]);
+
+        await cmd.execute('deploy', project.id);
+
+        expect(azd.deploy.mock.calls[0].arguments[0].path).to.equal('/workspace/nested');
+        await expect(cmd.execute('deploy', `${project.id}-missing`)).to.be.rejectedWith('Refresh the workspace view');
+    });
+
     it('should skip provisioning when user picks No on ConfirmProvisionStep', async () => {
         const { cmd, mockResult, azd } = createCommand();
 
-        const workspaceYaml = MockUri.file('/workspace/azure.yaml');
-        mockResult.fs.addFile(workspaceYaml, 'name: my-app\nservices:\n  api:\n    project: ./\n');
-        mockResult.fs.addFile(MockUri.file('/workspace/infra/main.bicep'), '// bicep');
-        azd.findAzureYaml.mock.mockImplementation(() => Promise.resolve([workspaceYaml]));
-        azd.show.mock.mockImplementation(() => Promise.resolve({
-            name: 'my-app',
-            services: { api: { project: { path: './', language: 'node' } } },
-        }));
-        azd.envList.mock.mockImplementation(() => Promise.resolve([{ Name: 'my-app', IsDefault: true }]));
-        azd.envExists.mock.mockImplementation((name: string) => Promise.resolve(name === 'my-app'));
-        azd.envGetValues.mock.mockImplementation(() => Promise.resolve({
-            /* eslint-disable @typescript-eslint/naming-convention -- azd env keys */
-            AZURE_LOCATION: 'eastus',
-            AZURE_SUBSCRIPTION_ID: 'sub-1',
-            /* eslint-enable @typescript-eslint/naming-convention */
-        }));
+        bootstrapWorkspace(azd, mockResult.fs);
 
         respondToPrompts(mockResult, [
             { pick: 'No' },
@@ -198,8 +204,7 @@ describe('CreateFunctionApp (unit)', () => {
             { pick: 'East US' },
             { input: 'my-app' },
             { pick: 'Node.js' },
-            { pick: '24' },
-            { pick: 'Flex Consumption' },
+            { pick: runtimeVersions.node[0] },
         ]);
 
         await cmd.execute('createNew');
@@ -209,6 +214,7 @@ describe('CreateFunctionApp (unit)', () => {
         const target = invalidate.mock.calls[0].arguments[0] as (node: unknown) => string | undefined;
         expect(target).to.be.a('function');
         expect(target(sub)).to.equal('subtree');
+        expect(target(makeSubscription({ subscriptionId: 'other', displayName: 'Other' }))).to.be.undefined;
     });
 
     it('should invalidate by hydrated subscription when no subscription was picked', async () => {
@@ -217,22 +223,7 @@ describe('CreateFunctionApp (unit)', () => {
         // Bootstrapped deploy flow: the subscription picker is skipped because the
         // existing default env hydrates AZURE_SUBSCRIPTION_ID, so context.subscription
         // is never set and we must fall back to context.hydratedSubscriptionId.
-        const workspaceYaml = MockUri.file('/workspace/azure.yaml');
-        mockResult.fs.addFile(workspaceYaml, 'name: my-app\nservices:\n  api:\n    project: ./\n');
-        mockResult.fs.addFile(MockUri.file('/workspace/infra/main.bicep'), '// bicep');
-        azd.findAzureYaml.mock.mockImplementation(() => Promise.resolve([workspaceYaml]));
-        azd.show.mock.mockImplementation(() => Promise.resolve({
-            name: 'my-app',
-            services: { api: { project: { path: './', language: 'node' } } },
-        }));
-        azd.envList.mock.mockImplementation(() => Promise.resolve([{ Name: 'my-app', IsDefault: true }]));
-        azd.envExists.mock.mockImplementation((name: string) => Promise.resolve(name === 'my-app'));
-        azd.envGetValues.mock.mockImplementation(() => Promise.resolve({
-            /* eslint-disable @typescript-eslint/naming-convention -- azd env keys */
-            AZURE_LOCATION: 'eastus',
-            AZURE_SUBSCRIPTION_ID: 'sub-1',
-            /* eslint-enable @typescript-eslint/naming-convention */
-        }));
+        bootstrapWorkspace(azd, mockResult.fs);
 
         respondToPrompts(mockResult, [
             { pick: 'Yes' }, // ConfirmProvisionStep
@@ -245,5 +236,6 @@ describe('CreateFunctionApp (unit)', () => {
         const target = invalidate.mock.calls[0].arguments[0] as (node: unknown) => string | undefined;
         expect(target).to.be.a('function');
         expect(target(sub)).to.equal('subtree');
+        expect(target(makeSubscription({ subscriptionId: 'other', displayName: 'Other' }))).to.be.undefined;
     });
 });

@@ -17,6 +17,10 @@
     "license": "MIT",
     "author": "Microsoft Corporation",
     "main": "main.js",
+    "activationEvents": [
+        "onDebugResolve:azure-functions",
+        "onDebugDynamicConfigurations:azure-functions"
+    ],
     "capabilities": {
         "virtualWorkspaces": {
             "supported": "limited",
@@ -24,6 +28,35 @@
         }
     },
     "contributes": {
+        "debuggers": [
+            {
+                "type": "azure-functions",
+                "label": "%debug.functions.label%",
+                "languages": ["javascript", "typescript", "python", "java", "powershell", "csharp", "go"],
+                "configurationAttributes": {
+                    "launch": {
+                        "required": [],
+                        "properties": {
+                            "projectPath": { "type": "string", "description": "%debug.functions.projectPath%" },
+                            "hostArgs": { "type": "array", "items": { "type": "string" }, "description": "%debug.functions.hostArgs%" },
+                            "env": { "type": "object", "additionalProperties": { "type": "string" }, "description": "%debug.functions.env%" },
+                            "hostPort": { "type": "integer", "minimum": 1, "maximum": 65535, "description": "%debug.functions.hostPort%" },
+                            "debugPort": { "type": "integer", "minimum": 1, "maximum": 65535, "description": "%debug.functions.debugPort%" },
+                            "skipBuild": { "type": "boolean", "default": false, "description": "%debug.functions.skipBuild%" }
+                        }
+                    }
+                },
+                "initialConfigurations": [
+                    { "type": "azure-functions", "request": "launch", "name": "%debug.functions.label%" }
+                ],
+                "configurationSnippets": [
+                    {
+                        "label": "%debug.functions.label%",
+                        "body": { "type": "azure-functions", "request": "launch", "name": "%debug.functions.label%", "projectPath": "^\"\\${workspaceFolder}\"" }
+                    }
+                ]
+            }
+        ],
         "commands": [
             {
                 "command": "vscode-azure/resources/refresh",
@@ -128,6 +161,7 @@
             },
             {
                 "command": "vscode-azure/functions/deploy",
+                "enablement": "!virtualWorkspace",
                 "category": "%commands.category.azure%",
                 "title": "%commands.vscode-azure/functions/deploy%"
             },
@@ -142,6 +176,30 @@
             {
                 "command": "vscode-azure/webApp/restart",
                 "title": "%commands.vscode-azure/webApp/restart%"
+            },
+            {
+                "command": "vscode-azure/functions/execute",
+                "title": "%commands.vscode-azure/functions/execute%"
+            },
+            {
+                "command": "vscode-azure/functions/copyUrl",
+                "title": "%commands.vscode-azure/functions/copyUrl%"
+            },
+            {
+                "command": "vscode-azure/functions/enable",
+                "title": "%commands.vscode-azure/functions/enable%"
+            },
+            {
+                "command": "vscode-azure/functions/disable",
+                "title": "%commands.vscode-azure/functions/disable%"
+            },
+            {
+                "command": "vscode-azure/functions/streamLogs",
+                "title": "%commands.vscode-azure/functions/streamLogs%"
+            },
+            {
+                "command": "vscode-azure/functions/revealIdentity",
+                "title": "%commands.vscode-azure/functions/revealIdentity%"
             },
             {
                 "command": "vscode-azure/resources/reveal",
@@ -383,6 +441,41 @@
                     "group": "3_actions@2"
                 },
                 {
+                    "command": "vscode-azure/functions/execute",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\bexecuteFunction\\b/i",
+                    "group": "3_actions@1"
+                },
+                {
+                    "command": "vscode-azure/functions/deploy",
+                    "when": "view == vscode-azure/workspace && viewItem =~ /\\bdeployFunctionApp\\b/i && !virtualWorkspace",
+                    "group": "3_actions@0"
+                },
+                {
+                    "command": "vscode-azure/functions/copyUrl",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\bcopyFunctionUrl\\b/i",
+                    "group": "1_browse@1"
+                },
+                {
+                    "command": "vscode-azure/functions/enable",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\benableFunction\\b/i",
+                    "group": "3_actions@2"
+                },
+                {
+                    "command": "vscode-azure/functions/disable",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\bdisableFunction\\b/i",
+                    "group": "3_actions@2"
+                },
+                {
+                    "command": "vscode-azure/functions/streamLogs",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\bstreamFunctionLogs\\b/i",
+                    "group": "2_logs@1"
+                },
+                {
+                    "command": "vscode-azure/functions/revealIdentity",
+                    "when": "view == vscode-azure/resources && viewItem =~ /\\brevealFunctionAppIdentity\\b/i",
+                    "group": "1_browse@2"
+                },
+                {
                     "command": "vscode-azure/acr/disableAdminUser",
                     "when": "view == vscode-azure/resources && viewItem =~ /\\bdisableAcrAdminUser\\b/i",
                     "group": "3_actions@1"
@@ -476,9 +569,34 @@
                     "command": "vscode-azure/workspace/refresh",
                     "when": "view == vscode-azure/workspace && viewItem =~ /\\brefreshWorkspace\\b/i",
                     "group": "3_actions@3"
+                },
+                {
+                    "command": "vscode-azure/functions/execute",
+                    "when": "view == vscode-azure/workspace && viewItem =~ /\\bexecuteFunction\\b/i && !virtualWorkspace",
+                    "group": "3_actions@1"
+                },
+                {
+                    "command": "vscode-azure/functions/copyUrl",
+                    "when": "view == vscode-azure/workspace && viewItem =~ /\\bcopyFunctionUrl\\b/i && !virtualWorkspace",
+                    "group": "1_browse@1"
+                },
+                {
+                    "command": "vscode-azure/functions/enable",
+                    "when": "view == vscode-azure/workspace && viewItem =~ /\\benableFunction\\b/i && !virtualWorkspace",
+                    "group": "3_actions@2"
+                },
+                {
+                    "command": "vscode-azure/functions/disable",
+                    "when": "view == vscode-azure/workspace && viewItem =~ /\\bdisableFunction\\b/i && !virtualWorkspace",
+                    "group": "3_actions@2"
                 }
             ],
             "explorer/context": [
+                {
+                    "command": "vscode-azure/functions/deploy",
+                    "when": "explorerResourceIsFolder && !virtualWorkspace",
+                    "group": "navigation"
+                },
                 {
                     "command": "vscode-azure/azdUp",
                     "when": "resourceFilename =~ /^azure\\.ya?ml$/i",
@@ -618,6 +736,14 @@
             }
         },
         "jsonValidation": [
+            {
+                "fileMatch": "function.json",
+                "url": "https://json.schemastore.org/function.json"
+            },
+            {
+                "fileMatch": "host.json",
+                "url": "https://json.schemastore.org/host.json"
+            },
             {
                 "fileMatch": "staticwebapp.config.json",
                 "url": "https://json.schemastore.org/staticwebapp.config.json"

@@ -75,18 +75,6 @@ describe('WebAppClient (unit)', () => {
         expect(new URL(httpClient.requests[0].url).pathname).to.match(/\/sites\/myapp\/functions\/hello$/);
     });
 
-    it('should delete a named function without deleting the app', async () => {
-        const { ctx } = createMockCodeContext();
-        const { executor } = createTestActionExecutor();
-        const httpClient = new MockHttpClient({ handler: req => makeResponse(req, 204, '') });
-        const client = WebAppClient.create(ctx, executor, makeCredential(), makeSubscription(), { httpClient });
-
-        await client.webApps.deleteFunction('rg1', 'myapp', 'hello');
-
-        expect(httpClient.requests[0].method).to.equal('DELETE');
-        expect(new URL(httpClient.requests[0].url).pathname).to.match(/\/sites\/myapp\/functions\/hello$/);
-    });
-
     it('should read function keys, host keys, and invocation secrets from their distinct endpoints', async () => {
         const { ctx } = createMockCodeContext();
         const { executor } = createTestActionExecutor();

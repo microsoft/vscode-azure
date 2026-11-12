@@ -14,7 +14,7 @@ export type { ClientOptions as FunctionsHostClientOptions };
 export type { OperationOptions as FunctionsHostRequestOptions };
 
 /**
- * A local Core Tools host, or a remote app whose master key is obtained lazily
+ * A local Azure Functions CLI host, or a remote app whose master key is obtained lazily
  * from the management-plane host-keys operation. Remote endpoints must use HTTPS.
  */
 export type FunctionsHostTarget =
@@ -37,7 +37,7 @@ export interface FunctionsHostStatus {
     readonly errors?: readonly string[];
 }
 
-/** The host admin operations needed by local listing, readiness, and function execution. */
+/** Host administration and HTTP-trigger requests used by local and remote Functions development. */
 export interface IFunctionsHostClient {
     listFunctions(options?: OperationOptions): Promise<readonly HostFunction[]>;
     getStatus(options?: OperationOptions): Promise<FunctionsHostStatus>;
@@ -47,6 +47,8 @@ export interface IFunctionsHostClient {
      * Rejects before sending a request if serialization throws or produces no text.
      */
     invoke(functionName: string, input: unknown, options?: OperationOptions): Promise<void>;
+    /** Posts raw input to a validated HTTP trigger on this host; keys are sent only in a header. */
+    invokeHttp(url: URL, input: string, options?: OperationOptions): Promise<void>;
 }
 
 /** Creates a host client without querying keys or starting a host. */
@@ -132,6 +134,38 @@ export class FunctionsHostClient implements IFunctionsHostClient {
             ...await this.requestOptions(options),
             contentType: 'application/json',
             body: { input: serializedInput },
+        });
+        assertRestSuccess(this.ctx.code, response);
+    }
+
+    /** Rejects other origins and redirects, and never acquires an admin master key for an HTTP trigger. */
+    public async invokeHttp(url: URL, input: string, options?: OperationOptions): Promise<void> {
+        const local = 'port' in this.target;
+        const matchesHost = local
+            ? url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname.toLowerCase())
+                && Number(url.port || '80') === this.target.port
+            : url.origin === new URL(this.target.endpoint).origin;
+        if (!matchesHost || url.username || url.password) {
+            throw new TypeError(this.ctx.code.l10n.t('The HTTP function URL must belong to the selected Functions host.'));
+        }
+        const target = new URL(url);
+        let key: string | undefined;
+        for (const name of [...target.searchParams.keys()]) {
+            if (name.toLowerCase() === 'code') {
+                key = target.searchParams.get(name) ?? undefined;
+                target.searchParams.delete(name);
+            }
+        }
+        const response = await this.inner.pathUnchecked(target.toString()).post({
+            ...options?.requestOptions,
+            abortSignal: options?.abortSignal,
+            tracingOptions: options?.tracingOptions,
+            onResponse: options?.onResponse,
+            allowInsecureConnection: local,
+            headers: { ...options?.requestOptions?.headers, ...(key ? { 'x-functions-key': key } : {}) },
+            contentType: 'application/json',
+            // Bytes bypass the REST client's JSON string quoting.
+            body: new TextEncoder().encode(input),
         });
         assertRestSuccess(this.ctx.code, response);
     }

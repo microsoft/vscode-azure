@@ -36,14 +36,14 @@ const MinFuncVersion = '5.0.0-0';
  */
 const FuncDefaultInstallDir = '.azure-functions';
 
-/** Installs the Azure Functions Core Tools. */
+/** Installs the Azure Functions CLI. */
 @injectable()
 export class FuncInstaller implements ToolInstaller {
     /** @inheritdoc */
     public readonly id: ToolId = 'func';
 
     /** @inheritdoc */
-    public readonly displayName = 'Azure Functions Core Tools';
+    public readonly displayName = 'Azure Functions CLI';
 
     /** @inheritdoc */
     public readonly executableName = FuncCommand;
@@ -113,11 +113,14 @@ export class FuncInstaller implements ToolInstaller {
 
         if (process.platform === 'win32') {
             const args = `-Prerelease${force ? ' -Force' : ''}`;
+            // The script is unsigned, but execution policy governs script files, not a script block built
+            // in memory, so no policy override is needed.
+            const script = `& ([ScriptBlock]::Create((Invoke-RestMethod https://aka.ms/func-cli/install.ps1))) ${args}`;
             return [{
                 name: 'install.ps1',
                 command: command('powershell')
-                    .namedArg('-ExecutionPolicy', 'Bypass')
-                    .arg('-Command', `Invoke-Expression ('& { ' + (Invoke-RestMethod 'https://aka.ms/func-cli/install.ps1') + ' } ${args}')`),
+                    .arg('-NoProfile')
+                    .arg('-Command', script),
                 verified: false,
             }];
         }

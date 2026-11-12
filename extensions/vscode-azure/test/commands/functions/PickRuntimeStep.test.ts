@@ -43,70 +43,19 @@ describe('PickRuntimeStep (unit)', () => {
     });
 
     describe('prompt', () => {
-        it('should return node runtime without a version (multiple supported)', async () => {
-            const { ctx, mock: mockResult } = createMockCodeContext();
-            respondToPrompts(mockResult, [{ pick: 'Node.js' }]);
+        for (const [label, runtime] of [
+            ['Node.js', 'node'], ['Python', 'python'], ['.NET (isolated)', 'dotnet-isolated'],
+            ['Java', 'java'], ['PowerShell', 'powershell'],
+        ] as const) {
+            it(`maps the ${label} choice to ${runtime} and leaves the version to the sub-step`, async () => {
+                const { ctx, mock: mockResult } = createMockCodeContext();
+                respondToPrompts(mockResult, [{ pick: label }]);
 
-            const step = new PickRuntimeStep(ctx);
-            const result = await step.prompt();
+                const result = await new PickRuntimeStep(ctx).prompt();
 
-            expect(result.functionWorkerRuntime).to.equal('node');
-            expect(result.runtimeVersion).to.be.undefined;
-        });
-
-        it('should return python runtime without a version (multiple supported)', async () => {
-            const { ctx, mock: mockResult } = createMockCodeContext();
-            respondToPrompts(mockResult, [{ pick: 'Python' }]);
-
-            const step = new PickRuntimeStep(ctx);
-            const result = await step.prompt();
-
-            expect(result.functionWorkerRuntime).to.equal('python');
-            expect(result.runtimeVersion).to.be.undefined;
-        });
-
-        it('should return dotnet-isolated runtime', async () => {
-            const { ctx, mock: mockResult } = createMockCodeContext();
-            respondToPrompts(mockResult, [{ pick: '.NET (isolated)' }]);
-
-            const step = new PickRuntimeStep(ctx);
-            const result = await step.prompt();
-
-            expect(result.functionWorkerRuntime).to.equal('dotnet-isolated');
-            expect(result.runtimeVersion).to.be.undefined;
-        });
-
-        it('should return java runtime', async () => {
-            const { ctx, mock: mockResult } = createMockCodeContext();
-            respondToPrompts(mockResult, [{ pick: 'Java' }]);
-
-            const step = new PickRuntimeStep(ctx);
-            const result = await step.prompt();
-
-            expect(result.functionWorkerRuntime).to.equal('java');
-            expect(result.runtimeVersion).to.be.undefined;
-        });
-
-        it('should return powershell runtime', async () => {
-            const { ctx, mock: mockResult } = createMockCodeContext();
-            respondToPrompts(mockResult, [{ pick: 'PowerShell' }]);
-
-            const step = new PickRuntimeStep(ctx);
-            const result = await step.prompt();
-
-            expect(result.functionWorkerRuntime).to.equal('powershell');
-            expect(result.runtimeVersion).to.be.undefined;
-        });
-
-        it('should return custom runtime without a version', async () => {
-            const { ctx, mock: mockResult } = createMockCodeContext();
-            respondToPrompts(mockResult, [{ pick: 'Custom' }]);
-
-            const step = new PickRuntimeStep(ctx);
-            const result = await step.prompt();
-
-            expect(result.functionWorkerRuntime).to.equal('custom');
-            expect(result.runtimeVersion).to.be.undefined;
-        });
+                expect(result.functionWorkerRuntime).to.equal(runtime);
+                expect(result.runtimeVersion).to.be.undefined;
+            });
+        }
     });
 });

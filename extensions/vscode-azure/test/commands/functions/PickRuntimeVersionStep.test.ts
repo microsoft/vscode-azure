@@ -25,7 +25,7 @@ describe('PickRuntimeVersionStep (unit)', () => {
         it('should return true when a single-version runtime is selected (resolved without prompting)', () => {
             const { ctx } = createMockCodeContext();
             const step = new PickRuntimeVersionStep(ctx);
-            const context: Partial<CreateFunctionAppContext> = { functionWorkerRuntime: 'custom' };
+            const context: Partial<CreateFunctionAppContext> = { functionWorkerRuntime: 'python' };
             expect(step.shouldPrompt({ resourceDisplayName: 'Function App', ...context })).to.be.true;
         });
 
@@ -47,21 +47,21 @@ describe('PickRuntimeVersionStep (unit)', () => {
     describe('prompt', () => {
         it('should return the selected version for the chosen runtime', async () => {
             const { ctx, mock: mockResult } = createMockCodeContext();
-            respondToPrompts(mockResult, [{ pick: '24' }]);
+            respondToPrompts(mockResult, [{ pick: '22' }]);
 
             const step = new PickRuntimeVersionStep(ctx);
             const result = await step.prompt({ resourceDisplayName: 'Function App', functionWorkerRuntime: 'node' });
 
-            expect(result.runtimeVersion).to.equal('24');
+            expect(result.runtimeVersion).to.equal('22');
         });
 
         it('should resolve the single supported version without prompting', async () => {
             const { ctx } = createMockCodeContext();
 
             const step = new PickRuntimeVersionStep(ctx);
-            const result = await step.prompt({ resourceDisplayName: 'Function App', functionWorkerRuntime: 'custom' });
+            const result = await step.prompt({ resourceDisplayName: 'Function App', functionWorkerRuntime: 'python' });
 
-            expect(result.runtimeVersion).to.equal('');
+            expect(result.runtimeVersion).to.equal('3.12');
         });
     });
 });

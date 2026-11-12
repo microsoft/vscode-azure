@@ -16,8 +16,9 @@ by editing this file and reconfirming with the reviewer.
 | **Rows** | 271 (FUNC-001 through FUNC-271) |
 | **Signed off by** | Brandon Waterloo (@bwateratmsft) |
 | **Date** | 2026-09-24 |
-| **Review** | Excel review workbook; 30 rows overridden, 241 accepted as recommended (blank decision = agreement). |
-| **Last confirmed** | 2026-10-12; reviewer dropped source agent metadata (FUNC-007: Drop), consistent with the dropped agent discovery/wizard/benchmark handlers. MCP support remains independently deferred. Reviewer deferred CLI scaffolding (`func init`, `func new`, `func quickstart`) and its dependent language/welcome/template flows (FUNC-026, FUNC-028, FUNC-192, FUNC-218 through FUNC-221, FUNC-223 through FUNC-225, FUNC-235, FUNC-236: Defer). CLI v5 ownership remains the direction for future scaffolding. Native Go debugging and Go/Delve validation remain Adapt (FUNC-140, FUNC-141, FUNC-195); Go scaffolding and provisioning/runtime selection remain deferred. Go code deployment uses the shared azd route. Earlier, 2026-09-29: PR review moved FUNC-055 to Reuse (`azd pipeline config`) and FUNC-168 back to Migrate (remote Functions group node), added optional `launch.json` generation to FUNC-030, and clarified that `local.settings.json` stays. Earlier, 2026-09-24: F5 design review moved FUNC-203 through FUNC-207 to Drop. |
+| **Review** | Excel review workbook; 37 rows overridden, 234 accepted as recommended (blank decision = agreement). |
+| **Runtime-selection review** | 2026-10-27: runtime selection is inline in F5 and saved in `local.settings.json` for future launches (FUNC-030: Adapt); the standalone initialization/tree action is dropped (FUNC-190: Drop). |
+| **Last confirmed** | 2026-10-28; reviewer dropped deleting an individual deployed function (FUNC-045: Drop): deployed functions come from the project and its infrastructure, and a function deleted in Azure is brought back by the next deployment. The same day the reviewer restored the Functions deploy command for local projects (FUNC-047, FUNC-202, FUNC-255, FUNC-256: Adapt), reusing the create wizard's `deploy` job and the shared endpoint step; deploying from a Function App node and runtime detection stay dropped (FUNC-046, FUNC-247: Drop). Earlier, 2026-10-22; reviewer removed the optional `launch.json` entry from initialization and made the running host the only source of local function metadata (FUNC-187: Adapt). Earlier, 2026-10-12; reviewer dropped source agent metadata (FUNC-007: Drop), consistent with the dropped agent discovery/wizard/benchmark handlers. MCP support remains independently deferred. Reviewer deferred CLI scaffolding (`func init`, `func new`, `func quickstart`) and its dependent language/welcome/template flows (FUNC-026, FUNC-028, FUNC-192, FUNC-218 through FUNC-221, FUNC-223 through FUNC-225, FUNC-235, FUNC-236: Defer). CLI v5 ownership remains the direction for future scaffolding. Native Go debugging and Go/Delve validation remain Adapt (FUNC-140, FUNC-141, FUNC-195); Go scaffolding and provisioning/runtime selection remain deferred. Go code deployment uses the shared azd route. Earlier, 2026-09-29: PR review moved FUNC-055 to Reuse (`azd pipeline config`) and FUNC-168 back to Migrate (remote Functions group node), added optional `launch.json` generation to FUNC-030, and clarified that `local.settings.json` stays. Earlier, 2026-09-24: F5 design review moved FUNC-203 through FUNC-207 to Drop. |
 
 ## Granularity
 
@@ -26,8 +27,8 @@ by editing this file and reconfirming with the reviewer.
 The reviewer directed: "I want to defer that scaffolding `func init` / `func new` / `func quickstart` for now."
 Project/function creation, gallery-backed quickstarts, language-specific
 scaffolding, template requirements/post-create flows, and the create-project
-welcome action are deferred. Initialization of existing projects for VS Code
-and F5 (FUNC-030, FUNC-190), shared Core Tools support (FUNC-021, FUNC-031,
+welcome action are deferred. F5 runtime selection for existing projects
+(FUNC-030), shared Core Tools support (FUNC-021, FUNC-031,
 FUNC-217), and Azure provisioning/deployment remain in scope.
 
 For future scaffolding, the approved ownership direction is CLI v5:
@@ -39,7 +40,7 @@ Go scaffolding, Java add-function, the gallery webview, and binding, Durable,
 MCP, and container integrations are also deferred.
 
 CLI v5 is distinct from Functions runtime v4. Runtime scope remains v4;
-the implemented F5 path acquires Core Tools v4 independently of scaffolding.
+the implemented F5 path acquires Core Tools v5.
 
 ### Confirmed Go debugging scope
 
@@ -65,17 +66,25 @@ problem matcher and pattern; per manifest-level contract; per orphan.
 
 | Disposition | Count | Meaning in this record |
 |---|---:|---|
-| Migrate | 25 | Preserve the source capability using monorepo patterns |
-| Adapt | 27 | Preserve the user goal with intentionally different behavior or UX |
+| Migrate | 23 | Preserve the source capability using monorepo patterns |
+| Adapt | 25 | Preserve the user goal with intentionally different behavior or UX |
 | Reuse | 19 | Satisfy the feature by wiring an existing monorepo capability |
-| Drop | 136 | Do not carry the source capability forward |
+| Drop | 140 | Do not carry the source capability forward |
 | Defer | 64 | Retain the goal for later tracked work |
 | **Total** | **271** | |
 
 ## Cross-cutting decisions
 
-- **Deployment is azd.** Deploy flows are rebuilt on `AzdJob`; the source's
-  per-deploy settings, guards, and zip/`func publish` paths are not carried forward.
+- **Deployment is azd.** Code deployment runs through azd. A Functions deploy
+  command deploys a local Functions project (Functions project node in the
+  workspace view, Explorer folder, or Command Palette) by generating its azd
+  infrastructure and running provision and deploy, then offers the shared
+  endpoint step. Deploying from a Function App node, runtime detection, and the
+  source's per-deploy settings, guards, and zip/`func publish` paths are not
+  carried forward.
+- **Local functions come from the running host.** The local tree lists
+  functions from the ready host's `/admin/functions`; there is no offline
+  `function.json`, build-output, or source discovery.
 - **Flex Consumption only.** Function App creation always provisions Flex
   Consumption; users change plans in the generated Bicep.
 - **Managed identity only.** Created apps use managed identity for connections;
@@ -87,22 +96,21 @@ problem matcher and pattern; per manifest-level contract; per orphan.
 - **Log streaming follows Container Apps.** Streaming opens a pseudoterminal;
   closing it stops the stream. There is no Logs node.
 - **`local.settings.json` stays; no settings file sync.** Projects keep
-  `local.settings.json` (written by `func init`, read by `func host start` and
+  `local.settings.json` (written by `func init`, read by `func run` and
   local execute). Remote app settings are owned by IaC, so there is no upload,
   download, encrypt, decrypt, or tree node for the file.
 - **Scaffolding is deferred; future ownership is CLI v5.** Project and
   function creation, gallery-backed quickstarts, and their dependent UI flows
   are outside this phase. Future integration delegates catalog/generation to
-  `func init` / `func new` / `func quickstart`, with separate CLI v5 workload
-  acquisition from the implemented Core Tools v4 F5 path.
+  `func init` / `func new` / `func quickstart`. Scaffolding workload capabilities
+  require verification independently of the implemented Core Tools v5 F5 path.
 - **F5 without `tasks.json` / `launch.json`.** A contributed `azure-functions`
   debug type builds the project, starts the host in-process, and resolves to the
-  language debugger's attach configuration. `launch.json` is optional: F5
-  works without it, and users who want more control can generate an
-  `azure-functions` entry that exposes the configurable options. No
-  `tasks.json` is generated, and no task type, problem matcher, or
+  language debugger's attach configuration. F5 needs no `launch.json`, and none
+  is generated. No `tasks.json` is generated, and no task type, problem matcher, or
   process-pick command is contributed. Existing projects' source-generated
-  `tasks.json` / `launch.json` are left untouched; users delete them or re-initialize.
+  `tasks.json` / `launch.json` are left untouched; users delete them or select the
+  `azure-functions` debugger explicitly.
 - **No exported API or agent contract.** The source's exported API,
   `agentMetadata`, and `agent.*` commands have no monorepo consumer. External
   consumers exist (see [Known external consumers](#known-external-consumers)); they are dropped
@@ -160,7 +168,7 @@ Judgment-call groups (`JC-*`) mark rows the reviewer was asked to weigh as a set
 | FUNC-027 | 1.1 Local project | `azureFunctions.createNewProjectWithDockerfile` | **Defer** | Cancel-dominant; tied to the containerized-hosting decision. |  | JC-CONTAINER |
 | FUNC-028 | 1.1 Local project | `azureFunctions.createFunction` | **Defer** | Add-function through CLI v5 `func new` is deferred for all languages, including Java. | Deferred by reviewer, 2026-10-12. | JC-SCAFFOLD |
 | FUNC-029 | 1.1 Local project | `azureFunctions.addBinding` | **Drop** | Only `function.json` projects; near-zero successes per telemetry. |  |  |
-| FUNC-030 | 1.1 Local project | `azureFunctions.initProjectForVSCode` | **Adapt** | Debugging needs no generated `tasks.json` / `launch.json`. Generating an `azure-functions` `launch.json` entry is optional and exposes the configurable options. Init otherwise writes only non-debug workspace files (for example `.vscode/extensions.json` recommendations), never project configuration in VS Code settings. | Adapt, but to the greatest extent possible, make debugging work without a tasks.json/launch.json needed. | JC-SCAFFOLD |
+| FUNC-030 | 1.1 Local project | `azureFunctions.initProjectForVSCode` | **Adapt** | F5 selects a missing worker runtime and persists it in local settings without generating tasks, launch files, or recommendations. | Runtime selection inline in F5 with persistence in local.settings.json, 2026-10-27. | JC-SCAFFOLD |
 | FUNC-031 | 1.1 Local project | `azureFunctions.installOrUpdateFuncCoreTools` | **Reuse** | `vscode-azure/installFunc` + FuncInstaller already exist; source failure rate is a reliability lesson. |  |  |
 | FUNC-032 | 1.1 Local project | `azureFunctions.uninstallFuncCoreTools` | **Drop** | Incidental; mostly fails; SWA precedent dropped CLI uninstall. Known external consumer: Logic Apps Standard. |  |  |
 | FUNC-033 | 1.1 Local project | `azureFunctions.pickProcess` | **Adapt** | High usage; .NET attach depends on it. Rebuild on shared process/task services. |  | JC-LOCALDEV |
@@ -175,9 +183,9 @@ Judgment-call groups (`JC-*`) mark rows the reviewer was asked to weigh as a set
 | FUNC-042 | 1.2 Functions | `azureFunctions.copyFunctionUrl` | **Migrate** | High usage. |  |  |
 | FUNC-043 | 1.2 Functions | `azureFunctions.enableFunction` | **Migrate** | Moderate; writes `AzureWebJobs.<name>.Disabled`. v1 branch not needed. |  |  |
 | FUNC-044 | 1.2 Functions | `azureFunctions.disableFunction` | **Migrate** | Pairs with enable. |  |  |
-| FUNC-045 | 1.2 Functions | `azureFunctions.deleteFunction` | **Migrate** | Moderate; remote only. |  |  |
-| FUNC-046 | 1.3 Deploy | `azureFunctions.deploy` (Function App node / explorer folder) | **Adapt** | Top command. Deploy goes through azd; open question: deploying to an existing app azd did not create. |  | JC-DEPLOY |
-| FUNC-047 | 1.3 Deploy | `azureFunctions.deployProject` (workspace) | **Adapt** | High; maps to `vscode-azure/functions/deploy` / azd up from the workspace project node. |  | JC-DEPLOY |
+| FUNC-045 | 1.2 Functions | `azureFunctions.deleteFunction` | **Drop** | Deployed functions come from the project and its infrastructure, so a function deleted in Azure is brought back by the next deployment, and functions defined in code (Node.js v4, Python v2) have no folder to delete. | Override (recommended Migrate), 2026-10-28. |  |
+| FUNC-046 | 1.3 Deploy | `azureFunctions.deploy` (Function App node / explorer folder) | **Drop** | Deploy from a Function App node in the Azure Resources view is not offered; deployment runs from the local project (workspace node, Explorer folder, or Command Palette) through the deploy job. | Override (recommended Adapt), 2026-10-22; scope confirmed 2026-10-28. | JC-DEPLOY |
+| FUNC-047 | 1.3 Deploy | `azureFunctions.deployProject` (workspace) | **Adapt** | High; maps to `vscode-azure/functions/deploy` / azd up from the workspace project node. | Override (restored), 2026-10-28; previously Drop, 2026-10-22. | JC-DEPLOY |
 | FUNC-048 | 1.3 Deploy | `azureFunctions.deploySlot` | **Defer** | Slots decided as a unit; Flex (the default plan) has no slots. |  | JC-SLOTS |
 | FUNC-049 | 1.3 Deploy | `azureFunctions.deployByFunctionAppId` | **Drop** | Programmatic entry for other extensions/agents; all recorded calls failed. |  | JC-AGENT |
 | FUNC-050 | 1.3 Deploy | `azureFunctions.redeploy` | **Drop** | Kudu deployments node; mostly fails; the Activity view tracks azd deployments. |  | JC-KUDU |
@@ -317,10 +325,10 @@ Judgment-call groups (`JC-*`) mark rows the reviewer was asked to weigh as a set
 | FUNC-184 | 3 Tree | Local Functions group node | **Adapt** | Flatten this group away? Flattened: individual functions are shown directly under the local project node, with no group node. | Override (recommended Migrate). |  |
 | FUNC-185 | 3 Tree | Local Function node | **Migrate** | Backs execute/copy URL/enable/disable locally. |  |  |
 | FUNC-186 | 3 Tree | Invalid local function node | **Migrate** | Preserve the error state. |  |  |
-| FUNC-187 | 3 Tree | "Run build task to update this list..." hint | **Migrate** | Precompiled projects list from build output. |  |  |
+| FUNC-187 | 3 Tree | "Run build task to update this list..." hint | **Adapt** | Project nodes show "Start debugging to list functions..." until a host is ready; there is no build-output listing. | Override (recommended Migrate), 2026-10-22. |  |
 | FUNC-188 | 3 Tree | "Start debugging to update this list..." hint | **Migrate** | Host-listed projects when the host is not running. |  |  |
 | FUNC-189 | 3 Tree | Local Settings node + items (`local.settings.json`) | **Drop** | Settings upload/download are dropped (FUNC-073, FUNC-074), so there is no local.settings.json node. | Override (recommended Defer). | JC-SETTINGSSYNC |
-| FUNC-190 | 3 Tree | Init project node + "Initialize project..." child | **Adapt** | Follows initProjectForVSCode (FUNC-030). |  | JC-SCAFFOLD |
+| FUNC-190 | 3 Tree | Init project node + "Initialize project..." child | **Drop** | F5 owns runtime selection; no standalone initialization action is needed. | User-directed removal, 2026-10-27. | JC-SCAFFOLD |
 | FUNC-191 | 3 Tree | Invalid local project node | **Migrate** | Preserve the error state. |  |  |
 | FUNC-192 | 3 Tree | "Create Function Project..." hint (empty workspace) | **Defer** | Depends on the deferred create-project command (FUNC-026). | Deferred by reviewer, 2026-10-12. | JC-SCAFFOLD |
 | FUNC-193 | 3 Tree | DTS scheduler + task hub nodes | **Defer** | DTS as a unit (azutils already has a DTS task-hub logical type). |  | JC-DTS |
@@ -328,11 +336,11 @@ Judgment-call groups (`JC-*`) mark rows the reviewer was asked to weigh as a set
 | FUNC-195 | 4 Debug | Go debug provider (Delve attach) + Go toolchain validation | **Adapt** | Native Go F5 through the shared owned-host lifecycle and Go extension, with debug compilation, loopback Delve, validation, and cleanup. | Confirmed reviewer decision. | JC-LANG |
 | FUNC-196 | 3 Tree | Functions Host Exceptions Debugger view (`funcHostDebugView`) + host/stopped/error/no-host nodes | **Defer** | Own view in the debug container; follows the F5 loop decision. |  | JC-LOCALDEV |
 | FUNC-197 | 3 Tree | Orphan icon `azFuncProxy.svg` | **Drop** | Dead asset. |  |  |
-| FUNC-198 | 3 Tree | Tree refresh (file watchers on function.json/local.settings.json, func-task events) | **Migrate** | Needed by the local function tree; use workspace index watchers. |  |  |
+| FUNC-198 | 3 Tree | Tree refresh (file watchers on function.json/local.settings.json, func-task events) | **Migrate** | Needed by the local function tree; use workspace index watchers for local settings and refresh on host registration. |  |  |
 | FUNC-199 | 3 Tree | Legacy pickers (`pickAppResource`, workspace pick by CV) | **Reuse** | `IResourceSelector`. |  |  |
 | FUNC-200 | 3 Tree | ARG bulk listing + site cache in the resolver | **Reuse** | Target resource listing + WebAppDataProvider enrich. |  |  |
 | FUNC-201 | 3 Tree | Submenu `workspaceActions` (create function/project, deploy) | **Drop** | No workspace actions submenu, this was an antipattern. | Override (recommended Adapt). |  |
-| FUNC-202 | 3 Tree | `explorer/context` Deploy on a folder | **Adapt** | Follows the deploy decision. |  | JC-DEPLOY |
+| FUNC-202 | 3 Tree | `explorer/context` Deploy on a folder | **Adapt** | Follows the deploy decision. | Override (restored), 2026-10-28; previously Drop, 2026-10-22. | JC-DEPLOY |
 | FUNC-203 | 4 Debug | Task definition `func` | **Drop** | Host is started in-process by the Functions debug configuration provider; no `tasks.json` task or problem matcher is needed. Known external consumers: Logic Apps Standard, Fabric User Data Functions. | Override (recommended Adapt); reconfirmed after the F5 design review. | JC-LOCALDEV |
 | FUNC-204 | 4 Debug | Task provider `FuncTaskProvider` (host start, extensions install, pack) | **Drop** | Host is started in-process by the Functions debug configuration provider; no `tasks.json` task or problem matcher is needed. Known external consumers: Logic Apps Standard, Fabric User Data Functions. | Override (recommended Adapt); reconfirmed after the F5 design review. | JC-LOCALDEV |
 | FUNC-205 | 4 Debug | Problem matcher `func-watch` | **Drop** | Host is started in-process by the Functions debug configuration provider; no `tasks.json` task or problem matcher is needed. | Override (recommended Adapt); reconfirmed after the F5 design review. | JC-LOCALDEV |
@@ -377,7 +385,7 @@ Judgment-call groups (`JC-*`) mark rows the reviewer was asked to weigh as a set
 | FUNC-244 | 5 Wizards | Create app: custom location (Azure Arc / Kubernetes) | **Drop** | Advanced-only, niche. |  |  |
 | FUNC-245 | 5 Wizards | Create app: pick existing RG / plan / storage / App Insights | **Drop** | Advanced-only; azd provisions a fresh environment. |  |  |
 | FUNC-246 | 5 Wizards | Create app: authentication (secrets vs managed identity for storage) | **Adapt** | Default to managed identity in the Bicep module; no prompt. | MI only, no more secrets ever period full stop. |  |
-| FUNC-247 | 5 Wizards | Create app: stack filtered by detected project language | **Adapt** | Detect the runtime from the workspace to skip PickRuntimeStep when possible. |  |  |
+| FUNC-247 | 5 Wizards | Create app: stack filtered by detected project language | **Drop** | Create and deploy always prompt for the runtime; no detection step is carried forward. | Override (recommended Adapt), 2026-10-22; confirmed 2026-10-28. |  |
 | FUNC-248 | 5 Wizards | Create app: Flex max instance count / instance memory | **Adapt** | Bicep parameters with defaults, no prompt. |  |  |
 | FUNC-249 | 5 Wizards | Create app: provisioning topology (RG, storage, App Insights, Log Analytics, plan, UAMI, role, site) | **Adapt** | Published AVM function-app pattern module (`br/public:avm/ptn/app/function-app:0.1.0`). |  |  |
 | FUNC-250 | 5 Wizards | Create app: containerized (ACA-hosted) function app | **Defer** | Containerized hosting as a unit. |  | JC-CONTAINER |
@@ -385,8 +393,8 @@ Judgment-call groups (`JC-*`) mark rows the reviewer was asked to weigh as a set
 | FUNC-252 | 5 Wizards | Deploy: worker runtime / extension version mismatch fixups | **Drop** | Bicep sets app settings. |  | JC-DEPLOY |
 | FUNC-253 | 5 Wizards | Deploy: custom handler on Flex via `func azure functionapp publish` | **Drop** | AZD will handle deploy. | Override (recommended Defer). | JC-DEPLOY |
 | FUNC-254 | 5 Wizards | Deploy: add remote MCP server to `.vscode/mcp.json` | **Defer** | MCP scope decision. |  | JC-AGENT |
-| FUNC-255 | 5 Wizards | Deploy: completion notification (output, stream logs, upload settings, MCP) | **Adapt** | ShowEndpointUrlStep + Activity view. Fixes the source eventVersion bug. | Use activity log. | JC-DEPLOY |
-| FUNC-256 | 5 Wizards | Deploy: list HTTP trigger URLs after deploy | **Adapt** | Fold into ShowEndpointUrlStep. |  | JC-DEPLOY |
+| FUNC-255 | 5 Wizards | Deploy: completion notification (output, stream logs, upload settings, MCP) | **Adapt** | ShowEndpointUrlStep + Activity view. Fixes the source eventVersion bug. | Use activity log. Override (restored), 2026-10-28; previously Drop, 2026-10-22. | JC-DEPLOY |
+| FUNC-256 | 5 Wizards | Deploy: list HTTP trigger URLs after deploy | **Adapt** | Fold into ShowEndpointUrlStep. | Override (restored), 2026-10-28; previously Drop, 2026-10-22. | JC-DEPLOY |
 | FUNC-257 | 5 Wizards | Deploy: 64-bit alignment and Netherite config update | **Drop** | Source deploy fixups. |  | JC-DEPLOY |
 | FUNC-258 | 5 Wizards | Delete containerized function app step | **Reuse** | Reuse deletion we have already (assuming we keep containerized fn apps). | Override (recommended Defer). | JC-CONTAINER |
 | FUNC-259 | 5 Wizards | executeFunction Event Grid sample-file flow | **Drop** | Pairs with the dropped Event Grid mock request. |  |  |

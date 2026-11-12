@@ -6,7 +6,7 @@
 import { addWorkspaceFile, addWorkspaceFolder, createMockVsCode, fireFileSystemEvent, ManualDebounceScheduler } from '@microsoft/vscode-azure-utils/testing';
 import { mock } from 'node:test';
 import type * as vscode from 'vscode';
-import { functionsDetector, FunctionsHostFileTag } from '../../../src/tree/workspace/functions/FunctionsWorkspaceDataProvider';
+import { functionsDetector, FunctionsHostFileTag } from '../../../src/functions/functionsDetector';
 import { WorkspaceIndexService } from '../../../src/utils/workspaceIndex/WorkspaceIndexService';
 import { Attribute, attributeDetector, csharpDetector } from './mockDetectors';
 

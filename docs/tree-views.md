@@ -180,7 +180,8 @@ The Azure resources tree composes three data providers. They split responsibilit
 | `AzureAccountDataProvider` (extension) | Yes | Accounts, tenants, subscriptions | `Infinity` | `onDidChange` on VS Code auth-session change (for the `microsoft` / `microsoft-sovereign-cloud` providers) and on `microsoft-sovereign-cloud`, `vscode-azure.signedInTenants`, or `vscode-azure.selectedSubscriptions` configuration change. Since nothing goes stale on its own, `Azure: Refresh` is the only thing that re-lists |
 | `AcrDataProvider` | No | Service-specific resources and their virtual children | default | default TTL |
 | `SettingsDataProvider` | No | Settings virtual-node leaves created by product providers | default | default TTL |
-| `WebAppDataProvider` | No | Function App, App Service, and Logic App resources; composes their settings nodes | default | default TTL |
+| `FunctionAppDataProvider` | No | Function Apps and their virtual function children; composes settings and Functions nodes. Registered before `WebAppDataProvider`, so it claims every Function App | default | default TTL |
+| `WebAppDataProvider` | No | App Service and Logic App resources; composes their settings nodes | default | default TTL |
 | `AzureResourceDataProvider` | No | Resource groups (under a subscription), and generic resources as the leaf fallback | default | default TTL |
 
 `AzureAccountDataProvider` owns none of the listing itself. It is a thin adapter over the **Azure listing layer** in azutils (`packages/azutils/src/auth/listing/`), passing the extension's subscription filter on every read. Because it returns `Infinity` from `getTtl`, its results never go stale on their own — it fires `onDidChange` instead when auth, the sovereign-cloud setting, the manual-tenant setting, or the filter changes.
@@ -290,7 +291,7 @@ plus a matching pair of providers. There is **no shared mega-provider**
 |----------|-------|-------------|
 | `AzdWorkspaceDataProvider` | Yes | Discovers azd projects from the shared workspace index (`IWorkspaceIndexService`), which tags every `azure.yaml`. Enumerates services via `IAzdService.show` (which shells out to `azd show --output json`). Caching is handled by the surrounding `DataItemTree` TTL. |
 | `FunctionsWorkspaceDataProvider` | Yes | Detects Azure Functions projects from the shared workspace index (`IWorkspaceIndexService`), which tags every `host.json`. |
-| `EmulatorsWorkspaceDataProvider` | Yes | Surfaces a fixed "Emulators" group with stubbed entries for Azurite and Functions Core Tools. |
+| `EmulatorsWorkspaceDataProvider` | Yes | Surfaces a fixed "Emulators" group with stubbed entries for Azurite and the Azure Functions CLI. |
 
 All three are `isRoot: true`, so they each contribute their detected
 items to the root in registration order (azd, functions, emulators).

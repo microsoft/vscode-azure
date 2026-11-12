@@ -5,7 +5,6 @@
 
 import { type WebSiteManagementClientOptionalParams, type WebSiteManagementContext, createWebSiteManagement } from '@azure/arm-appservice/api';
 import {
-    deleteFunction as sdkDeleteFunction,
     getFunction as sdkGetFunction,
     get as sdkGetWebApp,
     listApplicationSettings as sdkListApplicationSettings,
@@ -46,7 +45,6 @@ export interface IWebAppClient {
         restart(resourceGroupName: string, name: string): Promise<void>;
         listFunctions(resourceGroupName: string, name: string): AsyncIterable<Page<FunctionEnvelope>>;
         getFunction(resourceGroupName: string, name: string, functionName: string): Promise<FunctionEnvelope>;
-        deleteFunction(resourceGroupName: string, name: string, functionName: string): Promise<void>;
         listFunctionKeys(resourceGroupName: string, name: string, functionName: string): Promise<StringDictionary>;
         listHostKeys(resourceGroupName: string, name: string): Promise<HostKeys>;
         listFunctionSecrets(resourceGroupName: string, name: string, functionName: string): Promise<FunctionSecrets>;
@@ -98,7 +96,6 @@ export class WebAppClient implements IWebAppClient {
             restart: (...args) => sdkRestart(this.inner, ...args),
             listFunctions: (...args) => toPages(sdkListFunctions(this.inner, ...args)),
             getFunction: (...args) => sdkGetFunction(this.inner, ...args),
-            deleteFunction: (...args) => sdkDeleteFunction(this.inner, ...args),
             listFunctionKeys: (...args) => sdkListFunctionKeys(this.inner, ...args),
             listHostKeys: (...args) => sdkListHostKeys(this.inner, ...args),
             listFunctionSecrets: (...args) => sdkListFunctionSecrets(this.inner, ...args),

@@ -13,7 +13,7 @@ import type * as vscode from 'vscode';
 import { CancellationError } from '../vscode/CancellationError';
 import { createShellTask } from '../vscode/createShellTask';
 import type { IVsCode } from '../vscode/IVsCode';
-import { argsToStrings, type CommandLineArgs } from './CommandLineBuilder';
+import { argsToStrings, formatCommandLine, type CommandLineArgs } from './CommandLineBuilder';
 import { mergeProcessEnv } from './mergeProcessEnv';
 import { toAbortSignal, type AbortSignalBridge } from './toAbortSignal';
 
@@ -58,10 +58,19 @@ export interface ProcessExecutorOptions {
     readonly env?: Readonly<Record<string, string>>;
 }
 
+/** Options shared by every background execution mode. */
+export interface BackgroundProcessCallbacks {
+    /**
+     * Receives the display-formatted command line immediately before the process starts, so a
+     * caller can show exactly what is being run. See {@linkcode formatCommandLine}.
+     */
+    readonly onCommandLine?: (commandLine: string) => void;
+}
+
 /**
  * Runs a process in the background, returning raw stdout and stderr.
  */
-export interface BackgroundProcessOptions extends ProcessExecutorOptions {
+export interface BackgroundProcessOptions extends ProcessExecutorOptions, BackgroundProcessCallbacks {
     readonly execution: 'background';
     readonly parseJson?: false;
     readonly jsonLines?: false;
@@ -71,7 +80,7 @@ export interface BackgroundProcessOptions extends ProcessExecutorOptions {
 }
 
 /** Streams decoded stdout/stderr chunks instead of capturing process output. */
-export interface BackgroundStreamingProcessOptions extends ProcessExecutorOptions {
+export interface BackgroundStreamingProcessOptions extends ProcessExecutorOptions, BackgroundProcessCallbacks {
     readonly execution: 'background';
     readonly streamOutput: true;
     readonly parseJson?: false;
@@ -83,7 +92,7 @@ export interface BackgroundStreamingProcessOptions extends ProcessExecutorOption
 /**
  * Runs a process in the background and parses stdout as JSON.
  */
-export interface BackgroundJsonProcessOptions extends ProcessExecutorOptions {
+export interface BackgroundJsonProcessOptions extends ProcessExecutorOptions, BackgroundProcessCallbacks {
     readonly execution: 'background';
     readonly parseJson: true;
 }
@@ -92,7 +101,7 @@ export interface BackgroundJsonProcessOptions extends ProcessExecutorOptions {
  * Runs a process in the background, parses stdout as JSON, and streams
  * stderr as newline-delimited JSON via an async generator.
  */
-export interface BackgroundJsonLinesProcessOptions extends ProcessExecutorOptions {
+export interface BackgroundJsonLinesProcessOptions extends ProcessExecutorOptions, BackgroundProcessCallbacks {
     readonly execution: 'background';
     readonly parseJson: true;
     readonly jsonLines: true;
@@ -280,7 +289,7 @@ export class ProcessExecutor implements IProcessExecutor {
     /** @inheritdoc */
     public resolveExecutable(command: string): string | undefined {
         // Batch files are allowed so `.cmd` shims (the Azure CLI's `az.cmd`,
-        // the Functions Core Tools' `func.cmd`) can be resolved.
+        // the Azure Functions CLI's `func.cmd`) can be resolved.
         const resolved = this.resolveExecutableFn(command, { allowWindowsBatchFiles: true });
         // Normalize any falsy result to `undefined`, so callers have a single
         // value to test for "not found".
@@ -373,6 +382,7 @@ export class ProcessExecutor implements IProcessExecutor {
         if (!executable) {
             throw new Error('A command line must include at least the executable as its first element.');
         }
+        options.onCommandLine?.(formatCommandLine(options.command));
 
         const { signal, disposable } = toAbortSignal(cancellation);
         const killTreeOnCancel = 'killTreeOnCancel' in options && options.killTreeOnCancel === true;

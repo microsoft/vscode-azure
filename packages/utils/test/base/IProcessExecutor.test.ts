@@ -250,6 +250,22 @@ describe('ProcessExecutor (unit)', () => {
             expect((outcome as Error).message).to.include('EACCES');
         });
 
+        it('reports the display-formatted command line before spawning', async () => {
+            const { vscode: code } = createMockVsCode();
+            const spawnFn = createMockSpawn({ stdout: 'ok' });
+            const executor = new ProcessExecutor(code, spawnFn);
+            const onCommandLine = mock.fn((_line: string) => { expect(spawnFn.mock.callCount()).to.equal(0); });
+
+            await executor.spawn({
+                execution: 'background',
+                command: command('test-cmd').arg('C:\\My Project', 'say "hi"').namedArg('--name', 'value'),
+                onCommandLine,
+            });
+
+            expect(onCommandLine.mock.calls.map(call => call.arguments[0]))
+                .to.deep.equal(['test-cmd "C:\\My Project" "say \\"hi\\"" --name value']);
+        });
+
         it('should pass the command and args from a CommandLineBuilder', async () => {
             const { vscode: code } = createMockVsCode();
             const spawnFn = createMockSpawn({ stdout: 'ok' });
@@ -611,7 +627,7 @@ describe('ProcessExecutor (unit)', () => {
             const abort = new AbortController();
             const running = await executor.spawn({
                 execution: 'background', killTreeOnCancel: true, streamOutput: true,
-                command: [process.execPath, '-e', `const {spawn}=require('node:child_process'); const worker=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'ignore'}); console.log(worker.pid); setInterval(()=>{},1000);`],
+                command: [process.execPath, '-e', `const {spawn}=require('node:child_process'); spawn(process.execPath,['-e','console.log(process.pid); setInterval(()=>{},1000)'],{stdio:'inherit'}); setInterval(()=>{},1000);`],
             }, abort.signal);
             const rejected = expect(running.completed).to.be.rejectedWith(CancellationError);
             try {
@@ -620,12 +636,13 @@ describe('ProcessExecutor (unit)', () => {
                 if (first.done) { throw new Error('Expected the owned worker PID on stdout.'); }
                 const pid = Number(first.value.trim());
                 expect(pid).to.be.greaterThan(0);
+                expect(() => process.kill(pid, 0)).to.not.throw();
                 const remainder = collectAsync(running.stdout);
                 abort.abort();
                 await rejected;
+                // The worker holds the inherited pipes open until it exits.
                 expect(await remainder).to.deep.equal([]);
                 expect(await stderr).to.deep.equal([]);
-                expect(() => process.kill(pid, 0)).to.throw();
             } finally {
                 abort.abort();
                 await Promise.all([running.stdout.return(undefined), running.stderr.return(undefined)]);

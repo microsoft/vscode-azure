@@ -87,9 +87,9 @@ hidden from the Command Palette because it requires a reference and target.
 ### Shared site lifecycle
 
 `WebAppLifecycle` supplies start, stop, and restart actions for App Service,
-Function App, and Logic App sites. `WebAppDataProvider` enriches each site's
-resource object with management-plane `site` metadata; `WebAppViewProvider`
-uses its state to expose stop/restart for running sites and start for stopped
+Function App, and Logic App sites. `FunctionAppDataProvider` and `WebAppDataProvider`
+enrich their resource objects with management-plane `site` metadata; the corresponding
+view providers use its state to expose stop/restart for running sites and start for stopped
 sites. Unknown or transitional states expose neither. A successful action
 refreshes the site's metadata before invalidating only its subtree, so its
 lifecycle capabilities reflect the reported state. The commands are also available

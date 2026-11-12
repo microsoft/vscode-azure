@@ -19,6 +19,67 @@ function createClient(target: FunctionsHostTarget, handler: ConstructorParameter
 }
 
 describe('FunctionsHostClient (unit)', () => {
+    for (const input of ['', 'plain input', '{"message":"hello"}']) {
+        it('posts raw HTTP trigger input on the selected host without admin authentication', async () => {
+            const getMasterKey = mock.fn(() => Promise.resolve('admin-key'));
+            const { client, httpClient } = createClient(
+                { endpoint: 'https://app.azurewebsites.net', getMasterKey },
+                req => makeResponse(req, 200, 'response'),
+            );
+            await client.invokeHttp(new URL('https://app.azurewebsites.net/custom/route?custom=value&code=function-secret'), input);
+            const request = httpClient.requests[0];
+            expect(request.method).to.equal('POST');
+            expect(request.url).to.equal('https://app.azurewebsites.net/custom/route?custom=value');
+            if (!(request.body instanceof Uint8Array)) { throw new Error('Expected raw UTF-8 request bytes'); }
+            expect(new TextDecoder().decode(request.body)).to.equal(input);
+            expect(request.headers.get('x-functions-key')).to.equal('function-secret');
+            expect(getMasterKey.mock.callCount()).to.equal(0);
+        });
+    }
+
+    it('posts to the registered local port without adding a remote key', async () => {
+        const { client, httpClient } = createClient({ port: 8090 }, req => makeResponse(req, 204, ''));
+        await client.invokeHttp(new URL('http://localhost:8090/orders/42?mode=local'), 'local input');
+        expect(new URL(httpClient.requests[0].url).pathname).to.equal('/orders/42');
+        expect(new URL(httpClient.requests[0].url).port).to.equal('8090');
+        const body = httpClient.requests[0].body;
+        if (!(body instanceof Uint8Array)) { throw new Error('Expected raw UTF-8 request bytes'); }
+        expect(new TextDecoder().decode(body)).to.equal('local input');
+        expect(httpClient.requests[0].allowInsecureConnection).to.be.true;
+        expect(httpClient.requests[0].headers.get('x-functions-key')).to.be.undefined;
+    });
+
+    for (const url of ['https://other.example/route', 'http://app.azurewebsites.net/route', 'https://app.azurewebsites.net:444/route']) {
+        it('rejects an HTTP trigger outside its remote origin before sending input or keys', async () => {
+            const { client, httpClient } = createClient(
+                { endpoint: 'https://app.azurewebsites.net', getMasterKey: () => Promise.resolve('key') },
+                req => makeResponse(req, 200, ''),
+            );
+            await expect(client.invokeHttp(new URL(url), 'private input')).to.be.rejectedWith('selected Functions host');
+            expect(httpClient.requests).to.be.empty;
+        });
+    }
+
+    for (const url of ['http://example.com:8090/route', 'http://localhost:7071/route', 'https://localhost:8090/route']) {
+        it('rejects an HTTP trigger outside its registered loopback host before sending input', async () => {
+            const { client, httpClient } = createClient({ port: 8090 }, req => makeResponse(req, 200, ''));
+            await expect(client.invokeHttp(new URL(url), 'private input')).to.be.rejectedWith('selected Functions host');
+            expect(httpClient.requests).to.be.empty;
+        });
+    }
+
+    for (const status of [302, 401, 500]) {
+        it(`surfaces HTTP trigger status ${status} without exposing input, response bodies, or keys`, async () => {
+            const { client, httpClient } = createClient(
+                { endpoint: 'https://app.azurewebsites.net', getMasterKey: () => Promise.resolve('admin-key') },
+                req => makeResponse(req, status, 'private response', { location: 'https://other.example/route' }),
+            );
+            const result = client.invokeHttp(new URL('https://app.azurewebsites.net/route?code=function-secret'), 'private input');
+            await expect(result).to.be.rejectedWith(`HTTP ${status}`);
+            expect(httpClient.requests).to.have.lengthOf(1);
+        });
+    }
+
     it('should read a local host without remote authentication', async () => {
         const { client, httpClient } = createClient({ port: 7071 }, req => makeResponse(req, 200, JSON.stringify([
             {

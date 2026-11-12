@@ -8,6 +8,8 @@ import type * as vscode from 'vscode';
 import { FunctionsWorkspaceViewProvider } from '../../../../src/tree/workspace/functions/FunctionsWorkspaceViewProvider';
 import type { WorkspaceNode } from '../../../../src/tree/workspace/WorkspaceNode';
 import { makeAzdProjectNode, makeFunctionsProjectNode } from '../mockWorkspaceNode';
+import { LocalFunctionsHostTracker } from '../../../../src/functions/host/LocalFunctionsHostTracker';
+import { treeMenuMatches } from '../../treeMenuMatches';
 
 function createProvider(nodes: WorkspaceNode[], rootChildren: WorkspaceNode[] = nodes) {
     const m = createMockCodeContext();
@@ -17,7 +19,7 @@ function createProvider(nodes: WorkspaceNode[], rootChildren: WorkspaceNode[] = 
         get: (id: string) => nodeMap.get(id),
         getChildren: (parent?: WorkspaceNode) => Promise.resolve(parent ? [] : rootChildren),
     };
-    return { provider: new FunctionsWorkspaceViewProvider(m.ctx, executor, dataTree as never), code: m.ctx.code };
+    return { provider: new FunctionsWorkspaceViewProvider(m.ctx, executor, dataTree as never, new LocalFunctionsHostTracker()), code: m.ctx.code };
 }
 
 describe('FunctionsWorkspaceViewProvider (unit)', () => {
@@ -35,14 +37,14 @@ describe('FunctionsWorkspaceViewProvider (unit)', () => {
         expect(await provider.getChildren()).to.deep.equal([fn.id]);
     });
 
-    it('getTreeItem renders functionsProject with function app icon and reveal context', () => {
-        const node = makeFunctionsProjectNode({ label: 'my-fn' });
+    it('renders the project directory with its Function App icon and explorer action', () => {
+        const node = makeFunctionsProjectNode();
         const { provider, code } = createProvider([node]);
         const item = provider.getTreeItem(node.id);
-        expect(item.label).to.equal('my-fn');
-        expect(item.collapsibleState).to.equal(code.TreeItemCollapsibleState.None);
+        expect(item.label).to.equal('repo');
+        expect(item.collapsibleState).to.equal(code.TreeItemCollapsibleState.Collapsed);
         expect((item.iconPath as vscode.Uri).path).to.include('microsoft.web/sites~functionapp.svg');
-        expect((item.contextValue ?? '')).to.include('revealInExplorer');
+        expect(treeMenuMatches('vscode-azure/workspace/revealInExplorer', 'vscode-azure/workspace', item)).to.be.true;
     });
 
     it('getTreeItem throws for unknown keys', () => {
